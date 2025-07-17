@@ -147,7 +147,7 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 
 		expiry, err := time.Parse(time.RFC3339, user.SessionExpiry)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "Invalid session expiry format")
+			return echo.NewHTTPError(http.StatusInternalServerError, "invalid session expiry format")
 		}
 
 		// Set cookies with actual values (before they get emptied in response)
