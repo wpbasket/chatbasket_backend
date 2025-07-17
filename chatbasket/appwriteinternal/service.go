@@ -1,16 +1,20 @@
-package appwrite
+package appwriteinternal
 
 import (
 	"github.com/appwrite/sdk-for-go/account"
 	"github.com/appwrite/sdk-for-go/appwrite"
 	"github.com/appwrite/sdk-for-go/databases"
+	"github.com/appwrite/sdk-for-go/messaging"
 	"github.com/appwrite/sdk-for-go/storage"
+	"github.com/appwrite/sdk-for-go/users"
 )
 
-type AppwriteServiceSession struct {
+type AppwriteService struct {
 	Account                   *account.Account
 	Database                  *databases.Databases
 	Storage                   *storage.Storage
+	Users                     *users.Users
+	Message                   *messaging.Messaging
 	DatabaseID                string
 	UsersCollectionID         string
 	PostsCollectionID         string
@@ -19,20 +23,37 @@ type AppwriteServiceSession struct {
 	LikesCollectionID         string
 	FollowCollectionID        string
 	RefreshTokensCollectionID string
-	
+	FollowRequestsCollectionID string
+	TempOtpCollectionID       string
 }
 
-func NewAppwriteServiceWithSession(endpoint, projectID, sessionID, databaseID, usersCollectionID, postsCollectionID, commentsCollectionID, blockCollectionID, likesCollectionID, followCollectionID, refreshTokensCollectionID string) *AppwriteServiceSession {
+func NewAppwriteService(
+	endpoint,
+	projectID,
+	apiKey,
+	databaseID,
+	usersCollectionID,
+	postsCollectionID,
+	commentsCollectionID,
+	blockCollectionID,
+	likesCollectionID,
+	followCollectionID,
+	refreshTokensCollectionID,
+	followRequestsCollectionID,
+	tempOtpCollectionID string) *AppwriteService {
+
 	c := appwrite.NewClient(
 		appwrite.WithEndpoint(endpoint),
 		appwrite.WithProject(projectID),
-		appwrite.WithSession(sessionID), // 🔐 Use session token instead of API key
+		appwrite.WithKey(apiKey),
 	)
 
-	return &AppwriteServiceSession{
-		Account:  appwrite.NewAccount(c),
-		Database: appwrite.NewDatabases(c),
-		Storage:  appwrite.NewStorage(c),
+	return &AppwriteService{
+		Account:                   appwrite.NewAccount(c),
+		Database:                  appwrite.NewDatabases(c),
+		Storage:                   appwrite.NewStorage(c),
+		Users:                     appwrite.NewUsers(c),
+		Message:                   appwrite.NewMessaging(c),
 		DatabaseID:                databaseID,
 		UsersCollectionID:         usersCollectionID,
 		PostsCollectionID:         postsCollectionID,
@@ -41,5 +62,7 @@ func NewAppwriteServiceWithSession(endpoint, projectID, sessionID, databaseID, u
 		LikesCollectionID:         likesCollectionID,
 		FollowCollectionID:        followCollectionID,
 		RefreshTokensCollectionID: refreshTokensCollectionID,
+		FollowRequestsCollectionID: followRequestsCollectionID,
+		TempOtpCollectionID:       tempOtpCollectionID,
 	}
 }

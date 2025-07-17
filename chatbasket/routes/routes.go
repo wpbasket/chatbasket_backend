@@ -1,25 +1,55 @@
 package routes
 
 import (
-	"github.com/labstack/echo/v4"
-
+	"chatbasket/appwriteinternal"
 	"chatbasket/handler"
+	"chatbasket/middleware"
 	"chatbasket/services"
+	"os"
+
+	"github.com/labstack/echo/v4"
 )
 
 func RegisterRoutes(
 	e *echo.Echo,
-	userService *services.UserService,
 	// add more services as needed...
 ) {
-	// Initialize handlers
-	userHandler := handler.NewUserHandler(userService)
 
-	// ✅ User routes
-	e.POST("/signup", userHandler.Signup)
-	e.POST("/account-verification", userHandler.AcountVerification)
-	e.POST("/login", userHandler.Login)
-	e.POST("/login-verification", userHandler.LoginVerification)
+	as := appwriteinternal.NewAppwriteService(
+		os.Getenv("APPWRITE_ENDPOINT"),
+		os.Getenv("APPWRITE_PROJECT_ID"),
+		os.Getenv("APPWRITE_API_KEY"),
+		os.Getenv("APPWRITE_DATABASE_ID"),
+		os.Getenv("APPWRITE_USERS_COLLECTION_ID"),
+		os.Getenv("APPWRITE_POSTS_COLLECTION_ID"),
+		os.Getenv("APPWRITE_COMMENTS_COLLECTION_ID"),
+		os.Getenv("APPWRITE_BLOCK_COLLECTION_ID"),
+		os.Getenv("APPWRITE_LIKES_COLLECTION_ID"),
+		os.Getenv("APPWRITE_FOLLOW_COLLECTION_ID"),
+		os.Getenv("APPWRITE_REFRESH_TOKENS_COLLECTION_ID"),		
+		os.Getenv("APPWRITE_FOLLOW_REQUESTS_COLLECTION_ID"),
+		os.Getenv("APPWRITE_TEMP_OTP_COLLECTION_ID"),	
+	)
 	
+	globalService := services.NewGlobalService(as)
+	userHandler := handler.NewUserHandler(globalService)
+
+	authGroup := e.Group("/auth")
+	authGroup.POST("/signup", userHandler.Signup)
+	authGroup.POST("/account-verification", userHandler.AcountVerification)
+	authGroup.POST("/login", userHandler.Login)
+	authGroup.POST("/login-verification", userHandler.LoginVerification)
+
+	profileGroup := e.Group("/profile")
+	profileGroup.Use(middleware.AppwriteSessionMiddleware(true))
+	profileHandler := handler.NewProfileHandler(globalService)
+	profileGroup.POST("/logout", profileHandler.Logout)
+	profileGroup.POST("/check-username", profileHandler.CheckIfUserNameAvailable)
+	profileGroup.POST("/create-profile", profileHandler.CreateUserProfile)
+	profileGroup.GET("/get-profile", profileHandler.GetProfile)
+	profileGroup.POST("/update-profile", profileHandler.UpdateProfile)
+	profileGroup.POST("/update-email", profileHandler.UpdateEmail)
+	profileGroup.POST("/update-email-verification", profileHandler.UpdateEmailVerification)
+	profileGroup.POST("/update-password", profileHandler.UpdatePassword)
 
 }

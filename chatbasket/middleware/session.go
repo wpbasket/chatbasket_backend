@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"chatbasket/appwrite"
+	"chatbasket/appwriteinternal"
 	"net/http"
 	"os"
 	"strings"
@@ -9,42 +9,101 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+type ResponseError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Type    string `json:"type"`
+}
+
 func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			authHeader := c.Request().Header.Get("Authorization")
-			sessionID := strings.TrimPrefix(authHeader, "Bearer ")
+			var sessionId, userId string
+			var platform string
 
-			if sessionID == "" {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Missing session ID")
+			// Check if Authorization header is present (native apps)
+			authHeader := c.Request().Header.Get("Authorization")
+			
+			if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+				// Request from native app (iOS/Android)
+				platform = "native"
+				token := strings.TrimPrefix(authHeader, "Bearer ")
+				parts := strings.SplitN(token, ":", 2)
+				if len(parts) == 2 {
+					sessionId, userId = parts[0], parts[1]
+				}
+			} else {
+				// Request from web - extract from httpOnly cookies
+				platform = "web"
+				
+				// Extract sessionId from cookie
+				sessionCookie, err := c.Cookie("sessionId")
+				if err == nil {
+					sessionId = sessionCookie.Value
+				}
+				
+				// Extract userId from cookie
+				userCookie, err := c.Cookie("userId")
+				if err == nil {
+					userId = userCookie.Value
+				}
 			}
 
-			appwriteSvc := appwrite.NewAppwriteServiceWithSession(
+			// 🔒 Check missing auth
+			if sessionId == "" || userId == "" {
+				return c.JSON(http.StatusUnauthorized, ResponseError{
+					Code:    http.StatusUnauthorized,
+					Type:    "missing_auth",
+					Message: "Missing session ID or User ID",
+				})
+			}
+
+			// 🔐 Initialize Appwrite session service
+			appwriteService := appwriteinternal.NewAppwriteServiceSession(
 				os.Getenv("APPWRITE_ENDPOINT"),
 				os.Getenv("APPWRITE_PROJECT_ID"),
-				sessionID,
-				os.Getenv("APPWRITE_DATABASE_ID"),
-				os.Getenv("APPWRITE_USERS_COLLECTION_ID"),
-				os.Getenv("APPWRITE_POSTS_COLLECTION_ID"),
-				os.Getenv("APPWRITE_COMMENTS_COLLECTION_ID"),
-				os.Getenv("APPWRITE_BLOCK_COLLECTION_ID"),
-				os.Getenv("APPWRITE_LIKES_COLLECTION_ID"),
-				os.Getenv("APPWRITE_FOLLOW_COLLECTION_ID"),
-				os.Getenv("APPWRITE_REFRESH_TOKENS_COLLECTION_ID"),
+				os.Getenv("APPWRITE_API_KEY"),
 			)
 
-			account, err := appwriteSvc.Account.Get()
+			account, err := appwriteService.Users.ListSessions(userId)
 			if err != nil {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Invalid or expired session")
+				statusCode := http.StatusInternalServerError
+				if he, ok := err.(*echo.HTTPError); ok {
+					statusCode = he.Code
+				}
+
+				return c.JSON(statusCode, ResponseError{
+					Code:    statusCode,
+					Type:    "session_list_failed",
+					Message: err.Error(),
+				})
 			}
 
-			if requireVerified && !account.EmailVerification {
-				return echo.NewHTTPError(http.StatusForbidden, "Email not verified")
+			// ✅ Search session ID match
+			var sessionFound bool
+			for _, session := range account.Sessions {
+				if session.Id == sessionId {
+					sessionFound = true
+					break
+				}
 			}
 
-			// Set user ID and Appwrite service to context
-			c.Set("userID", account.Id)
-			c.Set("appwriteSessionService", appwriteSvc)
+			if !sessionFound {
+				return c.JSON(http.StatusUnauthorized, ResponseError{
+					Code:    http.StatusUnauthorized,
+					Type:    "session_invalid",
+					Message: "Invalid session ID",
+				})
+			}
+
+			// ✅ Set to context for handler access
+			c.Set("userId", userId)
+			c.Set("sessionId", sessionId)
+			c.Set("platform", platform)
+
+			// 🧹 Optional memory cleanup
+			appwriteService = nil
+			account = nil
 
 			return next(c)
 		}

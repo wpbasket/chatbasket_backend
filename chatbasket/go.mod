@@ -4,6 +4,8 @@ go 1.24.4
 
 require github.com/labstack/echo/v4 v4.13.4
 
+require github.com/alexedwards/argon2id v1.0.0 // indirect
+
 require (
 	github.com/appwrite/sdk-for-go v0.7.0 // indirect
 	github.com/google/uuid v1.6.0

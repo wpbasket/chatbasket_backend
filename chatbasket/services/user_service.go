@@ -1,44 +1,39 @@
 package services
 
 import (
+	// "chatbasket/appwriteinternal"
+	"chatbasket/model"
 	"context"
-	"encoding/json"
 
+	"github.com/alexedwards/argon2id"
 	"github.com/appwrite/sdk-for-go/id"
-	"github.com/appwrite/sdk-for-go/permission"
 	"github.com/appwrite/sdk-for-go/query"
-	"github.com/appwrite/sdk-for-go/role"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-
-	"chatbasket/appwrite"
-	"chatbasket/model"
 )
 
-type UserService struct {
-	Appwrite *appwrite.AppwriteService
-}
+// type UserService struct {
+// 	Appwrite *appwriteinternal.AppwriteService
+// }
 
-func NewUserService(app *appwrite.AppwriteService) *UserService {
-	return &UserService{Appwrite: app}
-}
+// func NewUserService(app *appwriteinternal.AppwriteService) *UserService {
+// 	return &UserService{Appwrite: app}
+// }
 
-func (us *UserService) Signup(ctx context.Context, payload *model.SignupPayload) (*model.SignupIntialResponse, error) {
+func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayload) (*model.StatusOkay, error) {
 	// 🔍 Step 1: Check if email already exists
-	emailRes, err := us.Appwrite.Database.ListDocuments(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.UsersCollectionID,
-		us.Appwrite.Database.WithListDocumentsQueries([]string{
+	emailRes, err := us.Appwrite.Users.List(
+		us.Appwrite.Users.WithListQueries([]string{
 			query.Equal("email", payload.Email),
 			query.Limit(1),
 		}),
 	)
 
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to query email")
+		return nil, echo.NewHTTPError(500, "Failed to query email: "+err.Error())
 	}
-	if len(emailRes.Documents) > 0 {
-		return nil, echo.NewHTTPError(409, "Email already in use")
+	if emailRes.Total == 1 {
+		return nil, echo.NewHTTPError(409, "Email already registered")
 	}
 
 	// ✅ Step 2: Create account in Appwrite Auth
@@ -47,22 +42,23 @@ func (us *UserService) Signup(ctx context.Context, payload *model.SignupPayload)
 		userID,
 		payload.Email,
 		payload.Password,
+		us.Appwrite.Account.WithCreateName(payload.Name),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Appwrite account creation failed")
+		return nil, echo.NewHTTPError(500, "Appwrite account creation failed: "+err.Error())
 	}
 
 	// Step 3: Send OTP (CreateEmailToken)
 	_, err = us.Appwrite.Account.CreateEmailToken(userID, payload.Email)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to send OTP to email")
+		return nil, echo.NewHTTPError(500, "Failed to send OTP to email: "+err.Error())
 	}
 
 	// 👤 Step 4: Return success response
-	return &model.SignupIntialResponse{Status: "success"}, nil
+	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
 
-func (us *UserService) AccountVerification(ctx context.Context, payload *model.AccountVerificationPayload) (*model.SessionResponse, error) {
+func (us *GlobalService) AccountVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, error) {
 
 	// Step1: Verify user
 	userRes, err := us.Appwrite.Users.List(
@@ -72,72 +68,35 @@ func (us *UserService) AccountVerification(ctx context.Context, payload *model.A
 		}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query email")
+		return nil, echo.NewHTTPError(401, "Failed to query email: "+err.Error())
 	}
 	if userRes.Total == 0 {
 		return nil, echo.NewHTTPError(401, "Email is not registered")
 	}
-	userID := userRes.Users[0].Id
+	userId := userRes.Users[0].Id
+	userName := userRes.Users[0].Name
+	userEmail := userRes.Users[0].Email
 
-	// Step2: Verify otp
-	session, err := us.Appwrite.Account.CreateSession(userID, payload.Secret)
+	// Step2: Verify account using OTP and create session
+	session, err := us.Appwrite.Account.CreateSession(userId, payload.Secret)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "OTP verification failed")
+		return nil, echo.NewHTTPError(401, "OTP verification failed: "+err.Error())
 	}
 
-	// Step 2: Verify account
-	_, err = us.Appwrite.Users.UpdateEmailVerification(userID, true)
-	if err != nil {
-		return nil, echo.NewHTTPError(401, "OTP verification failed")
-	}
-
-	// 🗃️ Step 4: Store additional user metadata in database
-	dbPayload := model.AppwriteUserPayload{
-		Username:         "",
-		Name:             payload.Name,
-		Email:            payload.Email,
-		Bio:              "",
-		Avatar:           "",
-		Followers:        0,
-		Following:        0,
-		ProfileVisibleTo: "public",
-		IsAdminBlocked:   false,
-		AdminBlockReason: "",
-	}
-
-	doc, errr := us.Appwrite.Database.CreateDocument(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.UsersCollectionID,
-		userID,
-		dbPayload,
-		us.Appwrite.Database.WithCreateDocumentPermissions([]string{
-			permission.Read(role.Any()),
-			permission.Update(role.User(userID,"true")),
-			permission.Delete(role.User(userID,"true")),
-		}),
-	)
-	if errr != nil {
-		return nil, echo.NewHTTPError(500, "Failed to save user in database")
-	}
-
-	// 📦 Convert to internal user model
-	var user model.User
-	userJSON, _ := json.Marshal(doc)
-	if err := json.Unmarshal(userJSON, &user); err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to parse user data")
-	}
-
-	// ✅ Step 4: Convert to private user and return session response
-	privateUser := model.ToPrivateUser(&user)
+	sessionId:= session.Id
+	resUserid:= userId
+	sessionExpiry:= session.Expire
 
 	return &model.SessionResponse{
-		User:          privateUser,
-		SessionID:     session.Id,
-		SessionExpiry: session.Expire,
+		UserId:        resUserid,
+		Name:          userName,
+		Email:         userEmail,
+		SessionID:     sessionId,
+		SessionExpiry: sessionExpiry,
 	}, nil
 }
 
-func (us *UserService) Login(ctx context.Context, payload *model.LoginPayload) (*model.LoginIntialResponse, error) {
+func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload) (*model.StatusOkay, error) {
 
 	// Step1: verify user
 	userRes, err := us.Appwrite.Users.List(
@@ -147,25 +106,34 @@ func (us *UserService) Login(ctx context.Context, payload *model.LoginPayload) (
 		}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query email")
+		return nil, echo.NewHTTPError(401, "Failed to query email: "+err.Error())
 	}
 	if (userRes.Total) == 0 {
 		return nil, echo.NewHTTPError(401, "Email is not registered")
 	}
-	if userRes.Users[0].Password != payload.Password {
+
+	if userRes.Users[0].Email != payload.Email {
+		return nil, echo.NewHTTPError(401, "Email does not match")
+	}
+
+	match, err := argon2id.ComparePasswordAndHash(payload.Password, userRes.Users[0].Password)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, err.Error())
+	}
+	if !match {
 		return nil, echo.NewHTTPError(401, "Invalid password")
 	}
 
 	// Step2: Generate otp to create session
 	_, err = us.Appwrite.Account.CreateEmailToken(userRes.Users[0].Id, payload.Email)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to send OTP to email")
+		return nil, echo.NewHTTPError(401, "Failed to send OTP to email"+err.Error())
 	}
 
-	return &model.LoginIntialResponse{Status: "success"}, nil
+	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
 
-func (us *UserService) LoginVerification(ctx context.Context, payload *model.LoginVerificationPayload) (*model.SessionResponse, error) {
+func (us *GlobalService) LoginVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, error) {
 	// 🔍 Step 1: Find user by email
 	userRes, err := us.Appwrite.Users.List(
 		us.Appwrite.Users.WithListQueries([]string{
@@ -174,42 +142,31 @@ func (us *UserService) LoginVerification(ctx context.Context, payload *model.Log
 		}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query email")
+		return nil, echo.NewHTTPError(401, "Failed to query email: "+err.Error())
 	}
 	if userRes.Total == 0 {
 		return nil, echo.NewHTTPError(401, "Email is not registered")
 	}
 	userId := userRes.Users[0].Id
+	userName := userRes.Users[0].Name
+	userEmail := userRes.Users[0].Email
 
 	// 🔑 Step 2: Verify OTP and create session
 	session, err := us.Appwrite.Account.CreateSession(userId, payload.Secret)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "OTP verification failed")
+		return nil, echo.NewHTTPError(401, "OTP verification failed"+err.Error())
 	}
 
-	// 🧾 Step 3: Get user profile from database
-	doc, err := us.Appwrite.Database.GetDocument(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.UsersCollectionID,
-		userId,
-	)
-	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query user data")
-	}
+	sessionId:= session.Id
+	resUserid:= userId
+	sessionExpiry:= session.Expire
 
-	// 📦 Convert to internal user model
-	var user model.User
-	userJSON, _ := json.Marshal(doc)
-	if err := json.Unmarshal(userJSON, &user); err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to parse user data")
-	}
-
-	// ✅ Step 4: Convert to private user and return session response
-	privateUser := model.ToPrivateUser(&user)
 
 	return &model.SessionResponse{
-		User:          privateUser,
-		SessionID:     session.Id,
-		SessionExpiry: session.Expire,
+		UserId:        resUserid,
+		Name:          userName,
+		Email:         userEmail,
+		SessionID:     sessionId,
+		SessionExpiry: sessionExpiry,
 	}, nil
 }
