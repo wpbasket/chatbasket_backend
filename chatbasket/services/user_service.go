@@ -3,7 +3,9 @@ package services
 import (
 	// "chatbasket/appwriteinternal"
 	"chatbasket/model"
+	"chatbasket/utils"
 	"context"
+	"time"
 
 	"github.com/alexedwards/argon2id"
 	"github.com/appwrite/sdk-for-go/id"
@@ -38,20 +40,76 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 
 	// ✅ Step 2: Create account in Appwrite Auth
 	userID := id.Custom(uuid.NewString())
-	_, err = us.Appwrite.Account.Create(
+	_, err = us.Appwrite.Users.CreateArgon2User(
 		userID,
 		payload.Email,
 		payload.Password,
-		us.Appwrite.Account.WithCreateName(payload.Name),
+		us.Appwrite.Users.WithCreateArgon2UserName(payload.Name),
 	)
 	if err != nil {
 		return nil, echo.NewHTTPError(500, "Appwrite account creation failed: "+err.Error())
 	}
 
 	// Step 3: Send OTP (CreateEmailToken)
-	_, err = us.Appwrite.Account.CreateEmailToken(userID, payload.Email)
+	messageId := id.Unique()
+	subject := "Otp for email verification"
+	otp, err := utils.GenerateOTP()
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to send OTP to email: "+err.Error())
+		return nil, echo.NewHTTPError(500, "Failed to generate OTP: "+err.Error())
+	}
+	content := "Hello,\n\nYour One-Time Password (OTP) for verifying your email address is: <b>" + otp + "</b>\n\nPlease enter this code in the app to verify your email address. This code is valid for 3 minutes.\n\nThank you,\nChatBasket"
+
+	_, err = us.Appwrite.Message.CreateEmail(
+		messageId,
+		subject,
+		content,
+		us.Appwrite.Message.WithCreateEmailUsers([]string{userID}),
+	)
+	if err != nil {
+		return nil, echo.NewHTTPError(401, "Failed to send email: "+err.Error())
+	}
+
+	doc, err := us.Appwrite.Database.ListDocuments(
+		us.Appwrite.DatabaseID,
+		us.Appwrite.TempOtpCollectionID,
+		us.Appwrite.Database.WithListDocumentsQueries(
+			[]string{
+				query.Equal("userId", userID),
+				query.Limit(1),
+			},		
+		),
+	)
+	if err != nil {
+		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+	}
+	if doc.Total == 1 {
+		_, err = us.Appwrite.Database.DeleteDocument(
+			us.Appwrite.DatabaseID,
+			us.Appwrite.TempOtpCollectionID,
+			userID,
+		)
+		if err != nil {
+			return nil, echo.NewHTTPError(401, "Failed to delete existing otp: "+err.Error())
+		}
+	}
+	hashedOtp, err := utils.HashOTP(otp)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to hash OTP: "+err.Error())
+	}
+
+	tempOtpPayload := model.TempOtpPayload{
+		Email: payload.Email,
+		Otp:   hashedOtp,
+	}
+
+	_, err = us.Appwrite.Database.CreateDocument(
+		us.Appwrite.DatabaseID,
+		us.Appwrite.TempOtpCollectionID,
+		userID,
+		tempOtpPayload,
+	)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to save otp in database: "+err.Error())
 	}
 
 	// 👤 Step 4: Return success response
@@ -77,8 +135,48 @@ func (us *GlobalService) AccountVerification(ctx context.Context, payload *model
 	userName := userRes.Users[0].Name
 	userEmail := userRes.Users[0].Email
 
-	// Step2: Verify account using OTP and create session
-	session, err := us.Appwrite.Account.CreateSession(userId, payload.Secret)
+	// Step2: verify otp
+
+	// Retrieve the temporary OTP document from the database
+	doc, err := us.Appwrite.Database.GetDocument(
+		us.Appwrite.DatabaseID,
+		us.Appwrite.TempOtpCollectionID,
+		userId,
+	)
+	if err != nil {
+		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+	}
+	var tempOtp model.TempOtp
+	if err := doc.Decode(&tempOtp); err != nil {
+		return nil, echo.NewHTTPError(401, "Failed to parse otp data: "+err.Error())
+	}
+
+	if tempOtp.Email != payload.Email {
+		return nil, echo.NewHTTPError(401, "Email does not match with the sent OTP email")
+	}
+
+	match, err := utils.VerifyOTP(payload.Secret, tempOtp.Otp)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to verify OTP: "+err.Error())
+	}
+	if !match {
+		return nil, echo.NewHTTPError(401, "Invalid OTP")
+	}
+
+	// check if tempOtp has expired or not time limit is till 3 minutes after created at
+
+	createdAtTime, err := time.Parse(time.RFC3339, tempOtp.CreatedAt)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to parse OTP creation time: "+err.Error())
+	}
+
+	expired := utils.IsExpiredOTP(createdAtTime, 3)
+	if expired {
+		return nil, echo.NewHTTPError(401, "OTP has expired")
+	}
+	
+	// Step3: Verify account using OTP and create session
+	session, err := us.Appwrite.Users.CreateSession(userId)
 	if err != nil {
 		return nil, echo.NewHTTPError(401, "OTP verification failed: "+err.Error())
 	}
@@ -125,11 +223,68 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 	}
 
 	// Step2: Generate otp to create session
-	_, err = us.Appwrite.Account.CreateEmailToken(userRes.Users[0].Id, payload.Email)
+	messageId := id.Unique()
+	subject := "Otp for login verification"
+	otp, err := utils.GenerateOTP()
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to send OTP to email"+err.Error())
+		return nil, echo.NewHTTPError(500, "Failed to generate OTP: "+err.Error())
+	}
+	content := "Hello,\n\nYour One-Time Password (OTP) for login verification is: <b>" + otp + "</b>\n\nPlease enter this code in the app to verify your login. This code is valid for 3 minutes.\n\nThank you,\nChatBasket"
+	userId := userRes.Users[0].Id
+
+	_, err = us.Appwrite.Message.CreateEmail(
+		messageId,
+		subject,
+		content,
+		us.Appwrite.Message.WithCreateEmailUsers([]string{userId}),
+	)
+	if err != nil {
+		return nil, echo.NewHTTPError(401, "Failed to send email: "+err.Error())
 	}
 
+	doc, err := us.Appwrite.Database.ListDocuments(
+		us.Appwrite.DatabaseID,
+		us.Appwrite.TempOtpCollectionID,
+		us.Appwrite.Database.WithListDocumentsQueries(
+			[]string{
+				query.Equal("userId", userId),
+				query.Limit(1),
+			},		
+		),
+	)
+	if err != nil {
+		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+	}
+	if doc.Total == 1 {
+		_, err = us.Appwrite.Database.DeleteDocument(
+			us.Appwrite.DatabaseID,
+			us.Appwrite.TempOtpCollectionID,
+			userId,
+		)
+		if err != nil {
+			return nil, echo.NewHTTPError(401, "Failed to delete existing otp: "+err.Error())
+		}
+	}
+	hashedOtp, err := utils.HashOTP(otp)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to hash OTP: "+err.Error())
+	}
+	tempOtpPayload := model.TempOtpPayload{
+		Email: payload.Email,
+		Otp:   hashedOtp,
+		UserId: userId,
+	}
+
+	_, err = us.Appwrite.Database.CreateDocument(
+		us.Appwrite.DatabaseID,
+		us.Appwrite.TempOtpCollectionID,
+		userId,
+		tempOtpPayload,
+	)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to save otp in database: "+err.Error())
+	}
+	
 	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
 
@@ -151,8 +306,48 @@ func (us *GlobalService) LoginVerification(ctx context.Context, payload *model.A
 	userName := userRes.Users[0].Name
 	userEmail := userRes.Users[0].Email
 
-	// 🔑 Step 2: Verify OTP and create session
-	session, err := us.Appwrite.Account.CreateSession(userId, payload.Secret)
+	// 🔑 Step 2: Verify OTP
+	// Retrieve the temporary OTP document from the database
+	doc, err := us.Appwrite.Database.GetDocument(
+		us.Appwrite.DatabaseID,
+		us.Appwrite.TempOtpCollectionID,
+		userId,
+	)
+	if err != nil {
+		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+	}
+	var tempOtp model.TempOtp
+	if err := doc.Decode(&tempOtp); err != nil {
+		return nil, echo.NewHTTPError(401, "Failed to parse otp data: "+err.Error())
+	}
+
+	if tempOtp.Email != payload.Email {
+		return nil, echo.NewHTTPError(401, "Email does not match with the sent OTP email")
+	}
+
+	match, err := utils.VerifyOTP(payload.Secret, tempOtp.Otp)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to verify OTP: "+err.Error())
+	}
+	if !match {
+		return nil, echo.NewHTTPError(401, "Invalid OTP")
+	}
+
+	// check if tempOtp has expired or not time limit is till 3 minutes after created at
+
+	createdAtTime, err := time.Parse(time.RFC3339, tempOtp.CreatedAt)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to parse OTP creation time: "+err.Error())
+	}
+
+	expired := utils.IsExpiredOTP(createdAtTime, 3)
+	if expired {
+		return nil, echo.NewHTTPError(401, "OTP has expired")
+	}
+	
+
+	// 🔑 Step 3:  create session
+	session, err := us.Appwrite.Users.CreateSession(userId)
 	if err != nil {
 		return nil, echo.NewHTTPError(401, "OTP verification failed"+err.Error())
 	}

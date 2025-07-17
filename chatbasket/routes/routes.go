@@ -36,7 +36,7 @@ func RegisterRoutes(
 
 	authGroup := e.Group("/auth")
 	authGroup.POST("/signup", userHandler.Signup)
-	authGroup.POST("/account-verification", userHandler.AcountVerification)
+	authGroup.POST("/signup-verification", userHandler.AcountVerification)
 	authGroup.POST("/login", userHandler.Login)
 	authGroup.POST("/login-verification", userHandler.LoginVerification)
 

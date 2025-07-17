@@ -168,6 +168,7 @@ type TempOtp struct{
 	Id        string `json:"$id"`
 	Email     string `json:"email"`
 	Otp       string `json:"otp"`
+	UserId    string `json:"userId"`
 	CreatedAt string `json:"$createdAt"`
 	UpdatedAt string `json:"$updatedAt"`
 }
@@ -176,6 +177,7 @@ type TempOtp struct{
 type TempOtpPayload struct{
 	Email     string `json:"email"`
 	Otp       string `json:"otp"`
+	UserId    string `json:"userId"`
 } 
 
 // 
