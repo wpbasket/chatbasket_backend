@@ -1,10 +1,11 @@
 package main
 
 import (
+	"chatbasket/model"
 	"chatbasket/routes"
 	"net/http"
 
-	"github.com/joho/godotenv"
+	// "github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -25,17 +26,17 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	err := godotenv.Load("../.env")
-	if err != nil {
-		e.Logger.Fatal("Error loading .env file", err)
-	}
+	// err := godotenv.Load("../.env")
+	// if err != nil {
+	// 	e.Logger.Fatal("Error loading .env file", err)
+	// }
 
 	routes.RegisterRoutes(e)
 
-	e.GET("/hello", hello)
+	e.GET("/", hello)
 	e.Logger.Fatal(e.Start(":8000"))
 }
 
 func hello(c echo.Context) error {
-	return c.String(http.StatusOK, "Hello")
+	return c.JSON(http.StatusOK, &model.StatusOkay{Status: true,Message: "Hello"})
 }

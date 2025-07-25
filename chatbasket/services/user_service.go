@@ -6,8 +6,6 @@ import (
 	"chatbasket/utils"
 	"context"
 	"time"
-
-	"github.com/alexedwards/argon2id"
 	"github.com/appwrite/sdk-for-go/id"
 	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
@@ -214,9 +212,11 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 		return nil, echo.NewHTTPError(401, "Email does not match")
 	}
 
-	match, err := argon2id.ComparePasswordAndHash(payload.Password, userRes.Users[0].Password)
+	passWord:=userRes.Users[0].Password
+
+	match, err := utils.VerifyOTP(payload.Password, passWord)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, err.Error())
+		return nil, echo.NewHTTPError(500,"Failed to verify password: "+ err.Error())
 	}
 	if !match {
 		return nil, echo.NewHTTPError(401, "Invalid password")
