@@ -36,7 +36,7 @@ RUN go mod download
 COPY . .
 
 # Build the application from app directory
-RUN go build -o main ./app
+RUN go build -o main ./app/main.go
 
 # Final runtime stage
 FROM alpine:latest
