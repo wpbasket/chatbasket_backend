@@ -21,79 +21,42 @@
 
 
 
-# FROM golang:1.24.4-alpine AS build_base
-
-# # Install git and ca-certificates
-# RUN apk add --no-cache git ca-certificates
-
-# # Set working directory
-# WORKDIR /app
-
-# # Copy go mod files for dependency caching
-# COPY go.mod go.sum ./
-
-# # Download dependencies
-# RUN go mod download
-
-# # Copy source code
-# COPY . .
-
-# # Build the application from app directory
-# RUN go build -o main ./app
-
-# # Final runtime stage
-# FROM alpine:latest
-
-# # Install ca-certificates for HTTPS
-# RUN apk --no-cache add ca-certificates
-
-# # Set working directory
-# WORKDIR /root/
-
-# # Copy binary from build stage
-# COPY --from=build_base /app/main .
-
-# # Heroku dynamic port
-# EXPOSE 8080
-
-# # Run the application
-# CMD ["./main"]
-
-
-
-# Build stage
 FROM golang:1.24.4-alpine AS build_base
 
-# Install dependencies
+# Install git and ca-certificates
 RUN apk add --no-cache git ca-certificates
 
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files and download dependencies
+# Copy go mod files for dependency caching
 COPY go.mod go.sum ./
+
+# Download dependencies
 RUN go mod download
 
-# Copy all source code
+# Copy source code
 COPY . .
 
-# Build the Go app (adjust if your main.go path is different)
+# Build the application from app directory
 RUN go build -o main ./app
 
-# Runtime stage
+# Final runtime stage
 FROM alpine:latest
 
-# Install only certs
+# Install ca-certificates for HTTPS
 RUN apk --no-cache add ca-certificates
 
 # Set working directory
 WORKDIR /root/
 
-# Copy the built binary
+# Copy binary from build stage
 COPY --from=build_base /app/main .
 
-# Set the PORT env (Heroku injects this automatically at runtime)
-ENV PORT=8080
+# # Heroku dynamic port
+# EXPOSE 8080
 
-# Run the app (it should bind to PORT from env)
+# Run the application
 CMD ["./main"]
+
+
