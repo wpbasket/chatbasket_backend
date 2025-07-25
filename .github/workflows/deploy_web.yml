@@ -26,7 +26,7 @@ jobs:
         env:
           HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
         run: |
-          heroku container:push web --app ${{ secrets.HEROKU_WEB_APP_NAME }} --context-path ./chatbasket
+          heroku container:push web --app ${{ secrets.HEROKU_WEB_APP_NAME }} --context-path chatbasket
           
       - name: Release the app
         env:
