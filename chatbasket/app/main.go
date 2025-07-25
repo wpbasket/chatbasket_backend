@@ -4,6 +4,7 @@ import (
 	"chatbasket/model"
 	"chatbasket/routes"
 	"net/http"
+	"os"
 
 	// "github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
@@ -34,9 +35,13 @@ func main() {
 	routes.RegisterRoutes(e)
 
 	e.GET("/", hello)
-	e.Logger.Fatal(e.Start(":8000"))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Fallback
+	}
+	e.Logger.Fatal(e.Start(":" + port))
 }
 
 func hello(c echo.Context) error {
-	return c.JSON(http.StatusOK, &model.StatusOkay{Status: true,Message: "Hello"})
+	return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "Hello"})
 }
