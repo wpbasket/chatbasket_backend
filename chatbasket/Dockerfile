@@ -36,7 +36,7 @@ RUN go mod download
 COPY . .
 
 # Build the application from app directory
-RUN go build -o main ./app/main.go
+RUN go build -o main ./app
 
 # Final runtime stage
 FROM alpine:latest
@@ -51,7 +51,7 @@ WORKDIR /root/
 COPY --from=build_base /app/main .
 
 # Heroku dynamic port
-EXPOSE $PORT
+EXPOSE 8080
 
 # Run the application
 CMD ["./main"]
