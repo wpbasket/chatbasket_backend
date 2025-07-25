@@ -43,5 +43,5 @@ func main() {
 }
 
 func hello(c echo.Context) error {
-	return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "Hello"})
+	return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "Hello "})
 }
