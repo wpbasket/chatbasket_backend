@@ -5,7 +5,9 @@ import (
 	"chatbasket/model"
 	"chatbasket/utils"
 	"context"
+	"log"
 	"time"
+
 	"github.com/appwrite/sdk-for-go/id"
 	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
@@ -98,6 +100,8 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 	tempOtpPayload := model.TempOtpPayload{
 		Email: payload.Email,
 		Otp:   hashedOtp,
+		UserId: userID,
+		MessageId: messageId,
 	}
 
 	_, err = us.Appwrite.Database.CreateDocument(
@@ -178,6 +182,16 @@ func (us *GlobalService) AccountVerification(ctx context.Context, payload *model
 	if err != nil {
 		return nil, echo.NewHTTPError(401, "OTP verification failed: "+err.Error())
 	}
+	_,err = us.Appwrite.Users.UpdateEmailVerification(userId, true)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to update email verification status: "+err.Error())
+	}
+	
+	_,err = us.Appwrite.Message.Delete(tempOtp.MessageId)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to delete message: "+err.Error())
+	}
+	
 
 	sessionId:= session.Id
 	resUserid:= userId
@@ -273,6 +287,7 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 		Email: payload.Email,
 		Otp:   hashedOtp,
 		UserId: userId,
+		MessageId: messageId,
 	}
 
 	_, err = us.Appwrite.Database.CreateDocument(
@@ -351,6 +366,22 @@ func (us *GlobalService) LoginVerification(ctx context.Context, payload *model.A
 	if err != nil {
 		return nil, echo.NewHTTPError(401, "OTP verification failed"+err.Error())
 	}
+
+	// if email not verified verfiy it
+	if !userRes.Users[0].EmailVerification {
+		_,err := us.Appwrite.Users.UpdateEmailVerification(userId, true)
+		if err !=nil{
+			return nil, echo.NewHTTPError(500, "Failed to update email verification status: "+err.Error())
+		
+		}
+	}
+
+	// delete message but even it fails continue dont return nil
+	_,err = us.Appwrite.Message.Delete(tempOtp.MessageId)
+	if err != nil {
+		log.Printf("could not delete message: %v",  err.Error())
+	}
+
 
 	sessionId:= session.Id
 	resUserid:= userId
