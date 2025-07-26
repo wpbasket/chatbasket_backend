@@ -37,13 +37,18 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 	if emailRes.Total == 1 {
 		return nil, echo.NewHTTPError(409, "Email already registered")
 	}
+	
+	hashedPassword,err:=utils.HashOTP(payload.Password)
+	if err != nil {
+		return nil, echo.NewHTTPError(500, "Failed to hash password: "+err.Error())
+	}
 
 	// ✅ Step 2: Create account in Appwrite Auth
 	userID := id.Custom(uuid.NewString())
 	_, err = us.Appwrite.Users.CreateArgon2User(
 		userID,
 		payload.Email,
-		payload.Password,
+		hashedPassword,
 		us.Appwrite.Users.WithCreateArgon2UserName(payload.Name),
 	)
 	if err != nil {
