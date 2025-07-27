@@ -2,7 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
-
+	"time"
 	"github.com/alexedwards/argon2id"
 )
 
@@ -28,4 +28,11 @@ func HashOTP(otp string) (string, error) {
 // VerifyOTP compares a plain OTP with the hashed OTP from the DB
 func VerifyOTP(plainOTP, hashedOTP string) (bool, error) {
 	return argon2id.ComparePasswordAndHash(plainOTP, hashedOTP)
+}
+
+
+// IsExpiredOTP checks if the OTP is expired based on createdAt and duration (in minutes)
+func IsExpiredOTP(createdAt time.Time, validMinutes int) bool {
+	expiry := createdAt.Add(time.Duration(validMinutes) * time.Minute)
+	return time.Now().After(expiry)
 }

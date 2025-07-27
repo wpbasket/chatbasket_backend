@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"chatbasket/appwriteinternal"
+	"chatbasket/model"
 	"net/http"
 	"os"
 	"strings"
@@ -9,11 +10,6 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-type ResponseError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Type    string `json:"type"`
-}
 
 func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -23,7 +19,7 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 
 			// Check if Authorization header is present (native apps)
 			authHeader := c.Request().Header.Get("Authorization")
-			
+
 			if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 				// Request from native app (iOS/Android)
 				platform = "native"
@@ -35,13 +31,13 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 			} else {
 				// Request from web - extract from httpOnly cookies
 				platform = "web"
-				
+
 				// Extract sessionId from cookie
 				sessionCookie, err := c.Cookie("sessionId")
 				if err == nil {
 					sessionId = sessionCookie.Value
 				}
-				
+
 				// Extract userId from cookie
 				userCookie, err := c.Cookie("userId")
 				if err == nil {
@@ -51,7 +47,7 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 
 			// 🔒 Check missing auth
 			if sessionId == "" || userId == "" {
-				return c.JSON(http.StatusUnauthorized, ResponseError{
+				return c.JSON(http.StatusUnauthorized, model.SessionError{
 					Code:    http.StatusUnauthorized,
 					Type:    "missing_auth",
 					Message: "Missing session ID or User ID",
@@ -72,7 +68,7 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 					statusCode = he.Code
 				}
 
-				return c.JSON(statusCode, ResponseError{
+				return c.JSON(statusCode, model.SessionError{
 					Code:    statusCode,
 					Type:    "session_list_failed",
 					Message: err.Error(),
@@ -89,7 +85,7 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 			}
 
 			if !sessionFound {
-				return c.JSON(http.StatusUnauthorized, ResponseError{
+				return c.JSON(http.StatusUnauthorized, model.SessionError{
 					Code:    http.StatusUnauthorized,
 					Type:    "session_invalid",
 					Message: "Invalid session ID",

@@ -23,18 +23,27 @@ func (h *UserHandler) Signup(c echo.Context) error {
 
 	// Parse and bind request body
 	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid signup payload: "+err.Error())
+		return c.JSON(http.StatusBadRequest, model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid signup payload: " + err.Error(),
+			Type:    "missing_value",			
+		})
 	}
 
 	// Validate required fields
 	if payload.Email == "" || payload.Password == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "Missing required fields")
+		return c.JSON(http.StatusBadRequest, model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Missing required fields",
+			Type:    "missing_value",
+		})
 	}
 
 	// Create user via service
 	user, err := h.Service.Signup(c.Request().Context(), &payload)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return c.JSON(err.Code,err)
+		// return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	// Return sanitized user info
