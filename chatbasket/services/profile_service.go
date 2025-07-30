@@ -80,7 +80,7 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 		ps.Appwrite.DatabaseID,
 		ps.Appwrite.UsersCollectionID,
 		ps.Appwrite.Database.WithListDocumentsQueries([]string{
-			query.Equal("userId", userId),
+			query.Equal("email", userEmail),
 			query.Limit(1),
 		}),
 	)
@@ -128,11 +128,20 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 
 func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.PrivateUser, *model.ApiError) {
 
+	getEmail,err := ps.Appwrite.Users.Get(userId)	
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query user data: " + err.Error(),
+			Type:    "internal_server_error",	
+		}
+	}
+	
 	user, err := ps.Appwrite.Database.ListDocuments(
 		ps.Appwrite.DatabaseID,
 		ps.Appwrite.UsersCollectionID,
 		ps.Appwrite.Database.WithListDocumentsQueries([]string{
-			query.Equal("userId", userId),
+			query.Equal("email", getEmail.Email),
 			query.Limit(1),	
 		}),
 	)	
