@@ -73,7 +73,7 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 	}
 
 	// Step 3: Send OTP (CreateEmailToken)
-	messageId := id.Unique()
+	messageId := id.Custom(uuid.NewString())
 	subject := "Otp for email verification"
 	otp, err := utils.GenerateOTP()
 	if err != nil {
@@ -306,7 +306,7 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 	}
 
 	// Step2: Generate otp to create session
-	messageId := id.Unique()
+	messageId := id.Custom(uuid.NewString())
 	subject := "Otp for login verification"
 	otp, err := utils.GenerateOTP()
 	if err != nil {
