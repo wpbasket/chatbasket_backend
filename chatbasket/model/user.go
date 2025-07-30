@@ -125,7 +125,6 @@ type CheckIfUserNameAvailablePayload struct {
 
 // db payload for creating user profile
 type CreateUserProfile struct {
-	Id               string `json:"$id"`                        // Always required
 	Username         string `json:"username"`                   // Required for identity
 	Name             string `json:"name"`                       // Optional display name
 	Email            string `json:"email"`                      // Required for login/contact

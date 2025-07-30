@@ -4,7 +4,6 @@ import (
 	"chatbasket/model"
 	"chatbasket/services"
 	"net/http"
-
 	"github.com/labstack/echo/v4"
 )
 
@@ -27,8 +26,9 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 	
 	user, err := h.Service.Logout(c.Request().Context(), &payload, userId, sessionId)
 	if err != nil {
-		return err
+		return c.JSON(err.Code, err)
 	}
+
 	platform:= c.Get("platform").(string)
 	if platform == "web" {
 		// remove these cookies c.SetCookie(sessionCookie) c.SetCookie(userCookie)
@@ -67,7 +67,7 @@ func (h *ProfileHandler) CheckIfUserNameAvailable(c echo.Context) error {
 	}
 	res,err := h.Service.CheckIfUserNameAvailable(c.Request().Context(), &payload)
 	if err != nil {
-		return err
+		return c.JSON(err.Code, err)
 	}
 	
 
@@ -84,7 +84,7 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 	
 	user, err := h.Service.CreateUserProfile(c.Request().Context(), &payload, userId)
 	if err != nil {
-		return err
+		return c.JSON(err.Code, err)
 	}
 	
 
@@ -101,7 +101,7 @@ func (h *ProfileHandler) GetProfile(c echo.Context) error {
 	
 	user, err := h.Service.GetProfile(c.Request().Context(), userId)
 	if err != nil {
-		return err
+		return c.JSON(err.Code, err)
 	}
 	
 
@@ -115,57 +115,11 @@ func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
 	}
 	userId:= c.Get("userId").(string)
 	
-	user, err := h.Service.CreateUserProfile(c.Request().Context(), &payload, userId)
+	user, err := h.Service.UpdateUserProfile(c.Request().Context(), &payload, userId)
 	if err != nil {
-		return err
+		return c.JSON(err.Code, err)
 	}
 	
 	return c.JSON(http.StatusOK, user)
 	
-}
-
-func (h *ProfileHandler) UpdateEmail(c echo.Context) error{
-	var payload model.UpdateEmailPayload
-	if err := c.Bind(&payload); err != nil {	
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid email payload")
-	}
-	userId:= c.Get("userId").(string)
-	
-	user, err := h.Service.UpdateEmail(c.Request().Context(), &payload, userId)	
-	if err != nil {
-		return err
-	}
-	
-	return c.JSON(http.StatusOK, user)
-
-}
-
-func (h *ProfileHandler) UpdateEmailVerification(c echo.Context) error{
-	var payload model.UpdateEmailVerification
-	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid email payload")
-	}
-	userId:= c.Get("userId").(string)
-	
-	user, err := h.Service.UpdateEmailVerification(c.Request().Context(), &payload, userId)
-	if err != nil {
-		return err
-	}
-	
-	return c.JSON(http.StatusOK, user)
-}
-
-func (h *ProfileHandler) UpdatePassword(c echo.Context) error{
-	var payload model.UpdatePassword
-	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid password payload")
-	}
-	userId:= c.Get("userId").(string)
-	
-	user, err := h.Service.UpdatePassword(c.Request().Context(), &payload, userId)
-	if err != nil {
-		return err
-	}
-	
-	return c.JSON(http.StatusOK, user)	
 }

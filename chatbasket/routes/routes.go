@@ -48,8 +48,13 @@ func RegisterRoutes(
 	profileGroup.POST("/create-profile", profileHandler.CreateUserProfile)
 	profileGroup.GET("/get-profile", profileHandler.GetProfile)
 	profileGroup.POST("/update-profile", profileHandler.UpdateProfile)
-	profileGroup.POST("/update-email", profileHandler.UpdateEmail)
-	profileGroup.POST("/update-email-verification", profileHandler.UpdateEmailVerification)
-	profileGroup.POST("/update-password", profileHandler.UpdatePassword)
+	
+
+	settingGroup := e.Group("/settings")
+	settingGroup.Use(middleware.AppwriteSessionMiddleware(true))
+	settingHandler := handler.NewSettingHandler(globalService)
+	settingGroup.POST("/update-email", settingHandler.UpdateEmail)
+	settingGroup.POST("/update-password", settingHandler.UpdatePassword)
+	profileGroup.POST("/update-email-verification", settingHandler.UpdateEmailVerification)
 
 }

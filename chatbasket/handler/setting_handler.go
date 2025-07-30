@@ -1,0 +1,65 @@
+package handler
+
+import (
+	"chatbasket/model"
+	"chatbasket/services"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+)
+
+type SettingHandler struct {
+	Service *services.GlobalService
+}
+
+func NewSettingHandler(service *services.GlobalService) *SettingHandler {
+	return &SettingHandler{Service: service}
+}
+
+func (h *SettingHandler) UpdateEmail(c echo.Context) error{
+	var payload model.UpdateEmailPayload
+	if err := c.Bind(&payload); err != nil {	
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid email payload")
+	}
+	userId:= c.Get("userId").(string)
+	
+	user, err := h.Service.UpdateEmail(c.Request().Context(), &payload, userId)	
+	if err != nil {
+		return err
+	}
+	
+	return c.JSON(http.StatusOK, user)
+
+}
+
+
+func (h *SettingHandler) UpdateEmailVerification(c echo.Context) error{
+	var payload model.UpdateEmailVerification
+	if err := c.Bind(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid email payload")
+	}
+	userId:= c.Get("userId").(string)
+	
+	user, err := h.Service.UpdateEmailVerification(c.Request().Context(), &payload, userId)
+	if err != nil {
+		return err
+	}
+	
+	return c.JSON(http.StatusOK, user)
+}
+
+
+func (h *SettingHandler) UpdatePassword(c echo.Context) error{
+	var payload model.UpdatePassword
+	if err := c.Bind(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid password payload")
+	}
+	userId:= c.Get("userId").(string)
+	
+	user, err := h.Service.UpdatePassword(c.Request().Context(), &payload, userId)
+	if err != nil {
+		return err
+	}
+	
+	return c.JSON(http.StatusOK, user)	
+}
