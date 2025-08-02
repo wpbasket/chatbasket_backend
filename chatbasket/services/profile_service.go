@@ -48,10 +48,10 @@ func (ps *GlobalService) CheckIfUserNameAvailable(ctx context.Context, payload *
 			Type:    "internal_server_error",
 		}
 	}
-	if userRes.Total == 1 {
-		return &model.StatusOkay{Status: false, Message: "Username already exists"}, nil
-	} else {
+	if userRes.Total == 0 {
 		return &model.StatusOkay{Status: true, Message: "Username is available"}, nil
+	} else {
+		return &model.StatusOkay{Status: false, Message: "Username is not available"}, nil
 	}
 
 }
@@ -98,6 +98,31 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 			Code:    409,
 			Message: "User profile already exists",
 			Type:    "conflict",
+		}
+	}
+
+	usernameCheck,err := ps.Appwrite.Database.ListDocuments(
+		ps.Appwrite.DatabaseID,
+		ps.Appwrite.UsersCollectionID,
+		ps.Appwrite.Database.WithListDocumentsQueries([]string{
+			query.Equal("username", payload.Username),
+			query.Limit(1),
+		}),
+	)
+
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query user data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	if usernameCheck.Total > 0{
+		return nil, &model.ApiError{
+			Code:    409,
+			Message: "Username already exists",
+			Type:    "conflict_username",
 		}
 	}
 
@@ -160,17 +185,35 @@ func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.
 			Type:    "not_found",
 		}
 	}
+	
+	
 
-	var privateUser model.PrivateUser
-	if err := user.Decode(&privateUser); err != nil {
+	var responseUser model.Documents[model.User]
+
+	if err := user.Decode(&responseUser); err != nil {
 		return nil, &model.ApiError{
 			Code:    500,
 			Message: "Failed to parse user data: " + err.Error(),
 			Type:    "internal_server_error",
 		}
 	}
+	
+	finalResponse:= responseUser.Documents[0]
 
-	return &privateUser, nil
+	return &model.PrivateUser{
+		Id:               finalResponse.Id,
+		Name:             finalResponse.Name,
+		Username:         finalResponse.Username,
+		Email:            finalResponse.Email,
+		Bio:              finalResponse.Bio,
+		Avatar:           finalResponse.Avatar,
+		ProfileVisibleTo: finalResponse.ProfileVisibleTo,
+		CreatedAt:        finalResponse.CreatedAt,
+		UpdatedAt:        finalResponse.UpdatedAt,
+		Followers:        finalResponse.Followers,
+		Following:        finalResponse.Following,
+		Posts:            finalResponse.Posts,
+	}, nil
 
 }
 
