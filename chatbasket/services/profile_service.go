@@ -67,12 +67,11 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 		}
 	}
 	userEmail := user.Email
-	dbUserPayload := model.CreateUserProfile{
+	dbUserPayload := model.CreateOrUpdateUserProfile{
 		Username:         payload.Username,
 		Name:             payload.Name,
 		Email:            userEmail,
 		Bio:              payload.Bio,
-		Avatar:           payload.Avatar,
 		ProfileVisibleTo: payload.ProfileVisibleTo,
 	}
 
@@ -139,8 +138,8 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 			Type:    "internal_server_error",
 		}
 	}
-	var privateUser model.PrivateUser
-	if err := doc.Decode(&privateUser); err != nil {
+	var resUser model.User
+	if err := doc.Decode(&resUser); err != nil {
 		return nil, &model.ApiError{
 			Code:    500,
 			Message: "Failed to parse created user data: " + err.Error(),
@@ -148,7 +147,7 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 		}
 	}
 
-	return &privateUser, nil
+	return model.ToPrivateUser(&resUser), nil
 }
 
 func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.PrivateUser, *model.ApiError) {
@@ -200,20 +199,7 @@ func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.
 	
 	finalResponse:= responseUser.Documents[0]
 
-	return &model.PrivateUser{
-		Id:               finalResponse.Id,
-		Name:             finalResponse.Name,
-		Username:         finalResponse.Username,
-		Email:            finalResponse.Email,
-		Bio:              finalResponse.Bio,
-		Avatar:           finalResponse.Avatar,
-		ProfileVisibleTo: finalResponse.ProfileVisibleTo,
-		CreatedAt:        finalResponse.CreatedAt,
-		UpdatedAt:        finalResponse.UpdatedAt,
-		Followers:        finalResponse.Followers,
-		Following:        finalResponse.Following,
-		Posts:            finalResponse.Posts,
-	}, nil
+	return model.ToPrivateUser(&finalResponse), nil
 
 }
 
@@ -222,7 +208,7 @@ func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.
 
 
 
-func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.CreateUserProfilePayload,  userId string) (*model.PrivateUser, *model.ApiError) {
+func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.UpdateUserProfilePayload,  userId string) (*model.PrivateUser, *model.ApiError) {
 
 	user, err := ps.Appwrite.Users.Get(userId)
 	if err != nil {
@@ -233,7 +219,7 @@ func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.C
 		}
 	}
 
-	updatePayload := model.CreateUserProfile{
+	updatePayload := model.CreateOrUpdateUserProfile{
 		Username:         payload.Username,
 		Name:             payload.Name,
 		Email:            user.Email,
