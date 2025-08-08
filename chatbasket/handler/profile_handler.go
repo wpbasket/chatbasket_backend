@@ -5,12 +5,12 @@ import (
 	"chatbasket/services"
 	"net/http"
 	"github.com/labstack/echo/v4"
-	"github.com/go-playground/validator/v10"
+	// "github.com/go-playground/validator/v10"
 
 
 )
 
-var validate = validator.New()
+// var validate = validator.New()
 
 type ProfileHandler struct{
 	Service *services.GlobalService
@@ -86,9 +86,9 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid create user profile payload")
 	}
 
-	if err := validate.Struct(payload); err != nil {
-        return echo.NewHTTPError(http.StatusBadRequest, "Validation failed: "+err.Error())
-    }
+	// if err := validate.Struct(payload); err != nil {
+    //     return echo.NewHTTPError(http.StatusBadRequest, "Validation failed: "+err.Error())
+    // }
 
 	userId:= c.Get("userId").(string)
 	
