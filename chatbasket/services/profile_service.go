@@ -2,8 +2,15 @@ package services
 
 import (
 	"chatbasket/model"
+	"chatbasket/utils"
 	"context"
+	"mime/multipart"
+
+	"github.com/appwrite/sdk-for-go/id"
+	"github.com/appwrite/sdk-for-go/permission"
 	"github.com/appwrite/sdk-for-go/query"
+	"github.com/appwrite/sdk-for-go/role"
+	"github.com/google/uuid"
 )
 
 func (ps *GlobalService) Logout(ctx context.Context, payload *model.LogoutPayload, userId, sessionId string) (*model.StatusOkay, *model.ApiError) {
@@ -75,7 +82,7 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 		ProfileVisibleTo: payload.ProfileVisibleTo,
 	}
 
-	check,err := ps.Appwrite.Database.ListDocuments(
+	check, err := ps.Appwrite.Database.ListDocuments(
 		ps.Appwrite.DatabaseID,
 		ps.Appwrite.UsersCollectionID,
 		ps.Appwrite.Database.WithListDocumentsQueries([]string{
@@ -91,7 +98,7 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 			Type:    "internal_server_error",
 		}
 	}
-	
+
 	if check.Total > 0 {
 		return nil, &model.ApiError{
 			Code:    409,
@@ -100,7 +107,7 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 		}
 	}
 
-	usernameCheck,err := ps.Appwrite.Database.ListDocuments(
+	usernameCheck, err := ps.Appwrite.Database.ListDocuments(
 		ps.Appwrite.DatabaseID,
 		ps.Appwrite.UsersCollectionID,
 		ps.Appwrite.Database.WithListDocumentsQueries([]string{
@@ -117,7 +124,7 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 		}
 	}
 
-	if usernameCheck.Total > 0{
+	if usernameCheck.Total > 0 {
 		return nil, &model.ApiError{
 			Code:    409,
 			Message: "Username already exists",
@@ -152,23 +159,23 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 
 func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.PrivateUser, *model.ApiError) {
 
-	getEmail,err := ps.Appwrite.Users.Get(userId)	
+	getEmail, err := ps.Appwrite.Users.Get(userId)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    500,
 			Message: "Failed to query user data: " + err.Error(),
-			Type:    "internal_server_error",	
+			Type:    "internal_server_error",
 		}
 	}
-	
+
 	user, err := ps.Appwrite.Database.ListDocuments(
 		ps.Appwrite.DatabaseID,
 		ps.Appwrite.UsersCollectionID,
 		ps.Appwrite.Database.WithListDocumentsQueries([]string{
 			query.Equal("email", getEmail.Email),
-			query.Limit(1),	
+			query.Limit(1),
 		}),
-	)	
+	)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    500,
@@ -184,8 +191,6 @@ func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.
 			Type:    "not_found",
 		}
 	}
-	
-	
 
 	var responseUser model.Documents[model.User]
 
@@ -196,19 +201,50 @@ func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.
 			Type:    "internal_server_error",
 		}
 	}
-	
-	finalResponse:= responseUser.Documents[0]
+
+	finalResponse := responseUser.Documents[0]
 
 	return model.ToPrivateUser(&finalResponse), nil
 
 }
 
+func (ps *GlobalService) UploadUserProfilePicture(ctx context.Context, fh *multipart.FileHeader, userId string) (*model.UploadUserProfilePictureResponse, *model.ApiError) {
+	fileTemp, err := utils.ConvertToInputFile(fh)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to open file: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	fileId := id.Custom(uuid.NewString())
+	uploadRes, err := ps.Appwrite.Storage.CreateFile(
+		ps.Appwrite.ProfilePicBucketID,
+		fileId,
+		fileTemp,
+		ps.Appwrite.Storage.WithCreateFilePermissions([]string{
+			permission.Read(role.User(userId,"verified")),
+			permission.Write(role.User(userId,"verified")),
+		}),
+	)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to upload file: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
 
 
+	return &model.UploadUserProfilePictureResponse{
+		Id:   uploadRes.Id,
+		Name: uploadRes.Name,
+	}, nil
 
+}
 
-
-func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.UpdateUserProfilePayload,  userId string) (*model.PrivateUser, *model.ApiError) {
+func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.UpdateUserProfilePayload, userId string) (*model.PrivateUser, *model.ApiError) {
 
 	user, err := ps.Appwrite.Users.Get(userId)
 	if err != nil {

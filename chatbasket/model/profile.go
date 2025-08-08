@@ -53,6 +53,8 @@ type CreateUserProfilePayload struct {
 	ProfileVisibleTo string `json:"profileVisibleTo" validate:"required,oneof=public followers private"`           // "public", "followers", "private"
 }
 
+
+
 //  payload for creating user profile
 type UpdateUserProfilePayload struct {
 	Username         string `json:"username,omitempty" validate:"omitempty,min=1,max=30,regexp=^[a-z0-9][a-z0-9._]*$"`
@@ -62,6 +64,10 @@ type UpdateUserProfilePayload struct {
 	Avatar           string `json:"avatar,omitempty"`
 }
 
+type UploadUserProfilePictureResponse struct {
+	Id string `json:"id"`
+	Name string `json:"name"`
+}
 
 // 🔁 Convert full user model → private view
 func ToPrivateUser(u *User) *PrivateUser {

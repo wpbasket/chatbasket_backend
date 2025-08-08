@@ -25,6 +25,7 @@ type AppwriteService struct {
 	RefreshTokensCollectionID string
 	FollowRequestsCollectionID string
 	TempOtpCollectionID       string
+	ProfilePicBucketID        string
 }
 
 func NewAppwriteService(
@@ -40,7 +41,8 @@ func NewAppwriteService(
 	followCollectionID,
 	refreshTokensCollectionID,
 	followRequestsCollectionID,
-	tempOtpCollectionID string) *AppwriteService {
+	tempOtpCollectionID,
+	profilePicBucketID string) *AppwriteService {
 
 	c := appwrite.NewClient(
 		appwrite.WithEndpoint(endpoint),
@@ -64,5 +66,6 @@ func NewAppwriteService(
 		RefreshTokensCollectionID: refreshTokensCollectionID,
 		FollowRequestsCollectionID: followRequestsCollectionID,
 		TempOtpCollectionID:       tempOtpCollectionID,
+		ProfilePicBucketID:        profilePicBucketID,
 	}
 }

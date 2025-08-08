@@ -28,7 +28,8 @@ func RegisterRoutes(
 		os.Getenv("APPWRITE_FOLLOW_COLLECTION_ID"),
 		os.Getenv("APPWRITE_REFRESH_TOKENS_COLLECTION_ID"),		
 		os.Getenv("APPWRITE_FOLLOW_REQUESTS_COLLECTION_ID"),
-		os.Getenv("APPWRITE_TEMP_OTP_COLLECTION_ID"),	
+		os.Getenv("APPWRITE_TEMP_OTP_COLLECTION_ID"),
+		os.Getenv("APPWRITE_FILE_USERPROFILEPIC_BUCKET_ID"),	
 	)
 	
 	globalService := services.NewGlobalService(as)
@@ -47,6 +48,7 @@ func RegisterRoutes(
 	profileGroup.POST("/check-username", profileHandler.CheckIfUserNameAvailable)
 	profileGroup.POST("/create-profile", profileHandler.CreateUserProfile)
 	profileGroup.GET("/get-profile", profileHandler.GetProfile)
+	profileGroup.POST("/upload-avatar", profileHandler.UploadProfilePicture)
 	profileGroup.POST("/update-profile", profileHandler.UpdateProfile)
 	
 

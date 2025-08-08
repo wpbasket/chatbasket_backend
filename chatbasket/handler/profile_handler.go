@@ -118,6 +118,27 @@ func (h *ProfileHandler) GetProfile(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
+func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
+	fh, err := c.FormFile("file")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "Invalid file payload")
+	}
+	if fh.Size > 5 << 20 { // 5 MB
+		return c.JSON(http.StatusBadRequest, "File size exceeds the limit")
+	}
+	
+	userId:= c.Get("userId").(string)
+	
+	user, Err := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, userId)
+
+	if Err != nil {
+		return c.JSON(Err.Code, err)
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+
+
 func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
 	var payload model.UpdateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
