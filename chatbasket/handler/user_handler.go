@@ -169,8 +169,8 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteNoneMode,
-			Domain:   "localhost:8081",
-			// Domain:   "chatbasket.me",
+			// Domain:   "localhost:8081",
+			Domain:   "chatbasket.me",
 			Expires:  expiry,
 		}
 
@@ -181,8 +181,8 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteNoneMode,
-			Domain:   "localhost:8081",
-			// Domain:   "chatbasket.me",
+			// Domain:   "localhost:8081",
+			Domain:   "chatbasket.me",
 			Expires:  expiry,
 		}
 
