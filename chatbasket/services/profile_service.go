@@ -4,13 +4,9 @@ import (
 	"chatbasket/model"
 	"chatbasket/utils"
 	"context"
-	"mime/multipart"
-
-	"github.com/appwrite/sdk-for-go/id"
-	"github.com/appwrite/sdk-for-go/permission"
 	"github.com/appwrite/sdk-for-go/query"
-	"github.com/appwrite/sdk-for-go/role"
-	"github.com/google/uuid"
+	"mime/multipart"
+	"os"
 )
 
 func (ps *GlobalService) Logout(ctx context.Context, payload *model.LogoutPayload, userId, sessionId string) (*model.StatusOkay, *model.ApiError) {
@@ -213,20 +209,80 @@ func (ps *GlobalService) UploadUserProfilePicture(ctx context.Context, fh *multi
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    500,
-			Message: "Failed to open file: " + err.Error(),
+			Message: "Failed to process file: " + err.Error(),
 			Type:    "internal_server_error",
 		}
 	}
 
-	fileId := id.Custom(uuid.NewString())
+	// Clean up temp file after upload
+	defer func() {
+		if fileTemp.Path != "" {
+			os.Remove(fileTemp.Path)
+		}
+	}()
+
+	resUser, err := ps.Appwrite.Database.GetDocument(
+		ps.Appwrite.DatabaseID,
+		ps.Appwrite.UsersCollectionID,
+		userId,
+	)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query user data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	var user model.User
+	if err := resUser.Decode(&user); err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to parse user data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	if user.Avatar == userId {
+
+		listFilesRes, err := ps.Appwrite.Storage.ListFiles(
+			ps.Appwrite.ProfilePicBucketID,
+			ps.Appwrite.Storage.WithListFilesQueries([]string{
+				query.Equal("$id", userId),
+				query.Limit(1),
+			}),
+		)
+
+		if err != nil {
+			return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to query profile picture: " + err.Error(),
+				Type:    "internal_server_error",
+			}
+		}
+
+		if listFilesRes.Total == 1 {
+			_, err := ps.Appwrite.Storage.DeleteFile(
+				ps.Appwrite.ProfilePicBucketID,
+				userId,
+			)
+			if err != nil {
+				return nil, &model.ApiError{
+					Code:    500,
+					Message: "Failed to delete old profile picture: " + err.Error(),
+					Type:    "internal_server_error",
+				}
+			}
+		}
+
+	}
+
+	fileId := userId
+
 	uploadRes, err := ps.Appwrite.Storage.CreateFile(
 		ps.Appwrite.ProfilePicBucketID,
 		fileId,
 		fileTemp,
-		ps.Appwrite.Storage.WithCreateFilePermissions([]string{
-			permission.Read(role.User(userId,"verified")),
-			permission.Write(role.User(userId,"verified")),
-		}),
 	)
 	if err != nil {
 		return nil, &model.ApiError{
@@ -236,17 +292,42 @@ func (ps *GlobalService) UploadUserProfilePicture(ctx context.Context, fh *multi
 		}
 	}
 
+	personalToken, err := ps.Appwrite.Tokens.CreateFileToken(
+		ps.Appwrite.ProfilePicBucketID,
+		fileId,
+	)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to create personal token: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
 
+	publicToken, err := ps.Appwrite.Tokens.CreateFileToken(
+		ps.Appwrite.ProfilePicBucketID,
+		fileId,
+	)
+
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to create public token: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	// fileUrl := "https://fra.cloud.appwrite.io/v1/storage/buckets/685bc613002edcfee6bb/files/" + "" + "/view?project=6858ed4d0005c859ea03&token=" + ""
 	return &model.UploadUserProfilePictureResponse{
-		Id:   uploadRes.Id,
-		Name: uploadRes.Name,
+		FileId:       uploadRes.Id,
+		Name:         uploadRes.Name,
+		AvatarTokens: []string{personalToken.Id, publicToken.Id, personalToken.Secret, publicToken.Secret},
 	}, nil
-
 }
 
 func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.UpdateUserProfilePayload, userId string) (*model.PrivateUser, *model.ApiError) {
 
-	user, err := ps.Appwrite.Users.Get(userId)
+	_, err := ps.Appwrite.Users.Get(userId)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    500,
@@ -255,12 +336,12 @@ func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.U
 		}
 	}
 
-	updatePayload := model.CreateOrUpdateUserProfile{
+	updatePayload := model.UpdateUserProfile{
 		Username:         payload.Username,
 		Name:             payload.Name,
-		Email:            user.Email,
 		Bio:              payload.Bio,
 		Avatar:           payload.Avatar,
+		AvatarTokens:     payload.AvatarTokens,
 		ProfileVisibleTo: payload.ProfileVisibleTo,
 	}
 

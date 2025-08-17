@@ -6,6 +6,7 @@ import (
 	"github.com/appwrite/sdk-for-go/databases"
 	"github.com/appwrite/sdk-for-go/messaging"
 	"github.com/appwrite/sdk-for-go/storage"
+	"github.com/appwrite/sdk-for-go/tokens"
 	"github.com/appwrite/sdk-for-go/users"
 )
 
@@ -15,6 +16,7 @@ type AppwriteService struct {
 	Storage                   *storage.Storage
 	Users                     *users.Users
 	Message                   *messaging.Messaging
+	Tokens                    *tokens.Tokens
 	DatabaseID                string
 	UsersCollectionID         string
 	PostsCollectionID         string
@@ -56,6 +58,7 @@ func NewAppwriteService(
 		Storage:                   appwrite.NewStorage(c),
 		Users:                     appwrite.NewUsers(c),
 		Message:                   appwrite.NewMessaging(c),
+		Tokens:                    appwrite.NewTokens(c),
 		DatabaseID:                databaseID,
 		UsersCollectionID:         usersCollectionID,
 		PostsCollectionID:         postsCollectionID,

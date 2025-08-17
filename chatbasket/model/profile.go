@@ -8,6 +8,7 @@ type User struct {
 	Email            string `json:"email"`                      // Required for login/contact
 	Bio              string `json:"bio,omitempty"`              // Optional user bio
 	Avatar           string `json:"avatar,omitempty"`           // Optional profile image
+	AvatarTokens   []string `json:"avatarTokens,omitempty"`     // Tokens for accessing Avatar ["personal_token","public_token"]
 	Followers        int64  `json:"followers"`                  // Follower count
 	Following        int    `json:"following"`                  // Following count
 	Posts 	         int    `json:"posts"`                      // Post count
@@ -20,28 +21,40 @@ type User struct {
 
 // 👤 Private user view (for user settings or own profile)
 type PrivateUser struct {
-	Id        string `json:"id"`               // Required
-	Username  string `json:"username"`         // Required
-	Name      string `json:"name"`             // Display name
-	Email     string `json:"email"`            // Required for settings
-	Bio       string `json:"bio,omitempty"`    // Bio
-	Avatar    string `json:"avatar,omitempty"` // Profile image
-	CreatedAt string `json:"createdAt"`        // Created at
-	UpdatedAt string `json:"updatedAt"`        // Updated at
-	ProfileVisibleTo string `json:"profileVisibleTo"` // Profile visibility setting
-	Followers int64  `json:"followers"`        // Follower count
-	Following int    `json:"following"`        // Following count
-	Posts 	  int    `json:"posts"`            // Post count
+	Id        			string `json:"id"`               			// Required
+	Username  			string `json:"username"`         			// Required
+	Name      			string `json:"name"`             			// Display name
+	Email     			string `json:"email"`            			// Required for settings
+	Bio       			string `json:"bio,omitempty"`    			// Bio
+	Avatar    			string `json:"avatar,omitempty"` 			// Avatar image file id
+	AvatarTokens      []string `json:"avatarTokens,omitempty"`      // Tokens for accessing Avatar ["personal_token","public_token"]
+	CreatedAt 			string `json:"createdAt"`        			// Created at
+	UpdatedAt 			string `json:"updatedAt"`        			// Updated at
+	ProfileVisibleTo 	string `json:"profileVisibleTo"` 			// Profile visibility setting
+	Followers 			int64  `json:"followers"`        			// Follower count
+	Following 			int    `json:"following"`        			// Following count
+	Posts 	  			int    `json:"posts"`            			// Post count
 }
 
 // db payload for creating user profile
 type CreateOrUpdateUserProfile struct {
-	Username         string `json:"username"`                   // Required for identity
-	Name             string `json:"name"`                       // Optional display name
-	Email            string `json:"email"`                      // Required for login/contact
-	Bio              string `json:"bio,omitempty"`              // Optional user bio
-	Avatar           string `json:"avatar,omitempty"`           // Optional profile image
-	ProfileVisibleTo string `json:"profileVisibleTo"`           // "public", "followers", "private"
+	Username       		  string `json:"username"`                   // Required for identity
+	Name           		  string `json:"name"`                       // Optional display name
+	Email          		  string `json:"email"`                      // Required for login/contact
+	Bio            		  string `json:"bio,omitempty"`              // Optional user bio
+	Avatar         		  string `json:"avatar,omitempty"`           // Optional profile image
+	AvatarTokens   		[]string `json:"avatarTokens,omitempty"`  	 // Tokens for accessing Avatar ["personal_token","public_token"]
+	ProfileVisibleTo 	  string `json:"profileVisibleTo"`           // "public", "followers", "private"
+}
+// db payload for creating user profile
+type UpdateUserProfile struct {
+	Username         		string `json:"username,omitempty"`                   // Required for identity
+	Name             		string `json:"name,omitempty"`                       // Optional display name
+	Email            		string `json:"email,omitempty"`                      // Required for login/contact
+	Bio              		string `json:"bio,omitempty"`              			 // Optional user bio
+	Avatar           		string `json:"avatar,omitempty"`           			 // Optional profile image
+	AvatarTokens   		  []string `json:"avatarTokens,omitempty"`       	     // Tokens for accessing Avatar ["personal_token","public_token"]
+	ProfileVisibleTo 		string `json:"profileVisibleTo,omitempty"`           // "public", "followers", "private"
 }
 
 
@@ -57,17 +70,21 @@ type CreateUserProfilePayload struct {
 
 //  payload for creating user profile
 type UpdateUserProfilePayload struct {
-	Username         string `json:"username,omitempty" validate:"omitempty,min=1,max=30,regexp=^[a-z0-9][a-z0-9._]*$"`
-	Name             string `json:"name,omitempty" validate:"omitempty,min=1,max=70,regexp=^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$"`
-	Bio              string `json:"bio,omitempty" validate:"omitempty,max=200"`
-	ProfileVisibleTo string `json:"profileVisibleTo,omitempty" validate:"omitempty,oneof=public followers private"`
-	Avatar           string `json:"avatar,omitempty"`
+	Username         	string `json:"username,omitempty" validate:"omitempty,min=1,max=30,regexp=^[a-z0-9][a-z0-9._]*$"`
+	Name             	string `json:"name,omitempty" validate:"omitempty,min=1,max=70,regexp=^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$"`
+	Bio              	string `json:"bio,omitempty" validate:"omitempty,max=200"`
+	ProfileVisibleTo 	string `json:"profileVisibleTo,omitempty" validate:"omitempty,oneof=public followers private"`
+	Avatar           	string `json:"avatar,omitempty"`
+	AvatarTokens   	  []string `json:"avatarTokens,omitempty"`           // Tokens for accessing Avatar ["personal_token","public_token"]
 }
 
 type UploadUserProfilePictureResponse struct {
-	Id string `json:"id"`
-	Name string `json:"name"`
+	FileId 			 string `json:"fileId"`
+	Name 			 string `json:"name"`
+	AvatarTokens   []string `json:"avatarTokens,omitempty"`           // Tokens for accessing Avatar ["personal_token","public_token"]
 }
+
+
 
 // 🔁 Convert full user model → private view
 func ToPrivateUser(u *User) *PrivateUser {
@@ -78,6 +95,8 @@ func ToPrivateUser(u *User) *PrivateUser {
 		Email:     u.Email,
 		Bio:       u.Bio,
 		Avatar:    u.Avatar,
+		AvatarTokens: u.AvatarTokens,
+		
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,
 		ProfileVisibleTo: u.ProfileVisibleTo,

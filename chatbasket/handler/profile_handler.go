@@ -3,8 +3,9 @@ package handler
 import (
 	"chatbasket/model"
 	"chatbasket/services"
-	"github.com/labstack/echo/v4"
 	"net/http"
+
+	"github.com/labstack/echo/v4"
 	// "github.com/go-playground/validator/v10"
 )
 
@@ -41,6 +42,7 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 			HttpOnly: true,
 			Secure:   true,
 			Domain:   "chatbasket.me", // Use this - same as when you set the cookie
+			// Domain:   "localhost:8081", // Use this - same as when you set the cookie
 			SameSite: http.SameSiteNoneMode,
 			MaxAge:   -1,
 		}
@@ -52,6 +54,7 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 			HttpOnly: true,
 			Secure:   true,
 			Domain:   "chatbasket.me", // Use this - same as when you set the cookie
+			// Domain:   "localhost:8081", // Use this - same as when you set the cookie
 			SameSite: http.SameSiteNoneMode,
 			MaxAge:   -1,
 		}
@@ -112,23 +115,46 @@ func (h *ProfileHandler) GetProfile(c echo.Context) error {
 }
 
 func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
-	fh, err := c.FormFile("file")
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, "Invalid file payload")
-	}
-	if fh.Size > 5<<20 { // 5 MB
-		return c.JSON(http.StatusBadRequest, "File size exceeds the limit")
-	}
+    err := c.Request().ParseMultipartForm(5 << 20) // 5MB
+    if err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{
+            "error": "Failed to parse multipart form",
+            "details": err.Error(),
+        })
+    }
+    
+    if c.Request().MultipartForm == nil {
+        return c.JSON(http.StatusBadRequest, "MultipartForm is nil")
+    }
+    
+    fh, err := c.FormFile("avatar")
+    if err != nil {
+        availableFields := []string{}
+        if c.Request().MultipartForm != nil && c.Request().MultipartForm.File != nil {
+            for field := range c.Request().MultipartForm.File {
+                availableFields = append(availableFields, field)
+            }
+        }
+        
+        return c.JSON(http.StatusBadRequest, map[string]interface{}{
+            "error": "Avatar file not found in request",
+            "details": err.Error(),
+            "available_file_fields": availableFields,
+        })
+    }
+    
+    if fh.Size > 5<<20 {
+        return c.JSON(http.StatusBadRequest, "File size exceeds the limit")
+    }
 
-	userId := c.Get("userId").(string)
+    userId := c.Get("userId").(string)
+    user, serviceErr := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, userId)
 
-	user, Err := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, userId)
+    if serviceErr != nil {
+        return c.JSON(serviceErr.Code, serviceErr)
+    }
 
-	if Err != nil {
-		return c.JSON(Err.Code, err)
-	}
-
-	return c.JSON(http.StatusOK, user)
+    return c.JSON(http.StatusOK, user)
 }
 
 func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
