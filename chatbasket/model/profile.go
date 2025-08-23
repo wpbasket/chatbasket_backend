@@ -57,6 +57,12 @@ type UpdateUserProfile struct {
 	ProfileVisibleTo 		string `json:"profileVisibleTo,omitempty"`           // "public", "followers", "private"
 }
 
+type RemoveProfilePicture struct {
+	Avatar string  `json:"avatar"`           // Optional profile image
+	AvatarTokens []string `json:"avatarTokens"` // Tokens for accessing Avatar ["personal_token","public_token"]
+}
+
+
 
 //  payload for creating user profile
 type CreateUserProfilePayload struct {
@@ -74,14 +80,14 @@ type UpdateUserProfilePayload struct {
 	Name             	string `json:"name,omitempty" validate:"omitempty,min=1,max=70,regexp=^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$"`
 	Bio              	string `json:"bio,omitempty" validate:"omitempty,max=200"`
 	ProfileVisibleTo 	string `json:"profileVisibleTo,omitempty" validate:"omitempty,oneof=public followers private"`
-	Avatar           	string `json:"avatar,omitempty"`
-	AvatarTokens   	  []string `json:"avatarTokens,omitempty"`           // Tokens for accessing Avatar ["personal_token","public_token"]
+	Avatar           	string `json:"avatar,omitempty"`           // fileid is userid
+	AvatarTokens   	  []string `json:"avatarTokens,omitempty"`           // Tokens for accessing Avatar ["personal_token","public_token","personal_token_secret","public_tpken_secret"]
 }
 
 type UploadUserProfilePictureResponse struct {
 	FileId 			 string `json:"fileId"`
 	Name 			 string `json:"name"`
-	AvatarTokens   []string `json:"avatarTokens,omitempty"`           // Tokens for accessing Avatar ["personal_token","public_token"]
+	AvatarTokens   []string `json:"avatarTokens,omitempty"`           // Tokens for accessing Avatar ["personal_token","public_token","personal_token_secret","public_tpken_secret"]
 }
 
 

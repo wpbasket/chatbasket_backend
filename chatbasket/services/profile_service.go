@@ -4,9 +4,11 @@ import (
 	"chatbasket/model"
 	"chatbasket/utils"
 	"context"
-	"github.com/appwrite/sdk-for-go/query"
+	"fmt"
 	"mime/multipart"
 	"os"
+
+	"github.com/appwrite/sdk-for-go/query"
 )
 
 func (ps *GlobalService) Logout(ctx context.Context, payload *model.LogoutPayload, userId, sessionId string) (*model.StatusOkay, *model.ApiError) {
@@ -325,6 +327,91 @@ func (ps *GlobalService) UploadUserProfilePicture(ctx context.Context, fh *multi
 	}, nil
 }
 
+func (ps *GlobalService) RemoveUserProfilePicture(ctx context.Context, userId string) (*model.StatusOkay, *model.ApiError) {
+	resUser, err := ps.Appwrite.Database.GetDocument(
+		ps.Appwrite.DatabaseID,
+		ps.Appwrite.UsersCollectionID,
+		userId,
+	)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query user data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	var user model.User
+	if err := resUser.Decode(&user); err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to parse user data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	if user.Avatar != userId {
+		return nil, &model.ApiError{
+			Code:    404,
+			Message: "No profile picture found to remove",
+			Type:    "not_found",
+		}
+	}
+
+	
+	// Delete associated tokens (only token IDs, not secrets)
+	for i, token := range user.AvatarTokens {
+		if i > 1 {
+			break // Only first two are token IDs, rest are secrets
+		}
+		_, err := ps.Appwrite.Tokens.Delete(token)
+		if err != nil {
+			// Log the error but don't fail the entire operation, as the file is already deleted
+			// and the main goal is achieved.
+			// In a real application, you might want to add more robust error handling/retries.
+			// For now, just print to stderr.
+			fmt.Println("Failed to delete token:",err)
+		}
+	}
+	
+	// Delete the file from storage
+	_, err = ps.Appwrite.Storage.DeleteFile(
+		ps.Appwrite.ProfilePicBucketID,
+		userId,
+	)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to delete profile picture from storage: " + err.Error(),
+			Type:    "not_found",
+		}
+	}
+
+	dataToUpdateInUserProfile:= model.RemoveProfilePicture{
+		Avatar: "",
+		AvatarTokens: []string{},
+	}
+
+
+	_, err = ps.Appwrite.Database.UpdateDocument(
+		ps.Appwrite.DatabaseID,
+		ps.Appwrite.UsersCollectionID,
+		userId,
+		ps.Appwrite.Database.WithUpdateDocumentData(dataToUpdateInUserProfile),
+	)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to update user profile in database: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+
+	return &model.StatusOkay{Status: true, Message: "Profile picture removed successfully"}, nil
+}
+
+
 func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.UpdateUserProfilePayload, userId string) (*model.PrivateUser, *model.ApiError) {
 
 	_, err := ps.Appwrite.Users.Get(userId)
@@ -370,3 +457,5 @@ func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.U
 
 	return &privateUser, nil
 }
+
+

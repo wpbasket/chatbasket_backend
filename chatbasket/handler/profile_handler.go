@@ -157,6 +157,19 @@ func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
     return c.JSON(http.StatusOK, user)
 }
 
+func (h *ProfileHandler) RemoveProfilePicture(c echo.Context) error {
+	userId := c.Get("userId").(string)
+
+	user, err := h.Service.RemoveUserProfilePicture(c.Request().Context(), userId)
+	if err != nil {	
+		return c.JSON(err.Code, err)
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+
+
+
 func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
 	var payload model.UpdateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {

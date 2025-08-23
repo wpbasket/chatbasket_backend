@@ -49,6 +49,7 @@ func RegisterRoutes(
 	profileGroup.POST("/create-profile", profileHandler.CreateUserProfile)
 	profileGroup.GET("/get-profile", profileHandler.GetProfile)
 	profileGroup.POST("/upload-avatar", profileHandler.UploadProfilePicture)
+	profileGroup.DELETE("/remove-avatar", profileHandler.RemoveProfilePicture)
 	profileGroup.POST("/update-profile", profileHandler.UpdateProfile)
 	
 
