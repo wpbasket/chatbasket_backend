@@ -94,10 +94,6 @@ type CheckIfUserNameAvailablePayload struct {
 
 
 
-// 
-type UpdateEmailPayload struct {
-	Email string `json:"email"`
-}
 
 // 
 type UpdateEmailVerification struct {
@@ -138,7 +134,6 @@ type TempOtpPayload struct{
 
 // 
 type UpdatePassword struct{
-	OldPassword string `json:"oldPassword"`
 	NewPassword string `json:"newPassword"`
 }
 

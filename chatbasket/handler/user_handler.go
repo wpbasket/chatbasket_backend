@@ -26,7 +26,7 @@ func (h *UserHandler) Signup(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, model.ApiError{
 			Code:    http.StatusBadRequest,
 			Message: "Invalid signup payload: " + err.Error(),
-			Type:    "missing_value",			
+			Type:    "missing_value",
 		})
 	}
 
@@ -42,7 +42,7 @@ func (h *UserHandler) Signup(c echo.Context) error {
 	// Create user via service
 	user, err := h.Service.Signup(c.Request().Context(), &payload)
 	if err != nil {
-		return c.JSON(err.Code,err)
+		return c.JSON(err.Code, err)
 		// return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -53,16 +53,16 @@ func (h *UserHandler) Signup(c echo.Context) error {
 func (h *UserHandler) AcountVerification(c echo.Context) error {
 	var payload model.AuthVerificationPayload
 	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid OTP payload")
+		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Invalid OTP payload: " + err.Error(), Type: "bad_request"})
 	}
 
 	if payload.Email == "" || payload.Secret == "" || payload.Platform == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "Missing required fields")
+		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Missing required fields", Type: "missing_value"})
 	}
 
 	user, err := h.Service.AccountVerification(c.Request().Context(), &payload)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+		return c.JSON(err.Code, err)
 	}
 
 	// Handle web platform - set httpOnly cookies
@@ -70,7 +70,7 @@ func (h *UserHandler) AcountVerification(c echo.Context) error {
 
 		expiry, err := time.Parse(time.RFC3339, user.SessionExpiry)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "invalid session expiry format")
+			return c.JSON(http.StatusInternalServerError, model.ApiError{Code: http.StatusInternalServerError, Message: "invalid session expiry format", Type: "internal_server_error"})
 		}
 
 		// Set cookies with actual values (before they get emptied in response)
@@ -87,15 +87,15 @@ func (h *UserHandler) AcountVerification(c echo.Context) error {
 		}
 
 		userCookie := &http.Cookie{
-			Name:  "userId",
-			Value: user.UserId,
-			Path:  "/",
+			Name:     "userId",
+			Value:    user.UserId,
+			Path:     "/",
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteNoneMode,
 			// Domain:   "localhost:8081",
 			Domain:   "chatbasket.me",
-			Expires:  expiry,
+			Expires: expiry,
 		}
 
 		c.SetCookie(sessionCookie)
@@ -120,18 +120,19 @@ func (h *UserHandler) Login(c echo.Context) error {
 
 	// Parse and bind request body
 	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid login payload: "+err.Error())
+		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Invalid login payload: " + err.Error(), Type: "bad_request"})
 	}
 
 	// Validate required fields
 	if payload.Email == "" || payload.Password == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "Missing required fields")
+		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Missing required fields", Type: "missing_value"})
 	}
 
 	// Login via service
 	user, err := h.Service.Login(c.Request().Context(), &payload)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return c.JSON(err.Code, err)
+
 	}
 
 	// Return sanitized user info
@@ -141,16 +142,16 @@ func (h *UserHandler) Login(c echo.Context) error {
 func (h *UserHandler) LoginVerification(c echo.Context) error {
 	var payload model.AuthVerificationPayload
 	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid OTP payload")
+		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Invalid OTP payload: " + err.Error(), Type: "bad_request"})
 	}
 
 	if payload.Email == "" || payload.Secret == "" || payload.Platform == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "Missing required fields")
+		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Missing required fields", Type: "missing_value"})
 	}
 
 	user, err := h.Service.LoginVerification(c.Request().Context(), &payload)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+		return c.JSON(err.Code, err)
 	}
 
 	// Handle web platform - set httpOnly cookies
@@ -158,7 +159,7 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 
 		expiry, err := time.Parse(time.RFC3339, user.SessionExpiry)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "invalid session expiry format")
+			return c.JSON(http.StatusInternalServerError, model.ApiError{Code: http.StatusInternalServerError, Message: "invalid session expiry format", Type: "internal_server_error"})
 		}
 
 		// Set cookies with actual values (before they get emptied in response)
@@ -171,19 +172,19 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 			SameSite: http.SameSiteNoneMode,
 			// Domain:   "localhost:8081",
 			Domain:   "chatbasket.me",
-			Expires:  expiry,
+			Expires: expiry,
 		}
 
 		userCookie := &http.Cookie{
-			Name:  "userId",
-			Value: user.UserId,
-			Path:  "/",
+			Name:     "userId",
+			Value:    user.UserId,
+			Path:     "/",
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteNoneMode,
 			// Domain:   "localhost:8081",
 			Domain:   "chatbasket.me",
-			Expires:  expiry,
+			Expires: expiry,
 		}
 
 		c.SetCookie(sessionCookie)

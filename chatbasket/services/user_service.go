@@ -11,7 +11,6 @@ import (
 	"github.com/appwrite/sdk-for-go/id"
 	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 )
 
 // type UserService struct {
@@ -32,27 +31,28 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 	)
 
 	if err != nil {
-		return nil,&model.ApiError{
-			Code:500,
-			Message: "Failed to query email: "+err.Error(),
-			Type: "internal_server_error",    
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query email: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
 
 	if emailRes.Total == 1 {
-		return nil,&model.ApiError{
-			Code:409,
+		return nil, &model.ApiError{
+			Code:    409,
 			Message: "Email already registered",
-			Type: "conflict",    
+			Type:    "conflict",
 		}
 	}
+	pass := "00" + payload.Password
 
-	hashedPassword, err := utils.HashOTP(payload.Password)
+	hashedPassword, err := utils.HashOTP(pass)
 	if err != nil {
-		return nil,&model.ApiError{
-			Code:500,
-			Message: "Failed to hash password: "+err.Error(),
-			Type: "internal_server_error",    
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to hash password: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
 
@@ -65,10 +65,10 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 		us.Appwrite.Users.WithCreateArgon2UserName(payload.Name),
 	)
 	if err != nil {
-		return nil,&model.ApiError{
-			Code:500,
-			Message: "Appwrite account creation failed: "+err.Error(),
-			Type: "internal_server_error",    
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Appwrite account creation failed: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
 
@@ -77,14 +77,14 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 	subject := "Otp for email verification"
 	otp, err := utils.GenerateOTP()
 	if err != nil {
-		return nil,&model.ApiError{
-			Code:500,
-			Message: "Failed to generate OTP: "+err.Error(),
-			Type: "internal_server_error",    
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to generate OTP: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
 
-	content := "Hello,\n\nYour One-Time Password (OTP) for verifying your email address is: <b>" + otp + "</b>\n\nPlease enter this code in the app to verify your email address. This code is valid for 3 minutes.\n\nThank you,\nChatBasket"
+	content := "<p>Hello,<br>Please enter this code in the app to verify your email address. This code is valid for 3 minutes.Your One-Time Password (OTP) for verifying your email address is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
 
 	_, err = us.Appwrite.Message.CreateEmail(
 		messageId,
@@ -93,10 +93,10 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 		us.Appwrite.Message.WithCreateEmailUsers([]string{userID}),
 	)
 	if err != nil {
-		return nil,&model.ApiError{
-			Code:500,
-			Message: "Failed to send email: "+err.Error(),
-			Type: "internal_server_error",    
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to send email: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
 
@@ -112,10 +112,10 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 	)
 
 	if err != nil {
-		return nil,&model.ApiError{
-			Code:500,
-			Message: "Failed to query otp data: "+err.Error(),
-			Type: "internal_server_error",    
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query otp data: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
 
@@ -126,20 +126,20 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 			userID,
 		)
 		if err != nil {
-			return nil,&model.ApiError{
-				Code:500,
-				Message: "Failed to delete existing otp: "+err.Error(),
-				Type: "internal_server_error",    
+			return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to delete existing otp: " + err.Error(),
+				Type:    "internal_server_error",
 			}
 		}
 	}
 
 	hashedOtp, err := utils.HashOTP(otp)
 	if err != nil {
-		return nil,&model.ApiError{
-			Code:500,
-			Message: "Failed to hash OTP: "+err.Error(),
-			Type: "internal_server_error",    
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to hash OTP: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
 
@@ -157,10 +157,10 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 		tempOtpPayload,
 	)
 	if err != nil {
-		return nil,&model.ApiError{
-			Code:500,
-			Message: "Failed to save otp in database: "+err.Error(),
-			Type: "internal_server_error",    
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to save otp in database: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
 
@@ -168,12 +168,7 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
 
-
-
-
-
-
-func (us *GlobalService) AccountVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, error) {
+func (us *GlobalService) AccountVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, *model.ApiError) {
 
 	// Step1: Verify user
 	userRes, err := us.Appwrite.Users.List(
@@ -183,10 +178,10 @@ func (us *GlobalService) AccountVerification(ctx context.Context, payload *model
 		}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query email: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to query email: " + err.Error(), Type: "internal_server_error"}
 	}
 	if userRes.Total == 0 {
-		return nil, echo.NewHTTPError(401, "Email is not registered")
+		return nil, &model.ApiError{Code: 401, Message: "Email is not registered", Type: "unauthorized"}
 	}
 	userId := userRes.Users[0].Id
 	userName := userRes.Users[0].Name
@@ -201,50 +196,50 @@ func (us *GlobalService) AccountVerification(ctx context.Context, payload *model
 		userId,
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to query otp data: " + err.Error(), Type: "internal_server_error"}
 	}
 	var tempOtp model.TempOtp
 	if err := doc.Decode(&tempOtp); err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to parse otp data: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to parse otp data: " + err.Error(), Type: "internal_server_error"}
 	}
 
 	if tempOtp.Email != payload.Email {
-		return nil, echo.NewHTTPError(401, "Email does not match with the sent OTP email")
+		return nil, &model.ApiError{Code: 401, Message: "Email does not match with the sent OTP email", Type: "unauthorized"}
 	}
 
 	match, err := utils.VerifyOTP(payload.Secret, tempOtp.Otp)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to verify OTP: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to verify OTP: " + err.Error(), Type: "internal_server_error"}
 	}
 	if !match {
-		return nil, echo.NewHTTPError(401, "Invalid OTP")
+		return nil, &model.ApiError{Code: 401, Message: "Invalid OTP", Type: "unauthorized"}
 	}
 
 	// check if tempOtp has expired or not time limit is till 3 minutes after created at
 
 	createdAtTime, err := time.Parse(time.RFC3339, tempOtp.CreatedAt)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to parse OTP creation time: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to parse OTP creation time: " + err.Error(), Type: "internal_server_error"}
 	}
 
 	expired := utils.IsExpiredOTP(createdAtTime, 3)
 	if expired {
-		return nil, echo.NewHTTPError(401, "OTP has expired")
+		return nil, &model.ApiError{Code: 401, Message: "OTP has expired", Type: "unauthorized"}
 	}
 
 	// Step3: Verify account using OTP and create session
 	session, err := us.Appwrite.Users.CreateSession(userId)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "OTP verification failed: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "OTP verification failed: " + err.Error(), Type: "internal_server_error"}
 	}
 	_, err = us.Appwrite.Users.UpdateEmailVerification(userId, true)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to update email verification status: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to update email verification status: " + err.Error(), Type: "internal_server_error"}
 	}
 
 	_, err = us.Appwrite.Message.Delete(tempOtp.MessageId)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to delete message: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to delete message: " + err.Error(), Type: "internal_server_error"}
 	}
 
 	_, err = us.Appwrite.Database.DeleteDocument(
@@ -269,13 +264,7 @@ func (us *GlobalService) AccountVerification(ctx context.Context, payload *model
 	}, nil
 }
 
-
-
-
-
-
-
-func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload) (*model.StatusOkay, error) {
+func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload) (*model.StatusOkay, *model.ApiError) {
 
 	// Step1: verify user
 	userRes, err := us.Appwrite.Users.List(
@@ -285,24 +274,47 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 		}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query email: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query email: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 	if (userRes.Total) == 0 {
-		return nil, echo.NewHTTPError(401, "Email is not registered")
+		return nil, &model.ApiError{
+			Code:    401,
+			Message: "Email is not registered",
+			Type:    "unauthorized",
+		}
 	}
 
 	if userRes.Users[0].Email != payload.Email {
-		return nil, echo.NewHTTPError(401, "Email does not match")
+		return nil, &model.ApiError{
+			Code:    401,
+			Message: "Email is not registered",
+			Type:    "unauthorized",
+		}
+
 	}
 
 	passWord := userRes.Users[0].Password
-
-	match, err := utils.VerifyOTP(payload.Password, passWord)
+	payloadPass := "00" + payload.Password
+	match, err := utils.VerifyOTP(payloadPass, passWord)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to verify password: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to verify password: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+
 	}
 	if !match {
-		return nil, echo.NewHTTPError(401, "Invalid password")
+		return nil, &model.ApiError{
+			Code:    401,
+			Message: "Invalid credentials",
+			Type:    "unauthorized",
+		}
+
 	}
 
 	// Step2: Generate otp to create session
@@ -310,9 +322,13 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 	subject := "Otp for login verification"
 	otp, err := utils.GenerateOTP()
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to generate OTP: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to generate OTP: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
-	content := "Hello,\n\nYour One-Time Password (OTP) for login verification is: <b>" + otp + "</b>\n\nPlease enter this code in the app to verify your login. This code is valid for 3 minutes.\n\nThank you,\nChatBasket"
+	content := "<p>Hello,<br>Please enter this code in the app to verify your login. This code is valid for 3 minutes.Your One-Time Password (OTP) for login verification is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
 	userId := userRes.Users[0].Id
 
 	_, err = us.Appwrite.Message.CreateEmail(
@@ -322,7 +338,11 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 		us.Appwrite.Message.WithCreateEmailUsers([]string{userId}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to send email: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to send email: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	doc, err := us.Appwrite.Database.ListDocuments(
@@ -336,7 +356,11 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 		),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query otp data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 	if doc.Total == 1 {
 		_, err = us.Appwrite.Database.DeleteDocument(
@@ -345,12 +369,21 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 			userId,
 		)
 		if err != nil {
-			return nil, echo.NewHTTPError(401, "Failed to delete existing otp: "+err.Error())
+			return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to delete existing otp: " + err.Error(),
+				Type:    "internal_server_error",
+			}
 		}
 	}
 	hashedOtp, err := utils.HashOTP(otp)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to hash OTP: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to hash OTP: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+
 	}
 	tempOtpPayload := model.TempOtpPayload{
 		Email:     payload.Email,
@@ -366,17 +399,17 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 		tempOtpPayload,
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to save otp in database: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to save otp in database: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
 
-
-
-
-
-func (us *GlobalService) LoginVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, error) {
+func (us *GlobalService) LoginVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, *model.ApiError) {
 	// 🔍 Step 1: Find user by email
 	userRes, err := us.Appwrite.Users.List(
 		us.Appwrite.Users.WithListQueries([]string{
@@ -385,10 +418,10 @@ func (us *GlobalService) LoginVerification(ctx context.Context, payload *model.A
 		}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query email: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to query email: " + err.Error(), Type: "internal_server_error"}
 	}
 	if userRes.Total == 0 {
-		return nil, echo.NewHTTPError(401, "Email is not registered")
+		return nil, &model.ApiError{Code: 401, Message: "Email is not registered", Type: "unauthorized"}
 	}
 	userId := userRes.Users[0].Id
 	userName := userRes.Users[0].Name
@@ -402,48 +435,48 @@ func (us *GlobalService) LoginVerification(ctx context.Context, payload *model.A
 		userId,
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to query otp data: " + err.Error(), Type: "internal_server_error"}
 	}
 	var tempOtp model.TempOtp
 	if err := doc.Decode(&tempOtp); err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to parse otp data: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to parse otp data: " + err.Error(), Type: "internal_server_error"}
 	}
 
 	if tempOtp.Email != payload.Email {
-		return nil, echo.NewHTTPError(401, "Email does not match with the sent OTP email")
+		return nil, &model.ApiError{Code: 401, Message: "Email does not match with the sent OTP email", Type: "unauthorized"}
 	}
 
 	match, err := utils.VerifyOTP(payload.Secret, tempOtp.Otp)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to verify OTP: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to verify OTP: " + err.Error(), Type: "internal_server_error"}
 	}
 	if !match {
-		return nil, echo.NewHTTPError(401, "Invalid OTP")
+		return nil, &model.ApiError{Code: 401, Message: "Invalid OTP", Type: "unauthorized"}
 	}
 
 	// check if tempOtp has expired or not time limit is till 3 minutes after created at
 
 	createdAtTime, err := time.Parse(time.RFC3339, tempOtp.CreatedAt)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to parse OTP creation time: "+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "Failed to parse OTP creation time: " + err.Error(), Type: "internal_server_error"}
 	}
 
 	expired := utils.IsExpiredOTP(createdAtTime, 3)
 	if expired {
-		return nil, echo.NewHTTPError(401, "OTP has expired")
+		return nil, &model.ApiError{Code: 401, Message: "OTP has expired", Type: "unauthorized"}
 	}
 
 	// 🔑 Step 3:  create session
 	session, err := us.Appwrite.Users.CreateSession(userId)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "OTP verification failed"+err.Error())
+		return nil, &model.ApiError{Code: 500, Message: "OTP verification failed: " + err.Error(), Type: "internal_server_error"}
 	}
 
 	// if email not verified verfiy it
 	if !userRes.Users[0].EmailVerification {
 		_, err := us.Appwrite.Users.UpdateEmailVerification(userId, true)
 		if err != nil {
-			return nil, echo.NewHTTPError(500, "Failed to update email verification status: "+err.Error())
+			return nil, &model.ApiError{Code: 500, Message: "Failed to update email verification status: " + err.Error(), Type: "internal_server_error"}
 
 		}
 	}

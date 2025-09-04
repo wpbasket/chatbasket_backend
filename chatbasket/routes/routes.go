@@ -58,6 +58,8 @@ func RegisterRoutes(
 	settingHandler := handler.NewSettingHandler(globalService)
 	settingGroup.POST("/update-email", settingHandler.UpdateEmail)
 	settingGroup.POST("/update-password", settingHandler.UpdatePassword)
-	profileGroup.POST("/update-email-verification", settingHandler.UpdateEmailVerification)
+	settingGroup.POST("/update-email-verification", settingHandler.UpdateEmailVerification)
+	settingGroup.POST("/send-otp",settingHandler.SendOtp)
+	settingGroup.POST("/verify-otp",settingHandler.VerifyOtp)
 
 }

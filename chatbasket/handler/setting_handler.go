@@ -63,3 +63,33 @@ func (h *SettingHandler) UpdatePassword(c echo.Context) error{
 	
 	return c.JSON(http.StatusOK, user)	
 }
+
+func (h *SettingHandler) SendOtp(c echo.Context) error{
+	var payload model.SendOtpPayload
+	if err:= c.Bind(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid OTP payload")
+	}
+	userId := c.Get("userId").(string)
+
+	user, err := h.Service.SendOtp(c.Request().Context(), &payload, userId)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+
+func (h *SettingHandler) VerifyOtp(c echo.Context) error{
+	var payload model.OtpVerificationPayload
+	if err:= c.Bind(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid OTP payload")
+	}
+	userId := c.Get("userId").(string)
+
+	user, err := h.Service.VerifyOtp(c.Request().Context(), &payload, userId)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
