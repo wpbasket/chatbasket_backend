@@ -243,7 +243,7 @@ func (ps *GlobalService) UpdateEmailVerification(ctx context.Context, payload *m
 	}
 
 
-	return &model.StatusOkay{Status: true, Message: "Email updated successfully"}, nil
+	return &model.StatusOkay{Status: true, Message:tempOtp.Email}, nil
 }
 
 
