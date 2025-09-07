@@ -10,10 +10,9 @@ import (
 	"github.com/appwrite/sdk-for-go/id"
 	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 )
 
-func (ps *GlobalService) UpdatePassword(ctx context.Context, payload *model.UpdatePassword, userId string) (*model.StatusOkay, error) {
+func (ps *GlobalService) UpdatePassword(ctx context.Context, payload *model.UpdatePassword, userId string) (*model.StatusOkay, *model.ApiError) {
 	// doc, err := ps.Appwrite.Users.Get(userId)
 	// if err != nil {
 	// 	return nil, echo.NewHTTPError(401, "Failed to query user data: "+err.Error())
@@ -29,13 +28,17 @@ func (ps *GlobalService) UpdatePassword(ctx context.Context, payload *model.Upda
 	newPass:="00"+payload.NewPassword
 	_, err := ps.Appwrite.Users.UpdatePassword(userId, newPass)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to update password in Appwrite Auth: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to update password: " + err.Error(),
+
+		}
 	}
 
 	return &model.StatusOkay{Status: true, Message: "Password updated successfully"}, nil
 }
 
-func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateEmailPayload, userId string) (*model.StatusOkay, error) {
+func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateEmailPayload, userId string) (*model.StatusOkay, *model.ApiError) {
 
 	res, err := ps.Appwrite.Database.ListDocuments(
 		ps.Appwrite.DatabaseID,
@@ -49,24 +52,40 @@ func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateE
 	)
 
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query email: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query user data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	if res.Total == 1 {
-		return &model.StatusOkay{Status: false, Message: "Email already exists"}, nil
+		return nil, &model.ApiError{
+			Code:    409,
+			Message: "Email already registered",
+			Type:    "conflict",
+		}
 	}
 
 	// Create temp email target for sending email
 
 	checkTargets,err:= ps.Appwrite.Users.ListTargets(userId)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query targets: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query target data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	if checkTargets.Total == 2{
 		_,err:=ps.Appwrite.Users.DeleteTarget(userId,userId)
 		if err != nil {
-			return nil, echo.NewHTTPError(401, "Failed to delete target: "+err.Error())
+			return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to delete target: " + err.Error(),
+				Type:    "internal_server_error",
+			}
 		}
 	}
 
@@ -77,7 +96,11 @@ func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateE
 		payload.Email,
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to create target: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to create target: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 
@@ -85,9 +108,14 @@ func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateE
 	subject := "Otp for email verification"
 	otp, err := utils.GenerateOTP()
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to generate OTP: "+err.Error())
+		return nil,	&model.ApiError{
+			Code:    500,
+			Message: "Failed to generate OTP: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+		 
 	}
-	content := "Hello,\n\nYour One-Time Password (OTP) for updating your email address is: <b>" + otp + "</b>\n\nPlease enter this code in the app to verify your email address. This code is valid for 3 minutes.\n\nThank you,\nChatBasket"
+	content := "<p>Hello,<br>Please enter this code in the app to verify your email address. This code is valid for 3 minutes.Your One-Time Password (OTP) for verifying your email address is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
 
 	_, err = ps.Appwrite.Message.CreateEmail(
 		messageId,
@@ -96,7 +124,11 @@ func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateE
 		ps.Appwrite.Message.WithCreateEmailTargets([]string{userId}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to send email: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to send email: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	docOtp, err := ps.Appwrite.Database.ListDocuments(
@@ -111,7 +143,12 @@ func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateE
 	)
 
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query otp data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+		
 	}
 	if docOtp.Total == 1 {
 		_, err = ps.Appwrite.Database.DeleteDocument(
@@ -120,17 +157,22 @@ func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateE
 			userId,
 		)
 		if err != nil {
-			// return nil, &model.ApiError{
-			// 	Code:    500,
-			// 	Message: "Failed to delete existing otp: " + err.Error(),
-			// 	Type:    "internal_server_error",
-			// }
+			return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to delete existing otp: " + err.Error(),
+				Type:    "internal_server_error",
+			}
 		}
 	}
 
 	hashedOtp, err := utils.HashOTP(otp)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to hash OTP: "+err.Error())
+		return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to hash OTP: " + err.Error(),
+				Type:    "internal_server_error",
+			}
+			
 	}
 
 	tempOtpPayload := model.TempOtpPayload{
@@ -148,13 +190,18 @@ func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateE
 	)
 
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to save otp in database: "+err.Error())
+		return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to save otp in database: " + err.Error(),
+				Type:    "internal_server_error",
+			}
+			
 	}
 
 	return &model.StatusOkay{Status: true, Message: "Otp sent to new email for verification"}, nil
 }
 
-func (ps *GlobalService) UpdateEmailVerification(ctx context.Context, payload *model.UpdateEmailVerification, userId string) (*model.StatusOkay, error) {
+func (ps *GlobalService) UpdateEmailVerification(ctx context.Context, payload *model.UpdateEmailVerification, userId string) (*model.StatusOkay, *model.ApiError) {
 
 	// Retrieve the temporary OTP document from the database
 	doc, err := ps.Appwrite.Database.GetDocument(
@@ -163,53 +210,93 @@ func (ps *GlobalService) UpdateEmailVerification(ctx context.Context, payload *m
 		userId,
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query otp data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 	var tempOtp model.TempOtp
 	if err := doc.Decode(&tempOtp); err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to parse otp data: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to parse otp data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	if tempOtp.Email != payload.Email {
-		return nil, echo.NewHTTPError(401, "Email does not match with the sent OTP email")
+		return nil, &model.ApiError{
+			Code:    401,
+			Message: "Email does not match with the sent OTP email",
+			Type:    "unauthorized",
+		}
 	}
 
 	match, err := utils.VerifyOTP(payload.Otp, tempOtp.Otp)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to verify OTP: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to verify OTP: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 	if !match {
-		return nil, echo.NewHTTPError(401, "Invalid OTP")
+		return nil, &model.ApiError{
+			Code:    401,
+			Message: "Invalid OTP",
+			Type:    "unauthorized",
+		}
 	}
 
 	// check if tempOtp has expired or not time limit is till 3 minutes after created at
 
 	createdAtTime, err := time.Parse(time.RFC3339, tempOtp.CreatedAt)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to parse OTP creation time: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to parse OTP creation time: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	expired := utils.IsExpiredOTP(createdAtTime, 3)
 	if expired {
-		return nil, echo.NewHTTPError(401, "OTP has expired")
+		return nil, &model.ApiError{
+			Code:    401,
+			Message: "OTP has expired",
+			Type:    "unauthorized",
+		}
 	}
 
-	_,err = ps.Appwrite.Users.DeleteTarget(userId,userId)
+	_, err = ps.Appwrite.Users.DeleteTarget(userId, userId)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to delete target: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to delete target: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	// Update user's email in Appwrite Auth
 	_, err = ps.Appwrite.Users.UpdateEmail(userId, tempOtp.Email)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to update user email in Appwrite Auth: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to update user email in Appwrite Auth: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	// Update user's email verification status in Appwrite Auth
 
 	_, err = ps.Appwrite.Users.UpdateEmailVerification(userId, true)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to update user email verification status: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to update user email verification status: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	// Update user's email in the user collection document
@@ -223,7 +310,11 @@ func (ps *GlobalService) UpdateEmailVerification(ctx context.Context, payload *m
 			}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to update user email in database: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to update user email in database: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	// Delete the temporary OTP document
@@ -247,16 +338,20 @@ func (ps *GlobalService) UpdateEmailVerification(ctx context.Context, payload *m
 }
 
 
-func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayload ,userId string) (*model.StatusOkay, error) {
+func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayload ,userId string) (*model.StatusOkay, *model.ApiError) {
 
 	// Step1: Generate otp 
 	messageId := id.Custom(uuid.NewString())
 	subject := "Otp for " + payload.Subject + " verification"
 	otp, err := utils.GenerateOTP()
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to generate OTP: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to generate OTP: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
-	content := "Hello,\n\nYour One-Time Password (OTP) for login verification is: <b>" + otp + "</b>\n\nPlease enter this code in the app to verify your login. This code is valid for 3 minutes.\n\nThank you,\nChatBasket"
+	content := "<p>Hello,<br>Please enter this code in the app to verify your identity. This code is valid for 3 minutes.Your One-Time Password (OTP) for verifying your identity is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
 
 	_, err = ps.Appwrite.Message.CreateEmail(
 		messageId,
@@ -265,7 +360,11 @@ func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayl
 		ps.Appwrite.Message.WithCreateEmailUsers([]string{userId}),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to send email: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to send email: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	doc, err := ps.Appwrite.Database.ListDocuments(
@@ -279,7 +378,11 @@ func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayl
 		),
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query otp data: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 	if doc.Total == 1 {
 		_, err = ps.Appwrite.Database.DeleteDocument(
@@ -288,12 +391,20 @@ func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayl
 			userId,
 		)
 		if err != nil {
-			return nil, echo.NewHTTPError(401, "Failed to delete existing otp: "+err.Error())
+			return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to delete existing otp: " + err.Error(),
+				Type:    "internal_server_error",
+			}
 		}
 	}
 	hashedOtp, err := utils.HashOTP(otp)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to hash OTP: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to hash OTP: " + err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 	tempOtpPayload := model.TempOtpPayload{
 		Email:     payload.Subject,
@@ -309,14 +420,18 @@ func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayl
 		tempOtpPayload,
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to save otp in database: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to save otp in database: " + err.Error(),
+			Type:    "internal_server_error",		
+		}
 	}
 
 	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 
 }
 
-func (ps *GlobalService) VerifyOtp(ctx context.Context, payload *model.OtpVerificationPayload, userId string) (*model.StatusOkay, error){
+func (ps *GlobalService) VerifyOtp(ctx context.Context, payload *model.OtpVerificationPayload, userId string) (*model.StatusOkay, *model.ApiError){
 	// Step 1: Verify OTP
 	
 	// Retrieve the temporary OTP document from the database
@@ -326,31 +441,55 @@ func (ps *GlobalService) VerifyOtp(ctx context.Context, payload *model.OtpVerifi
 		userId,
 	)
 	if err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to query otp data: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query otp data: "+err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 	var tempOtp model.TempOtp
 	if err := doc.Decode(&tempOtp); err != nil {
-		return nil, echo.NewHTTPError(401, "Failed to parse otp data: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to parse otp data: "+err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	match, err := utils.VerifyOTP(payload.Secret, tempOtp.Otp)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to verify OTP: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to verify OTP: "+err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 	if !match {
-		return nil, echo.NewHTTPError(401, "Invalid OTP")
+		return nil, &model.ApiError{
+			Code:    401,
+			Message: "Invalid OTP",
+			Type:    "unauthorized",
+		}
 	}
 
 	// check if tempOtp has expired or not time limit is till 3 minutes after created at
 
 	createdAtTime, err := time.Parse(time.RFC3339, tempOtp.CreatedAt)
 	if err != nil {
-		return nil, echo.NewHTTPError(500, "Failed to parse OTP creation time: "+err.Error())
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to parse OTP creation time: "+err.Error(),
+			Type:    "internal_server_error",
+		}
 	}
 
 	expired := utils.IsExpiredOTP(createdAtTime, 3)
 	if expired {
-		return nil, echo.NewHTTPError(401, "OTP has expired")
+		return nil, &model.ApiError{
+			Code:    401,
+			Message: "OTP has expired",
+			Type:    "unauthorized",
+		}
 	}
 
 	// delete message but even it fails continue dont return nil
