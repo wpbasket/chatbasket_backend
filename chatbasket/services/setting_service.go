@@ -362,10 +362,10 @@ func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayl
 		}
 	}
 
-	emailT := emailTarget.Targets[1].Id
-	if emailTarget.Total==1{
-		emailT=emailTarget.Targets[0].Id
-	}
+	emailT := emailTarget.Targets[0].Id
+	// if emailTarget.Total==1{
+	// 	emailT=emailTarget.Targets[0].Id
+	// }
 
 	_, err = ps.Appwrite.Message.CreateEmail(
 		messageId,

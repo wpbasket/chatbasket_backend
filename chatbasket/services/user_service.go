@@ -341,10 +341,10 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 		}
 	}
 
-	emailT := emailTarget.Targets[1].Id
-	if emailTarget.Total==1{
-		emailT=emailTarget.Targets[0].Id
-	}
+	emailT := emailTarget.Targets[0].Id
+	// if emailTarget.Total==2{
+	// 	emailT=emailTarget.Targets[0].Id
+	// }
 	  
 	_, err = us.Appwrite.Message.CreateEmail(
 		messageId,
