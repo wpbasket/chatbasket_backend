@@ -353,11 +353,25 @@ func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayl
 	}
 	content := "<p>Hello,<br>Please enter this code in the app to verify your identity. This code is valid for 3 minutes.Your One-Time Password (OTP) for verifying your identity is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
 
+	emailTarget,err := ps.Appwrite.Users.ListTargets(userId)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to list targets: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	emailT := emailTarget.Targets[1].Id
+	if emailTarget.Total==1{
+		emailT=emailTarget.Targets[0].Id
+	}
+
 	_, err = ps.Appwrite.Message.CreateEmail(
 		messageId,
 		subject,
 		content,
-		ps.Appwrite.Message.WithCreateEmailUsers([]string{userId}),
+		ps.Appwrite.Message.WithCreateEmailTargets([]string{emailT}),
 	)
 	if err != nil {
 		return nil, &model.ApiError{

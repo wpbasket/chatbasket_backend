@@ -331,11 +331,26 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 	content := "<p>Hello,<br>Please enter this code in the app to verify your login. This code is valid for 3 minutes.Your One-Time Password (OTP) for login verification is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
 	userId := userRes.Users[0].Id
 
+
+	emailTarget,err := us.Appwrite.Users.ListTargets(userId)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to list targets: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+
+	emailT := emailTarget.Targets[1].Id
+	if emailTarget.Total==1{
+		emailT=emailTarget.Targets[0].Id
+	}
+	  
 	_, err = us.Appwrite.Message.CreateEmail(
 		messageId,
 		subject,
 		content,
-		us.Appwrite.Message.WithCreateEmailUsers([]string{userId}),
+		us.Appwrite.Message.WithCreateEmailTargets([]string{emailT}),
 	)
 	if err != nil {
 		return nil, &model.ApiError{
