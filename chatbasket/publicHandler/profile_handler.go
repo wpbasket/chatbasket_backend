@@ -1,8 +1,8 @@
-package handler
+package publicHandler
 
 import (
 	"chatbasket/model"
-	"chatbasket/services"
+	"chatbasket/publicServices"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -12,10 +12,10 @@ import (
 // var validate = validator.New()
 
 type ProfileHandler struct {
-	Service *services.GlobalService
+	Service *publicServices.Service
 }
 
-func NewProfileHandler(service *services.GlobalService) *ProfileHandler {
+func NewProfileHandler(service *publicServices.Service) *ProfileHandler {
 	return &ProfileHandler{Service: service}
 }
 

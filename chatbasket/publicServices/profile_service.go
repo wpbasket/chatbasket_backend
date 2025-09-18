@@ -1,4 +1,4 @@
-package services
+package publicServices
 
 import (
 	"chatbasket/model"
@@ -11,7 +11,7 @@ import (
 	"github.com/appwrite/sdk-for-go/query"
 )
 
-func (ps *GlobalService) Logout(ctx context.Context, payload *model.LogoutPayload, userId, sessionId string) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) Logout(ctx context.Context, payload *model.LogoutPayload, userId, sessionId string) (*model.StatusOkay, *model.ApiError) {
 
 	if payload.AllSessions {
 		_, err := ps.Appwrite.Users.DeleteSessions(userId)
@@ -36,7 +36,7 @@ func (ps *GlobalService) Logout(ctx context.Context, payload *model.LogoutPayloa
 	return &model.StatusOkay{Status: true, Message: "Logged out successfully"}, nil
 }
 
-func (ps *GlobalService) CheckIfUserNameAvailable(ctx context.Context, payload *model.CheckIfUserNameAvailablePayload) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) CheckIfUserNameAvailable(ctx context.Context, payload *model.CheckIfUserNameAvailablePayload) (*model.StatusOkay, *model.ApiError) {
 
 	userRes, err := ps.Appwrite.Database.ListDocuments(
 		ps.Appwrite.DatabaseID,
@@ -61,7 +61,7 @@ func (ps *GlobalService) CheckIfUserNameAvailable(ctx context.Context, payload *
 
 }
 
-func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.CreateUserProfilePayload, userId string) (*model.PrivateUser, *model.ApiError) {
+func (ps *Service) CreateUserProfile(ctx context.Context, payload *model.CreateUserProfilePayload, userId string) (*model.PrivateUser, *model.ApiError) {
 
 	user, err := ps.Appwrite.Users.Get(userId)
 	if err != nil {
@@ -155,7 +155,7 @@ func (ps *GlobalService) CreateUserProfile(ctx context.Context, payload *model.C
 	return model.ToPrivateUser(&resUser), nil
 }
 
-func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.PrivateUser, *model.ApiError) {
+func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.PrivateUser, *model.ApiError) {
 
 	getEmail, err := ps.Appwrite.Users.Get(userId)
 	if err != nil {
@@ -206,7 +206,7 @@ func (ps *GlobalService) GetProfile(ctx context.Context, userId string) (*model.
 
 }
 
-func (ps *GlobalService) UploadUserProfilePicture(ctx context.Context, fh *multipart.FileHeader, userId string) (*model.UploadUserProfilePictureResponse, *model.ApiError) {
+func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.FileHeader, userId string) (*model.UploadUserProfilePictureResponse, *model.ApiError) {
 	fileTemp, err := utils.ConvertToInputFile(fh)
 	if err != nil {
 		return nil, &model.ApiError{
@@ -327,7 +327,7 @@ func (ps *GlobalService) UploadUserProfilePicture(ctx context.Context, fh *multi
 	}, nil
 }
 
-func (ps *GlobalService) RemoveUserProfilePicture(ctx context.Context, userId string) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId string) (*model.StatusOkay, *model.ApiError) {
 	resUser, err := ps.Appwrite.Database.GetDocument(
 		ps.Appwrite.DatabaseID,
 		ps.Appwrite.UsersCollectionID,
@@ -412,7 +412,7 @@ func (ps *GlobalService) RemoveUserProfilePicture(ctx context.Context, userId st
 }
 
 
-func (ps *GlobalService) UpdateUserProfile(ctx context.Context, payload *model.UpdateUserProfilePayload, userId string) (*model.PrivateUser, *model.ApiError) {
+func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateUserProfilePayload, userId string) (*model.PrivateUser, *model.ApiError) {
 
 	_, err := ps.Appwrite.Users.Get(userId)
 	if err != nil {

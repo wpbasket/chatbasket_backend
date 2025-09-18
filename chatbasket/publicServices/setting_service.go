@@ -1,4 +1,4 @@
-package services
+package publicServices
 
 import (
 	"chatbasket/model"
@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (ps *GlobalService) UpdatePassword(ctx context.Context, payload *model.UpdatePassword, userId string) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) UpdatePassword(ctx context.Context, payload *model.UpdatePassword, userId string) (*model.StatusOkay, *model.ApiError) {
 	// doc, err := ps.Appwrite.Users.Get(userId)
 	// if err != nil {
 	// 	return nil, echo.NewHTTPError(401, "Failed to query user data: "+err.Error())
@@ -38,7 +38,7 @@ func (ps *GlobalService) UpdatePassword(ctx context.Context, payload *model.Upda
 	return &model.StatusOkay{Status: true, Message: "Password updated successfully"}, nil
 }
 
-func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateEmailPayload, userId string) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) UpdateEmail(ctx context.Context, payload *model.UpdateEmailPayload, userId string) (*model.StatusOkay, *model.ApiError) {
 
 	res, err := ps.Appwrite.Database.ListDocuments(
 		ps.Appwrite.DatabaseID,
@@ -201,7 +201,7 @@ func (ps *GlobalService) UpdateEmail(ctx context.Context, payload *model.UpdateE
 	return &model.StatusOkay{Status: true, Message: "Otp sent to new email for verification"}, nil
 }
 
-func (ps *GlobalService) UpdateEmailVerification(ctx context.Context, payload *model.UpdateEmailVerification, userId string) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) UpdateEmailVerification(ctx context.Context, payload *model.UpdateEmailVerification, userId string) (*model.StatusOkay, *model.ApiError) {
 
 	// Retrieve the temporary OTP document from the database
 	doc, err := ps.Appwrite.Database.GetDocument(
@@ -338,7 +338,7 @@ func (ps *GlobalService) UpdateEmailVerification(ctx context.Context, payload *m
 }
 
 
-func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayload ,userId string) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) SendOtp(ctx context.Context, payload *model.SendOtpPayload ,userId string) (*model.StatusOkay, *model.ApiError) {
 
 	// Step1: Generate otp 
 	messageId := id.Custom(uuid.NewString())
@@ -445,7 +445,7 @@ func (ps *GlobalService) SendOtp(ctx context.Context, payload *model.SendOtpPayl
 
 }
 
-func (ps *GlobalService) VerifyOtp(ctx context.Context, payload *model.OtpVerificationPayload, userId string) (*model.StatusOkay, *model.ApiError){
+func (ps *Service) VerifyOtp(ctx context.Context, payload *model.OtpVerificationPayload, userId string) (*model.StatusOkay, *model.ApiError){
 	// Step 1: Verify OTP
 	
 	// Retrieve the temporary OTP document from the database

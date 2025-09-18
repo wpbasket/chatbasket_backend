@@ -4,6 +4,8 @@ import (
 	"chatbasket/appwriteinternal"
 	"chatbasket/handler"
 	"chatbasket/middleware"
+	"chatbasket/publicHandler"
+	"chatbasket/publicServices"
 	"chatbasket/services"
 	"os"
 
@@ -34,6 +36,8 @@ func RegisterRoutes(
 	
 	globalService := services.NewGlobalService(as)
 	userHandler := handler.NewUserHandler(globalService)
+	// public services wrapper (shared between profile and settings)
+	pubSvc := publicServices.New(globalService)
 
 	authGroup := e.Group("/auth")
 	authGroup.POST("/signup", userHandler.Signup)
@@ -41,25 +45,25 @@ func RegisterRoutes(
 	authGroup.POST("/login", userHandler.Login)
 	authGroup.POST("/login-verification", userHandler.LoginVerification)
 
-	profileGroup := e.Group("/profile")
-	profileGroup.Use(middleware.AppwriteSessionMiddleware(true))
-	profileHandler := handler.NewProfileHandler(globalService)
-	profileGroup.POST("/logout", profileHandler.Logout)
-	profileGroup.POST("/check-username", profileHandler.CheckIfUserNameAvailable)
-	profileGroup.POST("/create-profile", profileHandler.CreateUserProfile)
-	profileGroup.GET("/get-profile", profileHandler.GetProfile)
-	profileGroup.POST("/upload-avatar", profileHandler.UploadProfilePicture)
-	profileGroup.DELETE("/remove-avatar", profileHandler.RemoveProfilePicture)
-	profileGroup.POST("/update-profile", profileHandler.UpdateProfile)
+	publicProfileGroup := e.Group("/public/profile")
+	publicProfileGroup.Use(middleware.AppwriteSessionMiddleware(true))
+	publicProfileHandler := publicHandler.NewProfileHandler(pubSvc)
+	publicProfileGroup.POST("/logout", publicProfileHandler.Logout)
+	publicProfileGroup.POST("/check-username", publicProfileHandler.CheckIfUserNameAvailable)
+	publicProfileGroup.POST("/create-profile", publicProfileHandler.CreateUserProfile)
+	publicProfileGroup.GET("/get-profile", publicProfileHandler.GetProfile)
+	publicProfileGroup.POST("/upload-avatar", publicProfileHandler.UploadProfilePicture)
+	publicProfileGroup.DELETE("/remove-avatar", publicProfileHandler.RemoveProfilePicture)
+	publicProfileGroup.POST("/update-profile", publicProfileHandler.UpdateProfile)
 	
 
-	settingGroup := e.Group("/settings")
-	settingGroup.Use(middleware.AppwriteSessionMiddleware(true))
-	settingHandler := handler.NewSettingHandler(globalService)
-	settingGroup.POST("/update-email", settingHandler.UpdateEmail)
-	settingGroup.POST("/update-password", settingHandler.UpdatePassword)
-	settingGroup.POST("/update-email-verification", settingHandler.UpdateEmailVerification)
-	settingGroup.POST("/send-otp",settingHandler.SendOtp)
-	settingGroup.POST("/verify-otp",settingHandler.VerifyOtp)
+	publicSettingGroup := e.Group("/public/settings")
+	publicSettingGroup.Use(middleware.AppwriteSessionMiddleware(true))
+	publicSettingHandler := publicHandler.NewSettingHandler(pubSvc)
+	publicSettingGroup.POST("/update-email", publicSettingHandler.UpdateEmail)
+	publicSettingGroup.POST("/update-password", publicSettingHandler.UpdatePassword)
+	publicSettingGroup.POST("/update-email-verification", publicSettingHandler.UpdateEmailVerification)
+	publicSettingGroup.POST("/send-otp",publicSettingHandler.SendOtp)
+	publicSettingGroup.POST("/verify-otp",publicSettingHandler.VerifyOtp)
 
 }

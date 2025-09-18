@@ -1,18 +1,18 @@
-package handler
+package publicHandler
 
 import (
 	"chatbasket/model"
-	"chatbasket/services"
+	"chatbasket/publicServices"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 )
 
 type SettingHandler struct {
-	Service *services.GlobalService
+	Service *publicServices.Service
 }
 
-func NewSettingHandler(service *services.GlobalService) *SettingHandler {
+func NewSettingHandler(service *publicServices.Service) *SettingHandler {
 	return &SettingHandler{Service: service}
 }
 
