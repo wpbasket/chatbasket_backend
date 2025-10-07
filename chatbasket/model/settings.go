@@ -11,3 +11,4 @@ type OtpVerificationPayload struct {
 type SendOtpPayload struct {
 	Subject string `json:"subject"`
 }
+

@@ -57,7 +57,16 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 	}
 
 	// ✅ Step 2: Create account in Appwrite Auth
-	userID := id.Custom(uuid.NewString())
+	newUuid, err := uuid.NewV7()
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to generate UUID: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+	
+	userID := id.Custom(newUuid.String())
 	_, err = us.Appwrite.Users.CreateArgon2User(
 		userID,
 		payload.Email,

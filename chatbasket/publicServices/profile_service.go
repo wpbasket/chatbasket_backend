@@ -152,7 +152,13 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *model.CreateU
 		}
 	}
 
-	return model.ToPrivateUser(&resUser), nil
+	avatarData:= model.AvatarData{
+		Avatar: resUser.Avatar,
+		AvatarTokens: resUser.AvatarTokens,
+	}
+	avatarUri:=model.BuildAvatarURI(&avatarData)
+
+	return model.ToPrivateUser(&resUser,avatarUri), nil
 }
 
 func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.PrivateUser, *model.ApiError) {
@@ -201,8 +207,13 @@ func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.Privat
 	}
 
 	finalResponse := responseUser.Documents[0]
+	avatarData:= model.AvatarData{
+		Avatar: finalResponse.Avatar,
+		AvatarTokens: finalResponse.AvatarTokens,
+	}
+	avatarUri:=model.BuildAvatarURI(&avatarData)
 
-	return model.ToPrivateUser(&finalResponse), nil
+	return model.ToPrivateUser(&finalResponse,avatarUri), nil
 
 }
 
@@ -446,8 +457,8 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateU
 		}
 	}
 
-	var privateUser model.PrivateUser
-	if err := doc.Decode(&privateUser); err != nil {
+	var updatedUser model.User
+	if err := doc.Decode(&updatedUser); err != nil {
 		return nil, &model.ApiError{
 			Code:    500,
 			Message: "Failed to parse updated user data: " + err.Error(),
@@ -455,7 +466,13 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateU
 		}
 	}
 
-	return &privateUser, nil
+	avatarData:= model.AvatarData{
+		Avatar: updatedUser.Avatar,
+		AvatarTokens: updatedUser.AvatarTokens,
+	}
+	avatarUri:=model.BuildAvatarURI(&avatarData)
+
+	return model.ToPrivateUser(&updatedUser,avatarUri), nil
 }
 
 

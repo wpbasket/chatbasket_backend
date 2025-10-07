@@ -92,10 +92,21 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 				})
 			}
 
+			getEmail,err:= appwriteService.Users.Get(userId)
+			if err!=nil{
+				return c.JSON(http.StatusInternalServerError, model.SessionError{
+					Code:    http.StatusInternalServerError,
+					Type:    "internal_server_error",
+					Message: err.Error(),
+				})
+			}
+
+			
 			// ✅ Set to context for handler access
 			c.Set("userId", userId)
 			c.Set("sessionId", sessionId)
 			c.Set("platform", platform)
+			c.Set("email", getEmail.Email)
 
 			// 🧹 Optional memory cleanup
 			appwriteService = nil

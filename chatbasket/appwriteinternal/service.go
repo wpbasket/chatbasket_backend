@@ -28,6 +28,10 @@ type AppwriteService struct {
 	FollowRequestsCollectionID string
 	TempOtpCollectionID       string
 	ProfilePicBucketID        string
+	PersonalUsersCollectionID string
+	AloneUsernameCollectionID string
+	PersonalDatabaseID        string
+	PersonalUsernameKey       []byte
 }
 
 func NewAppwriteService(
@@ -44,7 +48,11 @@ func NewAppwriteService(
 	refreshTokensCollectionID,
 	followRequestsCollectionID,
 	tempOtpCollectionID,
-	profilePicBucketID string) *AppwriteService {
+	profilePicBucketID,
+	personalUsersCollectionID,
+	aloneUsernameCollectionID,
+	personalDatabaseID string,
+	personalUsernameKey []byte) *AppwriteService {
 
 	c := appwrite.NewClient(
 		appwrite.WithEndpoint(endpoint),
@@ -70,5 +78,9 @@ func NewAppwriteService(
 		FollowRequestsCollectionID: followRequestsCollectionID,
 		TempOtpCollectionID:       tempOtpCollectionID,
 		ProfilePicBucketID:        profilePicBucketID,
+		PersonalUsersCollectionID: personalUsersCollectionID,
+		AloneUsernameCollectionID: aloneUsernameCollectionID,
+		PersonalDatabaseID:        personalDatabaseID,
+		PersonalUsernameKey:       personalUsernameKey,
 	}
 }

@@ -4,10 +4,11 @@ import (
 	"chatbasket/appwriteinternal"
 	"chatbasket/handler"
 	"chatbasket/middleware"
+	"chatbasket/personalHandler"
+	"chatbasket/personalServices"
 	"chatbasket/publicHandler"
 	"chatbasket/publicServices"
 	"chatbasket/services"
-	"os"
 
 	"github.com/labstack/echo/v4"
 )
@@ -17,23 +18,32 @@ func RegisterRoutes(
 	// add more services as needed...
 ) {
 
+	cfg, err := loadAppwriteConfig()
+	if err != nil {
+		e.Logger.Fatal("failed to load appwrite config: " + err.Error())
+	}
+
 	as := appwriteinternal.NewAppwriteService(
-		os.Getenv("APPWRITE_ENDPOINT"),
-		os.Getenv("APPWRITE_PROJECT_ID"),
-		os.Getenv("APPWRITE_API_KEY"),
-		os.Getenv("APPWRITE_DATABASE_ID"),
-		os.Getenv("APPWRITE_USERS_COLLECTION_ID"),
-		os.Getenv("APPWRITE_POSTS_COLLECTION_ID"),
-		os.Getenv("APPWRITE_COMMENTS_COLLECTION_ID"),
-		os.Getenv("APPWRITE_BLOCK_COLLECTION_ID"),
-		os.Getenv("APPWRITE_LIKES_COLLECTION_ID"),
-		os.Getenv("APPWRITE_FOLLOW_COLLECTION_ID"),
-		os.Getenv("APPWRITE_REFRESH_TOKENS_COLLECTION_ID"),		
-		os.Getenv("APPWRITE_FOLLOW_REQUESTS_COLLECTION_ID"),
-		os.Getenv("APPWRITE_TEMP_OTP_COLLECTION_ID"),
-		os.Getenv("APPWRITE_FILE_USERPROFILEPIC_BUCKET_ID"),	
+		cfg.Endpoint,
+		cfg.ProjectID,
+		cfg.ApiKey,
+		cfg.DatabaseID,
+		cfg.UsersCollectionID,
+		cfg.PostsCollectionID,
+		cfg.CommentsCollectionID,
+		cfg.BlockCollectionID,
+		cfg.LikesCollectionID,
+		cfg.FollowCollectionID,
+		cfg.RefreshTokensCollectionID,
+		cfg.FollowRequestsCollectionID,
+		cfg.TempOtpCollectionID,
+		cfg.FileUserProfilePicBucketID,
+		cfg.PersonalUsersCollectionID,
+		cfg.PersonalAloneUsernameCollectionID,
+		cfg.PersonalDatabaseID,
+		cfg.PersonalUsernameKey,
 	)
-	
+
 	globalService := services.NewGlobalService(as)
 	userHandler := handler.NewUserHandler(globalService)
 	// public services wrapper (shared between profile and settings)
@@ -55,7 +65,6 @@ func RegisterRoutes(
 	publicProfileGroup.POST("/upload-avatar", publicProfileHandler.UploadProfilePicture)
 	publicProfileGroup.DELETE("/remove-avatar", publicProfileHandler.RemoveProfilePicture)
 	publicProfileGroup.POST("/update-profile", publicProfileHandler.UpdateProfile)
-	
 
 	publicSettingGroup := e.Group("/public/settings")
 	publicSettingGroup.Use(middleware.AppwriteSessionMiddleware(true))
@@ -63,7 +72,15 @@ func RegisterRoutes(
 	publicSettingGroup.POST("/update-email", publicSettingHandler.UpdateEmail)
 	publicSettingGroup.POST("/update-password", publicSettingHandler.UpdatePassword)
 	publicSettingGroup.POST("/update-email-verification", publicSettingHandler.UpdateEmailVerification)
-	publicSettingGroup.POST("/send-otp",publicSettingHandler.SendOtp)
-	publicSettingGroup.POST("/verify-otp",publicSettingHandler.VerifyOtp)
+	publicSettingGroup.POST("/send-otp", publicSettingHandler.SendOtp)
+	publicSettingGroup.POST("/verify-otp", publicSettingHandler.VerifyOtp)
 
+
+	personalProfileGroup := e.Group("/personal/profile")
+	perSvc := personalServices.New(globalService)
+	personalProfileGroup.Use(middleware.AppwriteSessionMiddleware(true))
+	personalProfileHandler := personalHandler.NewProfileHandler(perSvc)
+	personalProfileGroup.GET("/get-profile", personalProfileHandler.GetProfile)
+	personalProfileGroup.POST("/create-profile", personalProfileHandler.CreateUserProfile)
+	personalProfileGroup.POST("/logout", personalProfileHandler.Logout)
 }

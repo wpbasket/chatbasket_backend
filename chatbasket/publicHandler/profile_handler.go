@@ -4,6 +4,7 @@ import (
 	"chatbasket/model"
 	"chatbasket/publicServices"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	// "github.com/go-playground/validator/v10"
@@ -22,7 +23,11 @@ func NewProfileHandler(service *publicServices.Service) *ProfileHandler {
 func (h *ProfileHandler) Logout(c echo.Context) error {
 	var payload model.LogoutPayload
 	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid logout payload")
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid logout payload: " + err.Error(),
+			Type:    "bad_request",
+		})
 	}
 	userId := c.Get("userId").(string)
 	sessionId := c.Get("sessionId").(string)
@@ -69,7 +74,11 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 func (h *ProfileHandler) CheckIfUserNameAvailable(c echo.Context) error {
 	var payload model.CheckIfUserNameAvailablePayload
 	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid username payload")
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid username payload: " + err.Error(),
+			Type:    "bad_request",
+		})
 	}
 	res, err := h.Service.CheckIfUserNameAvailable(c.Request().Context(), &payload)
 	if err != nil {
@@ -82,7 +91,11 @@ func (h *ProfileHandler) CheckIfUserNameAvailable(c echo.Context) error {
 func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 	var payload model.CreateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid create user profile payload")
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid create user profile payload: " + err.Error(),
+			Type:    "bad_request",
+		})
 	}
 
 	// if err := validate.Struct(payload); err != nil {
@@ -103,7 +116,11 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 func (h *ProfileHandler) GetProfile(c echo.Context) error {
 	userId := c.Get("userId").(string)
 	if userId == "" {
-		return echo.NewHTTPError(http.StatusUnauthorized, "User id is missing")
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing",
+			Type:    "unauthorized",
+		})
 	}
 
 	user, err := h.Service.GetProfile(c.Request().Context(), userId)
@@ -115,65 +132,81 @@ func (h *ProfileHandler) GetProfile(c echo.Context) error {
 }
 
 func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
-    err := c.Request().ParseMultipartForm(5 << 20) // 5MB
-    if err != nil {
-        return c.JSON(http.StatusBadRequest, map[string]string{
-            "error": "Failed to parse multipart form",
-            "details": err.Error(),
-        })
-    }
-    
-    if c.Request().MultipartForm == nil {
-        return c.JSON(http.StatusBadRequest, "MultipartForm is nil")
-    }
-    
-    fh, err := c.FormFile("avatar")
-    if err != nil {
-        availableFields := []string{}
-        if c.Request().MultipartForm != nil && c.Request().MultipartForm.File != nil {
-            for field := range c.Request().MultipartForm.File {
-                availableFields = append(availableFields, field)
-            }
-        }
-        
-        return c.JSON(http.StatusBadRequest, map[string]interface{}{
-            "error": "Avatar file not found in request",
-            "details": err.Error(),
-            "available_file_fields": availableFields,
-        })
-    }
-    
-    if fh.Size > 5<<20 {
-        return c.JSON(http.StatusBadRequest, "File size exceeds the limit")
-    }
+	err := c.Request().ParseMultipartForm(5 << 20) // 5MB
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Failed to parse multipart form: " + err.Error(),
+			Type:    "bad_request",
+		})
+	}
 
-    userId := c.Get("userId").(string)
-    user, serviceErr := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, userId)
+	if c.Request().MultipartForm == nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Multipart form is missing",
+			Type:    "bad_request",
+		})
+	}
 
-    if serviceErr != nil {
-        return c.JSON(serviceErr.Code, serviceErr)
-    }
+	fh, err := c.FormFile("avatar")
+	if err != nil {
+		availableFields := []string{}
+		if c.Request().MultipartForm != nil && c.Request().MultipartForm.File != nil {
+			for field := range c.Request().MultipartForm.File {
+				availableFields = append(availableFields, field)
+			}
+		}
 
-    return c.JSON(http.StatusOK, user)
+		message := "Avatar file not found in request: " + err.Error()
+		if len(availableFields) > 0 {
+			message += ". Available file fields: " + strings.Join(availableFields, ", ")
+		}
+
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: message,
+			Type:    "bad_request",
+		})
+	}
+
+	if fh.Size > 5<<20 {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "File size exceeds the 5MB limit",
+			Type:    "bad_request",
+		})
+	}
+
+	userId := c.Get("userId").(string)
+	user, serviceErr := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, userId)
+
+	if serviceErr != nil {
+		return c.JSON(serviceErr.Code, serviceErr)
+	}
+
+	return c.JSON(http.StatusOK, user)
 }
 
 func (h *ProfileHandler) RemoveProfilePicture(c echo.Context) error {
 	userId := c.Get("userId").(string)
 
 	user, err := h.Service.RemoveUserProfilePicture(c.Request().Context(), userId)
-	if err != nil {	
+	if err != nil {
 		return c.JSON(err.Code, err)
 	}
 
 	return c.JSON(http.StatusOK, user)
 }
 
-
-
 func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
 	var payload model.UpdateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid update profile payload")
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid update profile payload: " + err.Error(),
+			Type:    "bad_request",
+		})
 	}
 	userId := c.Get("userId").(string)
 
