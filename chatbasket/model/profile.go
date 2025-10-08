@@ -9,8 +9,8 @@ type User struct {
 	Name             string   `json:"name"`                       // Optional display name
 	Email            string   `json:"email"`                      // Required for login/contact
 	Bio              string   `json:"bio,omitempty"`              // Optional user bio
-	Avatar           string   `json:"avatar,omitempty"`           // Optional profile image
-	AvatarTokens     []string `json:"avatarTokens,omitempty"`     // Tokens for accessing Avatar ["personal_token","public_token","personal_token_secret","public_token_secret"]
+	AvatarFileId     string   `json:"avatarFileId,omitempty"`     // Optional profile image
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
 	Followers        int64    `json:"followers"`                  // Follower count
 	Following        int      `json:"following"`                  // Following count
 	Posts            int      `json:"posts"`                      // Post count
@@ -39,13 +39,13 @@ type PrivateUser struct {
 
 // db payload for creating user profile
 type CreateUserProfileDbPayload struct {
-	Username         string   `json:"username"`               // Required for identity
-	Name             string   `json:"name"`                   // Optional display name
-	Email            string   `json:"email"`                  // Required for login/contact
-	Bio              string   `json:"bio,omitempty"`          // Optional user bio
-	Avatar           string   `json:"avatar,omitempty"`       // Optional profile image
-	AvatarTokens     []string `json:"avatarTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","public_token","personal_token_secret","public_token_secret"]
-	ProfileVisibleTo string   `json:"profileVisibleTo"`       // "public", "followers", "private"
+	Username         string   `json:"username"`                   // Required for identity
+	Name             string   `json:"name"`                       // Optional display name
+	Email            string   `json:"email"`                      // Required for login/contact
+	Bio              string   `json:"bio,omitempty"`              // Optional user bio
+	AvatarFileId     string   `json:"avatarFileId,omitempty"`     // Optional profile image
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
+	ProfileVisibleTo string   `json:"profileVisibleTo"`           // "public", "followers", "private"
 }
 
 // db payload for creating user profile
@@ -54,15 +54,15 @@ type UpdateUserProfileDbPayload struct {
 	Name             string   `json:"name,omitempty"`             // Optional display name
 	Email            string   `json:"email,omitempty"`            // Required for login/contact
 	Bio              string   `json:"bio,omitempty"`              // Optional user bio
-	Avatar           string   `json:"avatar,omitempty"`           // Optional profile image
-	AvatarTokens     []string `json:"avatarTokens,omitempty"`     // Tokens for accessing Avatar ["personal_token","public_token","personal_token_secret","public_token_secret"]
+	AvatarFileId     string   `json:"avatarFileId,omitempty"`     // Optional profile image
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
 	ProfileVisibleTo string   `json:"profileVisibleTo,omitempty"` // "public", "followers", "private"
 }
 
 // db payload for removing profile picture
 type RemoveProfilePictureDbPayload struct {
-	Avatar       string   `json:"avatar"`       // Optional profile image
-	AvatarTokens []string `json:"avatarTokens"` // Tokens for accessing Avatar ["personal_token","public_token"]
+	AvatarFileId     string   `json:"avatarFileId"`
+	AvatarFileTokens []string `json:"avatarFileTokens"`
 }
 
 // payload for creating user profile
@@ -79,32 +79,32 @@ type UpdateUserProfilePayload struct {
 	Name             string   `json:"name,omitempty" validate:"omitempty,min=1,max=70,regexp=^[a-zA-Z0-9]+(?: [a-zA-Z0-9]+)*$"`
 	Bio              string   `json:"bio,omitempty" validate:"omitempty,max=200"`
 	ProfileVisibleTo string   `json:"profileVisibleTo,omitempty" validate:"omitempty,oneof=public followers private"`
-	Avatar           string   `json:"avatar,omitempty"`       // fileid is userid
-	AvatarTokens     []string `json:"avatarTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","public_token","personal_token_secret","public_tpken_secret"]
+	AvatarFileId     string   `json:"avatarFileId,omitempty"`     // fileid is userid
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
 }
 
 type UploadUserProfilePictureResponse struct {
-	FileId       string   `json:"fileId"`
-	Name         string   `json:"name"`
-	AvatarTokens []string `json:"avatarTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","public_token","personal_token_secret","public_tpken_secret"]
+	AvatarFileId     string   `json:"avatarFileId"`
+	Name             string   `json:"name"`
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
 }
 
 // AppwriteFileData represents the data needed to construct an appwrite file URI
 type AppwriteFileData struct {
-	FileId       string   `json:"fileId"`
+	FileId     string   `json:"fileId"`
 	FileTokens []string `json:"fileTokens"`
 }
 
 // BuildAvatarURI constructs the avatar URL from AppwriteFileData
 // Returns empty string if data is invalid or insufficient tokens
-func BuildAvatarURI(ad *AppwriteFileData) string {
-	if ad == nil || ad.FileId == "" || len(ad.FileTokens) < 3 {
+func BuildAvatarURI(ad *AppwriteFileData, minTokens int) string {
+	if ad == nil || ad.FileId == "" || len(ad.FileTokens) < minTokens {
 		return ""
 	}
 
-	// Use the personal_token_secret (index 2) for avatar access
+	// Use the personal_token_secret (index 1) for avatar access
 	return fmt.Sprintf("https://fra.cloud.appwrite.io/v1/storage/buckets/685bc613002edcfee6bb/files/%s/view?project=6858ed4d0005c859ea03&token=%s",
-		ad.FileId, ad.FileTokens[2])
+		ad.FileId, ad.FileTokens[1])
 }
 
 // 🔁 Convert full user model → private view

@@ -144,7 +144,7 @@ func ToPublicUser(u *User, hasPendingRequest bool) *PublicUser {
 		Username: u.Username,
 		Name:     u.Name,
 		Bio:      u.Bio,
-		Avatar:   u.Avatar,
+		Avatar:   u.AvatarFileId,
 		HasPendingRequest: hasPendingRequest,
 	}
 }
@@ -155,7 +155,7 @@ func ToPreviewPublicUser(u *User, hasPendingRequest bool) PreviewPublicUser {
 		Id:       u.Id,
 		Username: u.Username,
 		Name:     u.Name,
-		Avatar:   u.Avatar,
+		Avatar:   u.AvatarFileId,
 		HasPendingRequest: hasPendingRequest,
 
 	}

@@ -29,15 +29,36 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 			Type:    "bad_request",
 		})
 	}
-	userId := c.Get("userId").(string)
-	sessionId := c.Get("sessionId").(string)
+	userId, ok := c.Get("userId").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	sessionId, ok := c.Get("sessionId").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid session context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	user, err := h.Service.Logout(c.Request().Context(), &payload, userId, sessionId)
 	if err != nil {
 		return c.JSON(err.Code, err)
 	}
 
-	platform := c.Get("platform").(string)
+	platform, ok := c.Get("platform").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid platform context",
+			Type:    "internal_server_error",
+		})
+	}
 	if platform == "web" {
 		// remove these cookies c.SetCookie(sessionCookie) c.SetCookie(userCookie)
 		sessionCookie := &http.Cookie{
@@ -102,7 +123,14 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 	//     return echo.NewHTTPError(http.StatusBadRequest, "Validation failed: "+err.Error())
 	// }
 
-	userId := c.Get("userId").(string)
+	userId, ok := c.Get("userId").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	user, err := h.Service.CreateUserProfile(c.Request().Context(), &payload, userId)
 	if err != nil {
@@ -114,11 +142,11 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 }
 
 func (h *ProfileHandler) GetProfile(c echo.Context) error {
-	userId := c.Get("userId").(string)
-	if userId == "" {
+	userId, ok := c.Get("userId").(string)
+	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
 			Code:    http.StatusUnauthorized,
-			Message: "User id is missing",
+			Message: "User id is missing or invalid",
 			Type:    "unauthorized",
 		})
 	}
@@ -178,7 +206,14 @@ func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
 		})
 	}
 
-	userId := c.Get("userId").(string)
+	userId, ok := c.Get("userId").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 	user, serviceErr := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, userId)
 
 	if serviceErr != nil {
@@ -189,7 +224,14 @@ func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
 }
 
 func (h *ProfileHandler) RemoveProfilePicture(c echo.Context) error {
-	userId := c.Get("userId").(string)
+	userId, ok := c.Get("userId").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	user, err := h.Service.RemoveUserProfilePicture(c.Request().Context(), userId)
 	if err != nil {
@@ -208,7 +250,14 @@ func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
 			Type:    "bad_request",
 		})
 	}
-	userId := c.Get("userId").(string)
+	userId, ok := c.Get("userId").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	user, err := h.Service.UpdateUserProfile(c.Request().Context(), &payload, userId)
 	if err != nil {

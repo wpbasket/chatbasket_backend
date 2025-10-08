@@ -2,11 +2,9 @@ package publicServices
 
 import (
 	"chatbasket/model"
-	"chatbasket/utils"
+	"chatbasket/services"
 	"context"
-	"fmt"
 	"mime/multipart"
-	"os"
 
 	"github.com/appwrite/sdk-for-go/query"
 )
@@ -152,13 +150,13 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *model.CreateU
 		}
 	}
 
-	avatarData:= model.AppwriteFileData{
-		FileId: resUser.Avatar,
-		FileTokens: resUser.AvatarTokens,
+	avatarData := model.AppwriteFileData{
+		FileId:     resUser.AvatarFileId,
+		FileTokens: resUser.AvatarFileTokens,
 	}
-	avatarUri:=model.BuildAvatarURI(&avatarData)
+	avatarUri := model.BuildAvatarURI(&avatarData, 2)
 
-	return model.ToPrivateUser(&resUser,avatarUri), nil
+	return model.ToPrivateUser(&resUser, avatarUri), nil
 }
 
 func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.PrivateUser, *model.ApiError) {
@@ -207,134 +205,50 @@ func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.Privat
 	}
 
 	finalResponse := responseUser.Documents[0]
-	avatarData:= model.AppwriteFileData{
-		FileId: finalResponse.Avatar,
-		FileTokens: finalResponse.AvatarTokens,
+	avatarData := model.AppwriteFileData{
+		FileId:     finalResponse.AvatarFileId,
+		FileTokens: finalResponse.AvatarFileTokens,
 	}
-	avatarUri:=model.BuildAvatarURI(&avatarData)
+	avatarUri := model.BuildAvatarURI(&avatarData, 2)
 
-	return model.ToPrivateUser(&finalResponse,avatarUri), nil
+	return model.ToPrivateUser(&finalResponse, avatarUri), nil
 
 }
 
 func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.FileHeader, userId string) (*model.UploadUserProfilePictureResponse, *model.ApiError) {
-	fileTemp, err := utils.ConvertToInputFile(fh)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to process file: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	// Clean up temp file after upload
-	defer func() {
-		if fileTemp.Path != "" {
-			os.Remove(fileTemp.Path)
-		}
-	}()
-
+	// Fetch user to determine if an existing avatar (same fileId) should be deleted
 	resUser, err := ps.Appwrite.Database.GetDocument(
 		ps.Appwrite.DatabaseID,
 		ps.Appwrite.UsersCollectionID,
 		userId,
 	)
 	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to query user data: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+		return nil, &model.ApiError{Code: 500, Message: "Failed to query user data: " + err.Error(), Type: "internal_server_error"}
 	}
-
 	var user model.User
 	if err := resUser.Decode(&user); err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to parse user data: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+		return nil, &model.ApiError{Code: 500, Message: "Failed to parse user data: " + err.Error(), Type: "internal_server_error"}
 	}
+	deleteExisting := user.AvatarFileId == userId
 
-	if user.Avatar == userId {
-
-		listFilesRes, err := ps.Appwrite.Storage.ListFiles(
-			ps.Appwrite.ProfilePicBucketID,
-			ps.Appwrite.Storage.WithListFilesQueries([]string{
-				query.Equal("$id", userId),
-				query.Limit(1),
-			}),
-		)
-
-		if err != nil {
-			return nil, &model.ApiError{
-				Code:    500,
-				Message: "Failed to query profile picture: " + err.Error(),
-				Type:    "internal_server_error",
-			}
-		}
-
-		if listFilesRes.Total == 1 {
-			_, err := ps.Appwrite.Storage.DeleteFile(
-				ps.Appwrite.ProfilePicBucketID,
-				userId,
-			)
-			if err != nil {
-				return nil, &model.ApiError{
-					Code:    500,
-					Message: "Failed to delete old profile picture: " + err.Error(),
-					Type:    "internal_server_error",
-				}
-			}
-		}
-
-	}
-
-	fileId := userId
-
-	uploadRes, err := ps.Appwrite.Storage.CreateFile(
+	result, apiErr := ps.UploadFileFromMultipart(
 		ps.Appwrite.ProfilePicBucketID,
-		fileId,
-		fileTemp,
+		userId,
+		fh,
+		services.UploadOptions{DeleteExisting: deleteExisting, GenerateTokens: true},
 	)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to upload file: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+	if apiErr != nil {
+		return nil, apiErr
 	}
 
-	personalToken, err := ps.Appwrite.Tokens.CreateFileToken(
-		ps.Appwrite.ProfilePicBucketID,
-		fileId,
-	)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to create personal token: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+	avatarTokens := []string{}
+	if len(result.TokenIDs) == 1 && len(result.TokenSecrets) == 1 {
+		avatarTokens = []string{result.TokenIDs[0], result.TokenSecrets[0]}
 	}
-
-	publicToken, err := ps.Appwrite.Tokens.CreateFileToken(
-		ps.Appwrite.ProfilePicBucketID,
-		fileId,
-	)
-
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to create public token: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	// fileUrl := "https://fra.cloud.appwrite.io/v1/storage/buckets/685bc613002edcfee6bb/files/" + "" + "/view?project=6858ed4d0005c859ea03&token=" + ""
 	return &model.UploadUserProfilePictureResponse{
-		FileId:       uploadRes.Id,
-		Name:         uploadRes.Name,
-		AvatarTokens: []string{personalToken.Id, publicToken.Id, personalToken.Secret, publicToken.Secret},
+		AvatarFileId:     result.FileId,
+		Name:             result.Name,
+		AvatarFileTokens: avatarTokens,
 	}, nil
 }
 
@@ -361,7 +275,7 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId string) 
 		}
 	}
 
-	if user.Avatar != userId {
+	if user.AvatarFileId != userId {
 		return nil, &model.ApiError{
 			Code:    404,
 			Message: "No profile picture found to remove",
@@ -369,22 +283,28 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId string) 
 		}
 	}
 
-	
-	// Delete associated tokens (only token IDs, not secrets)
-	for i, token := range user.AvatarTokens {
-		if i > 1 {
-			break // Only first two are token IDs, rest are secrets
-		}
-		_, err := ps.Appwrite.Tokens.Delete(token)
-		if err != nil {
-			// Log the error but don't fail the entire operation, as the file is already deleted
-			// and the main goal is achieved.
-			// In a real application, you might want to add more robust error handling/retries.
-			// For now, just print to stderr.
-			fmt.Println("Failed to delete token:",err)
+	// Delete the file access token
+	tok, err := ps.Appwrite.Tokens.List(ps.Appwrite.ProfilePicBucketID, user.AvatarFileId)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to query token data: " + err.Error(),
+			Type:    "internal_server_error",
 		}
 	}
-	
+	if tok.Total > 0 {
+		for _, token := range tok.Tokens {
+			_, err := ps.Appwrite.Tokens.Delete(token.Id)
+			if err != nil {
+				return nil, &model.ApiError{
+					Code:    500,
+					Message: "Failed to delete token data: " + err.Error(),
+					Type:    "internal_server_error",
+				}
+			}
+		}
+	}
+
 	// Delete the file from storage
 	_, err = ps.Appwrite.Storage.DeleteFile(
 		ps.Appwrite.ProfilePicBucketID,
@@ -398,11 +318,10 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId string) 
 		}
 	}
 
-	dataToUpdateInUserProfile:= model.RemoveProfilePictureDbPayload{
-		Avatar: "",
-		AvatarTokens: []string{},
+	dataToUpdateInUserProfile := model.RemoveProfilePictureDbPayload{
+		AvatarFileId:     "",
+		AvatarFileTokens: []string{},
 	}
-
 
 	_, err = ps.Appwrite.Database.UpdateDocument(
 		ps.Appwrite.DatabaseID,
@@ -418,10 +337,8 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId string) 
 		}
 	}
 
-
 	return &model.StatusOkay{Status: true, Message: "Profile picture removed successfully"}, nil
 }
-
 
 func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateUserProfilePayload, userId string) (*model.PrivateUser, *model.ApiError) {
 
@@ -438,8 +355,8 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateU
 		Username:         payload.Username,
 		Name:             payload.Name,
 		Bio:              payload.Bio,
-		Avatar:           payload.Avatar,
-		AvatarTokens:     payload.AvatarTokens,
+		AvatarFileId:     payload.AvatarFileId,
+		AvatarFileTokens: payload.AvatarFileTokens,
 		ProfileVisibleTo: payload.ProfileVisibleTo,
 	}
 
@@ -466,13 +383,11 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateU
 		}
 	}
 
-	avatarData:= model.AppwriteFileData{
-		FileId: updatedUser.Avatar,
-		FileTokens: updatedUser.AvatarTokens,
+	avatarData := model.AppwriteFileData{
+		FileId:     updatedUser.AvatarFileId,
+		FileTokens: updatedUser.AvatarFileTokens,
 	}
-	avatarUri:=model.BuildAvatarURI(&avatarData)
+	avatarUri := model.BuildAvatarURI(&avatarData, 2)
 
-	return model.ToPrivateUser(&updatedUser,avatarUri), nil
+	return model.ToPrivateUser(&updatedUser, avatarUri), nil
 }
-
-
