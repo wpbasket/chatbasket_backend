@@ -72,7 +72,7 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *model.CreateU
 		}
 	}
 	userEmail := user.Email
-	dbUserPayload := model.CreateOrUpdateUserProfile{
+	dbUserPayload := model.CreateUserProfileDbPayload{
 		Username:         payload.Username,
 		Name:             payload.Name,
 		Email:            userEmail,
@@ -152,9 +152,9 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *model.CreateU
 		}
 	}
 
-	avatarData:= model.AvatarData{
-		Avatar: resUser.Avatar,
-		AvatarTokens: resUser.AvatarTokens,
+	avatarData:= model.AppwriteFileData{
+		FileId: resUser.Avatar,
+		FileTokens: resUser.AvatarTokens,
 	}
 	avatarUri:=model.BuildAvatarURI(&avatarData)
 
@@ -207,9 +207,9 @@ func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.Privat
 	}
 
 	finalResponse := responseUser.Documents[0]
-	avatarData:= model.AvatarData{
-		Avatar: finalResponse.Avatar,
-		AvatarTokens: finalResponse.AvatarTokens,
+	avatarData:= model.AppwriteFileData{
+		FileId: finalResponse.Avatar,
+		FileTokens: finalResponse.AvatarTokens,
 	}
 	avatarUri:=model.BuildAvatarURI(&avatarData)
 
@@ -398,7 +398,7 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId string) 
 		}
 	}
 
-	dataToUpdateInUserProfile:= model.RemoveProfilePicture{
+	dataToUpdateInUserProfile:= model.RemoveProfilePictureDbPayload{
 		Avatar: "",
 		AvatarTokens: []string{},
 	}
@@ -434,7 +434,7 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateU
 		}
 	}
 
-	updatePayload := model.UpdateUserProfile{
+	updatePayload := model.UpdateUserProfileDbPayload{
 		Username:         payload.Username,
 		Name:             payload.Name,
 		Bio:              payload.Bio,
@@ -466,9 +466,9 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateU
 		}
 	}
 
-	avatarData:= model.AvatarData{
-		Avatar: updatedUser.Avatar,
-		AvatarTokens: updatedUser.AvatarTokens,
+	avatarData:= model.AppwriteFileData{
+		FileId: updatedUser.Avatar,
+		FileTokens: updatedUser.AvatarTokens,
 	}
 	avatarUri:=model.BuildAvatarURI(&avatarData)
 

@@ -38,7 +38,7 @@ type PrivateUser struct {
 }
 
 // db payload for creating user profile
-type CreateOrUpdateUserProfile struct {
+type CreateUserProfileDbPayload struct {
 	Username         string   `json:"username"`               // Required for identity
 	Name             string   `json:"name"`                   // Optional display name
 	Email            string   `json:"email"`                  // Required for login/contact
@@ -49,7 +49,7 @@ type CreateOrUpdateUserProfile struct {
 }
 
 // db payload for creating user profile
-type UpdateUserProfile struct {
+type UpdateUserProfileDbPayload struct {
 	Username         string   `json:"username,omitempty"`         // Required for identity
 	Name             string   `json:"name,omitempty"`             // Optional display name
 	Email            string   `json:"email,omitempty"`            // Required for login/contact
@@ -59,7 +59,8 @@ type UpdateUserProfile struct {
 	ProfileVisibleTo string   `json:"profileVisibleTo,omitempty"` // "public", "followers", "private"
 }
 
-type RemoveProfilePicture struct {
+// db payload for removing profile picture
+type RemoveProfilePictureDbPayload struct {
 	Avatar       string   `json:"avatar"`       // Optional profile image
 	AvatarTokens []string `json:"avatarTokens"` // Tokens for accessing Avatar ["personal_token","public_token"]
 }
@@ -88,22 +89,22 @@ type UploadUserProfilePictureResponse struct {
 	AvatarTokens []string `json:"avatarTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","public_token","personal_token_secret","public_tpken_secret"]
 }
 
-// AvatarData represents the data needed to construct an avatar URI
-type AvatarData struct {
-	Avatar       string   `json:"avatar"`
-	AvatarTokens []string `json:"avatarTokens"`
+// AppwriteFileData represents the data needed to construct an appwrite file URI
+type AppwriteFileData struct {
+	FileId       string   `json:"fileId"`
+	FileTokens []string `json:"fileTokens"`
 }
 
-// BuildAvatarURI constructs the avatar URL from AvatarData
+// BuildAvatarURI constructs the avatar URL from AppwriteFileData
 // Returns empty string if data is invalid or insufficient tokens
-func BuildAvatarURI(ad *AvatarData) string {
-	if ad == nil || ad.Avatar == "" || len(ad.AvatarTokens) < 3 {
+func BuildAvatarURI(ad *AppwriteFileData) string {
+	if ad == nil || ad.FileId == "" || len(ad.FileTokens) < 3 {
 		return ""
 	}
 
 	// Use the personal_token_secret (index 2) for avatar access
 	return fmt.Sprintf("https://fra.cloud.appwrite.io/v1/storage/buckets/685bc613002edcfee6bb/files/%s/view?project=6858ed4d0005c859ea03&token=%s",
-		ad.Avatar, ad.AvatarTokens[2])
+		ad.FileId, ad.FileTokens[2])
 }
 
 // 🔁 Convert full user model → private view
