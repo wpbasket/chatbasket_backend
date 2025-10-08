@@ -319,8 +319,8 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId string) 
 	}
 
 	dataToUpdateInUserProfile := model.RemoveProfilePictureDbPayload{
-		AvatarFileId:     "",
-		AvatarFileTokens: []string{},
+		AvatarFileId:     nil,
+		AvatarFileTokens: nil,
 	}
 
 	_, err = ps.Appwrite.Database.UpdateDocument(

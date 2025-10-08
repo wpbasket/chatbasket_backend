@@ -61,8 +61,8 @@ type UpdateUserProfileDbPayload struct {
 
 // db payload for removing profile picture
 type RemoveProfilePictureDbPayload struct {
-	AvatarFileId     string   `json:"avatarFileId"`
-	AvatarFileTokens []string `json:"avatarFileTokens"`
+	AvatarFileId     *string   `json:"avatarFileId"`
+	AvatarFileTokens *[]string `json:"avatarFileTokens"`
 }
 
 // payload for creating user profile
