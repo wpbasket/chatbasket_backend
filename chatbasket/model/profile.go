@@ -10,7 +10,7 @@ type User struct {
 	Email            string   `json:"email"`                      // Required for login/contact
 	Bio              string   `json:"bio,omitempty"`              // Optional user bio
 	AvatarFileId     string   `json:"avatarFileId,omitempty"`     // Optional profile image
-	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret","token_expire"]
 	Followers        int64    `json:"followers"`                  // Follower count
 	Following        int      `json:"following"`                  // Following count
 	Posts            int      `json:"posts"`                      // Post count
@@ -44,7 +44,7 @@ type CreateUserProfileDbPayload struct {
 	Email            string   `json:"email"`                      // Required for login/contact
 	Bio              string   `json:"bio,omitempty"`              // Optional user bio
 	AvatarFileId     string   `json:"avatarFileId,omitempty"`     // Optional profile image
-	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret","token_expire"]
 	ProfileVisibleTo string   `json:"profileVisibleTo"`           // "public", "followers", "private"
 }
 
@@ -55,7 +55,7 @@ type UpdateUserProfileDbPayload struct {
 	Email            string   `json:"email,omitempty"`            // Required for login/contact
 	Bio              string   `json:"bio,omitempty"`              // Optional user bio
 	AvatarFileId     string   `json:"avatarFileId,omitempty"`     // Optional profile image
-	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret","token_expire"]
 	ProfileVisibleTo string   `json:"profileVisibleTo,omitempty"` // "public", "followers", "private"
 }
 
@@ -80,13 +80,21 @@ type UpdateUserProfilePayload struct {
 	Bio              string   `json:"bio,omitempty" validate:"omitempty,max=200"`
 	ProfileVisibleTo string   `json:"profileVisibleTo,omitempty" validate:"omitempty,oneof=public followers private"`
 	AvatarFileId     string   `json:"avatarFileId,omitempty"`     // fileid is userid
-	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret","token_expire"]
 }
 
+// db payload for uploading user profile picture
+type UploadUserProfilePictureDbPayload struct {
+	AvatarFileId     string   `json:"avatarFileId,omitempty"`
+	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret","token_expire"]
+}
+
+
+// response for uploading user profile picture
 type UploadUserProfilePictureResponse struct {
 	AvatarFileId     string   `json:"avatarFileId"`
 	Name             string   `json:"name"`
-	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret"]
+	AvatarFileTokens []string `json:"avatarFileTokens"` // Tokens for accessing Avatar ["personal_token","personal_token_secret","token_expire"]
 }
 
 // AppwriteFileData represents the data needed to construct an appwrite file URI

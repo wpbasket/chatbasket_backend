@@ -5,6 +5,7 @@ import (
 	"chatbasket/utils"
 	"mime/multipart"
 	"os"
+	"time"
 
 	"github.com/appwrite/sdk-for-go/query"
 )
@@ -21,6 +22,7 @@ type UploadOptions struct {
 type UploadResult struct {
 	FileId       string
 	Name         string
+	Expire       string
 	TokenIDs     []string // [personalTokenId]
 	TokenSecrets []string // [personalTokenSecret]
 }
@@ -91,12 +93,14 @@ func (gs *GlobalService) UploadFileFromMultipart(
 	}
 
 	if opts.GenerateTokens {
-		personalToken, err := gs.Appwrite.Tokens.CreateFileToken(bucketId, fileId)
+		exp := time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
+		personalToken, err := gs.Appwrite.Tokens.CreateFileToken(bucketId, fileId, gs.Appwrite.Tokens.WithCreateFileTokenExpire(exp))
 		if err != nil {
 			return nil, &model.ApiError{Code: 500, Message: "Failed to create personal token: " + err.Error(), Type: "internal_server_error"}
 		}
 		result.TokenIDs = []string{personalToken.Id}
 		result.TokenSecrets = []string{personalToken.Secret}
+		result.Expire = personalToken.Expire
 	}
 
 	return result, nil
