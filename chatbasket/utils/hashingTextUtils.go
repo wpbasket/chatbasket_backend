@@ -15,7 +15,8 @@ import (
 // ---------- HMAC-SHA256 ----------
 //
 
-// HashUsername computes HMAC-SHA256 (hex string) of username with secret key.
+// HashUsername computes HMAC-SHA256 (hex string) of username with secret key. It cannot be reversed to retrieve the original username.
+// It is used for username queries in the database by comparing the hash of the username with the hash of the username in the database.
 func HashUsername(username string, secretKey []byte) (string, error) {
 	mac := hmac.New(sha256.New, secretKey)
 	if _, err := mac.Write([]byte(username)); err != nil {
@@ -48,7 +49,8 @@ func VerifyUsernameHash(username string, storedHex string, secretKey []byte) (bo
 // ---------- ChaCha20-Poly1305 ----------
 //
 
-// EncryptUsername encrypts username using ChaCha20-Poly1305 with a UUID string as nonce source.
+// EncryptUsername encrypts username using ChaCha20-Poly1305 with a UUID string as nonce source. It can be reversed to retrieve the original username.
+// It is used for storing the username in encrypted form in the database.
 func EncryptUsername(username string, encryptionKey []byte, userIDStr string) (string, error) {
 	// Parse UUID string from Appwrite
 	u, err := uuid.Parse(userIDStr)

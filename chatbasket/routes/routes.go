@@ -10,11 +10,13 @@ import (
 	"chatbasket/publicServices"
 	"chatbasket/services"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 )
 
 func RegisterRoutes(
 	e *echo.Echo,
+	pool *pgxpool.Pool,
 	// add more services as needed...
 ) {
 
@@ -41,10 +43,11 @@ func RegisterRoutes(
 		cfg.PersonalUsersCollectionID,
 		cfg.PersonalAloneUsernameCollectionID,
 		cfg.PersonalDatabaseID,
+		cfg.PersonalProfilePicBucketID,
 		cfg.PersonalUsernameKey,
 	)
 
-	globalService := services.NewGlobalService(as)
+	globalService := services.NewGlobalService(as, pool)
 	userHandler := handler.NewUserHandler(globalService)
 	// public services wrapper (shared between profile and settings)
 	pubSvc := publicServices.New(globalService)
@@ -75,7 +78,6 @@ func RegisterRoutes(
 	publicSettingGroup.POST("/send-otp", publicSettingHandler.SendOtp)
 	publicSettingGroup.POST("/verify-otp", publicSettingHandler.VerifyOtp)
 
-
 	personalProfileGroup := e.Group("/personal/profile")
 	perSvc := personalServices.New(globalService)
 	personalProfileGroup.Use(middleware.AppwriteSessionMiddleware(true))
@@ -83,4 +85,7 @@ func RegisterRoutes(
 	personalProfileGroup.GET("/get-profile", personalProfileHandler.GetProfile)
 	personalProfileGroup.POST("/create-profile", personalProfileHandler.CreateUserProfile)
 	personalProfileGroup.POST("/logout", personalProfileHandler.Logout)
+	personalProfileGroup.POST("/upload-avatar", personalProfileHandler.UploadProfilePicture)
+	personalProfileGroup.DELETE("/remove-avatar", personalProfileHandler.RemoveProfilePicture)
+	personalProfileGroup.POST("/update-profile", personalProfileHandler.UpdateProfile)
 }

@@ -3,6 +3,7 @@ package middleware
 import (
 	"chatbasket/appwriteinternal"
 	"chatbasket/model"
+	"chatbasket/utils"
 	"net/http"
 	"os"
 	"strings"
@@ -47,6 +48,7 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 
 			// 🔒 Check missing auth
 			if sessionId == "" || userId == "" {
+				// log.Printf("401 returned: Missing session ID or User ID. sessionId='%s', userId='%s', platform='%s'", sessionId, userId, platform)
 				return c.JSON(http.StatusUnauthorized, model.SessionError{
 					Code:    http.StatusUnauthorized,
 					Type:    "missing_auth",
@@ -85,6 +87,7 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 			}
 
 			if !sessionFound {
+				// log.Printf("401 returned: Invalid session ID. userId='%s', sessionId='%s', platform='%s'", userId, sessionId, platform)
 				return c.JSON(http.StatusUnauthorized, model.SessionError{
 					Code:    http.StatusUnauthorized,
 					Type:    "session_invalid",
@@ -102,6 +105,15 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 			}
 
 			// Set to context for handler access
+			uuidUserId, err := utils.StringToUUID(userId)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, model.SessionError{
+					Code:    http.StatusInternalServerError,
+					Type:    "internal_server_error",
+					Message: err.Error(),
+				})
+			}
+			c.Set("uuidUserId", uuidUserId)
 			c.Set("userId", userId)
 			c.Set("sessionId", sessionId)
 			c.Set("platform", platform)

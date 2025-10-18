@@ -16,7 +16,7 @@ const (
 // ----------------------------
 // GenerateRandomUsername
 // ----------------------------
-// Pattern: 6 letters + 4 digits + 1 letter
+// Pattern: 6 Uppercase letters(A-Z) + 4 digits(0-9) + 1 Uppercase letter(A-Z)
 func GenerateRandomUsername() (string, error) {
  username := make([]byte, 11)
 

@@ -6,32 +6,35 @@ import (
 	"github.com/appwrite/sdk-for-go/databases"
 	"github.com/appwrite/sdk-for-go/messaging"
 	"github.com/appwrite/sdk-for-go/storage"
+	"github.com/appwrite/sdk-for-go/tablesdb"
 	"github.com/appwrite/sdk-for-go/tokens"
 	"github.com/appwrite/sdk-for-go/users"
 )
 
 type AppwriteService struct {
-	Account                   *account.Account
-	Database                  *databases.Databases
-	Storage                   *storage.Storage
-	Users                     *users.Users
-	Message                   *messaging.Messaging
-	Tokens                    *tokens.Tokens
-	DatabaseID                string
-	UsersCollectionID         string
-	PostsCollectionID         string
-	CommentsCollectionID      string
-	BlockCollectionID         string
-	LikesCollectionID         string
-	FollowCollectionID        string
-	RefreshTokensCollectionID string
-	FollowRequestsCollectionID string
-	TempOtpCollectionID       string
-	ProfilePicBucketID        string
-	PersonalUsersCollectionID string
-	AloneUsernameCollectionID string
-	PersonalDatabaseID        string
-	PersonalUsernameKey       []byte
+	Account                   		*account.Account
+	Database                  		*databases.Databases
+	TableDb                   		*tablesdb.TablesDB
+	Storage                   		*storage.Storage
+	Users                     		*users.Users
+	Message                   		*messaging.Messaging
+	Tokens                    		*tokens.Tokens
+	DatabaseID                		string
+	UsersCollectionID         		string
+	PostsCollectionID         		string
+	CommentsCollectionID      		string
+	BlockCollectionID         		string
+	LikesCollectionID         		string
+	FollowCollectionID        		string
+	RefreshTokensCollectionID 		string
+	FollowRequestsCollectionID		string
+	TempOtpCollectionID       		string
+	ProfilePicBucketID        		string
+	PersonalUsersCollectionID 		string
+	AloneUsernameCollectionID 		string
+	PersonalDatabaseID        		string
+	PersonalProfilePicBucketID    	string
+	PersonalUsernameKey       	  []byte
 }
 
 func NewAppwriteService(
@@ -51,7 +54,8 @@ func NewAppwriteService(
 	profilePicBucketID,
 	personalUsersCollectionID,
 	aloneUsernameCollectionID,
-	personalDatabaseID string,
+	personalDatabaseID,
+	personalProfilePicBucketID string,
 	personalUsernameKey []byte) *AppwriteService {
 
 	c := appwrite.NewClient(
@@ -63,6 +67,7 @@ func NewAppwriteService(
 	return &AppwriteService{
 		Account:                   appwrite.NewAccount(c),
 		Database:                  appwrite.NewDatabases(c),
+		TableDb:                   appwrite.NewTablesDB(c),
 		Storage:                   appwrite.NewStorage(c),
 		Users:                     appwrite.NewUsers(c),
 		Message:                   appwrite.NewMessaging(c),
@@ -82,5 +87,6 @@ func NewAppwriteService(
 		AloneUsernameCollectionID: aloneUsernameCollectionID,
 		PersonalDatabaseID:        personalDatabaseID,
 		PersonalUsernameKey:       personalUsernameKey,
+		PersonalProfilePicBucketID: personalProfilePicBucketID,
 	}
 }

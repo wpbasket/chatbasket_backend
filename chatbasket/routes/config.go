@@ -22,6 +22,7 @@ type appwriteConfig struct {
 	PersonalUsersCollectionID       string
 	PersonalAloneUsernameCollectionID string
 	PersonalDatabaseID              string
+	PersonalProfilePicBucketID      string
 	PersonalUsernameKey             []byte
 }
 
@@ -81,6 +82,9 @@ func loadAppwriteConfig() (*appwriteConfig, error) {
 		return nil, err
 	}
 	if c.PersonalDatabaseID, err = utils.LoadKeyFromEnv("APPWRITE_PERSONAL_DATABASE_ID"); err != nil {
+		return nil, err
+	}
+	if c.PersonalProfilePicBucketID, err = utils.LoadKeyFromEnv("APPWRITE_FILE_PERSONAL_USERPROFILEPIC_BUCKET_ID"); err != nil {
 		return nil, err
 	}
 	return &c, nil
