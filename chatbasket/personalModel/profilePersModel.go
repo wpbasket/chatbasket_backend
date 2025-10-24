@@ -14,7 +14,6 @@ type User struct {
     Bio                                  string   `json:"bio"`
     Avatar                               string   `json:"avatar"` // avatar id in storage
     AvatarTokens                       []string   `json:"avatar_tokens"`
-    Contacts                             int      `json:"contacts"`
     ProfileType                          string   `json:"profile_type"` // User profile type: private/public/personal
     IsAdminBlocked                       bool     `json:"is_admin_blocked"`
     AdminBlockReason                     string   `json:"admin_block_reason"`
@@ -38,7 +37,6 @@ type PrivateUser struct {
     Email                                string      `json:"email"`
     Bio                                 *string      `json:"bio"`
     AvatarUrl                           *string      `json:"avatar_url"` 
-    Contacts                             int32       `json:"contacts"`
     ProfileType                          string      `json:"profile_type"` // User profile type: private/public/personal
     CreatedAt                            time.Time   `json:"createdAt"`
     UpdatedAt                            time.Time   `json:"updatedAt"`    
@@ -75,7 +73,6 @@ func ToPrivateUserWithAvatar(user *postgresCode.GetUserProfileRow,username strin
 		Email:          email,
         AvatarUrl:      avatarUrl,
 		Bio:            user.Bio,
-		Contacts:       user.Contacts,
 		ProfileType:    user.ProfileType,
 		CreatedAt:      user.CreatedAt.Time,
 		UpdatedAt:      user.UpdatedAt.Time,
@@ -90,7 +87,6 @@ func ToPrivateUser(user *postgresCode.User,username string,email string) *Privat
 		Email:          email,
 		Bio:            user.Bio,
         AvatarUrl:      nil,
-		Contacts:       user.Contacts,
 		ProfileType:    user.ProfileType,
 		CreatedAt:      user.CreatedAt.Time,
 		UpdatedAt:      user.UpdatedAt.Time,

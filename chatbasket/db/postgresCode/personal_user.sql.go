@@ -98,7 +98,7 @@ INSERT INTO users (
     profile_type
 )
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, bio, contacts, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
+RETURNING id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -126,7 +126,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.ID,
 		&i.Name,
 		&i.Bio,
-		&i.Contacts,
 		&i.ProfileType,
 		&i.IsAdminBlocked,
 		&i.AdminBlockReason,
@@ -151,7 +150,7 @@ func (q *Queries) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
 
 const getUserProfile = `-- name: GetUserProfile :many
 SELECT 
-    u.id, u.name, u.bio, u.contacts, u.profile_type, u.is_admin_blocked, u.admin_block_reason, u.hmac_sha256_hex_username, u.b64_cipher_chacha20poly1305_username, u.created_at, u.updated_at, 
+    u.id, u.name, u.bio, u.profile_type, u.is_admin_blocked, u.admin_block_reason, u.hmac_sha256_hex_username, u.b64_cipher_chacha20poly1305_username, u.created_at, u.updated_at, 
     a.file_id,
     a.token_id,
     a.token_secret,
@@ -167,7 +166,6 @@ type GetUserProfileRow struct {
 	ID                                uuid.UUID          `json:"id"`
 	Name                              string             `json:"name"`
 	Bio                               *string            `json:"bio"`
-	Contacts                          int32              `json:"contacts"`
 	ProfileType                       string             `json:"profile_type"`
 	IsAdminBlocked                    bool               `json:"is_admin_blocked"`
 	AdminBlockReason                  *string            `json:"admin_block_reason"`
@@ -195,7 +193,6 @@ func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) ([]GetUserPr
 			&i.ID,
 			&i.Name,
 			&i.Bio,
-			&i.Contacts,
 			&i.ProfileType,
 			&i.IsAdminBlocked,
 			&i.AdminBlockReason,
@@ -252,7 +249,7 @@ func (q *Queries) IsUserProfilePicExists(ctx context.Context, id uuid.UUID) (boo
 }
 
 const listUsersAfter = `-- name: ListUsersAfter :many
-SELECT id, name, bio, contacts, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
+SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 FROM users
 WHERE created_at < $1
 ORDER BY created_at DESC
@@ -278,7 +275,6 @@ func (q *Queries) ListUsersAfter(ctx context.Context, arg ListUsersAfterParams) 
 			&i.ID,
 			&i.Name,
 			&i.Bio,
-			&i.Contacts,
 			&i.ProfileType,
 			&i.IsAdminBlocked,
 			&i.AdminBlockReason,
@@ -340,7 +336,7 @@ UPDATE users SET
     bio = COALESCE($3, bio),
     profile_type = COALESCE($4, profile_type)
 WHERE id = $1
-RETURNING id, name, bio, contacts, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
+RETURNING id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 `
 
 type UpdateUserProfileParams struct {
@@ -363,7 +359,6 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.ID,
 		&i.Name,
 		&i.Bio,
-		&i.Contacts,
 		&i.ProfileType,
 		&i.IsAdminBlocked,
 		&i.AdminBlockReason,

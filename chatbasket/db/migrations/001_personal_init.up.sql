@@ -22,7 +22,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
 -- ======================================
 -- Table: users
 --        Stores user profile information
@@ -31,7 +30,6 @@ CREATE TABLE IF NOT EXISTS users (
     id                                      UUID        PRIMARY KEY,  -- Direct index via PK
     name                                    TEXT        NOT NULL CHECK (length(name) <= 40),
     bio                                     TEXT        CHECK (length(bio) <= 150),
-    contacts                                INTEGER     Not NULL DEFAULT 0 CHECK (contacts >= 0 AND contacts <= 500),
     profile_type                            TEXT        NOT NULL CHECK (profile_type IN ('public', 'private', 'personal')),
     is_admin_blocked                        BOOLEAN     NOT NULL DEFAULT FALSE,
     admin_block_reason                      TEXT,
@@ -50,10 +48,18 @@ BEFORE INSERT OR UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
 
--- Explicit indexes for faster filtering
-CREATE INDEX IF NOT EXISTS idx_users_profile_type ON users(profile_type);
-CREATE INDEX IF NOT EXISTS idx_users_is_admin_blocked ON users(is_admin_blocked);
-
+-- Explicit composite index for profile type and admin status with partial filtering
+CREATE INDEX IF NOT EXISTS idx_users_profile_type_admin_blocked
+    ON users(profile_type, is_admin_blocked)
+    WHERE is_admin_blocked = FALSE;
+-- Explicit index for admin-blocked users only
+CREATE INDEX IF NOT EXISTS idx_users_admin_blocked_only
+    ON users(id)
+    WHERE is_admin_blocked = TRUE;
+-- Explicit index for querying recent users by profile type
+CREATE INDEX IF NOT EXISTS idx_users_profile_created
+    ON users(profile_type, created_at DESC)
+    WHERE is_admin_blocked = FALSE;
 -- ======================================
 -- End of users table section
 -- ======================================
@@ -65,16 +71,16 @@ CREATE INDEX IF NOT EXISTS idx_users_is_admin_blocked ON users(is_admin_blocked)
 -- ======================================
 CREATE TABLE IF NOT EXISTS avatars (
     id                  UUID            PRIMARY KEY,  -- Direct index via PK
-    user_id             UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,  
-    file_id             TEXT            NOT NULL,     -- Can sometimes equal user_id (e.g., default avatar),
-    avatar_type         TEXT            NOT NULL DEFAULT 'profile',  -- Avatar type: profile, cover, thumbnail, etc.
+    user_id             UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    file_id             TEXT            NOT NULL,
+    avatar_type         TEXT            NOT NULL DEFAULT 'profile',
     token_id            TEXT,
     token_secret        TEXT,
     token_expiry        TIMESTAMPTZ,
     created_at          TIMESTAMPTZ,
     updated_at          TIMESTAMPTZ,
-    
-    UNIQUE(user_id, file_id)  -- Composite unique index (allows file_id = user_id)
+    CONSTRAINT avatars_unique_user_file UNIQUE(user_id, file_id),  -- Composite unique index
+    CONSTRAINT avatars_check_profile_file CHECK (avatar_type != 'profile' OR file_id::TEXT = user_id::TEXT)  -- Profile avatars must use user_id as file_id
 );
 
 -- Drop existing trigger if already present
@@ -86,12 +92,17 @@ BEFORE INSERT OR UPDATE ON avatars
 FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
 
--- Explicit index for fast avatar lookup by user
-CREATE INDEX IF NOT EXISTS idx_avatars_user_id ON avatars(user_id);
-
--- Explicit index for fast avatar lookup by type
-CREATE INDEX IF NOT EXISTS idx_avatars_type ON avatars(avatar_type);
-
+-- Explicit unique index for user's profile avatar
+CREATE UNIQUE INDEX IF NOT EXISTS idx_avatars_user_profile
+    ON avatars(user_id, avatar_type)
+    WHERE avatar_type = 'profile';
+-- Explicit index for user avatars by type and recency
+CREATE INDEX IF NOT EXISTS idx_avatars_user_type_created
+    ON avatars(user_id, avatar_type, created_at DESC);
+-- Explicit index for token expiry cleanup
+CREATE INDEX IF NOT EXISTS idx_avatars_token_expiry
+    ON avatars(token_expiry)
+    WHERE token_expiry IS NOT NULL;
 -- ======================================
 -- End of avatars table section
 -- ======================================
@@ -116,7 +127,11 @@ CREATE TRIGGER alone_username_timestamps_trigger
 BEFORE INSERT OR UPDATE ON alone_username
 FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
-
 -- ======================================
 -- End of alone_username table section
+-- ======================================
+
+
+-- ======================================
+-- End of first migration: users, avatars, alone_username
 -- ======================================

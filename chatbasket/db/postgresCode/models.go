@@ -28,11 +28,19 @@ type Avatar struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ContactRequest struct {
+	ID              uuid.UUID          `json:"id"`
+	RequesterUserID uuid.UUID          `json:"requester_user_id"`
+	ReceiverUserID  uuid.UUID          `json:"receiver_user_id"`
+	Status          interface{}        `json:"status"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
 	ID                                uuid.UUID          `json:"id"`
 	Name                              string             `json:"name"`
 	Bio                               *string            `json:"bio"`
-	Contacts                          int32              `json:"contacts"`
 	ProfileType                       string             `json:"profile_type"`
 	IsAdminBlocked                    bool               `json:"is_admin_blocked"`
 	AdminBlockReason                  *string            `json:"admin_block_reason"`
@@ -40,4 +48,49 @@ type User struct {
 	B64CipherChacha20poly1305Username string             `json:"b64_cipher_chacha20poly1305_username"`
 	CreatedAt                         pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserBlock struct {
+	ID            uuid.UUID          `json:"id"`
+	BlockerUserID uuid.UUID          `json:"blocker_user_id"`
+	BlockedUserID uuid.UUID          `json:"blocked_user_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserContact struct {
+	OwnerUserID   uuid.UUID          `json:"owner_user_id"`
+	ContactUserID uuid.UUID          `json:"contact_user_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserGlobalRestriction struct {
+	UserID          uuid.UUID          `json:"user_id"`
+	RestrictAvatar  bool               `json:"restrict_avatar"`
+	RestrictStatus  bool               `json:"restrict_status"`
+	RestrictProfile bool               `json:"restrict_profile"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserGlobalRestrictionExemption struct {
+	UserID           uuid.UUID          `json:"user_id"`
+	ExemptedUserID   uuid.UUID          `json:"exempted_user_id"`
+	ExceptionAvatar  bool               `json:"exception_avatar"`
+	ExceptionStatus  bool               `json:"exception_status"`
+	ExceptionProfile bool               `json:"exception_profile"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserRestriction struct {
+	ID               uuid.UUID          `json:"id"`
+	UserID           uuid.UUID          `json:"user_id"`
+	RestrictedUserID uuid.UUID          `json:"restricted_user_id"`
+	RestrictProfile  bool               `json:"restrict_profile"`
+	RestrictAvatar   bool               `json:"restrict_avatar"`
+	RestrictStatus   bool               `json:"restrict_status"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
