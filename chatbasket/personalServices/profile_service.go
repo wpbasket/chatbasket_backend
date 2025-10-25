@@ -8,13 +8,13 @@ import (
 	"chatbasket/services"
 	"chatbasket/utils"
 	"context"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"time"
 
 	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -104,22 +104,19 @@ func (ps *Service) GetProfile(ctx context.Context, userId model.UserId, email st
 	// get user profile from db
 	profile, err := ps.Queries.GetUserProfile(ctx, userId.UuidUserId)
 	if err != nil {
-		log.Printf("personal GetProfile failed: %v", err.Error())
+		if err == pgx.ErrNoRows {
+			return nil, &model.ApiError{Code: http.StatusNotFound, Message:err.Error(), Type: "not_found"}
+		}
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
 
-	// check if user profile exists
-	if len(profile) == 0 {
-		return nil, &model.ApiError{Code: http.StatusNotFound, Message: "personal GetProfile not found", Type: "not_found"}
-	}
-
 	// decrypt username
-	decodeUsername, err := utils.DecryptUsername(profile[0].B64CipherChacha20poly1305Username, ps.Appwrite.PersonalUsernameKey)
+	decodeUsername, err := utils.DecryptUsername(profile.B64CipherChacha20poly1305Username, ps.Appwrite.PersonalUsernameKey)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "personal GetProfile failed", Type: "internal_server_error"}
 	}
 
-	userProfile := profile[0]
+	userProfile := profile
 
 	avatarUrl := utils.BuildAvatarURI(&utils.AppwriteFileData{
 		FileId:     userProfile.FileID,
@@ -176,7 +173,7 @@ func (ps *Service) GetProfile(ctx context.Context, userId model.UserId, email st
 		})
 	}
 
-	return personalmodel.ToPrivateUserWithAvatar(&profile[0], decodeUsername, email, finalAvatarUrl), nil
+	return personalmodel.ToPrivateUserWithAvatar(&profile, decodeUsername, email, finalAvatarUrl), nil
 }
 
 func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.FileHeader, userId model.UserId) (*model.StatusOkay, *model.ApiError) {

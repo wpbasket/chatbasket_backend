@@ -148,7 +148,7 @@ func (q *Queries) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
 	return err
 }
 
-const getUserProfile = `-- name: GetUserProfile :many
+const getUserProfile = `-- name: GetUserProfile :one
 SELECT 
     u.id, u.name, u.bio, u.profile_type, u.is_admin_blocked, u.admin_block_reason, u.hmac_sha256_hex_username, u.b64_cipher_chacha20poly1305_username, u.created_at, u.updated_at, 
     a.file_id,
@@ -180,39 +180,26 @@ type GetUserProfileRow struct {
 }
 
 // Returns full user record along with its profile avatar tokens and file_id
-func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) ([]GetUserProfileRow, error) {
-	rows, err := q.db.Query(ctx, getUserProfile, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetUserProfileRow
-	for rows.Next() {
-		var i GetUserProfileRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Bio,
-			&i.ProfileType,
-			&i.IsAdminBlocked,
-			&i.AdminBlockReason,
-			&i.HmacSha256HexUsername,
-			&i.B64CipherChacha20poly1305Username,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.FileID,
-			&i.TokenID,
-			&i.TokenSecret,
-			&i.TokenExpiry,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error) {
+	row := q.db.QueryRow(ctx, getUserProfile, id)
+	var i GetUserProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Bio,
+		&i.ProfileType,
+		&i.IsAdminBlocked,
+		&i.AdminBlockReason,
+		&i.HmacSha256HexUsername,
+		&i.B64CipherChacha20poly1305Username,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FileID,
+		&i.TokenID,
+		&i.TokenSecret,
+		&i.TokenExpiry,
+	)
+	return i, err
 }
 
 const isUserExists = `-- name: IsUserExists :one

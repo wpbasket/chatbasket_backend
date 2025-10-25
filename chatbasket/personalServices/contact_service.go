@@ -8,7 +8,7 @@ import (
 
 func (ps *Service) GetContacts(ctx context.Context, userId model.UserId,) (*personalmodel.GetContactsResponse, *model.ApiError) {
 	
-
+	
 	
 	
 	return nil, nil

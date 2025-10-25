@@ -14,7 +14,7 @@ INSERT INTO users (
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
--- name: GetUserProfile :many
+-- name: GetUserProfile :one
 -- Returns full user record along with its profile avatar tokens and file_id
 SELECT 
     u.*, 
