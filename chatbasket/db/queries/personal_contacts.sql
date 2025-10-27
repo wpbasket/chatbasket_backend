@@ -13,7 +13,9 @@ SELECT
     
     -- Raw avatar data (Go applies visibility logic)
     a.file_id AS avatar_file_id,
-    a.token_secret AS avatar_file_secret,
+    a.token_id AS avatar_token_id,
+    a.token_secret AS avatar_token_secret,
+    a.token_expiry AS avatar_token_expiry,
     
     -- Global restriction flags (Priority 1 & 2)
     COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
@@ -62,7 +64,9 @@ SELECT
     
     -- Raw avatar data (Go applies visibility logic)
     a.file_id AS avatar_file_id,
-    a.token_secret AS avatar_file_secret,
+    a.token_id AS avatar_token_id,
+    a.token_secret AS avatar_token_secret,
+    a.token_expiry AS avatar_token_expiry,
     
     -- Global restriction flags (Priority 1 & 2)
     COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,

@@ -45,11 +45,17 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 }
 
 func (ps *Service) CreateUserProfile(ctx context.Context, payload *personalmodel.CreateUserProfilePayload, userId *model.UserId, email string) (*personalmodel.PrivateUser, *model.ApiError) {
-	// check if user profile already exists
-	res, err := ps.Queries.IsUserExists(ctx, userId.UuidUserId)
-	if err != nil {
-		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
-	}
+    if payload == nil {
+        return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid request payload", Type: "bad_request"}
+    }
+    if userId == nil {
+        return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid user id", Type: "bad_request"}
+    }
+    // check if user profile already exists
+    res, err := ps.Queries.IsUserExists(ctx, userId.UuidUserId)
+    if err != nil {
+        return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+    }
 	if res {
 		return nil, &model.ApiError{Code: http.StatusConflict, Message: "User profile already exists", Type: "conflict"}
 	}
@@ -116,72 +122,23 @@ func (ps *Service) GetProfile(ctx context.Context, userId model.UserId, email st
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "personal GetProfile failed", Type: "internal_server_error"}
 	}
 
-	userProfile := profile
-
-	avatarUrl := utils.BuildAvatarURI(&utils.AppwriteFileData{
-		FileId:     userProfile.FileID,
-		FileToken:  userProfile.TokenID,
-		FileSecret: userProfile.TokenSecret,
-	})
-
-	var finalAvatarUrl *string
-	finalAvatarUrl = avatarUrl
-
-	// check if avatar token is expired
-	now := time.Now().UTC()
-	needsRefresh := false
-	if userProfile.TokenExpiry.Valid {
-		needsRefresh = !userProfile.TokenExpiry.Time.UTC().After(now)
-	} else if userProfile.TokenID != nil && *userProfile.TokenID != "" && userProfile.TokenSecret != nil && *userProfile.TokenSecret != "" {
-		needsRefresh = true
-	}
-	if needsRefresh {
-		exp := now.AddDate(1, 0, 0).Format("2006-01-02 15:04:05")
-		tok, err := ps.Appwrite.Tokens.CreateFileToken(ps.Appwrite.ProfilePicBucketID, *userProfile.FileID, ps.Appwrite.Tokens.WithCreateFileTokenExpire(exp))
-		if err != nil {
-			return nil, &model.ApiError{
-				Code:    500,
-				Message: "Failed to create personal token: " + err.Error(),
-				Type:    "internal_server_error",
-			}
-		}
-		tokTime, err := time.Parse(time.RFC3339, tok.Expire)
-		if err != nil {
-			return nil, &model.ApiError{
-				Code:    500,
-				Message: "Failed to parse expire time: " + err.Error(),
-				Type:    "internal_server_error",
-			}
-		}
-		_, err = ps.Queries.UpdateAvatarTokens(ctx, postgresCode.UpdateAvatarTokensParams{
-			UserID:      userId.UuidUserId,
-			TokenID:     &tok.Id,
-			TokenSecret: &tok.Secret,
-			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: tokTime},
-		})
-		if err != nil {
-			return nil, &model.ApiError{
-				Code:    500,
-				Message: "Failed to update avatar tokens: " + utils.GetPostgresError(err).Message,
-				Type:    "internal_server_error",
-			}
-		}
-		finalAvatarUrl = utils.BuildAvatarURI(&utils.AppwriteFileData{
-			FileId:     userProfile.FileID,
-			FileToken:  &tok.Id,
-			FileSecret: &tok.Secret,
-		})
+	finalAvatarUrl, apiErr := ps.buildAvatarURL(ctx, profile.FileID, profile.TokenID, profile.TokenSecret, profile.TokenExpiry, userId.UuidUserId)
+	if apiErr != nil {
+		return nil, apiErr
 	}
 
 	return personalmodel.ToPrivateUserWithAvatar(&profile, decodeUsername, email, finalAvatarUrl), nil
 }
 
 func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.FileHeader, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
-	// check if user profile pic exists and if it exists, delete it
-	resUser, err := ps.Queries.IsUserProfilePicExists(ctx, userId.UuidUserId)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to check user profile pic: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
-	}
+    if fh == nil {
+        return nil, &model.ApiError{Code: 400, Message: "no file provided", Type: "bad_request"}
+    }
+    // check if user profile pic exists and if it exists, delete it
+    resUser, err := ps.Queries.IsUserProfilePicExists(ctx, userId.UuidUserId)
+    if err != nil {
+        return nil, &model.ApiError{Code: 500, Message: "Failed to check user profile pic: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+    }
 
 	checkExistInStorage, err := ps.Appwrite.Storage.ListFiles(
 		ps.Appwrite.PersonalProfilePicBucketID,
@@ -212,6 +169,10 @@ func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.F
 	)
 	if apiErr != nil {
 		return nil, apiErr
+	}
+
+	if len(result.TokenIDs) == 0 || len(result.TokenSecrets) == 0 {
+		return nil, &model.ApiError{Code: 500, Message: "missing file access tokens", Type: "internal_server_error"}
 	}
 
 	expireTime, err := time.Parse(time.RFC3339, result.Expire)

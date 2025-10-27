@@ -8,11 +8,11 @@ type Contact struct {
 	Username         string    `json:"username"`
 	Bio              *string   `json:"bio"`
 	CreatedAt        time.Time `json:"created_at"`
-	AvatarFileID     *string   `json:"avatar_file_id"`
-	AvatarFileSecret *string   `json:"avatar_file_secret"`
-	IsMutual         bool      `json:"is_mutual"` // ✅ new field
+	AvatarURL        *string   `json:"avatar_url"`
+	IsMutual         bool      `json:"is_mutual"`
 }
 
 type GetContactsResponse struct {
-	Contacts []Contact `json:"contacts"`
+	Contacts          []Contact `json:"contacts"`             // ✅ You added
+	PeopleWhoAddedYou []Contact `json:"people_who_added_you"` // ✅ They added you
 }

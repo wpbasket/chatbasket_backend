@@ -27,8 +27,22 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid logout payload")
 	}
-	userId := c.Get("userId").(string)
-	sessionId := c.Get("sessionId").(string)
+	userId, ok := c.Get("userId").(string)
+	if !ok || userId == "" {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	sessionId, ok := c.Get("sessionId").(string)
+	if !ok || sessionId == "" {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid session context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	res, apiErr := h.Service.Logout(c.Request().Context(), &payload, userId, sessionId)
 	if apiErr != nil {
@@ -44,9 +58,30 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid create user profile payload")
 	}
-	stringUserId := c.Get("userId").(string)
-	email := c.Get("email").(string)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	stringUserId, ok := c.Get("userId").(string)
+	if !ok || stringUserId == "" {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	email, ok := c.Get("email").(string)
+	if !ok || email == "" {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid email context",
+			Type:    "internal_server_error",
+		})
+	}
+	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	res, apiErr := h.Service.CreateUserProfile(c.Request().Context(), &payload, &model.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId},email)
 	if apiErr != nil {
@@ -56,9 +91,30 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 }
 
 func (h *ProfileHandler) GetProfile(c echo.Context) error {
-	stringUserId := c.Get("userId").(string)
-	email := c.Get("email").(string)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	stringUserId, ok := c.Get("userId").(string)
+	if !ok || stringUserId == "" {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	email, ok := c.Get("email").(string)
+	if !ok || email == "" {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid email context",
+			Type:    "internal_server_error",
+		})
+	}
+	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 	res, apiErr := h.Service.GetProfile(c.Request().Context(), model.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId},email)
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
@@ -117,8 +173,15 @@ func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
 	}
 
 	userId, ok := c.Get("userId").(string)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
 	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	if !okUUID {
 		return c.JSON(http.StatusInternalServerError, &model.ApiError{
 			Code:    http.StatusInternalServerError,
 			Message: "Invalid user context",
@@ -136,8 +199,15 @@ func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
 
 func (h *ProfileHandler) RemoveProfilePicture(c echo.Context) error {
 	userId, ok := c.Get("userId").(string)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
 	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	if !okUUID {
 		return c.JSON(http.StatusInternalServerError, &model.ApiError{
 			Code:    http.StatusInternalServerError,
 			Message: "Invalid user context",

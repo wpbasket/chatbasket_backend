@@ -23,7 +23,9 @@ SELECT
     
     -- Raw avatar data (Go applies visibility logic)
     a.file_id AS avatar_file_id,
-    a.token_secret AS avatar_file_secret,
+    a.token_id AS avatar_token_id,
+    a.token_secret AS avatar_token_secret,
+    a.token_expiry AS avatar_token_expiry,
     
     -- Global restriction flags (Priority 1 & 2)
     COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
@@ -64,7 +66,9 @@ type GetUserContactsRow struct {
 	Bio                    *string            `json:"bio"`
 	ContactCreatedAt       pgtype.Timestamptz `json:"contact_created_at"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
-	AvatarFileSecret       *string            `json:"avatar_file_secret"`
+	AvatarTokenID          *string            `json:"avatar_token_id"`
+	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
+	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
 	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
 	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
 	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
@@ -93,7 +97,9 @@ func (q *Queries) GetUserContacts(ctx context.Context, exemptedUserID uuid.UUID)
 			&i.Bio,
 			&i.ContactCreatedAt,
 			&i.AvatarFileID,
-			&i.AvatarFileSecret,
+			&i.AvatarTokenID,
+			&i.AvatarTokenSecret,
+			&i.AvatarTokenExpiry,
 			&i.GlobalRestrictProfile,
 			&i.GlobalRestrictAvatar,
 			&i.ExceptionGlobalProfile,
@@ -122,7 +128,9 @@ SELECT
     
     -- Raw avatar data (Go applies visibility logic)
     a.file_id AS avatar_file_id,
-    a.token_secret AS avatar_file_secret,
+    a.token_id AS avatar_token_id,
+    a.token_secret AS avatar_token_secret,
+    a.token_expiry AS avatar_token_expiry,
     
     -- Global restriction flags (Priority 1 & 2)
     COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
@@ -163,7 +171,9 @@ type GetUsersWhoAddedYouRow struct {
 	Bio                    *string            `json:"bio"`
 	ContactCreatedAt       pgtype.Timestamptz `json:"contact_created_at"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
-	AvatarFileSecret       *string            `json:"avatar_file_secret"`
+	AvatarTokenID          *string            `json:"avatar_token_id"`
+	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
+	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
 	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
 	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
 	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
@@ -192,7 +202,9 @@ func (q *Queries) GetUsersWhoAddedYou(ctx context.Context, exemptedUserID uuid.U
 			&i.Bio,
 			&i.ContactCreatedAt,
 			&i.AvatarFileID,
-			&i.AvatarFileSecret,
+			&i.AvatarTokenID,
+			&i.AvatarTokenSecret,
+			&i.AvatarTokenExpiry,
 			&i.GlobalRestrictProfile,
 			&i.GlobalRestrictAvatar,
 			&i.ExceptionGlobalProfile,
