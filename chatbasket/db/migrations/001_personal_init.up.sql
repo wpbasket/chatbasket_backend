@@ -114,7 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_avatars_token_expiry
 -- ======================================
 CREATE TABLE IF NOT EXISTS alone_username (
     id                  UUID            PRIMARY KEY,  -- Direct index via PK
-    username            TEXT            NOT NULL UNIQUE CHECK (length(username) = 11),  -- Direct index via UNIQUE
+    username            TEXT            NOT NULL UNIQUE CHECK (length(username) = 10),  -- Direct index via UNIQUE
     created_at          TIMESTAMPTZ,
     updated_at          TIMESTAMPTZ
 );

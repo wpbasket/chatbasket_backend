@@ -16,12 +16,12 @@ const (
 // ----------------------------
 // GenerateRandomUsername
 // ----------------------------
-// Pattern: 6 Uppercase letters(A-Z) + 4 digits(0-9) + 1 Uppercase letter(A-Z)
+// Pattern: 4 Uppercase letters(A-Z) + 6 digits(0-9)
 func GenerateRandomUsername() (string, error) {
- username := make([]byte, 11)
+ username := make([]byte, 10)
 
- // first 6 letters
- for i := 0; i < 6; i++ {
+ // first 4 letters
+ for i := 0; i < 4; i++ {
   idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
   if err != nil {
    return "", err
@@ -29,21 +29,14 @@ func GenerateRandomUsername() (string, error) {
   username[i] = letters[idx.Int64()]
  }
 
- // next 4 digits
- for i := 6; i < 10; i++ {
+ // next 6 digits
+ for i := 4; i < 10; i++ {
   idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
   if err != nil {
    return "", err
   }
   username[i] = digits[idx.Int64()]
  }
-
- // last letter
- idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
- if err != nil {
-  return "", err
- }
- username[10] = letters[idx.Int64()]
 
  return string(username), nil
 }
@@ -53,13 +46,13 @@ func GenerateRandomUsername() (string, error) {
 // ----------------------------
 // Checks if a username matches the pattern
 // func ValidateUsername(username string) error {
-//  pattern := `^[a-z]{6}[0-9]{4}[a-z]$`
+//  pattern := `^[A-Z]{4}[0-9]{6}$`
 //  match, err := regexp.MatchString(pattern, username)
 //  if err != nil {
 //   return err
 //  }
 //  if !match {
-//   return errors.New("invalid username format: must be 6 letters + 4 digits + 1 letter")
+//   return errors.New("invalid username format: must be 4 uppercase letters + 6 digits")
 //  }
 //  return nil
 // }
