@@ -166,7 +166,7 @@ SELECT EXISTS(
 );
 
 -- name: GetContactRequestStatus :one
-SELECT status FROM contact_requests
+SELECT status::text FROM contact_requests
 WHERE requester_user_id = $1 AND receiver_user_id = $2
 LIMIT 1;
 
@@ -174,9 +174,14 @@ LIMIT 1;
 WITH deleted AS (
     DELETE FROM contact_requests
     WHERE requester_user_id = $2 AND receiver_user_id = $3
+    RETURNING requester_user_id
 )
 INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
-VALUES ($1, $2, $3, 'pending');
+SELECT $1, $2, $3, 'pending'
+WHERE EXISTS (SELECT 1 FROM deleted) OR NOT EXISTS (
+    SELECT 1 FROM contact_requests 
+    WHERE requester_user_id = $2 AND receiver_user_id = $3
+);
 
 -- name: InsertContactRequest :exec
 INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)

@@ -51,9 +51,14 @@ const deleteAndInsertContactRequest = `-- name: DeleteAndInsertContactRequest :e
 WITH deleted AS (
     DELETE FROM contact_requests
     WHERE requester_user_id = $2 AND receiver_user_id = $3
+    RETURNING requester_user_id
 )
 INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
-VALUES ($1, $2, $3, 'pending')
+SELECT $1, $2, $3, 'pending'
+WHERE EXISTS (SELECT 1 FROM deleted) OR NOT EXISTS (
+    SELECT 1 FROM contact_requests 
+    WHERE requester_user_id = $2 AND receiver_user_id = $3
+)
 `
 
 type DeleteAndInsertContactRequestParams struct {
@@ -91,7 +96,7 @@ func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (i
 }
 
 const getContactRequestStatus = `-- name: GetContactRequestStatus :one
-SELECT status FROM contact_requests
+SELECT status::text FROM contact_requests
 WHERE requester_user_id = $1 AND receiver_user_id = $2
 LIMIT 1
 `
@@ -101,9 +106,9 @@ type GetContactRequestStatusParams struct {
 	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
 }
 
-func (q *Queries) GetContactRequestStatus(ctx context.Context, arg GetContactRequestStatusParams) (interface{}, error) {
+func (q *Queries) GetContactRequestStatus(ctx context.Context, arg GetContactRequestStatusParams) (string, error) {
 	row := q.db.QueryRow(ctx, getContactRequestStatus, arg.RequesterUserID, arg.ReceiverUserID)
-	var status interface{}
+	var status string
 	err := row.Scan(&status)
 	return status, err
 }

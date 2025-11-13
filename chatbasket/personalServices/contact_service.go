@@ -310,13 +310,8 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		}
 
 		// If request exists, check its status
-		if err != pgx.ErrNoRows && requestStatus != nil {
-			status, ok := requestStatus.(string)
-			if !ok {
-				return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "invalid request status type", Type: "internal_server_error"}
-			}
-
-			if status == "pending" {
+		if err != pgx.ErrNoRows && requestStatus != "" {
+			if requestStatus == "pending" {
 				// If pending, don't delete old request, just return
 				return &model.StatusOkay{Status: true, Message: "pending_request_exists"}, nil
 			}
