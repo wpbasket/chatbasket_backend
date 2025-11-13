@@ -561,6 +561,7 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 				Bio:         r.Bio,
 				RequestedAt: requestedAt,
 				UpdatedAt:   updatedAt,
+				Status:      r.Status,
 				AvatarURL:   avatarURL,
 			})
 		}
@@ -605,6 +606,7 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 				Bio:         r.Bio,
 				RequestedAt: requestedAt,
 				UpdatedAt:   updatedAt,
+				Status:      r.Status,
 				AvatarURL:   avatarURL,
 			})
 		}

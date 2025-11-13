@@ -55,6 +55,7 @@ type PendingContactRequest struct {
 	Bio         *string   `json:"bio"`
 	RequestedAt time.Time `json:"requested_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	Status      string    `json:"status"`
 	AvatarURL   *string   `json:"avatar_url"`
 }
 
@@ -65,8 +66,10 @@ type SentContactRequest struct {
 	Bio         *string   `json:"bio"`
 	RequestedAt time.Time `json:"requested_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	Status      string    `json:"status"`
 	AvatarURL   *string   `json:"avatar_url"`
 }
+
 type GetContactRequestsResponse struct {
 	Pending []PendingContactRequest `json:"pending_requests"`
 	Sent    []SentContactRequest    `json:"sent_requests"`

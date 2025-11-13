@@ -121,6 +121,7 @@ SELECT
     ru.bio,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
+    cr.status::text AS status,
     a.file_id AS avatar_file_id,
     a.token_id AS avatar_token_id,
     a.token_secret AS avatar_token_secret,
@@ -159,6 +160,7 @@ type GetPendingContactRequestsRow struct {
 	Bio                    *string            `json:"bio"`
 	RequestCreatedAt       pgtype.Timestamptz `json:"request_created_at"`
 	RequestUpdatedAt       pgtype.Timestamptz `json:"request_updated_at"`
+	Status                 string             `json:"status"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
 	AvatarTokenID          *string            `json:"avatar_token_id"`
 	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
@@ -187,6 +189,7 @@ func (q *Queries) GetPendingContactRequests(ctx context.Context, exemptedUserID 
 			&i.Bio,
 			&i.RequestCreatedAt,
 			&i.RequestUpdatedAt,
+			&i.Status,
 			&i.AvatarFileID,
 			&i.AvatarTokenID,
 			&i.AvatarTokenSecret,
@@ -216,6 +219,7 @@ SELECT
     ru.bio,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
+    cr.status::text AS status,
     a.file_id AS avatar_file_id,
     a.token_id AS avatar_token_id,
     a.token_secret AS avatar_token_secret,
@@ -243,7 +247,7 @@ LEFT JOIN user_restrictions AS ur
     ON ru.id = ur.user_id
     AND ur.restricted_user_id = $1
 WHERE cr.requester_user_id = $1
-  AND cr.status = 'pending'
+  AND cr.status IN ('pending', 'declined')
 ORDER BY cr.created_at DESC
 `
 
@@ -254,6 +258,7 @@ type GetSentContactRequestsRow struct {
 	Bio                    *string            `json:"bio"`
 	RequestCreatedAt       pgtype.Timestamptz `json:"request_created_at"`
 	RequestUpdatedAt       pgtype.Timestamptz `json:"request_updated_at"`
+	Status                 string             `json:"status"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
 	AvatarTokenID          *string            `json:"avatar_token_id"`
 	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
@@ -282,6 +287,7 @@ func (q *Queries) GetSentContactRequests(ctx context.Context, exemptedUserID uui
 			&i.Bio,
 			&i.RequestCreatedAt,
 			&i.RequestUpdatedAt,
+			&i.Status,
 			&i.AvatarFileID,
 			&i.AvatarTokenID,
 			&i.AvatarTokenSecret,
