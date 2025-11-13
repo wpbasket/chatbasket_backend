@@ -34,7 +34,7 @@ func main() {
 		// AllowOrigins: []string{"http://localhost:8081"},
 		AllowOrigins: []string{"https://chatbasket.me"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
-		// AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete,http.MethodOptions},
+		// AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "x-api-key"},
 		AllowCredentials: true,
 	}))
