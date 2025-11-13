@@ -293,24 +293,50 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		return &model.StatusOkay{Status: true, Message: "public_contact_added"}, nil
 	case "personal":
 		/*
-			DB call to check for existing pending request from me
+			DB call to check for existing request status
 		*/
-		pendingExisting, err := ps.Queries.HasPendingRequest(ctx, postgresCode.HasPendingRequestParams{
+		requestStatus, err := ps.Queries.GetContactRequestStatus(ctx, postgresCode.GetContactRequestStatusParams{
 			RequesterUserID: userId.UuidUserId,
 			ReceiverUserID:  targetUUID,
 		})
-		if err != nil {
+		if err != nil && err != pgx.ErrNoRows {
 			return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 		}
-		if pendingExisting {
-			return &model.StatusOkay{Status: true, Message: "pending_request_exists"}, nil
-		}
 
-		// Generate new request ID and insert
+		// Generate new request ID
 		reqID, err := uuid.NewV7()
 		if err != nil {
 			return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "failed to generate request ID", Type: "internal_server_error"}
 		}
+
+		// If request exists, check its status
+		if err != pgx.ErrNoRows && requestStatus != nil {
+			status, ok := requestStatus.(string)
+			if !ok {
+				return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "invalid request status type", Type: "internal_server_error"}
+			}
+
+			if status == "pending" {
+				// If pending, don't delete old request, just return
+				return &model.StatusOkay{Status: true, Message: "pending_request_exists"}, nil
+			}
+
+			// If accepted or declined, delete old request and insert new one
+			/*
+				DB call to delete old request and insert new contact request
+			*/
+			err = ps.Queries.DeleteAndInsertContactRequest(ctx, postgresCode.DeleteAndInsertContactRequestParams{
+				ID:              reqID,
+				RequesterUserID: userId.UuidUserId,
+				ReceiverUserID:  targetUUID,
+			})
+			if err != nil {
+				return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+			}
+			return &model.StatusOkay{Status: true, Message: "contact_request_sent"}, nil
+		}
+
+		// No existing request, insert new one
 		/*
 			DB call to insert contact request
 		*/
@@ -352,6 +378,7 @@ func (ps *Service) AcceptContactRequest(ctx context.Context, payload *personalmo
 
 	switch result {
 	case "accepted":
+		
 		return &model.StatusOkay{Status: true, Message: "contact_request_accepted"}, nil
 	case "not_found":
 		return nil, &model.ApiError{Code: http.StatusNotFound, Message: "pending_request_not_found", Type: "not_found"}
