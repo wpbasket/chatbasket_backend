@@ -16,10 +16,10 @@ $$;
 --        Stores pending friend/contact requests
 -- ======================================
 CREATE TABLE IF NOT EXISTS contact_requests (
-    id                      UUID            PRIMARY KEY,  -- Direct index via PK
-    requester_user_id       UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    receiver_user_id        UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    status                  request_status_enum NOT NULL DEFAULT 'pending',
+    id                      UUID                    PRIMARY KEY,  -- Direct index via PK
+    requester_user_id       UUID                    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    receiver_user_id        UUID                    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status                  request_status_enum     NOT NULL DEFAULT 'pending',
     created_at              TIMESTAMPTZ,
     updated_at              TIMESTAMPTZ,
     

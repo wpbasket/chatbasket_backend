@@ -100,3 +100,15 @@ RETURNING *;
 -- Deletes the main profile avatar for a user
 DELETE FROM avatars
 WHERE user_id = $1 AND file_id = $1::TEXT;
+
+-- name: IsUserAdminBlocked :one
+-- Returns true if the user is admin-blocked
+SELECT EXISTS(
+    SELECT 1 FROM users
+    WHERE id = $1 AND is_admin_blocked IS TRUE
+);
+
+-- name: GetUserCoreProfile :one
+-- Minimal user profile without avatar join
+SELECT * FROM users
+WHERE id = $1;

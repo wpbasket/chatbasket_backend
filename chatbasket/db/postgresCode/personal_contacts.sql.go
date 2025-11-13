@@ -12,6 +12,283 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const acceptContactRequest = `-- name: AcceptContactRequest :one
+WITH updated AS (
+    UPDATE contact_requests AS cr
+    SET status = 'accepted'
+    WHERE cr.requester_user_id = $1
+      AND cr.receiver_user_id = $2
+      AND cr.status = 'pending'
+    RETURNING cr.id
+), existing AS (
+    SELECT cr.status
+    FROM contact_requests AS cr
+    WHERE cr.requester_user_id = $1
+      AND cr.receiver_user_id = $2
+    LIMIT 1
+)
+SELECT
+    CASE
+        WHEN EXISTS (SELECT 1 FROM updated) THEN 'accepted'
+        WHEN (SELECT status FROM existing) IS NULL THEN 'not_found'
+        ELSE 'processed'
+    END AS outcome
+`
+
+type AcceptContactRequestParams struct {
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
+	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
+}
+
+func (q *Queries) AcceptContactRequest(ctx context.Context, arg AcceptContactRequestParams) (string, error) {
+	row := q.db.QueryRow(ctx, acceptContactRequest, arg.RequesterUserID, arg.ReceiverUserID)
+	var outcome string
+	err := row.Scan(&outcome)
+	return outcome, err
+}
+
+const deleteContact = `-- name: DeleteContact :one
+WITH deleted AS (
+    DELETE FROM user_contacts AS uc
+    WHERE uc.owner_user_id = $1
+      AND uc.contact_user_id = ANY($2::uuid[])
+    RETURNING uc.contact_user_id
+)
+SELECT COUNT(*) AS removed
+FROM deleted
+`
+
+type DeleteContactParams struct {
+	OwnerUserID    uuid.UUID   `json:"owner_user_id"`
+	ContactUserIds []uuid.UUID `json:"contact_user_ids"`
+}
+
+func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (int64, error) {
+	row := q.db.QueryRow(ctx, deleteContact, arg.OwnerUserID, arg.ContactUserIds)
+	var removed int64
+	err := row.Scan(&removed)
+	return removed, err
+}
+
+const getPendingContactRequests = `-- name: GetPendingContactRequests :many
+SELECT
+    ru.id,
+    ru.name,
+    ru.b64_cipher_chacha20poly1305_username AS username,
+    ru.bio,
+    cr.created_at AS request_created_at,
+    cr.updated_at AS request_updated_at,
+    a.file_id AS avatar_file_id,
+    a.token_id AS avatar_token_id,
+    a.token_secret AS avatar_token_secret,
+    a.token_expiry AS avatar_token_expiry,
+    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
+    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
+    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
+    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
+    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
+    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
+FROM contact_requests AS cr
+INNER JOIN users AS ru
+    ON cr.requester_user_id = ru.id
+    AND ru.is_admin_blocked IS FALSE
+    AND ru.profile_type IN ('public', 'personal')
+LEFT JOIN avatars AS a
+    ON ru.id = a.user_id
+    AND a.avatar_type = 'profile'
+LEFT JOIN user_global_restrictions AS ugr
+    ON ru.id = ugr.user_id
+LEFT JOIN user_global_restriction_exemptions AS ugre
+    ON ru.id = ugre.user_id
+    AND ugre.exempted_user_id = $1
+LEFT JOIN user_restrictions AS ur
+    ON ru.id = ur.user_id
+    AND ur.restricted_user_id = $1
+WHERE cr.receiver_user_id = $1
+  AND cr.status = 'pending'
+ORDER BY cr.created_at DESC
+`
+
+type GetPendingContactRequestsRow struct {
+	ID                     uuid.UUID          `json:"id"`
+	Name                   string             `json:"name"`
+	Username               string             `json:"username"`
+	Bio                    *string            `json:"bio"`
+	RequestCreatedAt       pgtype.Timestamptz `json:"request_created_at"`
+	RequestUpdatedAt       pgtype.Timestamptz `json:"request_updated_at"`
+	AvatarFileID           *string            `json:"avatar_file_id"`
+	AvatarTokenID          *string            `json:"avatar_token_id"`
+	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
+	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
+	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
+	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
+	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
+	ExceptionGlobalAvatar  bool               `json:"exception_global_avatar"`
+	UserRestrictProfile    bool               `json:"user_restrict_profile"`
+	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
+}
+
+func (q *Queries) GetPendingContactRequests(ctx context.Context, exemptedUserID uuid.UUID) ([]GetPendingContactRequestsRow, error) {
+	rows, err := q.db.Query(ctx, getPendingContactRequests, exemptedUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPendingContactRequestsRow
+	for rows.Next() {
+		var i GetPendingContactRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Username,
+			&i.Bio,
+			&i.RequestCreatedAt,
+			&i.RequestUpdatedAt,
+			&i.AvatarFileID,
+			&i.AvatarTokenID,
+			&i.AvatarTokenSecret,
+			&i.AvatarTokenExpiry,
+			&i.GlobalRestrictProfile,
+			&i.GlobalRestrictAvatar,
+			&i.ExceptionGlobalProfile,
+			&i.ExceptionGlobalAvatar,
+			&i.UserRestrictProfile,
+			&i.UserRestrictAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSentContactRequests = `-- name: GetSentContactRequests :many
+SELECT
+    ru.id,
+    ru.name,
+    ru.b64_cipher_chacha20poly1305_username AS username,
+    ru.bio,
+    cr.created_at AS request_created_at,
+    cr.updated_at AS request_updated_at,
+    a.file_id AS avatar_file_id,
+    a.token_id AS avatar_token_id,
+    a.token_secret AS avatar_token_secret,
+    a.token_expiry AS avatar_token_expiry,
+    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
+    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
+    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
+    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
+    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
+    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
+FROM contact_requests AS cr
+INNER JOIN users AS ru
+    ON cr.receiver_user_id = ru.id
+    AND ru.is_admin_blocked IS FALSE
+    AND ru.profile_type IN ('public', 'personal')
+LEFT JOIN avatars AS a
+    ON ru.id = a.user_id
+    AND a.avatar_type = 'profile'
+LEFT JOIN user_global_restrictions AS ugr
+    ON ru.id = ugr.user_id
+LEFT JOIN user_global_restriction_exemptions AS ugre
+    ON ru.id = ugre.user_id
+    AND ugre.exempted_user_id = $1
+LEFT JOIN user_restrictions AS ur
+    ON ru.id = ur.user_id
+    AND ur.restricted_user_id = $1
+WHERE cr.requester_user_id = $1
+  AND cr.status = 'pending'
+ORDER BY cr.created_at DESC
+`
+
+type GetSentContactRequestsRow struct {
+	ID                     uuid.UUID          `json:"id"`
+	Name                   string             `json:"name"`
+	Username               string             `json:"username"`
+	Bio                    *string            `json:"bio"`
+	RequestCreatedAt       pgtype.Timestamptz `json:"request_created_at"`
+	RequestUpdatedAt       pgtype.Timestamptz `json:"request_updated_at"`
+	AvatarFileID           *string            `json:"avatar_file_id"`
+	AvatarTokenID          *string            `json:"avatar_token_id"`
+	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
+	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
+	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
+	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
+	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
+	ExceptionGlobalAvatar  bool               `json:"exception_global_avatar"`
+	UserRestrictProfile    bool               `json:"user_restrict_profile"`
+	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
+}
+
+func (q *Queries) GetSentContactRequests(ctx context.Context, exemptedUserID uuid.UUID) ([]GetSentContactRequestsRow, error) {
+	rows, err := q.db.Query(ctx, getSentContactRequests, exemptedUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSentContactRequestsRow
+	for rows.Next() {
+		var i GetSentContactRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Username,
+			&i.Bio,
+			&i.RequestCreatedAt,
+			&i.RequestUpdatedAt,
+			&i.AvatarFileID,
+			&i.AvatarTokenID,
+			&i.AvatarTokenSecret,
+			&i.AvatarTokenExpiry,
+			&i.GlobalRestrictProfile,
+			&i.GlobalRestrictAvatar,
+			&i.ExceptionGlobalProfile,
+			&i.ExceptionGlobalAvatar,
+			&i.UserRestrictProfile,
+			&i.UserRestrictAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserByHashedUsername = `-- name: GetUserByHashedUsername :one
+
+SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
+FROM users
+WHERE hmac_sha256_hex_username = $1
+  AND is_admin_blocked IS NOT TRUE
+`
+
+// ===========================================
+// Contact existence helpers
+// ===========================================
+func (q *Queries) GetUserByHashedUsername(ctx context.Context, hmacSha256HexUsername string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByHashedUsername, hmacSha256HexUsername)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Bio,
+		&i.ProfileType,
+		&i.IsAdminBlocked,
+		&i.AdminBlockReason,
+		&i.HmacSha256HexUsername,
+		&i.B64CipherChacha20poly1305Username,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserContacts = `-- name: GetUserContacts :many
 
 SELECT
@@ -20,6 +297,7 @@ SELECT
     cu.b64_cipher_chacha20poly1305_username AS username,
     cu.bio,
     uc.created_at AS contact_created_at,
+    uc.updated_at AS contact_updated_at,
     
     -- Raw avatar data (Go applies visibility logic)
     a.file_id AS avatar_file_id,
@@ -65,6 +343,7 @@ type GetUserContactsRow struct {
 	Username               string             `json:"username"`
 	Bio                    *string            `json:"bio"`
 	ContactCreatedAt       pgtype.Timestamptz `json:"contact_created_at"`
+	ContactUpdatedAt       pgtype.Timestamptz `json:"contact_updated_at"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
 	AvatarTokenID          *string            `json:"avatar_token_id"`
 	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
@@ -96,6 +375,7 @@ func (q *Queries) GetUserContacts(ctx context.Context, exemptedUserID uuid.UUID)
 			&i.Username,
 			&i.Bio,
 			&i.ContactCreatedAt,
+			&i.ContactUpdatedAt,
 			&i.AvatarFileID,
 			&i.AvatarTokenID,
 			&i.AvatarTokenSecret,
@@ -125,6 +405,7 @@ SELECT
     cu.b64_cipher_chacha20poly1305_username AS username,
     cu.bio,
     uc.created_at AS contact_created_at,
+    uc.updated_at AS contact_updated_at,
     
     -- Raw avatar data (Go applies visibility logic)
     a.file_id AS avatar_file_id,
@@ -170,6 +451,7 @@ type GetUsersWhoAddedYouRow struct {
 	Username               string             `json:"username"`
 	Bio                    *string            `json:"bio"`
 	ContactCreatedAt       pgtype.Timestamptz `json:"contact_created_at"`
+	ContactUpdatedAt       pgtype.Timestamptz `json:"contact_updated_at"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
 	AvatarTokenID          *string            `json:"avatar_token_id"`
 	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
@@ -201,6 +483,7 @@ func (q *Queries) GetUsersWhoAddedYou(ctx context.Context, exemptedUserID uuid.U
 			&i.Username,
 			&i.Bio,
 			&i.ContactCreatedAt,
+			&i.ContactUpdatedAt,
 			&i.AvatarFileID,
 			&i.AvatarTokenID,
 			&i.AvatarTokenSecret,
@@ -220,4 +503,201 @@ func (q *Queries) GetUsersWhoAddedYou(ctx context.Context, exemptedUserID uuid.U
 		return nil, err
 	}
 	return items, nil
+}
+
+const hasPendingRequest = `-- name: HasPendingRequest :one
+SELECT EXISTS(
+    SELECT 1 FROM contact_requests
+    WHERE requester_user_id = $1 AND receiver_user_id = $2 AND status = 'pending'
+)
+`
+
+type HasPendingRequestParams struct {
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
+	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
+}
+
+func (q *Queries) HasPendingRequest(ctx context.Context, arg HasPendingRequestParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPendingRequest, arg.RequesterUserID, arg.ReceiverUserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const insertContactRequest = `-- name: InsertContactRequest :exec
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
+VALUES ($1, $2, $3, 'pending')
+ON CONFLICT DO NOTHING
+`
+
+type InsertContactRequestParams struct {
+	ID              uuid.UUID `json:"id"`
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
+	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
+}
+
+func (q *Queries) InsertContactRequest(ctx context.Context, arg InsertContactRequestParams) error {
+	_, err := q.db.Exec(ctx, insertContactRequest, arg.ID, arg.RequesterUserID, arg.ReceiverUserID)
+	return err
+}
+
+const insertUserContact = `-- name: InsertUserContact :exec
+INSERT INTO user_contacts (owner_user_id, contact_user_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type InsertUserContactParams struct {
+	OwnerUserID   uuid.UUID `json:"owner_user_id"`
+	ContactUserID uuid.UUID `json:"contact_user_id"`
+}
+
+func (q *Queries) InsertUserContact(ctx context.Context, arg InsertUserContactParams) error {
+	_, err := q.db.Exec(ctx, insertUserContact, arg.OwnerUserID, arg.ContactUserID)
+	return err
+}
+
+const isAlreadyContact = `-- name: IsAlreadyContact :one
+SELECT EXISTS(
+    SELECT 1 FROM user_contacts
+    WHERE owner_user_id = $1 AND contact_user_id = $2
+)
+`
+
+type IsAlreadyContactParams struct {
+	OwnerUserID   uuid.UUID `json:"owner_user_id"`
+	ContactUserID uuid.UUID `json:"contact_user_id"`
+}
+
+func (q *Queries) IsAlreadyContact(ctx context.Context, arg IsAlreadyContactParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isAlreadyContact, arg.OwnerUserID, arg.ContactUserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const isEitherBlocked = `-- name: IsEitherBlocked :one
+
+
+
+
+
+SELECT CASE
+    WHEN EXISTS(SELECT 1 FROM user_blocks ub1 WHERE ub1.blocker_user_id = $1 AND ub1.blocked_user_id = $2) THEN 1
+    WHEN EXISTS(SELECT 1 FROM user_blocks ub2 WHERE ub2.blocker_user_id = $2 AND ub2.blocked_user_id = $1) THEN 2
+    ELSE 0
+END
+`
+
+type IsEitherBlockedParams struct {
+	BlockerUserID uuid.UUID `json:"blocker_user_id"`
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+}
+
+// ===========================================
+// Avatar Privacy Circuit Breaker Logic
+// ===========================================
+// Both queries return RAW restriction flags for Go to process.
+// Go applies the following priority order (circuit breaker pattern):
+//
+// Priority 1: Global PROFILE restriction
+//
+//	→ If restrict_profile = TRUE AND exception_profile = FALSE → HIDE avatar
+//	→ If restrict_profile = TRUE AND exception_profile = TRUE → SHOW avatar
+//	→ Otherwise, continue to Priority 2
+//
+// Priority 2: Global AVATAR restriction
+//
+//	→ If restrict_avatar = TRUE AND exception_avatar = FALSE → HIDE avatar
+//	→ If restrict_avatar = TRUE AND exception_avatar = TRUE → SHOW avatar
+//	→ Otherwise, continue to Priority 3
+//
+// Priority 3: User-level PROFILE restriction
+//
+//	→ If user_restrict_profile = TRUE → HIDE avatar
+//	→ Otherwise, continue to Priority 4
+//
+// Priority 4: User-level AVATAR restriction
+//
+//	→ If user_restrict_avatar = TRUE → HIDE avatar
+//	→ Otherwise, SHOW avatar
+//
+// Each level short-circuits evaluation (circuit breaker pattern).
+// Privacy checks work identically for both queries because:
+//   - cu.id = the contact being viewed (their restrictions apply)
+//   - $1 = the viewer (you, checking if you're restricted/exempted)
+//   - Direction of contact relationship doesn't affect privacy logic
+//
+// ===========================================
+// ===========================================
+// Contact creation helpers
+// ===========================================
+// Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
+func (q *Queries) IsEitherBlocked(ctx context.Context, arg IsEitherBlockedParams) (int32, error) {
+	row := q.db.QueryRow(ctx, isEitherBlocked, arg.BlockerUserID, arg.BlockedUserID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const rejectContactRequest = `-- name: RejectContactRequest :one
+WITH updated AS (
+    UPDATE contact_requests AS cr
+    SET status = 'declined'
+    WHERE cr.requester_user_id = $1
+      AND cr.receiver_user_id = $2
+      AND cr.status = 'pending'
+    RETURNING cr.id
+), existing AS (
+    SELECT cr.status
+    FROM contact_requests AS cr
+    WHERE cr.requester_user_id = $1
+      AND cr.receiver_user_id = $2
+    LIMIT 1
+)
+SELECT
+    CASE
+        WHEN EXISTS (SELECT 1 FROM updated) THEN 'declined'
+        WHEN (SELECT status FROM existing) IS NULL THEN 'not_found'
+        ELSE 'processed'
+    END AS outcome
+`
+
+type RejectContactRequestParams struct {
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
+	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
+}
+
+func (q *Queries) RejectContactRequest(ctx context.Context, arg RejectContactRequestParams) (string, error) {
+	row := q.db.QueryRow(ctx, rejectContactRequest, arg.RequesterUserID, arg.ReceiverUserID)
+	var outcome string
+	err := row.Scan(&outcome)
+	return outcome, err
+}
+
+const undoContactRequest = `-- name: UndoContactRequest :one
+WITH deleted AS (
+    DELETE FROM contact_requests AS cr
+    WHERE cr.requester_user_id = $1
+      AND cr.receiver_user_id = $2
+      AND cr.status = 'pending'
+    RETURNING cr.id
+)
+SELECT
+    CASE
+        WHEN EXISTS (SELECT 1 FROM deleted) THEN 'undone'
+        ELSE 'not_found'
+    END AS outcome
+`
+
+type UndoContactRequestParams struct {
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
+	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
+}
+
+func (q *Queries) UndoContactRequest(ctx context.Context, arg UndoContactRequestParams) (string, error) {
+	row := q.db.QueryRow(ctx, undoContactRequest, arg.RequesterUserID, arg.ReceiverUserID)
+	var outcome string
+	err := row.Scan(&outcome)
+	return outcome, err
 }

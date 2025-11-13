@@ -148,6 +148,30 @@ func (q *Queries) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
 	return err
 }
 
+const getUserCoreProfile = `-- name: GetUserCoreProfile :one
+SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at FROM users
+WHERE id = $1
+`
+
+// Minimal user profile without avatar join
+func (q *Queries) GetUserCoreProfile(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, getUserCoreProfile, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Bio,
+		&i.ProfileType,
+		&i.IsAdminBlocked,
+		&i.AdminBlockReason,
+		&i.HmacSha256HexUsername,
+		&i.B64CipherChacha20poly1305Username,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserProfile = `-- name: GetUserProfile :one
 SELECT 
     u.id, u.name, u.bio, u.profile_type, u.is_admin_blocked, u.admin_block_reason, u.hmac_sha256_hex_username, u.b64_cipher_chacha20poly1305_username, u.created_at, u.updated_at, 
@@ -200,6 +224,21 @@ func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProf
 		&i.TokenExpiry,
 	)
 	return i, err
+}
+
+const isUserAdminBlocked = `-- name: IsUserAdminBlocked :one
+SELECT EXISTS(
+    SELECT 1 FROM users
+    WHERE id = $1 AND is_admin_blocked IS TRUE
+)
+`
+
+// Returns true if the user is admin-blocked
+func (q *Queries) IsUserAdminBlocked(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, isUserAdminBlocked, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const isUserExists = `-- name: IsUserExists :one
