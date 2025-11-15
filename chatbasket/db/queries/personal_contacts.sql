@@ -9,6 +9,7 @@ SELECT
     cu.name,
     cu.b64_cipher_chacha20poly1305_username AS username,
     cu.bio,
+    uc.nickname,
     uc.created_at AS contact_created_at,
     uc.updated_at AS contact_updated_at,
     
@@ -61,6 +62,7 @@ SELECT
     cu.name,
     cu.b64_cipher_chacha20poly1305_username AS username,
     cu.bio,
+    uc.nickname,
     uc.created_at AS contact_created_at,
     uc.updated_at AS contact_updated_at,
     
@@ -155,8 +157,8 @@ SELECT EXISTS(
 );
 
 -- name: InsertUserContact :exec
-INSERT INTO user_contacts (owner_user_id, contact_user_id)
-VALUES ($1, $2)
+INSERT INTO user_contacts (owner_user_id, contact_user_id, nickname)
+VALUES ($1, $2, $3)
 ON CONFLICT DO NOTHING;
 
 -- name: HasPendingRequest :one
@@ -176,16 +178,16 @@ WITH deleted AS (
     WHERE requester_user_id = $2 AND receiver_user_id = $3
     RETURNING requester_user_id
 )
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
-SELECT $1, $2, $3, 'pending'
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status, nickname)
+SELECT $1, $2, $3, 'pending', $4
 WHERE EXISTS (SELECT 1 FROM deleted) OR NOT EXISTS (
     SELECT 1 FROM contact_requests 
     WHERE requester_user_id = $2 AND receiver_user_id = $3
 );
 
 -- name: InsertContactRequest :exec
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
-VALUES ($1, $2, $3, 'pending')
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status, nickname)
+VALUES ($1, $2, $3, 'pending', $4)
 ON CONFLICT DO NOTHING;
 
 -- name: AcceptContactRequest :one
@@ -242,12 +244,21 @@ WITH deleted AS (
 SELECT COUNT(*) AS removed
 FROM deleted;
 
+-- name: UpdateContactNickname :one
+UPDATE user_contacts
+SET nickname = $3,
+    updated_at = now()
+WHERE owner_user_id = $1
+  AND contact_user_id = $2
+RETURNING true AS updated;
+
 -- name: GetPendingContactRequests :many
 SELECT
     ru.id,
     ru.name,
     ru.b64_cipher_chacha20poly1305_username AS username,
     ru.bio,
+    cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
     cr.status::text AS status,
@@ -287,6 +298,7 @@ SELECT
     ru.name,
     ru.b64_cipher_chacha20poly1305_username AS username,
     ru.bio,
+    cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
     cr.status::text AS status,

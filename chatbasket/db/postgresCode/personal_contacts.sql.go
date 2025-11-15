@@ -53,8 +53,8 @@ WITH deleted AS (
     WHERE requester_user_id = $2 AND receiver_user_id = $3
     RETURNING requester_user_id
 )
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
-SELECT $1, $2, $3, 'pending'
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status, nickname)
+SELECT $1, $2, $3, 'pending', $4
 WHERE EXISTS (SELECT 1 FROM deleted) OR NOT EXISTS (
     SELECT 1 FROM contact_requests 
     WHERE requester_user_id = $2 AND receiver_user_id = $3
@@ -65,10 +65,16 @@ type DeleteAndInsertContactRequestParams struct {
 	ID              uuid.UUID `json:"id"`
 	RequesterUserID uuid.UUID `json:"requester_user_id"`
 	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
+	Nickname        *string   `json:"nickname"`
 }
 
 func (q *Queries) DeleteAndInsertContactRequest(ctx context.Context, arg DeleteAndInsertContactRequestParams) error {
-	_, err := q.db.Exec(ctx, deleteAndInsertContactRequest, arg.ID, arg.RequesterUserID, arg.ReceiverUserID)
+	_, err := q.db.Exec(ctx, deleteAndInsertContactRequest,
+		arg.ID,
+		arg.RequesterUserID,
+		arg.ReceiverUserID,
+		arg.Nickname,
+	)
 	return err
 }
 
@@ -119,6 +125,7 @@ SELECT
     ru.name,
     ru.b64_cipher_chacha20poly1305_username AS username,
     ru.bio,
+    cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
     cr.status::text AS status,
@@ -158,6 +165,7 @@ type GetPendingContactRequestsRow struct {
 	Name                   string             `json:"name"`
 	Username               string             `json:"username"`
 	Bio                    *string            `json:"bio"`
+	Nickname               *string            `json:"nickname"`
 	RequestCreatedAt       pgtype.Timestamptz `json:"request_created_at"`
 	RequestUpdatedAt       pgtype.Timestamptz `json:"request_updated_at"`
 	Status                 string             `json:"status"`
@@ -187,6 +195,7 @@ func (q *Queries) GetPendingContactRequests(ctx context.Context, exemptedUserID 
 			&i.Name,
 			&i.Username,
 			&i.Bio,
+			&i.Nickname,
 			&i.RequestCreatedAt,
 			&i.RequestUpdatedAt,
 			&i.Status,
@@ -217,6 +226,7 @@ SELECT
     ru.name,
     ru.b64_cipher_chacha20poly1305_username AS username,
     ru.bio,
+    cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
     cr.status::text AS status,
@@ -256,6 +266,7 @@ type GetSentContactRequestsRow struct {
 	Name                   string             `json:"name"`
 	Username               string             `json:"username"`
 	Bio                    *string            `json:"bio"`
+	Nickname               *string            `json:"nickname"`
 	RequestCreatedAt       pgtype.Timestamptz `json:"request_created_at"`
 	RequestUpdatedAt       pgtype.Timestamptz `json:"request_updated_at"`
 	Status                 string             `json:"status"`
@@ -285,6 +296,7 @@ func (q *Queries) GetSentContactRequests(ctx context.Context, exemptedUserID uui
 			&i.Name,
 			&i.Username,
 			&i.Bio,
+			&i.Nickname,
 			&i.RequestCreatedAt,
 			&i.RequestUpdatedAt,
 			&i.Status,
@@ -345,6 +357,7 @@ SELECT
     cu.name,
     cu.b64_cipher_chacha20poly1305_username AS username,
     cu.bio,
+    uc.nickname,
     uc.created_at AS contact_created_at,
     uc.updated_at AS contact_updated_at,
     
@@ -391,6 +404,7 @@ type GetUserContactsRow struct {
 	Name                   string             `json:"name"`
 	Username               string             `json:"username"`
 	Bio                    *string            `json:"bio"`
+	Nickname               *string            `json:"nickname"`
 	ContactCreatedAt       pgtype.Timestamptz `json:"contact_created_at"`
 	ContactUpdatedAt       pgtype.Timestamptz `json:"contact_updated_at"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
@@ -423,6 +437,7 @@ func (q *Queries) GetUserContacts(ctx context.Context, exemptedUserID uuid.UUID)
 			&i.Name,
 			&i.Username,
 			&i.Bio,
+			&i.Nickname,
 			&i.ContactCreatedAt,
 			&i.ContactUpdatedAt,
 			&i.AvatarFileID,
@@ -453,6 +468,7 @@ SELECT
     cu.name,
     cu.b64_cipher_chacha20poly1305_username AS username,
     cu.bio,
+    uc.nickname,
     uc.created_at AS contact_created_at,
     uc.updated_at AS contact_updated_at,
     
@@ -499,6 +515,7 @@ type GetUsersWhoAddedYouRow struct {
 	Name                   string             `json:"name"`
 	Username               string             `json:"username"`
 	Bio                    *string            `json:"bio"`
+	Nickname               *string            `json:"nickname"`
 	ContactCreatedAt       pgtype.Timestamptz `json:"contact_created_at"`
 	ContactUpdatedAt       pgtype.Timestamptz `json:"contact_updated_at"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
@@ -531,6 +548,7 @@ func (q *Queries) GetUsersWhoAddedYou(ctx context.Context, exemptedUserID uuid.U
 			&i.Name,
 			&i.Username,
 			&i.Bio,
+			&i.Nickname,
 			&i.ContactCreatedAt,
 			&i.ContactUpdatedAt,
 			&i.AvatarFileID,
@@ -574,8 +592,8 @@ func (q *Queries) HasPendingRequest(ctx context.Context, arg HasPendingRequestPa
 }
 
 const insertContactRequest = `-- name: InsertContactRequest :exec
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
-VALUES ($1, $2, $3, 'pending')
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status, nickname)
+VALUES ($1, $2, $3, 'pending', $4)
 ON CONFLICT DO NOTHING
 `
 
@@ -583,26 +601,33 @@ type InsertContactRequestParams struct {
 	ID              uuid.UUID `json:"id"`
 	RequesterUserID uuid.UUID `json:"requester_user_id"`
 	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
+	Nickname        *string   `json:"nickname"`
 }
 
 func (q *Queries) InsertContactRequest(ctx context.Context, arg InsertContactRequestParams) error {
-	_, err := q.db.Exec(ctx, insertContactRequest, arg.ID, arg.RequesterUserID, arg.ReceiverUserID)
+	_, err := q.db.Exec(ctx, insertContactRequest,
+		arg.ID,
+		arg.RequesterUserID,
+		arg.ReceiverUserID,
+		arg.Nickname,
+	)
 	return err
 }
 
 const insertUserContact = `-- name: InsertUserContact :exec
-INSERT INTO user_contacts (owner_user_id, contact_user_id)
-VALUES ($1, $2)
+INSERT INTO user_contacts (owner_user_id, contact_user_id, nickname)
+VALUES ($1, $2, $3)
 ON CONFLICT DO NOTHING
 `
 
 type InsertUserContactParams struct {
 	OwnerUserID   uuid.UUID `json:"owner_user_id"`
 	ContactUserID uuid.UUID `json:"contact_user_id"`
+	Nickname      *string   `json:"nickname"`
 }
 
 func (q *Queries) InsertUserContact(ctx context.Context, arg InsertUserContactParams) error {
-	_, err := q.db.Exec(ctx, insertUserContact, arg.OwnerUserID, arg.ContactUserID)
+	_, err := q.db.Exec(ctx, insertUserContact, arg.OwnerUserID, arg.ContactUserID, arg.Nickname)
 	return err
 }
 
@@ -749,4 +774,26 @@ func (q *Queries) UndoContactRequest(ctx context.Context, arg UndoContactRequest
 	var outcome string
 	err := row.Scan(&outcome)
 	return outcome, err
+}
+
+const updateContactNickname = `-- name: UpdateContactNickname :one
+UPDATE user_contacts
+SET nickname = $3,
+    updated_at = now()
+WHERE owner_user_id = $1
+  AND contact_user_id = $2
+RETURNING true AS updated
+`
+
+type UpdateContactNicknameParams struct {
+	OwnerUserID   uuid.UUID `json:"owner_user_id"`
+	ContactUserID uuid.UUID `json:"contact_user_id"`
+	Nickname      *string   `json:"nickname"`
+}
+
+func (q *Queries) UpdateContactNickname(ctx context.Context, arg UpdateContactNicknameParams) (bool, error) {
+	row := q.db.QueryRow(ctx, updateContactNickname, arg.OwnerUserID, arg.ContactUserID, arg.Nickname)
+	var updated bool
+	err := row.Scan(&updated)
+	return updated, err
 }

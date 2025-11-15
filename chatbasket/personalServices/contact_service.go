@@ -3,7 +3,7 @@ package personalServices
 import (
 	"chatbasket/db/postgresCode"
 	"chatbasket/model"
-	"chatbasket/personalModel"
+	personalmodel "chatbasket/personalModel"
 	"chatbasket/utils"
 	"context"
 	"net/http"
@@ -44,8 +44,11 @@ func (ps *Service) GetContacts(ctx context.Context, userId model.UserId) (*perso
 	}
 
 	myContactsMap := make(map[string]struct{}, len(myContacts))
+	myNicknameByID := make(map[string]*string, len(myContacts))
 	for _, c := range myContacts {
-		myContactsMap[c.ID.String()] = struct{}{}
+		id := c.ID.String()
+		myContactsMap[id] = struct{}{}
+		myNicknameByID[id] = c.Nickname
 	}
 
 	shouldExposeAvatar := func(globalRestrictProfile, exceptionGlobalProfile, globalRestrictAvatar, exceptionGlobalAvatar, userRestrictProfile, userRestrictAvatar bool) bool {
@@ -101,6 +104,7 @@ func (ps *Service) GetContacts(ctx context.Context, userId model.UserId) (*perso
 			Name:      c.Name,
 			Username:  username,
 			Bio:       c.Bio,
+			Nickname:  c.Nickname,
 			CreatedAt: createdAt,
 			UpdatedAt: updatedAt,
 			AvatarURL: avatarURL,
@@ -139,12 +143,17 @@ func (ps *Service) GetContacts(ctx context.Context, userId model.UserId) (*perso
 		}
 
 		_, isMutual := myContactsMap[p.ID.String()]
+		var myNickname *string
+		if n, ok := myNicknameByID[p.ID.String()]; ok {
+			myNickname = n
+		}
 
 		peopleWhoAddedYou = append(peopleWhoAddedYou, personalmodel.Contact{
 			ID:        p.ID.String(),
 			Name:      p.Name,
 			Username:  username,
 			Bio:       p.Bio,
+			Nickname:  myNickname,
 			CreatedAt: createdAt,
 			UpdatedAt: updatedAt,
 			AvatarURL: avatarURL,
@@ -275,6 +284,19 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		return &model.StatusOkay{Status: true, Message: "already_in_contacts"}, nil
 	}
 
+	// Normalize optional nickname
+	var nickname *string
+	if payload.Nickname != nil {
+		trimmed := strings.TrimSpace(*payload.Nickname)
+		if trimmed != "" {
+			if len([]rune(trimmed)) > 40 {
+				return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid_nickname_length", Type: "bad_request"}
+			}
+			v := trimmed
+			nickname = &v
+		}
+	}
+
 	// Handle based on target profile type
 	switch targetProfile.ProfileType {
 	case "private":
@@ -286,6 +308,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		err = ps.Queries.InsertUserContact(ctx, postgresCode.InsertUserContactParams{
 			OwnerUserID:   userId.UuidUserId,
 			ContactUserID: targetUUID,
+			Nickname:      nickname,
 		})
 		if err != nil {
 			return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
@@ -324,6 +347,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 				ID:              reqID,
 				RequesterUserID: userId.UuidUserId,
 				ReceiverUserID:  targetUUID,
+				Nickname:        nickname,
 			})
 			if err != nil {
 				return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
@@ -339,6 +363,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 			ID:              reqID,
 			RequesterUserID: userId.UuidUserId,
 			ReceiverUserID:  targetUUID,
+			Nickname:        nickname,
 		})
 		if err != nil {
 			return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
@@ -373,7 +398,7 @@ func (ps *Service) AcceptContactRequest(ctx context.Context, payload *personalmo
 
 	switch result {
 	case "accepted":
-		
+
 		return &model.StatusOkay{Status: true, Message: "contact_request_accepted"}, nil
 	case "not_found":
 		return nil, &model.ApiError{Code: http.StatusNotFound, Message: "pending_request_not_found", Type: "not_found"}
@@ -523,6 +548,16 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 		return true
 	}
 
+	// Fetch viewer's contacts so we can reuse their own nicknames for pending requests
+	myContacts, err := ps.Queries.GetUserContacts(ctx, userId.UuidUserId)
+	if err != nil {
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+	}
+	myNicknameByID := make(map[string]*string, len(myContacts))
+	for _, c := range myContacts {
+		myNicknameByID[c.ID.String()] = c.Nickname
+	}
+
 	transformPending := func(rows []postgresCode.GetPendingContactRequestsRow) ([]personalmodel.PendingContactRequest, *model.ApiError) {
 		requests := make([]personalmodel.PendingContactRequest, 0, len(rows))
 		for _, r := range rows {
@@ -554,11 +589,18 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 				avatarURL = url
 			}
 
+			// Use viewer's own contact nickname for this user, if it exists
+			var myNickname *string
+			if n, ok := myNicknameByID[r.ID.String()]; ok {
+				myNickname = n
+			}
+
 			requests = append(requests, personalmodel.PendingContactRequest{
 				ID:          r.ID.String(),
 				Name:        r.Name,
 				Username:    username,
 				Bio:         r.Bio,
+				Nickname:    myNickname,
 				RequestedAt: requestedAt,
 				UpdatedAt:   updatedAt,
 				Status:      r.Status,
@@ -604,6 +646,7 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 				Name:        r.Name,
 				Username:    username,
 				Bio:         r.Bio,
+				Nickname:    r.Nickname,
 				RequestedAt: requestedAt,
 				UpdatedAt:   updatedAt,
 				Status:      r.Status,
@@ -637,4 +680,74 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 		Pending: pending,
 		Sent:    sent,
 	}, nil
+}
+
+func (ps *Service) UpdateContactNickname(ctx context.Context, payload *personalmodel.UpdateContactNicknamePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
+	if payload == nil || payload.ContactUserId == "" {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid request payload", Type: "bad_request"}
+	}
+
+	contactUUID, err := uuid.Parse(payload.ContactUserId)
+	if err != nil {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid contactUserId", Type: "bad_request"}
+	}
+
+	if contactUUID == userId.UuidUserId {
+		return nil, &model.ApiError{Code: http.StatusConflict, Message: "self_action_not_allowed", Type: "conflict"}
+	}
+
+	var nickname *string
+	if payload.Nickname != nil {
+		trimmed := strings.TrimSpace(*payload.Nickname)
+		if trimmed != "" {
+			if len([]rune(trimmed)) > 40 {
+				return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid_nickname_length", Type: "bad_request"}
+			}
+			v := trimmed
+			nickname = &v
+		}
+	}
+
+	_, err = ps.Queries.UpdateContactNickname(ctx, postgresCode.UpdateContactNicknameParams{
+		OwnerUserID:   userId.UuidUserId,
+		ContactUserID: contactUUID,
+		Nickname:      nickname,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, &model.ApiError{Code: http.StatusNotFound, Message: "contact_not_found", Type: "not_found"}
+		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+	}
+
+	return &model.StatusOkay{Status: true, Message: "contact_nickname_updated"}, nil
+}
+
+func (ps *Service) RemoveContactNickname(ctx context.Context, payload *personalmodel.RemoveContactNicknamePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
+	if payload == nil || payload.ContactUserId == "" {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid request payload", Type: "bad_request"}
+	}
+
+	contactUUID, err := uuid.Parse(payload.ContactUserId)
+	if err != nil {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid contactUserId", Type: "bad_request"}
+	}
+
+	if contactUUID == userId.UuidUserId {
+		return nil, &model.ApiError{Code: http.StatusConflict, Message: "self_action_not_allowed", Type: "conflict"}
+	}
+
+	_, err = ps.Queries.UpdateContactNickname(ctx, postgresCode.UpdateContactNicknameParams{
+		OwnerUserID:   userId.UuidUserId,
+		ContactUserID: contactUUID,
+		Nickname:      nil,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, &model.ApiError{Code: http.StatusNotFound, Message: "contact_not_found", Type: "not_found"}
+		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+	}
+
+	return &model.StatusOkay{Status: true, Message: "contact_nickname_removed"}, nil
 }

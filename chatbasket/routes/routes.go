@@ -100,4 +100,6 @@ func RegisterRoutes(
 	personalContactsGroup.POST("/requests/accept", persContactsHandler.AcceptContactRequest)
 	personalContactsGroup.POST("/requests/reject", persContactsHandler.RejectContactRequest)
 	personalContactsGroup.POST("/requests/undo", persContactsHandler.UndoContactRequest)
+	personalContactsGroup.POST("/update-nickname", persContactsHandler.UpdateContactNickname)
+	personalContactsGroup.POST("/remove-nickname", persContactsHandler.RemoveContactNickname)
 }

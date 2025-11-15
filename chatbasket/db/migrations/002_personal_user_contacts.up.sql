@@ -8,6 +8,7 @@
 CREATE TABLE IF NOT EXISTS user_contacts (
     owner_user_id       UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     contact_user_id     UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    nickname            TEXT            CHECK (length(nickname) <= 40),
     created_at          TIMESTAMPTZ,
     updated_at          TIMESTAMPTZ,
     

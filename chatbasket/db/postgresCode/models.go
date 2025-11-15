@@ -33,6 +33,7 @@ type ContactRequest struct {
 	RequesterUserID uuid.UUID          `json:"requester_user_id"`
 	ReceiverUserID  uuid.UUID          `json:"receiver_user_id"`
 	Status          interface{}        `json:"status"`
+	Nickname        *string            `json:"nickname"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
@@ -61,6 +62,7 @@ type UserBlock struct {
 type UserContact struct {
 	OwnerUserID   uuid.UUID          `json:"owner_user_id"`
 	ContactUserID uuid.UUID          `json:"contact_user_id"`
+	Nickname      *string            `json:"nickname"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS contact_requests (
     requester_user_id       UUID                    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     receiver_user_id        UUID                    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status                  request_status_enum     NOT NULL DEFAULT 'pending',
+    nickname                TEXT                    CHECK (length(nickname) <= 40),
     created_at              TIMESTAMPTZ,
     updated_at              TIMESTAMPTZ,
     
@@ -62,8 +63,8 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    INSERT INTO user_contacts (owner_user_id, contact_user_id)
-    VALUES (NEW.requester_user_id, NEW.receiver_user_id)
+    INSERT INTO user_contacts (owner_user_id, contact_user_id, nickname)
+    VALUES (NEW.requester_user_id, NEW.receiver_user_id, NEW.nickname)
     ON CONFLICT (owner_user_id, contact_user_id) DO NOTHING;
     RETURN NEW;
 END;

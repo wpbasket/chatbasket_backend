@@ -7,6 +7,7 @@ type Contact struct {
 	Name      string    `json:"name"`
 	Username  string    `json:"username"`
 	Bio       *string   `json:"bio"`
+	Nickname  *string   `json:"nickname"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	AvatarURL *string   `json:"avatar_url"`
@@ -19,7 +20,8 @@ type GetContactsResponse struct {
 }
 
 type CreateContactPayload struct {
-	ContactUserId string `json:"contact_user_id"`
+	ContactUserId string  `json:"contact_user_id"`
+	Nickname      *string `json:"nickname"`
 }
 
 type CheckContactExistancePayload struct {
@@ -53,6 +55,7 @@ type PendingContactRequest struct {
 	Name        string    `json:"name"`
 	Username    string    `json:"username"`
 	Bio         *string   `json:"bio"`
+	Nickname    *string   `json:"nickname"`
 	RequestedAt time.Time `json:"requested_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	Status      string    `json:"status"`
@@ -64,6 +67,7 @@ type SentContactRequest struct {
 	Name        string    `json:"name"`
 	Username    string    `json:"username"`
 	Bio         *string   `json:"bio"`
+	Nickname    *string   `json:"nickname"`
 	RequestedAt time.Time `json:"requested_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	Status      string    `json:"status"`
@@ -73,4 +77,13 @@ type SentContactRequest struct {
 type GetContactRequestsResponse struct {
 	Pending []PendingContactRequest `json:"pending_requests"`
 	Sent    []SentContactRequest    `json:"sent_requests"`
+}
+
+type UpdateContactNicknamePayload struct {
+	ContactUserId string  `json:"contact_user_id"`
+	Nickname      *string `json:"nickname"`
+}
+
+type RemoveContactNicknamePayload struct {
+	ContactUserId string `json:"contact_user_id"`
 }
