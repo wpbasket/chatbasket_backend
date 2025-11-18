@@ -30,6 +30,7 @@ type CheckContactExistancePayload struct {
 
 type CheckContactExistanceResponse struct {
 	Exists          bool    `json:"exists"`
+	Name            string  `json:"name"`
 	ProfileType     string  `json:"profile_type"`
 	RecipientUserId *string `json:"recipient_user_id"`
 }

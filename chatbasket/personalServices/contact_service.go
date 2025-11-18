@@ -191,6 +191,7 @@ func (ps *Service) CheckContactExistance(ctx context.Context, payload *personalm
 
 	existsResp := &personalmodel.CheckContactExistanceResponse{
 		Exists:      true,
+		Name:        user.Name,
 		ProfileType: user.ProfileType,
 	}
 
