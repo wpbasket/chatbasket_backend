@@ -21,7 +21,7 @@
 
 
 
-FROM golang:1.25.2-alpine AS build_base
+FROM golang:1.25.4-alpine AS build_base
 
 # Install git and ca-certificates
 RUN apk add --no-cache git ca-certificates
