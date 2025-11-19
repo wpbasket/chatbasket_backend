@@ -95,11 +95,42 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 
 	content := "<p>Hello,<br>Please enter this code in the app to verify your email address. This code is valid for 3 minutes.Your One-Time Password (OTP) for verifying your email address is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
 
+	targetRes, err := us.Appwrite.Users.ListTargets(userID)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    500,
+			Message: "Failed to list targets: " + err.Error(),
+			Type:    "internal_server_error",
+		}
+	}
+	var target string
+	if targetRes.Total == 0 {
+		target = uuid.New().String()
+		createTargetRes, err := us.Appwrite.Users.CreateTarget(
+			userID,
+			target,
+			"email",
+			payload.Email,
+		)
+		if err != nil {
+			return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to create target: " + err.Error(),
+				Type:    "internal_server_error",
+			}
+		}
+		target = createTargetRes.Id
+	}
+	if targetRes.Total > 0 {
+		target = targetRes.Targets[0].Id
+	}
+
 	_, err = us.Appwrite.Message.CreateEmail(
 		messageId,
 		subject,
 		content,
 		us.Appwrite.Message.WithCreateEmailUsers([]string{userID}),
+		us.Appwrite.Message.WithCreateEmailCc([]string{target}),
 	)
 	if err != nil {
 		return nil, &model.ApiError{
@@ -349,17 +380,37 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 			Type:    "internal_server_error",
 		}
 	}
+	var emailT string
 
-	emailT := emailTarget.Targets[0].Id
-	// if emailTarget.Total==2{
-	// 	emailT=emailTarget.Targets[0].Id
-	// }
-	  
+	if emailTarget.Total==0{
+		targetId := uuid.New().String()
+		createTargetRes, err := us.Appwrite.Users.CreateTarget(
+			userId,
+			targetId,
+			"email",
+			payload.Email,
+		)
+		if err != nil {
+			return nil, &model.ApiError{
+				Code:    500,
+				Message: "Failed to create target: " + err.Error(),
+				Type:    "internal_server_error",
+			}
+		}
+		emailT = createTargetRes.Id
+
+	}
+
+	if emailTarget.Total>0{
+		emailT = emailTarget.Targets[0].Id
+	}
+
 	_, err = us.Appwrite.Message.CreateEmail(
 		messageId,
 		subject,
 		content,
-		us.Appwrite.Message.WithCreateEmailTargets([]string{emailT}),
+		us.Appwrite.Message.WithCreateEmailUsers([]string{userId}),
+		us.Appwrite.Message.WithCreateEmailCc([]string{emailT}),
 	)
 	if err != nil {
 		return nil, &model.ApiError{

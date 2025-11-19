@@ -99,7 +99,16 @@ func (h *SettingHandler) SendOtp(c echo.Context) error{
 		})
 	}
 
-	user, err := h.Service.SendOtp(c.Request().Context(), &payload, userId)
+	email, ok := c.Get("email").(string)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+
+	user, err := h.Service.SendOtp(c.Request().Context(), &payload, userId, email)
 	if err != nil {
 		return c.JSON(err.Code, err)
 	}
