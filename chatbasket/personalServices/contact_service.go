@@ -316,6 +316,25 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		}
 		return &model.StatusOkay{Status: true, Message: "public_contact_added"}, nil
 	case "personal":
+		targetAlreadyHasMe, err := ps.Queries.IsAlreadyContact(ctx, postgresCode.IsAlreadyContactParams{
+			OwnerUserID:   targetUUID,
+			ContactUserID: userId.UuidUserId,
+		})
+		if err != nil {
+			return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+		}
+		if targetAlreadyHasMe {
+			err = ps.Queries.InsertUserContact(ctx, postgresCode.InsertUserContactParams{
+				OwnerUserID:   userId.UuidUserId,
+				ContactUserID: targetUUID,
+				Nickname:      nickname,
+			})
+			if err != nil {
+				return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+			}
+			return &model.StatusOkay{Status: true, Message: "personal_contact_added"}, nil
+		}
+
 		/*
 			DB call to check for existing request status
 		*/
