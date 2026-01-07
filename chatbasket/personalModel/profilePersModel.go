@@ -22,8 +22,8 @@ type User struct {
 }
 
 type CreateUserProfilePayload struct {
-    Name        string `json:"name" validate:"required,min=1,max=40"` 
-    ProfileType string `json:"profile_type" validate:"required,oneof=public private personal"`
+	Name        string `json:"name" validate:"required,min=1,max=40"`
+	ProfileType string `json:"profile_type" validate:"required,oneof=public private personal"`
 }
 
 type LogoutPayload struct {
@@ -44,29 +44,18 @@ type PrivateUser struct {
 
 
 type UpdateUserProfilePayload struct {
-    Name        *string `json:"name,omitempty" validate:"omitempty,min=1,max=40"` 
-    Bio         *string `json:"bio,omitempty" validate:"omitempty,max=150"`
-    ProfileType *string `json:"profile_type,omitempty" validate:"omitempty,oneof=public private personal"`
+	Name        *string `json:"name,omitempty" validate:"omitempty,min=1,max=40"`
+	Bio         *string `json:"bio,omitempty" validate:"omitempty,max=150"`
+	ProfileType *string `json:"profile_type,omitempty" validate:"omitempty,oneof=public private personal"`
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+type RegisterOrUpdateFcmOrApnTokenPayload struct {
+	Token string `json:"token" validate:"required,min=1"`
+	Type  string `json:"type" validate:"required,oneof=fcm apn"`
+}
 
 func ToPrivateUserWithAvatar(user *postgresCode.GetUserProfileRow,username string,email string,avatarUrl *string) *PrivateUser {
-    return &PrivateUser{
+	return &PrivateUser{
 		Id:             user.ID.String(),
 		Username:       username,
 		Name:           user.Name,

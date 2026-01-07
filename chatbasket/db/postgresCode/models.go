@@ -38,6 +38,17 @@ type ContactRequest struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Token struct {
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"user_id"`
+	Sha256HexSessionID string             `json:"sha256_hex_session_id"`
+	Token              string             `json:"token"`
+	Type               string             `json:"type"`
+	IsActive           bool               `json:"is_active"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
 	ID                                uuid.UUID          `json:"id"`
 	Name                              string             `json:"name"`

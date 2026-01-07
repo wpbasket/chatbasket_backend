@@ -4,6 +4,7 @@ import (
 	"chatbasket/db"
 	"chatbasket/model"
 	"chatbasket/routes"
+	"chatbasket/utils"
 	"context"
 	"net/http"
 	"os"
@@ -39,14 +40,19 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-
-
 	// err := godotenv.Load("../.env")
 	// if err != nil {
 	// 	e.Logger.Fatal("Error loading .env file", err)
 	// }
 
-
+	// Initialize Firebase
+	firebaseCtx, firebaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := utils.InitializeFirebase(firebaseCtx); err != nil {
+		e.Logger.Warn("⚠️  Firebase initialization failed: ", err)
+	} else {
+		e.Logger.Info("✅ Firebase initialized successfully")
+	}
+	firebaseCancel()
 
 	// Rate limit: 100 requests per second per IP
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(100)))
@@ -112,20 +118,20 @@ func main() {
 	// Close PostgreSQL connection pool with timeout
 	poolCloseCtx, poolCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer poolCancel()
-	
+
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		pool.Close()
 	}()
-	
+
 	select {
 	case <-done:
 		e.Logger.Info("Database pool closed gracefully")
 	case <-poolCloseCtx.Done():
 		e.Logger.Warn("Database pool close timeout - forcing shutdown")
 	}
-	
+
 	e.Logger.Info("Server exited")
 }
 

@@ -27,14 +27,19 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid logout payload")
 	}
+
+	// Extract user ID from context
 	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !ok || !okUUID {
 		return c.JSON(http.StatusInternalServerError, &model.ApiError{
 			Code:    http.StatusInternalServerError,
 			Message: "Invalid user context",
 			Type:    "internal_server_error",
 		})
 	}
+
+	// Extract session ID from context
 	sessionId, ok := c.Get("sessionId").(string)
 	if !ok || sessionId == "" {
 		return c.JSON(http.StatusInternalServerError, &model.ApiError{
@@ -44,14 +49,12 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 		})
 	}
 
-	res, apiErr := h.Service.Logout(c.Request().Context(), &payload, userId, sessionId)
+	res, apiErr := h.Service.Logout(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId}, sessionId)
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 	return c.JSON(http.StatusOK, res)
 }
-
-
 
 func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 	var payload personalmodel.CreateUserProfilePayload
@@ -83,7 +86,7 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 		})
 	}
 
-	res, apiErr := h.Service.CreateUserProfile(c.Request().Context(), &payload, &model.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId},email)
+	res, apiErr := h.Service.CreateUserProfile(c.Request().Context(), &payload, &model.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId}, email)
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
@@ -115,15 +118,12 @@ func (h *ProfileHandler) GetProfile(c echo.Context) error {
 			Type:    "internal_server_error",
 		})
 	}
-	res, apiErr := h.Service.GetProfile(c.Request().Context(), model.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId},email)
+	res, apiErr := h.Service.GetProfile(c.Request().Context(), model.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId}, email)
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 	return c.JSON(http.StatusOK, res)
 }
-
-
-
 
 func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
 	err := c.Request().ParseMultipartForm(5 << 20) // 5MB
@@ -249,4 +249,59 @@ func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, user)
 
+}
+
+func (h *ProfileHandler) RegisterOrUpdateToken(c echo.Context) error {
+	// Parse and bind payload
+	var payload personalmodel.RegisterOrUpdateFcmOrApnTokenPayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid token registration payload: " + err.Error(),
+			Type:    "bad_request",
+		})
+	}
+
+	// Validate payload
+	if err := c.Validate(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Validation failed: " + err.Error(),
+			Type:    "validation_error",
+		})
+	}
+
+	// Extract session ID from context
+	sessionId, ok := c.Get("sessionId").(string)
+	if !ok || sessionId == "" {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "Missing or invalid session ID",
+			Type:    "unauthorized",
+		})
+	}
+
+	// Extract user ID from context
+	userId, ok := c.Get("userId").(string)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !ok || !okUUID {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+
+	// Call service
+	result, apiErr := h.Service.RegisterOrUpdateFcmOrApnToken(
+		c.Request().Context(),
+		&payload,
+		model.UserId{StringUserId: userId, UuidUserId: uuidUserId},
+		sessionId,
+	)
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+
+	return c.JSON(http.StatusOK, result)
 }

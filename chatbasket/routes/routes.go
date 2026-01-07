@@ -88,6 +88,7 @@ func RegisterRoutes(
 	personalProfileGroup.POST("/upload-avatar", personalProfileHandler.UploadProfilePicture)
 	personalProfileGroup.DELETE("/remove-avatar", personalProfileHandler.RemoveProfilePicture)
 	personalProfileGroup.POST("/update-profile", personalProfileHandler.UpdateProfile)
+	personalProfileGroup.POST("/token/register", personalProfileHandler.RegisterOrUpdateToken)
 
 	personalContactsGroup := e.Group("/personal/contacts")
 	personalContactsGroup.Use(middleware.AppwriteSessionMiddleware(true))

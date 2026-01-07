@@ -20,9 +20,10 @@ import (
 
 // Template: mirror public profile methods for personal mode. Implement later.
 
-func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayload, userId, sessionId string) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayload, userId model.UserId, sessionId string) (*model.StatusOkay, *model.ApiError) {
 	if payload.AllSessions {
-		_, err := ps.Appwrite.Users.DeleteSessions(userId)
+		// Logout from all sessions
+		_, err := ps.Appwrite.Users.DeleteSessions(userId.StringUserId)
 		if err != nil {
 			return nil, &model.ApiError{
 				Code:    401,
@@ -30,13 +31,37 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 				Type:    "unauthorized",
 			}
 		}
+
+		// Deactivate all tokens for this user
+		err = ps.Queries.DeactivateUserTokens(ctx, userId.UuidUserId)
+		if err != nil {
+			// Log error but don't fail the logout
+			// Tokens will be cleaned up by periodic cleanup job
+		}
 	} else {
-		_, err := ps.Appwrite.Users.DeleteSession(userId, sessionId)
+		// Logout from single session
+		_, err := ps.Appwrite.Users.DeleteSession(userId.StringUserId, sessionId)
 		if err != nil {
 			return nil, &model.ApiError{
 				Code:    401,
 				Message: "Failed to Logout from session: " + err.Error(),
 				Type:    "unauthorized",
+			}
+		}
+
+		// Deactivate tokens for this session
+		hashedSessionId, err := utils.HashSessionId(sessionId, ps.Appwrite.PersonalUsernameKey)
+		if err != nil {
+			// Log error but don't fail the logout
+			// Skip token deactivation if hashing fails
+		} else {
+			err = ps.Queries.DeactivateSessionTokens(ctx, postgresCode.DeactivateSessionTokensParams{
+				Sha256HexSessionID: hashedSessionId,
+				UserID:             userId.UuidUserId,
+			})
+			if err != nil {
+				// Log error but don't fail the logout
+				// Tokens will be cleaned up by periodic cleanup job
 			}
 		}
 	}
@@ -45,17 +70,17 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 }
 
 func (ps *Service) CreateUserProfile(ctx context.Context, payload *personalmodel.CreateUserProfilePayload, userId *model.UserId, email string) (*personalmodel.PrivateUser, *model.ApiError) {
-    if payload == nil {
-        return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid request payload", Type: "bad_request"}
-    }
-    if userId == nil {
-        return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid user id", Type: "bad_request"}
-    }
-    // check if user profile already exists
-    res, err := ps.Queries.IsUserExists(ctx, userId.UuidUserId)
-    if err != nil {
-        return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
-    }
+	if payload == nil {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid request payload", Type: "bad_request"}
+	}
+	if userId == nil {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid user id", Type: "bad_request"}
+	}
+	// check if user profile already exists
+	res, err := ps.Queries.IsUserExists(ctx, userId.UuidUserId)
+	if err != nil {
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+	}
 	if res {
 		return nil, &model.ApiError{Code: http.StatusConflict, Message: "User profile already exists", Type: "conflict"}
 	}
@@ -111,7 +136,7 @@ func (ps *Service) GetProfile(ctx context.Context, userId model.UserId, email st
 	profile, err := ps.Queries.GetUserProfile(ctx, userId.UuidUserId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, &model.ApiError{Code: http.StatusNotFound, Message:err.Error(), Type: "not_found"}
+			return nil, &model.ApiError{Code: http.StatusNotFound, Message: err.Error(), Type: "not_found"}
 		}
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -131,14 +156,14 @@ func (ps *Service) GetProfile(ctx context.Context, userId model.UserId, email st
 }
 
 func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.FileHeader, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
-    if fh == nil {
-        return nil, &model.ApiError{Code: 400, Message: "no file provided", Type: "bad_request"}
-    }
-    // check if user profile pic exists and if it exists, delete it
-    resUser, err := ps.Queries.IsUserProfilePicExists(ctx, userId.UuidUserId)
-    if err != nil {
-        return nil, &model.ApiError{Code: 500, Message: "Failed to check user profile pic: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
-    }
+	if fh == nil {
+		return nil, &model.ApiError{Code: 400, Message: "no file provided", Type: "bad_request"}
+	}
+	// check if user profile pic exists and if it exists, delete it
+	resUser, err := ps.Queries.IsUserProfilePicExists(ctx, userId.UuidUserId)
+	if err != nil {
+		return nil, &model.ApiError{Code: 500, Message: "Failed to check user profile pic: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+	}
 
 	checkExistInStorage, err := ps.Appwrite.Storage.ListFiles(
 		ps.Appwrite.PersonalProfilePicBucketID,
@@ -308,4 +333,48 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *personalmodel
 	}
 
 	return &model.StatusOkay{Status: true, Message: "Profile updated successfully"}, nil
+}
+
+func (ps *Service) RegisterOrUpdateFcmOrApnToken(ctx context.Context, payload *personalmodel.RegisterOrUpdateFcmOrApnTokenPayload, userId model.UserId, sessionId string) (*model.StatusOkay, *model.ApiError) {
+	// Hash the session ID (HMAC-SHA256 hex, 64 characters)
+	hashedSessionId, err := utils.HashSessionId(sessionId, ps.Appwrite.PersonalUsernameKey)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Failed to hash session ID",
+			Type:    "internal_server_error",
+		}
+	}
+
+	// Generate UUID for the token record
+	tokenId, err := uuid.NewV7()
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Failed to generate token ID",
+			Type:    "internal_server_error",
+		}
+	}
+
+	// Upsert the token in the database
+	// If a token already exists for this (session_id, user_id, type), it will be updated
+	_, err = ps.Queries.UpsertToken(ctx, postgresCode.UpsertTokenParams{
+		ID:                 tokenId,
+		UserID:             userId.UuidUserId,
+		Sha256HexSessionID: hashedSessionId,
+		Token:              payload.Token,
+		Type:               payload.Type,
+	})
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Failed to register token: " + utils.GetPostgresError(err).Message,
+			Type:    "internal_server_error",
+		}
+	}
+
+	return &model.StatusOkay{
+		Status:  true,
+		Message: "Token registered successfully",
+	}, nil
 }

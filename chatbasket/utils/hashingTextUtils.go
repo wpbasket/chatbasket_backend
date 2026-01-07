@@ -106,9 +106,18 @@ func DecryptUsername(encryptedB64 string, encryptionKey []byte) (string, error) 
 	return string(plaintext), nil
 }
 
-
-
 // hmacKey := []byte("super-strong-random-secret-key-32bytes!")
 // encryptionKey := []byte("my_32_byte_chacha_key_demo!!abcd") // exactly 32 bytes
 
-
+// HashSessionId computes SHA-256 hash (hex string) of session ID for token storage.
+// The hash is 64 characters long (32 bytes in hex) to match the database constraint.
+// HashSessionId computes HMAC-SHA256 hash (hex string) of session ID with secret key for token storage.
+// The hash is 64 characters long (32 bytes in hex) to match the database constraint.
+// Uses the same HMAC pattern as HashUsername for consistency and security.
+func HashSessionId(sessionId string, secretKey []byte) (string, error) {
+	mac := hmac.New(sha256.New, secretKey)
+	if _, err := mac.Write([]byte(sessionId)); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(mac.Sum(nil)), nil
+}
