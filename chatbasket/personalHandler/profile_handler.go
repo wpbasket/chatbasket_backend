@@ -263,13 +263,14 @@ func (h *ProfileHandler) RegisterOrUpdateToken(c echo.Context) error {
 	}
 
 	// Validate payload
-	if err := c.Validate(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, &model.ApiError{
-			Code:    http.StatusBadRequest,
-			Message: "Validation failed: " + err.Error(),
-			Type:    "validation_error",
-		})
-	}
+	// Validate payload
+	// if err := c.Validate(&payload); err != nil {
+	// 	return c.JSON(http.StatusBadRequest, &model.ApiError{
+	// 		Code:    http.StatusBadRequest,
+	// 		Message: "Validation failed: " + err.Error(),
+	// 		Type:    "validation_error",
+	// 	})
+	// }
 
 	// Extract session ID from context
 	sessionId, ok := c.Get("sessionId").(string)
