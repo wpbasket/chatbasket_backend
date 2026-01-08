@@ -28,24 +28,16 @@ SET
 RETURNING
     *;
 
--- name: DeactivateSessionTokens :exec
--- Marks all tokens for a specific session as inactive (useful for logout)
-UPDATE tokens
-SET
-    is_active = FALSE,
-    updated_at = now()
+-- name: DeleteSessionTokens :exec
+-- Deletes all tokens for a specific session (useful for logout)
+DELETE FROM tokens
 WHERE
     sha256_hex_session_id = $1
     AND user_id = $2;
 
--- name: DeactivateUserTokens :exec
--- Marks all tokens for a user as inactive (useful for logout from all sessions)
-UPDATE tokens
-SET
-    is_active = FALSE,
-    updated_at = now()
-WHERE
-    user_id = $1;
+-- name: DeleteUserTokens :exec
+-- Deletes all tokens for a user (useful for logout from all sessions)
+DELETE FROM tokens WHERE user_id = $1;
 
 -- name: GetActiveTokensByUser :many
 -- Returns all active tokens for a user (for sending push notifications)

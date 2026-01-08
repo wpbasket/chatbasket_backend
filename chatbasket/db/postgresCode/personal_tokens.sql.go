@@ -12,42 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deactivateSessionTokens = `-- name: DeactivateSessionTokens :exec
-UPDATE tokens
-SET
-    is_active = FALSE,
-    updated_at = now()
-WHERE
-    sha256_hex_session_id = $1
-    AND user_id = $2
-`
-
-type DeactivateSessionTokensParams struct {
-	Sha256HexSessionID string    `json:"sha256_hex_session_id"`
-	UserID             uuid.UUID `json:"user_id"`
-}
-
-// Marks all tokens for a specific session as inactive (useful for logout)
-func (q *Queries) DeactivateSessionTokens(ctx context.Context, arg DeactivateSessionTokensParams) error {
-	_, err := q.db.Exec(ctx, deactivateSessionTokens, arg.Sha256HexSessionID, arg.UserID)
-	return err
-}
-
-const deactivateUserTokens = `-- name: DeactivateUserTokens :exec
-UPDATE tokens
-SET
-    is_active = FALSE,
-    updated_at = now()
-WHERE
-    user_id = $1
-`
-
-// Marks all tokens for a user as inactive (useful for logout from all sessions)
-func (q *Queries) DeactivateUserTokens(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deactivateUserTokens, userID)
-	return err
-}
-
 const deleteInactiveTokens = `-- name: DeleteInactiveTokens :exec
 DELETE FROM tokens WHERE is_active = FALSE AND updated_at < $1
 `
@@ -55,6 +19,34 @@ DELETE FROM tokens WHERE is_active = FALSE AND updated_at < $1
 // Cleanup query: deletes tokens that have been inactive for a specified period
 func (q *Queries) DeleteInactiveTokens(ctx context.Context, updatedAt pgtype.Timestamptz) error {
 	_, err := q.db.Exec(ctx, deleteInactiveTokens, updatedAt)
+	return err
+}
+
+const deleteSessionTokens = `-- name: DeleteSessionTokens :exec
+DELETE FROM tokens
+WHERE
+    sha256_hex_session_id = $1
+    AND user_id = $2
+`
+
+type DeleteSessionTokensParams struct {
+	Sha256HexSessionID string    `json:"sha256_hex_session_id"`
+	UserID             uuid.UUID `json:"user_id"`
+}
+
+// Deletes all tokens for a specific session (useful for logout)
+func (q *Queries) DeleteSessionTokens(ctx context.Context, arg DeleteSessionTokensParams) error {
+	_, err := q.db.Exec(ctx, deleteSessionTokens, arg.Sha256HexSessionID, arg.UserID)
+	return err
+}
+
+const deleteUserTokens = `-- name: DeleteUserTokens :exec
+DELETE FROM tokens WHERE user_id = $1
+`
+
+// Deletes all tokens for a user (useful for logout from all sessions)
+func (q *Queries) DeleteUserTokens(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserTokens, userID)
 	return err
 }
 

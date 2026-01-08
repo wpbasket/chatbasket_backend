@@ -32,8 +32,8 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 			}
 		}
 
-		// Deactivate all tokens for this user
-		err = ps.Queries.DeactivateUserTokens(ctx, userId.UuidUserId)
+		// Delete all tokens for this user
+		err = ps.Queries.DeleteUserTokens(ctx, userId.UuidUserId)
 		if err != nil {
 			// Log error but don't fail the logout
 			// Tokens will be cleaned up by periodic cleanup job
@@ -49,13 +49,13 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 			}
 		}
 
-		// Deactivate tokens for this session
+		// Delete tokens for this session
 		hashedSessionId, err := utils.HashSessionId(sessionId, ps.Appwrite.PersonalUsernameKey)
 		if err != nil {
 			// Log error but don't fail the logout
 			// Skip token deactivation if hashing fails
 		} else {
-			err = ps.Queries.DeactivateSessionTokens(ctx, postgresCode.DeactivateSessionTokensParams{
+			err = ps.Queries.DeleteSessionTokens(ctx, postgresCode.DeleteSessionTokensParams{
 				Sha256HexSessionID: hashedSessionId,
 				UserID:             userId.UuidUserId,
 			})
