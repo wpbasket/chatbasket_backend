@@ -21,7 +21,7 @@ import (
 
 func main() {
 	e := echo.New()
-	e.Logger.SetLevel(log.INFO)
+	e.Logger.SetLevel(log.ERROR)
 	e.HideBanner = true
 	e.Pre(middleware.RemoveTrailingSlash())
 	e.Use(middleware.Recover())
@@ -51,9 +51,9 @@ func main() {
 	// Initialize Firebase
 	firebaseCtx, firebaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := utils.InitializeFirebase(firebaseCtx); err != nil {
-		e.Logger.Warn("⚠️  Firebase initialization failed: ", err)
+		log.Printf("⚠️  Firebase initialization failed: %v\n", err)
 	} else {
-		e.Logger.Info("✅ Firebase initialized successfully")
+		log.Printf("✅ Firebase initialized successfully\n")
 	}
 	firebaseCancel()
 
