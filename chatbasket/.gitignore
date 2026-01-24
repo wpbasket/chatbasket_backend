@@ -1,5 +1,5 @@
 .vscode/
 .env
 .DS_Store
-chatbasket-207b6-firebase-adminsdk-fbsvc-360aca9832.json
-*firebase*adminsdk*.json
+# chatbasket-207b6-firebase-adminsdk-fbsvc-360aca9832.json
+# *firebase*adminsdk*.json
