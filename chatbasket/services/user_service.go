@@ -65,7 +65,7 @@ func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayloa
 			Type:    "internal_server_error",
 		}
 	}
-	
+
 	userID := id.Custom(newUuid.String())
 	_, err = us.Appwrite.Users.CreateArgon2User(
 		userID,
@@ -371,8 +371,7 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 	content := "<p>Hello,<br>Please enter this code in the app to verify your login. This code is valid for 3 minutes.Your One-Time Password (OTP) for login verification is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
 	userId := userRes.Users[0].Id
 
-
-	emailTarget,err := us.Appwrite.Users.ListTargets(userId)
+	emailTarget, err := us.Appwrite.Users.ListTargets(userId)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    500,
@@ -382,7 +381,7 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 	}
 	var emailT string
 
-	if emailTarget.Total==0{
+	if emailTarget.Total == 0 {
 		targetId := uuid.New().String()
 		createTargetRes, err := us.Appwrite.Users.CreateTarget(
 			userId,
@@ -401,7 +400,7 @@ func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload)
 
 	}
 
-	if emailTarget.Total>0{
+	if emailTarget.Total > 0 {
 		emailT = emailTarget.Targets[0].Id
 	}
 

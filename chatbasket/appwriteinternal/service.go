@@ -12,29 +12,29 @@ import (
 )
 
 type AppwriteService struct {
-	Account                   		*account.Account
-	Database                  		*databases.Databases
-	TableDb                   		*tablesdb.TablesDB
-	Storage                   		*storage.Storage
-	Users                     		*users.Users
-	Message                   		*messaging.Messaging
-	Tokens                    		*tokens.Tokens
-	DatabaseID                		string
-	UsersCollectionID         		string
-	PostsCollectionID         		string
-	CommentsCollectionID      		string
-	BlockCollectionID         		string
-	LikesCollectionID         		string
-	FollowCollectionID        		string
-	RefreshTokensCollectionID 		string
-	FollowRequestsCollectionID		string
-	TempOtpCollectionID       		string
-	ProfilePicBucketID        		string
-	PersonalUsersCollectionID 		string
-	AloneUsernameCollectionID 		string
-	PersonalDatabaseID        		string
-	PersonalProfilePicBucketID    	string
-	PersonalUsernameKey       	  []byte
+	Account                    *account.Account
+	Database                   *databases.Databases
+	TableDb                    *tablesdb.TablesDB
+	Storage                    *storage.Storage
+	Users                      *users.Users
+	Message                    *messaging.Messaging
+	Tokens                     *tokens.Tokens
+	DatabaseID                 string
+	UsersCollectionID          string
+	PostsCollectionID          string
+	CommentsCollectionID       string
+	BlockCollectionID          string
+	LikesCollectionID          string
+	FollowCollectionID         string
+	RefreshTokensCollectionID  string
+	FollowRequestsCollectionID string
+	TempOtpCollectionID        string
+	ProfilePicBucketID         string
+	PersonalUsersCollectionID  string
+	AloneUsernameCollectionID  string
+	PersonalDatabaseID         string
+	PersonalProfilePicBucketID string
+	PersonalUsernameKey        []byte
 }
 
 func NewAppwriteService(
@@ -65,28 +65,28 @@ func NewAppwriteService(
 	)
 
 	return &AppwriteService{
-		Account:                   appwrite.NewAccount(c),
-		Database:                  appwrite.NewDatabases(c),
-		TableDb:                   appwrite.NewTablesDB(c),
-		Storage:                   appwrite.NewStorage(c),
-		Users:                     appwrite.NewUsers(c),
-		Message:                   appwrite.NewMessaging(c),
-		Tokens:                    appwrite.NewTokens(c),
-		DatabaseID:                databaseID,
-		UsersCollectionID:         usersCollectionID,
-		PostsCollectionID:         postsCollectionID,
-		CommentsCollectionID:      commentsCollectionID,
-		BlockCollectionID:         blockCollectionID,
-		LikesCollectionID:         likesCollectionID,
-		FollowCollectionID:        followCollectionID,
-		RefreshTokensCollectionID: refreshTokensCollectionID,
+		Account:                    appwrite.NewAccount(c),
+		Database:                   appwrite.NewDatabases(c),
+		TableDb:                    appwrite.NewTablesDB(c),
+		Storage:                    appwrite.NewStorage(c),
+		Users:                      appwrite.NewUsers(c),
+		Message:                    appwrite.NewMessaging(c),
+		Tokens:                     appwrite.NewTokens(c),
+		DatabaseID:                 databaseID,
+		UsersCollectionID:          usersCollectionID,
+		PostsCollectionID:          postsCollectionID,
+		CommentsCollectionID:       commentsCollectionID,
+		BlockCollectionID:          blockCollectionID,
+		LikesCollectionID:          likesCollectionID,
+		FollowCollectionID:         followCollectionID,
+		RefreshTokensCollectionID:  refreshTokensCollectionID,
 		FollowRequestsCollectionID: followRequestsCollectionID,
-		TempOtpCollectionID:       tempOtpCollectionID,
-		ProfilePicBucketID:        profilePicBucketID,
-		PersonalUsersCollectionID: personalUsersCollectionID,
-		AloneUsernameCollectionID: aloneUsernameCollectionID,
-		PersonalDatabaseID:        personalDatabaseID,
-		PersonalUsernameKey:       personalUsernameKey,
+		TempOtpCollectionID:        tempOtpCollectionID,
+		ProfilePicBucketID:         profilePicBucketID,
+		PersonalUsersCollectionID:  personalUsersCollectionID,
+		AloneUsernameCollectionID:  aloneUsernameCollectionID,
+		PersonalDatabaseID:         personalDatabaseID,
+		PersonalUsernameKey:        personalUsernameKey,
 		PersonalProfilePicBucketID: personalProfilePicBucketID,
 	}
 }

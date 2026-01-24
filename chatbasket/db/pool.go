@@ -35,7 +35,6 @@ func NewPool(ctx context.Context, cfg *PostgresConfig) (*pgxpool.Pool, error) {
 		poolCfg.MaxConnLifetimeJitter = cfg.MaxConnLifetimeJitter
 	}
 
-
 	// Create pool with the provided context
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {

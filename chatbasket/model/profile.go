@@ -89,7 +89,6 @@ type UploadUserProfilePictureDbPayload struct {
 	AvatarFileTokens []string `json:"avatarFileTokens,omitempty"` // Tokens for accessing Avatar ["personal_token","personal_token_secret","token_expire"]
 }
 
-
 // response for uploading user profile picture
 type UploadUserProfilePictureResponse struct {
 	AvatarFileId     string   `json:"avatarFileId"`

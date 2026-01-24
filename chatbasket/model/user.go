@@ -1,17 +1,15 @@
 package model
 
 import (
-	"net/http"
 	"github.com/labstack/echo/v4"
+	"net/http"
 )
-
-
 
 // AppwriteUserPayload is the structure for creating/updating user documents in Appwrite.
 // It includes all fields that can be directly set in the database.
 type AppwriteUserPayload struct {
-	Name             string `json:"name"`
-	Email            string `json:"email"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 // 📝 Signup payload (used in signup endpoint)
@@ -29,21 +27,21 @@ type LoginPayload struct {
 
 // 🌐 Public user view (used when others view your profile)
 type PublicUser struct {
-	Id       string `json:"id"`               // Required for linking
-	Username string `json:"username"`         // Public ID
-	Name     string `json:"name"`             // Display name
-	Bio      string `json:"bio,omitempty"`    // Bio (optional)
-	Avatar   string `json:"avatar,omitempty"` // Profile image (optional)
-	HasPendingRequest bool `json:"hasPendingRequest,omitempty"` // 
+	Id                string `json:"id"`                          // Required for linking
+	Username          string `json:"username"`                    // Public ID
+	Name              string `json:"name"`                        // Display name
+	Bio               string `json:"bio,omitempty"`               // Bio (optional)
+	Avatar            string `json:"avatar,omitempty"`            // Profile image (optional)
+	HasPendingRequest bool   `json:"hasPendingRequest,omitempty"` //
 }
 
 // 🧩 Preview user view (used in post/comment cards, follow lists)
 type PreviewPublicUser struct {
-	Id       			string `json:"id"`               				// ID
-	Username 			string `json:"username"`         				// Username
-	Name     			string `json:"name"`             				// Display name
-	Avatar   			string `json:"avatar,omitempty"` 				// Optional avatar
-	HasPendingRequest 	bool   `json:"hasPendingRequest,omitempty"` 	// 
+	Id                string `json:"id"`                          // ID
+	Username          string `json:"username"`                    // Username
+	Name              string `json:"name"`                        // Display name
+	Avatar            string `json:"avatar,omitempty"`            // Optional avatar
+	HasPendingRequest bool   `json:"hasPendingRequest,omitempty"` //
 }
 
 // 📝 Login initial response (used in login endpoint)
@@ -56,29 +54,24 @@ type SignupIntialResponse struct {
 	Status string `json:"status"`
 }
 
-
-
 // SignupSessionResponse is the response structure after successful signup.
 type SessionResponse struct {
-	UserId		  string       `json:"userId"`	
-	Name          string       `json:"name"`
-	Email         string       `json:"email"`
-	SessionID     string       `json:"sessionId"`
-	SessionExpiry string       `json:"sessionExpiry"`
+	UserId        string `json:"userId"`
+	Name          string `json:"name"`
+	Email         string `json:"email"`
+	SessionID     string `json:"sessionId"`
+	SessionExpiry string `json:"sessionExpiry"`
 }
 
-
-
 type AuthVerificationPayload struct {
-	Email  string `json:"email"`
-	Secret string `json:"secret"` // OTP code from email
+	Email    string `json:"email"`
+	Secret   string `json:"secret"` // OTP code from email
 	Platform string `json:"platform"`
 }
 
-
 // 📝 Logout payload
 type LogoutPayload struct {
-	AllSessions bool   `json:"allSessions"`
+	AllSessions bool `json:"allSessions"`
 }
 
 // 📝 Logout response
@@ -86,35 +79,24 @@ type LogoutResponse struct {
 	Status string `json:"status"`
 }
 
-
 type CheckIfUserNameAvailablePayload struct {
 	Username string `json:"username"`
 }
 
-
-
-
-
-// 
+//
 type UpdateEmailVerification struct {
 	Email string `json:"email"`
-	Otp string `json:"otp"`
-} 
+	Otp   string `json:"otp"`
+}
 
-
-//  
+//
 type StatusOkay struct {
-	Status bool `json:"status"`
+	Status  bool   `json:"status"`
 	Message string `json:"message"`
 }
 
-
-
-
-
-
-// 
-type TempOtp struct{
+//
+type TempOtp struct {
 	Id        string `json:"$id"`
 	Email     string `json:"email"`
 	Otp       string `json:"otp"`
@@ -124,27 +106,27 @@ type TempOtp struct{
 	UpdatedAt string `json:"$updatedAt"`
 }
 
-// 
-type TempOtpPayload struct{
+//
+type TempOtpPayload struct {
 	Email     string `json:"email"`
 	Otp       string `json:"otp"`
 	UserId    string `json:"userId"`
 	MessageId string `json:"messageId"`
-} 
+}
 
-// 
-type UpdatePassword struct{
+//
+type UpdatePassword struct {
 	NewPassword string `json:"newPassword"`
 }
 
 // 🔁 Convert full user model → public view
 func ToPublicUser(u *User, hasPendingRequest bool) *PublicUser {
 	return &PublicUser{
-		Id:       u.Id,
-		Username: u.Username,
-		Name:     u.Name,
-		Bio:      u.Bio,
-		Avatar:   u.AvatarFileId,
+		Id:                u.Id,
+		Username:          u.Username,
+		Name:              u.Name,
+		Bio:               u.Bio,
+		Avatar:            u.AvatarFileId,
 		HasPendingRequest: hasPendingRequest,
 	}
 }
@@ -152,16 +134,13 @@ func ToPublicUser(u *User, hasPendingRequest bool) *PublicUser {
 // 🔁 Convert full user model → preview view
 func ToPreviewPublicUser(u *User, hasPendingRequest bool) PreviewPublicUser {
 	return PreviewPublicUser{
-		Id:       u.Id,
-		Username: u.Username,
-		Name:     u.Name,
-		Avatar:   u.AvatarFileId,
+		Id:                u.Id,
+		Username:          u.Username,
+		Name:              u.Name,
+		Avatar:            u.AvatarFileId,
 		HasPendingRequest: hasPendingRequest,
-
 	}
 }
-
-
 
 // ✅ Check if user's profile is viewable by the current viewer
 func CanViewUserProfile(user User, viewerId string, isFollower bool) bool {
@@ -189,4 +168,3 @@ func CheckIfUserBlocked(user *User) error {
 	}
 	return nil
 }
-

@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: personal_contacts.sql
 
-package postgresCode
+package personal
 
 import (
 	"context"

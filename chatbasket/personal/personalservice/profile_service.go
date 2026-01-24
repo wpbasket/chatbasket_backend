@@ -1,7 +1,7 @@
 package personalservice
 
 import (
-	"chatbasket/db/postgresCode"
+	"chatbasket/internal/db/personal"
 	"chatbasket/model"
 	personalmodel "chatbasket/personal/personalmodel"
 	personalutils "chatbasket/personal/personalutils"
@@ -33,7 +33,7 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 		}
 
 		// Delete all tokens for this user
-		err = ps.Queries.DeleteUserTokens(ctx, userId.UuidUserId)
+		err = ps.PersonalQueries.DeleteUserTokens(ctx, userId.UuidUserId)
 		if err != nil {
 			// Log error but don't fail the logout
 			// Tokens will be cleaned up by periodic cleanup job
@@ -55,7 +55,7 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 			// Log error but don't fail the logout
 			// Skip token deactivation if hashing fails
 		} else {
-			err = ps.Queries.DeleteSessionTokens(ctx, postgresCode.DeleteSessionTokensParams{
+			err = ps.PersonalQueries.DeleteSessionTokens(ctx, personal.DeleteSessionTokensParams{
 				Sha256HexSessionID: hashedSessionId,
 				UserID:             userId.UuidUserId,
 			})
@@ -77,7 +77,7 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *personalmodel
 		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid user id", Type: "bad_request"}
 	}
 	// check if user profile already exists
-	res, err := ps.Queries.IsUserExists(ctx, userId.UuidUserId)
+	res, err := ps.PersonalQueries.IsUserExists(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -102,14 +102,14 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *personalmodel
 	}
 
 	// create user profile in db separate
-	dbPayload := postgresCode.CreateUserParams{
+	dbPayload := personal.CreateUserParams{
 		ID:                                userId.UuidUserId,
 		HmacSha256HexUsername:             sha256Username,
 		B64CipherChacha20poly1305Username: b64CipherChacha20Poly1305Username,
 		Name:                              payload.Name,
 		ProfileType:                       payload.ProfileType,
 	}
-	responseUser, err := ps.Queries.CreateUser(ctx, dbPayload)
+	responseUser, err := ps.PersonalQueries.CreateUser(ctx, dbPayload)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -119,11 +119,11 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *personalmodel
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to generate uuid", Type: "internal_server_error"}
 	}
-	aloneUsernameDbPayload := postgresCode.CreateAloneUsernameParams{
+	aloneUsernameDbPayload := personal.CreateAloneUsernameParams{
 		ID:       rdmUUID,
 		Username: generatedUsername,
 	}
-	_, err = ps.Queries.CreateAloneUsername(ctx, aloneUsernameDbPayload)
+	_, err = ps.PersonalQueries.CreateAloneUsername(ctx, aloneUsernameDbPayload)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to create alone username", Type: "internal_server_error"}
 	}
@@ -133,7 +133,7 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *personalmodel
 
 func (ps *Service) GetProfile(ctx context.Context, userId model.UserId, email string) (*personalmodel.PrivateUser, *model.ApiError) {
 	// get user profile from db
-	profile, err := ps.Queries.GetUserProfile(ctx, userId.UuidUserId)
+	profile, err := ps.PersonalQueries.GetUserProfile(ctx, userId.UuidUserId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, &model.ApiError{Code: http.StatusNotFound, Message: err.Error(), Type: "not_found"}
@@ -160,7 +160,7 @@ func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.F
 		return nil, &model.ApiError{Code: 400, Message: "no file provided", Type: "bad_request"}
 	}
 	// check if user profile pic exists and if it exists, delete it
-	resUser, err := ps.Queries.IsUserProfilePicExists(ctx, userId.UuidUserId)
+	resUser, err := ps.PersonalQueries.IsUserProfilePicExists(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: 500, Message: "Failed to check user profile pic: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -210,7 +210,7 @@ func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.F
 		if err != nil {
 			return nil, &model.ApiError{Code: 500, Message: "Failed to generate uuid", Type: "internal_server_error"}
 		}
-		_, err = ps.Queries.CreateAvatar(ctx, postgresCode.CreateAvatarParams{
+		_, err = ps.PersonalQueries.CreateAvatar(ctx, personal.CreateAvatarParams{
 			ID:          rdmUUID,
 			UserID:      userId.UuidUserId,
 			FileID:      result.FileId,
@@ -225,7 +225,7 @@ func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.F
 	}
 
 	if resUser {
-		_, err := ps.Queries.UpdateAvatarTokens(ctx, postgresCode.UpdateAvatarTokensParams{
+		_, err := ps.PersonalQueries.UpdateAvatarTokens(ctx, personal.UpdateAvatarTokensParams{
 			UserID:      userId.UuidUserId,
 			TokenID:     &result.TokenIDs[0],
 			TokenSecret: &result.TokenSecrets[0],
@@ -240,7 +240,7 @@ func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.F
 }
 
 func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
-	resUser, err := ps.Queries.IsUserProfilePicExists(ctx, userId.UuidUserId)
+	resUser, err := ps.PersonalQueries.IsUserProfilePicExists(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: 500, Message: "Failed to check user profile pic: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -263,7 +263,7 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId model.Us
 
 	if checkExistInStorage.Total == 0 {
 		if resUser {
-			err = ps.Queries.DeleteAvatar(ctx, userId.UuidUserId)
+			err = ps.PersonalQueries.DeleteAvatar(ctx, userId.UuidUserId)
 			if err != nil {
 				return nil, &model.ApiError{Code: 500, Message: "Failed to delete avatar from database: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 			}
@@ -312,7 +312,7 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId model.Us
 
 	if resUser {
 		// Delete the avatar from the database
-		err = ps.Queries.DeleteAvatar(ctx, userId.UuidUserId)
+		err = ps.PersonalQueries.DeleteAvatar(ctx, userId.UuidUserId)
 		if err != nil {
 			return nil, &model.ApiError{Code: 500, Message: "Failed to delete avatar from database: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 		}
@@ -322,7 +322,7 @@ func (ps *Service) RemoveUserProfilePicture(ctx context.Context, userId model.Us
 }
 
 func (ps *Service) UpdateUserProfile(ctx context.Context, payload *personalmodel.UpdateUserProfilePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
-	_, err := ps.Queries.UpdateUserProfile(ctx, postgresCode.UpdateUserProfileParams{
+	_, err := ps.PersonalQueries.UpdateUserProfile(ctx, personal.UpdateUserProfileParams{
 		ID:          userId.UuidUserId,
 		Name:        payload.Name,
 		Bio:         payload.Bio,
@@ -358,7 +358,7 @@ func (ps *Service) RegisterOrUpdateFcmOrApnToken(ctx context.Context, payload *p
 
 	// Upsert the token in the database
 	// If a token already exists for this (session_id, user_id, type), it will be updated
-	_, err = ps.Queries.UpsertToken(ctx, postgresCode.UpsertTokenParams{
+	_, err = ps.PersonalQueries.UpsertToken(ctx, personal.UpsertTokenParams{
 		ID:                 tokenId,
 		UserID:             userId.UuidUserId,
 		Sha256HexSessionID: hashedSessionId,

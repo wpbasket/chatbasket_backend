@@ -10,7 +10,6 @@ type Block struct {
 	UpdatedAt string `json:"$updatedAt"`       // Timestamp of last update
 }
 
-
 // BlockView is used in frontend to show blocked users with details
 type BlockView struct {
 	User      PreviewPublicUser `json:"user"`      // The blocked user's public preview
@@ -36,4 +35,3 @@ func IsUserBlocked(blocks []Block, blockerId, blockedId string) bool {
 	}
 	return false
 }
-

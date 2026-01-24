@@ -9,6 +9,6 @@ type Documents[T any] struct {
 }
 
 type UserId struct {
-	StringUserId     string     
-	UuidUserId       uuid.UUID  
+	StringUserId string
+	UuidUserId   uuid.UUID
 }

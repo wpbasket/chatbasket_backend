@@ -5,25 +5,25 @@ import (
 )
 
 type appwriteConfig struct {
-	Endpoint                        string
-	ProjectID                       string
-	ApiKey                          string
-	DatabaseID                      string
-	UsersCollectionID               string
-	PostsCollectionID               string
-	CommentsCollectionID            string
-	BlockCollectionID               string
-	LikesCollectionID               string
-	FollowCollectionID              string
-	RefreshTokensCollectionID       string
-	FollowRequestsCollectionID      string
-	TempOtpCollectionID             string
-	FileUserProfilePicBucketID      string
-	PersonalUsersCollectionID       string
+	Endpoint                          string
+	ProjectID                         string
+	ApiKey                            string
+	DatabaseID                        string
+	UsersCollectionID                 string
+	PostsCollectionID                 string
+	CommentsCollectionID              string
+	BlockCollectionID                 string
+	LikesCollectionID                 string
+	FollowCollectionID                string
+	RefreshTokensCollectionID         string
+	FollowRequestsCollectionID        string
+	TempOtpCollectionID               string
+	FileUserProfilePicBucketID        string
+	PersonalUsersCollectionID         string
 	PersonalAloneUsernameCollectionID string
-	PersonalDatabaseID              string
-	PersonalProfilePicBucketID      string
-	PersonalUsernameKey             []byte
+	PersonalDatabaseID                string
+	PersonalProfilePicBucketID        string
+	PersonalUsernameKey               []byte
 }
 
 func loadAppwriteConfig() (*appwriteConfig, error) {

@@ -94,7 +94,7 @@ func (h *UserHandler) AcountVerification(c echo.Context) error {
 			Secure:   true,
 			SameSite: http.SameSiteNoneMode,
 			// Domain:   "localhost:8081",
-			Domain:   "chatbasket.me",
+			Domain:  "chatbasket.me",
 			Expires: expiry,
 		}
 
@@ -171,7 +171,7 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 			Secure:   true,
 			SameSite: http.SameSiteNoneMode,
 			// Domain:   "localhost:8081",
-			Domain:   "chatbasket.me",
+			Domain:  "chatbasket.me",
 			Expires: expiry,
 		}
 
@@ -183,7 +183,7 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 			Secure:   true,
 			SameSite: http.SameSiteNoneMode,
 			// Domain:   "localhost:8081",
-			Domain:   "chatbasket.me",
+			Domain:  "chatbasket.me",
 			Expires: expiry,
 		}
 

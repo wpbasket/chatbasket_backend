@@ -38,9 +38,9 @@ func StringToUUID(id string) (uuid.UUID, error) {
 
 // AppwriteFileData represents the data needed to construct an appwrite file URI
 type AppwriteFileData struct {
-	FileId     *string   `json:"fileId"`
-	FileToken  *string   `json:"fileToken"`
-	FileSecret *string   `json:"fileSecret"`
+	FileId     *string `json:"fileId"`
+	FileToken  *string `json:"fileToken"`
+	FileSecret *string `json:"fileSecret"`
 }
 
 // BuildAvatarURI constructs the avatar URL from AppwriteFileData

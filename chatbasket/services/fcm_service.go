@@ -76,7 +76,7 @@ func (f *FCMService) SendNotificationToMultipleTokens(ctx context.Context, token
 	}
 
 	log.Printf("✅ Successfully sent FCM multicast notification. Success: %d, Failure: %d", response.SuccessCount, response.FailureCount)
-	
+
 	// Log any failures
 	if response.FailureCount > 0 {
 		for idx, resp := range response.Responses {

@@ -5,7 +5,7 @@ type Comment struct {
 	Id             string   `json:"$id"`                      // Appwrite document ID
 	PostId         string   `json:"postId"`                   // Linked post ID
 	UserId         string   `json:"userId"`                   // Commenter's user ID
-	Content        string   `json:"content,omitempty"`           // Comment content
+	Content        string   `json:"content,omitempty"`        // Comment content
 	Images         []string `json:"images,omitempty"`         // Optional attached images
 	BlockedByOwner bool     `json:"blockedByOwner,omitempty"` // ✅ Hidden by post owner
 	BlockedByAdmin bool     `json:"blockedByAdmin,omitempty"` // ✅ Hidden by admin/moderator
@@ -15,12 +15,12 @@ type Comment struct {
 
 // 🌐 PublicComment is the version sent to frontend with author info
 type PublicComment struct {
-	Id        string            `json:"id"`           // Comment ID
-	Content   string            `json:"content"`         // Comment content
+	Id        string            `json:"id"`      // Comment ID
+	Content   string            `json:"content"` // Comment content
 	Images    []string          `json:"images,omitempty"`
-	Author    PreviewPublicUser `json:"author"`       // Minimal author info
-	CreatedAt string            `json:"createdAt"`    // Timestamp
-	UpdatedAt string            `json:"updatedAt"`    // Last edit time
+	Author    PreviewPublicUser `json:"author"`    // Minimal author info
+	CreatedAt string            `json:"createdAt"` // Timestamp
+	UpdatedAt string            `json:"updatedAt"` // Last edit time
 }
 
 // 🔁 ToPublicComment transforms internal comment + author to frontend version

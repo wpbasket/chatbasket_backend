@@ -1,7 +1,7 @@
 package personalservice
 
 import (
-	"chatbasket/db/postgresCode"
+	"chatbasket/internal/db/personal"
 	"chatbasket/model"
 	"chatbasket/services"
 	"chatbasket/utils"
@@ -68,7 +68,7 @@ func (ps *Service) buildAvatarURL(
 			}
 		}
 
-		_, err = ps.Queries.UpdateAvatarTokens(ctx, postgresCode.UpdateAvatarTokensParams{
+		_, err = ps.PersonalQueries.UpdateAvatarTokens(ctx, personal.UpdateAvatarTokensParams{
 			UserID:      ownerID,
 			TokenID:     &tok.Id,
 			TokenSecret: &tok.Secret,

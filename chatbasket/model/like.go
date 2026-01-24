@@ -35,4 +35,3 @@ func ToPublicLike(like Like, user PreviewPublicUser) PublicLike {
 		CreatedAt: like.CreatedAt,
 	}
 }
-

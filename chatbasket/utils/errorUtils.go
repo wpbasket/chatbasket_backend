@@ -18,7 +18,7 @@ type PostgresError struct {
 	PgError *pgconn.PgError
 }
 
-func GetPostgresError(err error) (*PostgresError) {
+func GetPostgresError(err error) *PostgresError {
 	if err == nil {
 		return nil
 	}

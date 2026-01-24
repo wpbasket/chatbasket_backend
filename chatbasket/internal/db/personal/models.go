@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package postgresCode
+package personal
 
 import (
 	"github.com/google/uuid"

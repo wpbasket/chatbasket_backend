@@ -2,8 +2,8 @@ package utils
 
 import (
 	"crypto/rand"
-	"time"
 	"github.com/alexedwards/argon2id"
+	"time"
 )
 
 // GenerateOTP generates a secure 6-digit numeric OTP
@@ -29,7 +29,6 @@ func HashOTP(otp string) (string, error) {
 func VerifyOTP(plainOTP, hashedOTP string) (bool, error) {
 	return argon2id.ComparePasswordAndHash(plainOTP, hashedOTP)
 }
-
 
 // IsExpiredOTP checks if the OTP is expired based on createdAt and duration (in minutes)
 func IsExpiredOTP(createdAt time.Time, validMinutes int) bool {

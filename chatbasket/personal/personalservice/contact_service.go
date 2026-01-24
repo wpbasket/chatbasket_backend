@@ -1,7 +1,7 @@
 package personalservice
 
 import (
-	"chatbasket/db/postgresCode"
+	"chatbasket/internal/db/personal"
 	"chatbasket/model"
 	personalmodel "chatbasket/personal/personalmodel"
 	"chatbasket/utils"
@@ -18,7 +18,7 @@ func (ps *Service) GetContacts(ctx context.Context, userId model.UserId) (*perso
 	/*
 		DB call to get user's contacts
 	*/
-	myContacts, err := ps.Queries.GetUserContacts(ctx, userId.UuidUserId)
+	myContacts, err := ps.PersonalQueries.GetUserContacts(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -26,7 +26,7 @@ func (ps *Service) GetContacts(ctx context.Context, userId model.UserId) (*perso
 	/*
 		DB call to get users who added you
 	*/
-	addedMe, err := ps.Queries.GetUsersWhoAddedYou(ctx, userId.UuidUserId)
+	addedMe, err := ps.PersonalQueries.GetUsersWhoAddedYou(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -177,7 +177,7 @@ func (ps *Service) CheckContactExistance(ctx context.Context, payload *personalm
 	/*
 		DB call to get user by hashed username
 	*/
-	user, err := ps.Queries.GetUserByHashedUsername(ctx, hashContactUsername)
+	user, err := ps.PersonalQueries.GetUserByHashedUsername(ctx, hashContactUsername)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return &personalmodel.CheckContactExistanceResponse{Exists: false}, nil
@@ -225,7 +225,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 	/*
 		DB call to check if user is admin-blocked
 	*/
-	isMeAdminBlocked, err := ps.Queries.IsUserAdminBlocked(ctx, userId.UuidUserId)
+	isMeAdminBlocked, err := ps.PersonalQueries.IsUserAdminBlocked(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -236,7 +236,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 	/*
 		DB call to get target user's core profile
 	*/
-	targetProfile, err := ps.Queries.GetUserCoreProfile(ctx, targetUUID)
+	targetProfile, err := ps.PersonalQueries.GetUserCoreProfile(ctx, targetUUID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, &model.ApiError{Code: http.StatusNotFound, Message: "user_not_found", Type: "not_found"}
@@ -253,7 +253,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		DB call to check if users are mutually blocked
 	*/
 	var blockStatus int32
-	blockStatus, err = ps.Queries.IsEitherBlocked(ctx, postgresCode.IsEitherBlockedParams{
+	blockStatus, err = ps.PersonalQueries.IsEitherBlocked(ctx, personal.IsEitherBlockedParams{
 		BlockerUserID: userId.UuidUserId,
 		BlockedUserID: targetUUID,
 	})
@@ -274,7 +274,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 	/*
 		DB call to check if already a contact
 	*/
-	alreadyContact, err := ps.Queries.IsAlreadyContact(ctx, postgresCode.IsAlreadyContactParams{
+	alreadyContact, err := ps.PersonalQueries.IsAlreadyContact(ctx, personal.IsAlreadyContactParams{
 		OwnerUserID:   userId.UuidUserId,
 		ContactUserID: targetUUID,
 	})
@@ -306,7 +306,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		/*
 			DB call to add contact
 		*/
-		err = ps.Queries.InsertUserContact(ctx, postgresCode.InsertUserContactParams{
+		err = ps.PersonalQueries.InsertUserContact(ctx, personal.InsertUserContactParams{
 			OwnerUserID:   userId.UuidUserId,
 			ContactUserID: targetUUID,
 			Nickname:      nickname,
@@ -316,7 +316,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		}
 		return &model.StatusOkay{Status: true, Message: "public_contact_added"}, nil
 	case "personal":
-		targetAlreadyHasMe, err := ps.Queries.IsAlreadyContact(ctx, postgresCode.IsAlreadyContactParams{
+		targetAlreadyHasMe, err := ps.PersonalQueries.IsAlreadyContact(ctx, personal.IsAlreadyContactParams{
 			OwnerUserID:   targetUUID,
 			ContactUserID: userId.UuidUserId,
 		})
@@ -324,7 +324,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 			return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 		}
 		if targetAlreadyHasMe {
-			err = ps.Queries.InsertUserContact(ctx, postgresCode.InsertUserContactParams{
+			err = ps.PersonalQueries.InsertUserContact(ctx, personal.InsertUserContactParams{
 				OwnerUserID:   userId.UuidUserId,
 				ContactUserID: targetUUID,
 				Nickname:      nickname,
@@ -338,7 +338,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		/*
 			DB call to check for existing request status
 		*/
-		requestStatus, err := ps.Queries.GetContactRequestStatus(ctx, postgresCode.GetContactRequestStatusParams{
+		requestStatus, err := ps.PersonalQueries.GetContactRequestStatus(ctx, personal.GetContactRequestStatusParams{
 			RequesterUserID: userId.UuidUserId,
 			ReceiverUserID:  targetUUID,
 		})
@@ -363,7 +363,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 			/*
 				DB call to delete old request and insert new contact request
 			*/
-			err = ps.Queries.DeleteAndInsertContactRequest(ctx, postgresCode.DeleteAndInsertContactRequestParams{
+			err = ps.PersonalQueries.DeleteAndInsertContactRequest(ctx, personal.DeleteAndInsertContactRequestParams{
 				ID:              reqID,
 				RequesterUserID: userId.UuidUserId,
 				ReceiverUserID:  targetUUID,
@@ -379,7 +379,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 		/*
 			DB call to insert contact request
 		*/
-		err = ps.Queries.InsertContactRequest(ctx, postgresCode.InsertContactRequestParams{
+		err = ps.PersonalQueries.InsertContactRequest(ctx, personal.InsertContactRequestParams{
 			ID:              reqID,
 			RequesterUserID: userId.UuidUserId,
 			ReceiverUserID:  targetUUID,
@@ -408,7 +408,7 @@ func (ps *Service) AcceptContactRequest(ctx context.Context, payload *personalmo
 		return nil, &model.ApiError{Code: http.StatusConflict, Message: "self_action_not_allowed", Type: "conflict"}
 	}
 
-	result, err := ps.Queries.AcceptContactRequest(ctx, postgresCode.AcceptContactRequestParams{
+	result, err := ps.PersonalQueries.AcceptContactRequest(ctx, personal.AcceptContactRequestParams{
 		RequesterUserID: requesterUUID,
 		ReceiverUserID:  userId.UuidUserId,
 	})
@@ -443,7 +443,7 @@ func (ps *Service) RejectContactRequest(ctx context.Context, payload *personalmo
 		return nil, &model.ApiError{Code: http.StatusConflict, Message: "self_action_not_allowed", Type: "conflict"}
 	}
 
-	result, err := ps.Queries.RejectContactRequest(ctx, postgresCode.RejectContactRequestParams{
+	result, err := ps.PersonalQueries.RejectContactRequest(ctx, personal.RejectContactRequestParams{
 		RequesterUserID: requesterUUID,
 		ReceiverUserID:  userId.UuidUserId,
 	})
@@ -497,7 +497,7 @@ func (ps *Service) DeleteContact(ctx context.Context, payload *personalmodel.Del
 		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid request payload", Type: "bad_request"}
 	}
 
-	removed, err := ps.Queries.DeleteContact(ctx, postgresCode.DeleteContactParams{
+	removed, err := ps.PersonalQueries.DeleteContact(ctx, personal.DeleteContactParams{
 		OwnerUserID:    userId.UuidUserId,
 		ContactUserIds: uniqIDs,
 	})
@@ -533,7 +533,7 @@ func (ps *Service) UndoContactRequest(ctx context.Context, payload *personalmode
 		return nil, &model.ApiError{Code: http.StatusConflict, Message: "self_action_not_allowed", Type: "conflict"}
 	}
 
-	result, err := ps.Queries.UndoContactRequest(ctx, postgresCode.UndoContactRequestParams{
+	result, err := ps.PersonalQueries.UndoContactRequest(ctx, personal.UndoContactRequestParams{
 		RequesterUserID: userId.UuidUserId,
 		ReceiverUserID:  receiverUUID,
 	})
@@ -569,7 +569,7 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 	}
 
 	// Fetch viewer's contacts so we can reuse their own nicknames for pending requests
-	myContacts, err := ps.Queries.GetUserContacts(ctx, userId.UuidUserId)
+	myContacts, err := ps.PersonalQueries.GetUserContacts(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -578,7 +578,7 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 		myNicknameByID[c.ID.String()] = c.Nickname
 	}
 
-	transformPending := func(rows []postgresCode.GetPendingContactRequestsRow) ([]personalmodel.PendingContactRequest, *model.ApiError) {
+	transformPending := func(rows []personal.GetPendingContactRequestsRow) ([]personalmodel.PendingContactRequest, *model.ApiError) {
 		requests := make([]personalmodel.PendingContactRequest, 0, len(rows))
 		for _, r := range rows {
 			username := ""
@@ -630,7 +630,7 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 		return requests, nil
 	}
 
-	transformSent := func(rows []postgresCode.GetSentContactRequestsRow) ([]personalmodel.SentContactRequest, *model.ApiError) {
+	transformSent := func(rows []personal.GetSentContactRequestsRow) ([]personalmodel.SentContactRequest, *model.ApiError) {
 		records := make([]personalmodel.SentContactRequest, 0, len(rows))
 		for _, r := range rows {
 			username := ""
@@ -676,12 +676,12 @@ func (ps *Service) GetContactRequests(ctx context.Context, userId model.UserId) 
 		return records, nil
 	}
 
-	pendingRows, err := ps.Queries.GetPendingContactRequests(ctx, userId.UuidUserId)
+	pendingRows, err := ps.PersonalQueries.GetPendingContactRequests(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
 
-	sentRows, err := ps.Queries.GetSentContactRequests(ctx, userId.UuidUserId)
+	sentRows, err := ps.PersonalQueries.GetSentContactRequests(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
@@ -728,7 +728,7 @@ func (ps *Service) UpdateContactNickname(ctx context.Context, payload *personalm
 		}
 	}
 
-	_, err = ps.Queries.UpdateContactNickname(ctx, postgresCode.UpdateContactNicknameParams{
+	_, err = ps.PersonalQueries.UpdateContactNickname(ctx, personal.UpdateContactNicknameParams{
 		OwnerUserID:   userId.UuidUserId,
 		ContactUserID: contactUUID,
 		Nickname:      nickname,
@@ -757,7 +757,7 @@ func (ps *Service) RemoveContactNickname(ctx context.Context, payload *personalm
 		return nil, &model.ApiError{Code: http.StatusConflict, Message: "self_action_not_allowed", Type: "conflict"}
 	}
 
-	_, err = ps.Queries.UpdateContactNickname(ctx, postgresCode.UpdateContactNicknameParams{
+	_, err = ps.PersonalQueries.UpdateContactNickname(ctx, personal.UpdateContactNicknameParams{
 		OwnerUserID:   userId.UuidUserId,
 		ContactUserID: contactUUID,
 		Nickname:      nil,
