@@ -21,7 +21,7 @@ import (
 
 func main() {
 	e := echo.New()
-	e.Logger.SetLevel(log.ERROR)
+	e.Logger.SetLevel(log.INFO)
 	e.HideBanner = true
 	e.Pre(middleware.RemoveTrailingSlash())
 	e.Use(middleware.Recover())
