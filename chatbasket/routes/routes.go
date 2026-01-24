@@ -5,6 +5,7 @@ import (
 	"chatbasket/handler"
 	"chatbasket/services"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 )
@@ -12,7 +13,7 @@ import (
 func RegisterRoutes(
 	e *echo.Echo,
 	pool *pgxpool.Pool,
-	// add more services as needed...
+	cosmosClient *azcosmos.Client, // Added Cosmos Client injection
 ) {
 
 	cfg, err := loadAppwriteConfig()
@@ -42,7 +43,7 @@ func RegisterRoutes(
 		cfg.PersonalUsernameKey,
 	)
 
-	globalService := services.NewGlobalService(as, pool)
+	globalService := services.NewGlobalService(as, pool, cosmosClient)
 	userHandler := handler.NewUserHandler(globalService)
 
 	// Auth Routes (shared across domains)

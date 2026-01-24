@@ -83,19 +83,16 @@ type CheckIfUserNameAvailablePayload struct {
 	Username string `json:"username"`
 }
 
-//
 type UpdateEmailVerification struct {
 	Email string `json:"email"`
 	Otp   string `json:"otp"`
 }
 
-//
 type StatusOkay struct {
 	Status  bool   `json:"status"`
 	Message string `json:"message"`
 }
 
-//
 type TempOtp struct {
 	Id        string `json:"$id"`
 	Email     string `json:"email"`
@@ -106,7 +103,6 @@ type TempOtp struct {
 	UpdatedAt string `json:"$updatedAt"`
 }
 
-//
 type TempOtpPayload struct {
 	Email     string `json:"email"`
 	Otp       string `json:"otp"`
@@ -114,7 +110,6 @@ type TempOtpPayload struct {
 	MessageId string `json:"messageId"`
 }
 
-//
 type UpdatePassword struct {
 	NewPassword string `json:"newPassword"`
 }

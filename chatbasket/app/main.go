@@ -12,7 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	// "github.com/joho/godotenv"
+	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
+	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -40,10 +41,12 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	// err := godotenv.Load("../.env")
-	// if err != nil {
-	// 	e.Logger.Fatal("Error loading .env file", err)
-	// }
+	// Try loading .env files, but don't fail if missing (production uses real env vars)
+	if err := godotenv.Load(".env"); err != nil {
+		if err := godotenv.Load("../.env"); err != nil {
+			e.Logger.Warn("No .env file found, using system environment variables")
+		}
+	}
 
 	// Initialize Firebase
 	firebaseCtx, firebaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -69,6 +72,22 @@ func main() {
 		e.Logger.Fatal("failed to connect to postgres: " + err.Error())
 	}
 
+	// Initialize Azure Cosmos DB (NoSQL API)
+	var cosmosClient *azcosmos.Client // Define variable in outer scope
+	cosmosCfg, err := db.LoadCosmosConfig()
+	if err != nil {
+		log.Printf("⚠️  Cosmos DB config issue: %v\n", err)
+	} else {
+		// Initialize Cosmos DB Client
+		var clientErr error
+		cosmosClient, clientErr = db.NewCosmosClient(cosmosCfg)
+		if clientErr != nil {
+			log.Printf("⚠️  Cosmos DB client creation failed: %v\n", clientErr)
+		} else {
+			log.Printf("✅ Cosmos DB client initialized successfully (Database: %s)", cosmosCfg.Database)
+		}
+	}
+
 	e.GET("/healthz", func(c echo.Context) error {
 		pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
 		defer cancel()
@@ -78,7 +97,7 @@ func main() {
 		return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "ok"})
 	})
 
-	routes.RegisterRoutes(e, pool)
+	routes.RegisterRoutes(e, pool, cosmosClient)
 
 	e.GET("/", hello)
 	port := os.Getenv("PORT")

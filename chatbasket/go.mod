@@ -6,6 +6,7 @@ require (
 	firebase.google.com/go/v4 v4.18.0
 	github.com/alexedwards/argon2id v1.0.0
 	github.com/jackc/pgx/v5 v5.7.6
+	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.4
 	golang.org/x/oauth2 v0.34.0
 	google.golang.org/api v0.259.0
@@ -22,6 +23,9 @@ require (
 	cloud.google.com/go/longrunning v0.7.0 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
 	cloud.google.com/go/storage v1.56.0 // indirect
+	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.1 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.53.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.53.0 // indirect
@@ -63,6 +67,7 @@ require (
 )
 
 require (
+	github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos v1.4.2
 	github.com/appwrite/sdk-for-go v0.15.0
 	github.com/google/uuid v1.6.0
 	github.com/labstack/gommon v0.4.2
