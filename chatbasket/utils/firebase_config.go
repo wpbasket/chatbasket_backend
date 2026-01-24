@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -24,19 +25,40 @@ var (
 // This should be called once during application startup
 func InitializeFirebase(ctx context.Context) error {
 	once.Do(func() {
-		// Hardcoded service account path
+		var serviceAccountBytes []byte
+		var err error
+
+		// Hardcoded service account filename
 		filename := "chatbasket-207b6-firebase-adminsdk-fbsvc-360aca9832.json"
 
-		// Try current directory first
-		serviceAccountBytes, err := os.ReadFile(filename)
+		// Try file first (for local development)
+		serviceAccountBytes, err = os.ReadFile(filename)
 		if err != nil {
 			// Try parent directory
 			serviceAccountBytes, err = os.ReadFile("../" + filename)
 			if err != nil {
-				// Try absolute path if we can guess, or just fail
-				initErr = fmt.Errorf("failed to read service account file (checked . and ..): %w", err)
-				return
+				// File not found, try environment variable (for Heroku/production)
+				firebaseCredsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON")
+				
+				if firebaseCredsJSON == "" {
+					initErr = fmt.Errorf("Firebase credentials not found: no file '%s' and no FIREBASE_CREDENTIALS_JSON env var", filename)
+					return
+				}
+				
+				serviceAccountBytes = []byte(firebaseCredsJSON)
+				log.Println("📍 Using Firebase credentials from environment variable")
+			} else {
+				log.Println("📍 Using Firebase credentials from file (parent directory)")
 			}
+		} else {
+			log.Println("📍 Using Firebase credentials from file (current directory)")
+		}
+
+		// Validate JSON format
+		var jsonCheck map[string]interface{}
+		if err := json.Unmarshal(serviceAccountBytes, &jsonCheck); err != nil {
+			initErr = fmt.Errorf("invalid Firebase credentials JSON: %w", err)
+			return
 		}
 
 		// Parse credentials explicitly to avoid deprecation warnings
@@ -62,7 +84,6 @@ func InitializeFirebase(ctx context.Context) error {
 			return
 		}
 
-		log.Println("✅ Firebase initialized successfully")
 	})
 
 	return initErr
