@@ -1,4 +1,4 @@
-package personalServices
+package personalservice
 
 import (
 	"chatbasket/db/postgresCode"

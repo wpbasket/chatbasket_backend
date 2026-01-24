@@ -1,9 +1,9 @@
-package personalServices
+package personalservice
 
 import (
 	"chatbasket/db/postgresCode"
 	"chatbasket/model"
-	personalmodel "chatbasket/personalModel"
+	personalmodel "chatbasket/personal/personalmodel"
 	"chatbasket/utils"
 	"context"
 	"net/http"

@@ -1,24 +1,24 @@
-package publicHandler
+package publichandler
 
 import (
 	"chatbasket/model"
-	"chatbasket/publicServices"
+	"chatbasket/public/publicservice"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 )
 
 type SettingHandler struct {
-	Service *publicServices.Service
+	Service *publicservice.Service
 }
 
-func NewSettingHandler(service *publicServices.Service) *SettingHandler {
+func NewSettingHandler(service *publicservice.Service) *SettingHandler {
 	return &SettingHandler{Service: service}
 }
 
-func (h *SettingHandler) UpdateEmail(c echo.Context) error{
+func (h *SettingHandler) UpdateEmail(c echo.Context) error {
 	var payload model.UpdateEmailPayload
-	if err := c.Bind(&payload); err != nil {	
+	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, "Invalid email payload")
 	}
 	userId, ok := c.Get("userId").(string)
@@ -29,18 +29,17 @@ func (h *SettingHandler) UpdateEmail(c echo.Context) error{
 			Type:    "internal_server_error",
 		})
 	}
-	
-	user, err := h.Service.UpdateEmail(c.Request().Context(), &payload, userId)	
+
+	user, err := h.Service.UpdateEmail(c.Request().Context(), &payload, userId)
 	if err != nil {
 		return c.JSON(err.Code, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, user)
 
 }
 
-
-func (h *SettingHandler) UpdateEmailVerification(c echo.Context) error{
+func (h *SettingHandler) UpdateEmailVerification(c echo.Context) error {
 	var payload model.UpdateEmailVerification
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, "Invalid email payload")
@@ -53,17 +52,16 @@ func (h *SettingHandler) UpdateEmailVerification(c echo.Context) error{
 			Type:    "internal_server_error",
 		})
 	}
-	
+
 	user, err := h.Service.UpdateEmailVerification(c.Request().Context(), &payload, userId)
 	if err != nil {
 		return c.JSON(err.Code, err)
 	}
-	
+
 	return c.JSON(http.StatusOK, user)
 }
 
-
-func (h *SettingHandler) UpdatePassword(c echo.Context) error{
+func (h *SettingHandler) UpdatePassword(c echo.Context) error {
 	var payload model.UpdatePassword
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, "Invalid password payload")
@@ -76,18 +74,18 @@ func (h *SettingHandler) UpdatePassword(c echo.Context) error{
 			Type:    "internal_server_error",
 		})
 	}
-	
+
 	user, err := h.Service.UpdatePassword(c.Request().Context(), &payload, userId)
 	if err != nil {
 		return c.JSON(err.Code, err)
 	}
-	
-	return c.JSON(http.StatusOK, user)	
+
+	return c.JSON(http.StatusOK, user)
 }
 
-func (h *SettingHandler) SendOtp(c echo.Context) error{
+func (h *SettingHandler) SendOtp(c echo.Context) error {
 	var payload model.SendOtpPayload
-	if err:= c.Bind(&payload); err != nil {
+	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, "Invalid OTP payload")
 	}
 	userId, ok := c.Get("userId").(string)
@@ -116,9 +114,9 @@ func (h *SettingHandler) SendOtp(c echo.Context) error{
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *SettingHandler) VerifyOtp(c echo.Context) error{
+func (h *SettingHandler) VerifyOtp(c echo.Context) error {
 	var payload model.OtpVerificationPayload
-	if err:= c.Bind(&payload); err != nil {
+	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, "Invalid OTP payload")
 	}
 	userId, ok := c.Get("userId").(string)

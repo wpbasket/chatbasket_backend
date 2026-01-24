@@ -1,4 +1,4 @@
-package personalServices
+package personalservice
 
 // import (
 // 	"chatbasket/model"
@@ -6,4 +6,4 @@ package personalServices
 // 	"net/http"
 // )
 
-// func 
+// func

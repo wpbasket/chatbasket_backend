@@ -1,8 +1,8 @@
-package publicHandler
+package publichandler
 
 import (
 	"chatbasket/model"
-	"chatbasket/publicServices"
+	"chatbasket/public/publicservice"
 	"net/http"
 	"strings"
 
@@ -13,10 +13,10 @@ import (
 // var validate = validator.New()
 
 type ProfileHandler struct {
-	Service *publicServices.Service
+	Service *publicservice.Service
 }
 
-func NewProfileHandler(service *publicServices.Service) *ProfileHandler {
+func NewProfileHandler(service *publicservice.Service) *ProfileHandler {
 	return &ProfileHandler{Service: service}
 }
 

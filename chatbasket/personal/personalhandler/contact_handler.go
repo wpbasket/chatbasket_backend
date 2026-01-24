@@ -1,9 +1,9 @@
-package personalHandler
+package personalhandler
 
 import (
 	"chatbasket/model"
-	personalmodel "chatbasket/personalModel"
-	"chatbasket/personalServices"
+	personalmodel "chatbasket/personal/personalmodel"
+	"chatbasket/personal/personalservice"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -11,10 +11,10 @@ import (
 )
 
 type ContactHandler struct {
-	Service *personalServices.Service
+	Service *personalservice.Service
 }
 
-func NewContactHandler(service *personalServices.Service) *ContactHandler {
+func NewContactHandler(service *personalservice.Service) *ContactHandler {
 	return &ContactHandler{Service: service}
 }
 

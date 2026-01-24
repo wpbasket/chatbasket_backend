@@ -1,10 +1,10 @@
-package personalServices
+package personalservice
 
 import (
 	"chatbasket/db/postgresCode"
 	"chatbasket/model"
-	"chatbasket/personalModel"
-	"chatbasket/personalUtils"
+	personalmodel "chatbasket/personal/personalmodel"
+	personalutils "chatbasket/personal/personalutils"
 	"chatbasket/services"
 	"chatbasket/utils"
 	"context"

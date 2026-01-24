@@ -1,9 +1,9 @@
-package personalHandler
+package personalhandler
 
 import (
 	"chatbasket/model"
-	"chatbasket/personalModel"
-	"chatbasket/personalServices"
+	"chatbasket/personal/personalmodel"
+	"chatbasket/personal/personalservice"
 	"net/http"
 	"strings"
 
@@ -12,13 +12,13 @@ import (
 )
 
 // ProfileHandler handles personal-mode profile endpoints
-// It uses personalServices.Service which wraps the shared services.GlobalService
+// It uses personalservice.Service which wraps the shared services.GlobalService
 // and is intended for personal mode specific behaviors.
 type ProfileHandler struct {
-	Service *personalServices.Service
+	Service *personalservice.Service
 }
 
-func NewProfileHandler(service *personalServices.Service) *ProfileHandler {
+func NewProfileHandler(service *personalservice.Service) *ProfileHandler {
 	return &ProfileHandler{Service: service}
 }
 

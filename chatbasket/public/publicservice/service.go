@@ -1,4 +1,4 @@
-package publicServices
+package publicservice
 
 import (
 	"chatbasket/services"

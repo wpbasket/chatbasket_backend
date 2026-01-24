@@ -1,4 +1,4 @@
-package publicServices
+package publicservice
 
 import (
 	"chatbasket/model"
@@ -205,12 +205,11 @@ func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.Privat
 		FileTokens: finalResponse.AvatarFileTokens,
 	}
 
+	if len(finalResponse.AvatarFileTokens) >= 3 {
 
-	if len(finalResponse.AvatarFileTokens) >=3 {
-
-		if finalResponse.AvatarFileTokens[2]<time.Now().Format("2006-01-02 15:04:05") {
-			exp:=time.Now().AddDate(1, 0, 0).Format("2006-01-02 15:04:05")
-			tok,err := ps.Appwrite.Tokens.CreateFileToken(ps.Appwrite.ProfilePicBucketID, finalResponse.AvatarFileId, ps.Appwrite.Tokens.WithCreateFileTokenExpire(exp))
+		if finalResponse.AvatarFileTokens[2] < time.Now().Format("2006-01-02 15:04:05") {
+			exp := time.Now().AddDate(1, 0, 0).Format("2006-01-02 15:04:05")
+			tok, err := ps.Appwrite.Tokens.CreateFileToken(ps.Appwrite.ProfilePicBucketID, finalResponse.AvatarFileId, ps.Appwrite.Tokens.WithCreateFileTokenExpire(exp))
 			if err != nil {
 				return nil, &model.ApiError{
 					Code:    500,
@@ -218,12 +217,12 @@ func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.Privat
 					Type:    "internal_server_error",
 				}
 			}
-			_,err = ps.Appwrite.Database.UpdateDocument(
+			_, err = ps.Appwrite.Database.UpdateDocument(
 				ps.Appwrite.DatabaseID,
 				ps.Appwrite.UsersCollectionID,
 				userId,
 				ps.Appwrite.Database.WithUpdateDocumentData(model.UploadUserProfilePictureDbPayload{
-					AvatarFileTokens: []string{tok.Id,tok.Secret,exp},
+					AvatarFileTokens: []string{tok.Id, tok.Secret, exp},
 				}),
 			)
 			if err != nil {
@@ -233,11 +232,10 @@ func (ps *Service) GetProfile(ctx context.Context, userId string) (*model.Privat
 					Type:    "internal_server_error",
 				}
 			}
-			avatarData.FileTokens = []string{tok.Id,tok.Secret,exp}
+			avatarData.FileTokens = []string{tok.Id, tok.Secret, exp}
 
 		}
 	}
-
 
 	avatarUri := model.BuildAvatarURI(&avatarData, 3)
 
@@ -272,19 +270,18 @@ func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.F
 	}
 
 	avatarTokens := []string{}
-	if len(result.TokenIDs) == 1 && len(result.TokenSecrets) == 1  && result.Expire!="" {
-		avatarTokens = []string{result.TokenIDs[0], result.TokenSecrets[0],result.Expire}
+	if len(result.TokenIDs) == 1 && len(result.TokenSecrets) == 1 && result.Expire != "" {
+		avatarTokens = []string{result.TokenIDs[0], result.TokenSecrets[0], result.Expire}
 	}
-	
+
 	updatePayload := model.UploadUserProfilePictureDbPayload{
-		AvatarFileId: result.FileId,
+		AvatarFileId:     result.FileId,
 		AvatarFileTokens: avatarTokens,
 	}
-	_,err = ps.Appwrite.Database.UpdateDocument(ps.Appwrite.DatabaseID,ps.Appwrite.UsersCollectionID,userId,ps.Appwrite.Database.WithUpdateDocumentData(updatePayload))
+	_, err = ps.Appwrite.Database.UpdateDocument(ps.Appwrite.DatabaseID, ps.Appwrite.UsersCollectionID, userId, ps.Appwrite.Database.WithUpdateDocumentData(updatePayload))
 	if err != nil {
 		return nil, &model.ApiError{Code: 500, Message: "Failed to update user data: " + err.Error(), Type: "internal_server_error"}
 	}
-
 
 	return &model.UploadUserProfilePictureResponse{
 		AvatarFileId:     result.FileId,

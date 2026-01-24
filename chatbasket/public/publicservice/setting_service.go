@@ -1,4 +1,4 @@
-package publicServices
+package publicservice
 
 import (
 	"chatbasket/model"
@@ -117,7 +117,7 @@ func (ps *Service) UpdateEmail(ctx context.Context, payload *model.UpdateEmailPa
 
 	}
 	content := "<p>Hello,<br>Please enter this code in the app to verify your email address. This code is valid for 3 minutes.Your One-Time Password (OTP) for verifying your email address is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
-	
+
 	targetId := targetRes.Id
 	_, err = ps.Appwrite.Message.CreateEmail(
 		messageId,
@@ -338,7 +338,7 @@ func (ps *Service) UpdateEmailVerification(ctx context.Context, payload *model.U
 	return &model.StatusOkay{Status: true, Message: tempOtp.Email}, nil
 }
 
-func (ps *Service) SendOtp(ctx context.Context, payload *model.SendOtpPayload, userId string,email string) (*model.StatusOkay, *model.ApiError) {
+func (ps *Service) SendOtp(ctx context.Context, payload *model.SendOtpPayload, userId string, email string) (*model.StatusOkay, *model.ApiError) {
 
 	// Step1: Generate otp
 	messageId := id.Custom(uuid.NewString())
@@ -364,7 +364,7 @@ func (ps *Service) SendOtp(ctx context.Context, payload *model.SendOtpPayload, u
 	var emailT string
 	if emailTarget.Total == 0 {
 		targetId := uuid.New().String()
-		createTarget, err := ps.Appwrite.Users.CreateTarget(userId, targetId, "email",email)
+		createTarget, err := ps.Appwrite.Users.CreateTarget(userId, targetId, "email", email)
 		if err != nil {
 			return nil, &model.ApiError{
 				Code:    500,
@@ -377,7 +377,6 @@ func (ps *Service) SendOtp(ctx context.Context, payload *model.SendOtpPayload, u
 	if emailTarget.Total > 0 {
 		emailT = emailTarget.Targets[0].Id
 	}
-
 
 	_, err = ps.Appwrite.Message.CreateEmail(
 		messageId,
