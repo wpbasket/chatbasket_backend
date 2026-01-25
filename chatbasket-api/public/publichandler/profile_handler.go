@@ -67,7 +67,7 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   true,
-			Domain:   "chatbasket.me", // Use this - same as when you set the cookie
+			Domain:   "chatbasket.live", // Use this - same as when you set the cookie
 			// Domain:   "localhost:8081", // Use this - same as when you set the cookie
 			SameSite: http.SameSiteNoneMode,
 			MaxAge:   -1,
@@ -79,7 +79,7 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   true,
-			Domain:   "chatbasket.me", // Use this - same as when you set the cookie
+			Domain:   "chatbasket.live", // Use this - same as when you set the cookie
 			// Domain:   "localhost:8081", // Use this - same as when you set the cookie
 			SameSite: http.SameSiteNoneMode,
 			MaxAge:   -1,
