@@ -1,36 +1,52 @@
-name: Deploy Web to Heroku
+name: Deploy chatbasket-api to Droplet
+
 on:
   push:
+    branches:
+      - main
     paths:
-      - 'chatbasket/**'
+      - 'chatbasket-api/**'
       - '.github/workflows/deploy_web.yml'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
+      # 1. Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: Install Heroku CLI
+
+      # 2. Login to GitHub Container Registry (GHCR)
+      - name: Login to GHCR
         run: |
-          curl https://cli-assets.heroku.com/install.sh | sh
-          
-      - name: Log in to Heroku Container Registry
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # 3. Build Docker image from chatbasket-api/
+      - name: Build Docker image
         run: |
-          echo "$HEROKU_API_KEY" | docker login --username=_ --password-stdin registry.heroku.com
-          
-      - name: Build and push Docker image
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          docker build \
+            -t ghcr.io/${{ github.repository_owner }}/chatbasket-api:latest \
+            ./chatbasket-api
+
+      # 4. Push Docker image to GHCR
+      - name: Push Docker image
         run: |
-          cd ./chatbasket
-          heroku container:push web --app ${{ secrets.HEROKU_WEB_APP_NAME }}
-          
-      - name: Release the app
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          docker push ghcr.io/${{ github.repository_owner }}/chatbasket-api:latest
+
+      # 5. Setup SSH for Droplet access
+      - name: Setup SSH
         run: |
-          heroku container:release web --app ${{ secrets.HEROKU_WEB_APP_NAME }}
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
+
+      # 6. Deploy on DigitalOcean Droplet
+      - name: Deploy on Droplet
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.DROPLET_IP }} "
+            cd /app/chatbasket &&
+            docker-compose pull &&
+            docker-compose up -d
+          "
