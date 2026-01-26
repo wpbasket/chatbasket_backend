@@ -3,7 +3,6 @@ package main
 import (
 	"chatbasket/db"
 	"chatbasket/model"
-	"chatbasket/routes"
 	"chatbasket/utils"
 	"context"
 	"net/http"
@@ -60,17 +59,19 @@ func main() {
 	// Rate limit: 100 requests per second per IP
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(100)))
 
-	cfg, err := db.LoadPostgresConfig()
-	if err != nil {
-		e.Logger.Fatal("failed to load postgres config: " + err.Error())
-	}
+	// TEMP DISABLED FOR TESTING
+	// cfg, err := db.LoadPostgresConfig()
+	// if err != nil {
+	// 	e.Logger.Fatal("failed to load postgres config: " + err.Error())
+	// }
 	// Create pool with startup timeout context
-	startupCtx, startupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	pool, err := db.NewPool(startupCtx, cfg)
-	startupCancel()
-	if err != nil {
-		e.Logger.Fatal("failed to connect to postgres: " + err.Error())
-	}
+	// startupCtx, startupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// pool, err := db.NewPool(startupCtx, cfg)
+	// startupCancel()
+	// if err != nil {
+	// 	e.Logger.Fatal("failed to connect to postgres: " + err.Error())
+	// }
+	var pool interface{} // Temp placeholder
 
 	// Initialize Azure Cosmos DB (NoSQL API)
 	var cosmosClient *azcosmos.Client // Define variable in outer scope
@@ -89,15 +90,11 @@ func main() {
 	}
 
 	e.GET("/healthz", func(c echo.Context) error {
-		pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
-		defer cancel()
-		if err := pool.Ping(pingCtx); err != nil {
-			return c.JSON(http.StatusServiceUnavailable, &model.StatusOkay{Status: false, Message: "unhealthy"})
-		}
-		return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "ok"})
+		// TEMP: DB disabled
+		return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "ok (db disabled)"})
 	})
 
-	routes.RegisterRoutes(e, pool, cosmosClient)
+	// routes.RegisterRoutes(e, pool, cosmosClient) // TEMP DISABLED
 
 	e.GET("/", hello)
 	port := os.Getenv("PORT")
@@ -134,22 +131,20 @@ func main() {
 		e.Logger.Error("Server forced to shutdown: ", err)
 	}
 
-	// Close PostgreSQL connection pool with timeout
-	poolCloseCtx, poolCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer poolCancel()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		pool.Close()
-	}()
-
-	select {
-	case <-done:
-		e.Logger.Info("Database pool closed gracefully")
-	case <-poolCloseCtx.Done():
-		e.Logger.Warn("Database pool close timeout - forcing shutdown")
-	}
+	// TEMP DISABLED: PostgreSQL connection pool close
+	// poolCloseCtx, poolCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// defer poolCancel()
+	// done := make(chan struct{})
+	// go func() {
+	// 	defer close(done)
+	// 	pool.Close()
+	// }()
+	// select {
+	// case <-done:
+	// 	e.Logger.Info("Database pool closed gracefully")
+	// case <-poolCloseCtx.Done():
+	// 	e.Logger.Warn("Database pool close timeout - forcing shutdown")
+	// }
 
 	e.Logger.Info("Server exited")
 }
