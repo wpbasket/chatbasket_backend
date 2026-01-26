@@ -3,6 +3,8 @@ package main
 import (
 	"chatbasket/db"
 	"chatbasket/model"
+
+	// "chatbasket/routes" // TEMP DISABLED
 	"chatbasket/utils"
 	"context"
 	"net/http"
@@ -64,14 +66,13 @@ func main() {
 	// if err != nil {
 	// 	e.Logger.Fatal("failed to load postgres config: " + err.Error())
 	// }
-	// Create pool with startup timeout context
+	// // Create pool with startup timeout context
 	// startupCtx, startupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	// pool, err := db.NewPool(startupCtx, cfg)
 	// startupCancel()
 	// if err != nil {
 	// 	e.Logger.Fatal("failed to connect to postgres: " + err.Error())
 	// }
-	var pool interface{} // Temp placeholder
 
 	// Initialize Azure Cosmos DB (NoSQL API)
 	var cosmosClient *azcosmos.Client // Define variable in outer scope
@@ -88,9 +89,15 @@ func main() {
 			log.Printf("✅ Cosmos DB client initialized successfully (Database: %s)", cosmosCfg.Database)
 		}
 	}
+	_ = cosmosClient // TEMP: Silence unused variable warning
 
 	e.GET("/healthz", func(c echo.Context) error {
-		// TEMP: DB disabled
+		// TEMP: DB check disabled
+		// pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
+		// defer cancel()
+		// if err := pool.Ping(pingCtx); err != nil {
+		// 	return c.JSON(http.StatusServiceUnavailable, &model.StatusOkay{Status: false, Message: "unhealthy"})
+		// }
 		return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "ok (db disabled)"})
 	})
 
@@ -131,14 +138,16 @@ func main() {
 		e.Logger.Error("Server forced to shutdown: ", err)
 	}
 
-	// TEMP DISABLED: PostgreSQL connection pool close
+	// TEMP DISABLED: DB Pool cleanup
 	// poolCloseCtx, poolCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	// defer poolCancel()
+	//
 	// done := make(chan struct{})
 	// go func() {
 	// 	defer close(done)
 	// 	pool.Close()
 	// }()
+	//
 	// select {
 	// case <-done:
 	// 	e.Logger.Info("Database pool closed gracefully")
