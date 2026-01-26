@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'chatbasket-api/**'
-      - '.github/workflows/deploy_web.yml'
+      - "chatbasket-api/**"
+      - ".github/workflows/deploy_web.yml"
 
 jobs:
   deploy:
@@ -42,11 +42,52 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
 
-      # 6. Deploy on DigitalOcean Droplet (Docker Compose v2)
+      # 6. Transfer deployment configuration files
+      - name: Transfer deployment files
+        run: |
+          scp -o StrictHostKeyChecking=no \
+            ./deployment/docker-compose.yml \
+            ${{ secrets.SSH_USER }}@${{ secrets.DROPLET_IP }}:/app/chatbasket/
+
+          scp -o StrictHostKeyChecking=no \
+            ./deployment/nginx.conf \
+            ${{ secrets.SSH_USER }}@${{ secrets.DROPLET_IP }}:/app/chatbasket/
+
+      # 7. Deploy on DigitalOcean Droplet
       - name: Deploy on Droplet
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.DROPLET_IP }} "
             cd /app/chatbasket &&
+            
+            # Create .env file from GitHub secrets
+            cat > .env << 'ENVEOF'
+            APPWRITE_ENDPOINT=${{ secrets.APPWRITE_ENDPOINT }}
+            APPWRITE_PROJECT_ID=${{ secrets.APPWRITE_PROJECT_ID }}
+            APPWRITE_API_KEY=${{ secrets.APPWRITE_API_KEY }}
+            APPWRITE_DATABASE_ID=${{ secrets.APPWRITE_DATABASE_ID }}
+            APPWRITE_USERS_COLLECTION_ID=${{ secrets.APPWRITE_USERS_COLLECTION_ID }}
+            APPWRITE_POSTS_COLLECTION_ID=${{ secrets.APPWRITE_POSTS_COLLECTION_ID }}
+            APPWRITE_REFRESH_TOKENS_COLLECTION_ID=${{ secrets.APPWRITE_REFRESH_TOKENS_COLLECTION_ID }}
+            APPWRITE_LIKES_COLLECTION_ID=${{ secrets.APPWRITE_LIKES_COLLECTION_ID }}
+            APPWRITE_FOLLOW_COLLECTION_ID=${{ secrets.APPWRITE_FOLLOW_COLLECTION_ID }}
+            APPWRITE_COMMENTS_COLLECTION_ID=${{ secrets.APPWRITE_COMMENTS_COLLECTION_ID }}
+            APPWRITE_BLOCK_COLLECTION_ID=${{ secrets.APPWRITE_BLOCK_COLLECTION_ID }}
+            APPWRITE_FOLLOW_REQUESTS_COLLECTION_ID=${{ secrets.APPWRITE_FOLLOW_REQUESTS_COLLECTION_ID }}
+            APPWRITE_TEMP_OTP_COLLECTION_ID=${{ secrets.APPWRITE_TEMP_OTP_COLLECTION_ID }}
+            APPWRITE_FILE_USERPROFILEPIC_BUCKET_ID=${{ secrets.APPWRITE_FILE_USERPROFILEPIC_BUCKET_ID }}
+            APPWRITE_PERSONAL_DATABASE_ID=${{ secrets.APPWRITE_PERSONAL_DATABASE_ID }}
+            APPWRITE_PERSONAL_USERS_COLLECTION_ID=${{ secrets.APPWRITE_PERSONAL_USERS_COLLECTION_ID }}
+            APPWRITE_PERSONAL_ALONE_USERNAME_COLLECTION_ID=${{ secrets.APPWRITE_PERSONAL_ALONE_USERNAME_COLLECTION_ID }}
+            PERSONAL_USERNAME_KEY=${{ secrets.PERSONAL_USERNAME_KEY }}
+            DATABASE_URL_PG_CB=${{ secrets.DATABASE_URL_PG_CB }}
+            DATABASE_URL_PG_DEV=${{ secrets.DATABASE_URL_PG_DEV }}
+            APPWRITE_FILE_PERSONAL_USERPROFILEPIC_BUCKET_ID=${{ secrets.APPWRITE_FILE_PERSONAL_USERPROFILEPIC_BUCKET_ID }}
+            COSMOS_CONNECTION_STRING=${{ secrets.COSMOS_CONNECTION_STRING }}
+            COSMOS_DATABASE=${{ secrets.COSMOS_DATABASE }}
+            COSMOS_CONTAINER=${{ secrets.COSMOS_CONTAINER }}
+            ENVEOF
+
+            # Pull latest images and restart
             docker compose pull &&
-            docker compose up -d
+            docker compose up -d --remove-orphans
           "
