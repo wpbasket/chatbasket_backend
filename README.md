@@ -8,8 +8,7 @@ Chatbasket Backend is a Go-based HTTP API built with the Echo framework. It prov
 - Public and personal routes
 - PostgreSQL-backed persistence
 - Health checks and basic observability
-
-The application is container-ready and can be built and run using Docker.
+- **Fully Automated Deployment Pipeline**
 
 ## Tech Stack
 
@@ -17,83 +16,62 @@ The application is container-ready and can be built and run using Docker.
 - **Framework:** Echo v4
 - **Database:** PostgreSQL (via `pgx` connection pool)
 - **Env Management:** `github.com/joho/godotenv`
-- **Other:** Appwrite Go SDK, CORS, gzip, rate limiting middleware
+- **Infrastructure:** Docker, Nginx, DigitalOcean, GitHub Actions
+
+## 🚀 Automated Deployment
+
+This repository features a **zero-touch deployment pipeline**.
+
+### How it Works
+1. Push to `main` branch.
+2. GitHub Actions builds the Docker image and pushes to GHCR.
+3. Workflow SSHs into DigitalOcean droplet and:
+   - Updates `docker-compose.yml` and `nginx.conf`
+   - Generates `.env` from GitHub Secrets
+   - Pulls new images and restarts containers
+
+### Setup & Documentation
+Refactored deployment documentation is available in the `docs/` folder:
+
+- **[GitHub Secrets Setup](docs/GITHUB_SECRETS_SETUP.md)** - Required configuration for the pipeline
+- **[Deployment Verification](docs/DEPLOYMENT_VERIFICATION.md)** - How to verify deployments are working
+- **[Nginx Configuration](docs/nginxconf.md)** - Reverse proxy setup details
+- **[.env.example](docs/.env.example)** - Template for environment variables
+
+### Manual Maintenance
+The only manual steps required are initial droplet setup or one-time secret updates:
+- **Reseved IP**: Ensure your Azure PostgreSQL Firewall allows the droplet's **Anchor IP** (check via `curl ifconfig.me`).
+- **Secret Rotation**: Update secrets in GitHub and push an empty commit to redeploy.
 
 ## Project Structure
 
-Key directories inside `chatbasket/`:
+- **`chatbasket-api/`** – Application source code (`main.go`, `db/`, `routes/`, etc.)
+- **`deployment/`** – Infrastructure configuration (`docker-compose.yml`, `nginx.conf`)
+- **`docs/`** – Deployment and setup documentation
+- **`.github/workflows/`** – CI/CD Pipeline definitions
 
-- **`app/`** – Application entrypoint (`main.go`)
-- **`db/`** – Database configuration and queries
-- **`model/` / `personalModel/`** – Data models
-- **`routes/`** – Route registration
-- **`services/`, `personalServices/`, `publicServices/`** – Business logic
-- **`handler/`, `personalHandler/`, `publicHandler/`** – HTTP handlers
-- **`middleware/`** – Custom middleware
-- **`utils/`, `personalUtils/`** – Helper utilities
-- **`Dockerfile`** – Multi-stage Docker build for the API
+## Development
 
-## Requirements
-
-- Go (compatible with version in `go.mod` – `go 1.25.5`)
-- PostgreSQL instance
-- Appwrite (if using Appwrite integrations)
-- Git
-- Docker (optional, for containerized runs)
-
-## Environment Configuration
-
-Environment variables are loaded from `.env` at the project root (relative to `app/main.go` it uses `../.env`). Typical variables include:
-
-- **Database:** `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
-- **Server:** `PORT` (defaults to `8080` if not set)
-- **Appwrite / Auth / Other:** e.g. API keys, endpoint URLs, project IDs, secrets, etc.
-
-> Configure the `.env` file with the values required by your deployment (database, Appwrite, auth config, etc.). Do **not** commit secrets to version control.
-
-## Running Locally (Go)
-
-From the `chatbasket/` directory:
+### Running Locally
 
 ```bash
-# Install dependencies (Go modules will auto-resolve)
+cd chatbasket-api
 go mod tidy
-
-# Run the server
 go run ./app
 ```
 
-The API will start on the port defined by `PORT` in `.env`, or on `:8080` by default.
-
-Health check endpoint:
-
-- `GET /healthz` – returns an `ok`/`unhealthy` JSON status depending on DB health
-
-## Running with Docker
-
-From the `chatbasket/` directory:
+### Running with Docker
 
 ```bash
-# Build the image
-docker build -t chatbasket-backend .
-
-# Run the container (example; adjust envs/ports as needed)
-docker run \
-  -p 8080:8080 \
-  --env-file ../.env \
-  --name chatbasket-backend \
-  chatbasket-backend
+cd chatbasket-api
+docker build -t chatbasket-api .
+docker run -p 8080:8080 --env-file ../.env chatbasket-api
 ```
 
-The container runs the compiled Go binary from `./main` built in the Dockerfile.
-
 ## CORS and Frontend
-
-CORS is configured in `app/main.go`. By default it allows origins such as:
-
-- `http://localhost:8081` (local frontend)
-
-You can update the `AllowOrigins` list in `main.go` to add or change allowed frontend URLs (e.g. production domain).
+CORS allows:
+- `https://chatbasket.live` (Production)
+- `http://localhost:8081` (Local dev - uncomment in `main.go` if needed)
 
 ## Graceful Shutdown & Health Checks
 
