@@ -83,7 +83,7 @@ jobs:
           echo "COSMOS_CONNECTION_STRING=${{ secrets.COSMOS_CONNECTION_STRING }}" >> .env
           echo "COSMOS_DATABASE=${{ secrets.COSMOS_DATABASE }}" >> .env
           echo "COSMOS_CONTAINER=${{ secrets.COSMOS_CONTAINER }}" >> .env
-          echo "FIREBASE_CREDENTIALS_JSON='${{ secrets.FIREBASE_CREDENTIALS_JSON }}'" >> .env
+          echo 'FIREBASE_CREDENTIALS_JSON=${{ secrets.FIREBASE_CREDENTIALS_JSON }}' >> .env
 
           docker compose pull
           docker compose up -d --remove-orphans
