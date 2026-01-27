@@ -17,7 +17,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Login to GitHub Container Registry (GHCR)
+      # 2. Login to GitHub Container Registry (GHCR) on the Runner
       - name: Login to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -59,6 +59,7 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.DROPLET_IP }} << 'ENDSSH'
           cd /app/chatbasket
 
+          # Create .env file with secrets
           echo "APPWRITE_ENDPOINT=${{ secrets.APPWRITE_ENDPOINT }}" > .env
           echo "APPWRITE_PROJECT_ID=${{ secrets.APPWRITE_PROJECT_ID }}" >> .env
           echo "APPWRITE_API_KEY=${{ secrets.APPWRITE_API_KEY }}" >> .env
@@ -85,6 +86,15 @@ jobs:
           echo "COSMOS_CONTAINER=${{ secrets.COSMOS_CONTAINER }}" >> .env
           echo 'FIREBASE_CREDENTIALS_JSON=${{ secrets.FIREBASE_CREDENTIALS_JSON }}' >> .env
 
+          # Login to GHCR on the Droplet (Required to pull the private image)
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+          # Pull and Start
           docker compose pull
           docker compose up -d --remove-orphans
+
+          # --- CRITICAL CLEANUP STEP ---
+          # Deletes the old "dangling" image to save disk space
+          docker image prune -f
+          
           ENDSSH

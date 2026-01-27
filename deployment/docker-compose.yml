@@ -5,6 +5,11 @@ services:
     restart: always
     env_file:
       - .env
+    # --- MEMORY LIMIT ADDED HERE ---
+    # This limits Go to 150MB of RAM.
+    # It forces the app to clean up memory immediately instead of growing to crash the server.
+    environment:
+      - GOMEMLIMIT=150MiB
     expose:
       - "8080"
 
