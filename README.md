@@ -1,11 +1,12 @@
 # Chatbasket Backend
 
-![Go Version](https://img.shields.io/badge/go-1.23+-00ADD8?style=for-the-badge&logo=go)
-![Architecture](https://img.shields.io/badge/architecture-clean-success?style=for-the-badge)
-![Security](https://img.shields.io/badge/security-hardened-blueviolet?style=for-the-badge)
-[![Website](https://img.shields.io/website?url=https%3A%2F%2Fchatbasket.live&up_message=online&down_message=offline&style=for-the-badge&label=chatbasket.live)](https://chatbasket.live)
+![Go Version](https://img.shields.io/badge/go-1.25.2-00ADD8?style=flat-square&logo=go)
+![Architecture](https://img.shields.io/badge/architecture-clean-success?style=flat-square)
+![Security](https://img.shields.io/badge/security-privacy--first-blueviolet?style=flat-square)
 
 > **A simplified yet highly secure production-grade backend for the Chatbasket application.**
+>
+> **View Live Deployment:** [https://chatbasket.live](https://chatbasket.live)
 
 ## 🚀 Overview
 
@@ -101,13 +102,13 @@ We choose tools that offer **Control** and **Predictability**.
 
 | Component | Technology | Rationale (Why?) |
 |-----------|------------|------------------|
-| **Core Logic** | **Go (Golang)** | Chosen for its superior concurrency model (Goroutines) and compile-time type safety.
-| **API Framework** | **Echo v4** | Lightweight and blazing fast. Offers extreme flexibility for custom middleware and handlers, avoiding the bloat of heavier frameworks. |
-| **Database** | **PostgreSQL** | ACID compliance is non-negotiable for user data. Powered by `pgx` for high-performance connection pooling. |
-| **Authentication** | **Appwrite (Current)** | Managed session infrastructure. *Planned for upgrade to native implementation (see Roadmap).* |
-| **Object Storage** | **Appwrite (Storage)** | Secure, scalable file storage for media and attachments. |
-| **Edge Security** | **Cloudflare** | Offloads SSL termination and acts as the first line of defense against volumetric attacks. |
-| **CI/CD** | **GitHub Actions** | Enables "Zero-Touch" deployment, ensuring code in `main` is always living in production. |
+| **Core Logic** | ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat-square&logo=go&logoColor=white) | **Concurrency & Safety**: Goroutines handle thousands of concurrent WebSocket connections with minimal footprint. |
+| **API Framework** | ![Echo](https://img.shields.io/badge/Echo_v4-00ADD8?style=flat-square&logoColor=white) | **Performance**: Zero-allocation router that is significantly faster than Gin or Fiber in our benchmarks. |
+| **Database** | ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=flat-square&logo=postgresql&logoColor=white) | **Data Integrity**: Strict ACID compliance for user transactions and relations. |
+| **Authentication** | ![Appwrite](https://img.shields.io/badge/Appwrite-%23FD366E.svg?style=flat-square&logo=appwrite&logoColor=white) | **Managed Security**: Offloads session token management while sticking to a self-hostable open-source standard. |
+| **Object Storage** | ![Appwrite](https://img.shields.io/badge/Appwrite_Storage-%23FD366E.svg?style=flat-square&logo=appwrite&logoColor=white) | **Secure Uploads**: Handles chunked uploads and virus scanning for media. |
+| **Edge Security** | ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=flat-square&logo=Cloudflare&logoColor=white) | **DDoS Defense**: Proxies all traffic, hiding the origin server IP from direct attacks. |
+| **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=flat-square&logo=githubactions&logoColor=white) | **Zero-Touch Deploy**: Commits to `main` automatically build and swap containers on DigitalOcean. |
 
 ---
 
@@ -140,7 +141,7 @@ The `main` package is located in `app/`, keeping the root clean.
 
 ```bash
 # Clone and tidy
-git clone https://github.com/your-org/chatbasket-backend
+git clone https://github.com/wpbasket/chatbasket-backend
 cd chatbasket-api
 go mod tidy
 
