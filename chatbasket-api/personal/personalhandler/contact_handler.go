@@ -1,9 +1,9 @@
 package personalhandler
 
 import (
-	"chatbasket/model"
-	personalmodel "chatbasket/personal/personalmodel"
-	"chatbasket/personal/personalservice"
+	"chatbasket-api/model"
+	personalmodel "chatbasket-api/personal/personalmodel"
+	"chatbasket-api/personal/personalservice"
 	"net/http"
 
 	"github.com/google/uuid"

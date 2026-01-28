@@ -1,9 +1,9 @@
 package routes
 
 import (
-	"chatbasket/appwriteinternal"
-	"chatbasket/handler"
-	"chatbasket/services"
+	"chatbasket-api/appwriteinternal"
+	"chatbasket-api/handler"
+	"chatbasket-api/services"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/jackc/pgx/v5/pgxpool"

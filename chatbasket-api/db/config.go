@@ -1,7 +1,7 @@
 package db
 
 import (
-	"chatbasket/utils"
+	"chatbasket-api/utils"
 	"time"
 )
 

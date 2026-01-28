@@ -1,8 +1,8 @@
 package services
 
 import (
-	"chatbasket/model"
-	"chatbasket/utils"
+	"chatbasket-api/model"
+	"chatbasket-api/utils"
 	"mime/multipart"
 	"os"
 	"time"

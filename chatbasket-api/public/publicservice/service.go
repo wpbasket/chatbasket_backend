@@ -1,7 +1,7 @@
 package publicservice
 
 import (
-	"chatbasket/services"
+	"chatbasket-api/services"
 )
 
 // Service wraps the shared GlobalService for public endpoints

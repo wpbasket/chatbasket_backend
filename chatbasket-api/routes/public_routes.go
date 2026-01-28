@@ -1,10 +1,10 @@
 package routes
 
 import (
-	"chatbasket/middleware"
-	"chatbasket/public/publichandler"
-	"chatbasket/public/publicservice"
-	"chatbasket/services"
+	"chatbasket-api/middleware"
+	"chatbasket-api/public/publichandler"
+	"chatbasket-api/public/publicservice"
+	"chatbasket-api/services"
 
 	"github.com/labstack/echo/v4"
 )

@@ -1,8 +1,8 @@
 package personalhandler
 
 import (
-	// "chatbasket/model"
-	"chatbasket/personal/personalservice"
+	// "chatbasket-api/model"
+	"chatbasket-api/personal/personalservice"
 	// "net/http"
 	// "github.com/labstack/echo/v4"
 )

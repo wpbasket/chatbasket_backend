@@ -1,7 +1,7 @@
 package services
 
 import (
-	"chatbasket/utils"
+	"chatbasket-api/utils"
 	"context"
 	"fmt"
 	"log"

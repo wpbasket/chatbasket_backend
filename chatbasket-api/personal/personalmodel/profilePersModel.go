@@ -1,8 +1,8 @@
 package personalmodel
 
 import (
-	"chatbasket/internal/db/personal"
-	// "chatbasket/utils"
+	"chatbasket-api/internal/db/personal"
+	// "chatbasket-api/utils"
 	"time"
 )
 

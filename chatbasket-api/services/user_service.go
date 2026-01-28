@@ -1,9 +1,9 @@
 package services
 
 import (
-	// "chatbasket/appwriteinternal"
-	"chatbasket/model"
-	"chatbasket/utils"
+	// "chatbasket-api/appwriteinternal"
+	"chatbasket-api/model"
+	"chatbasket-api/utils"
 	"context"
 	"log"
 	"time"

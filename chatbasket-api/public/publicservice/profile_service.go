@@ -1,8 +1,8 @@
 package publicservice
 
 import (
-	"chatbasket/model"
-	"chatbasket/services"
+	"chatbasket-api/model"
+	"chatbasket-api/services"
 	"context"
 	"mime/multipart"
 	"time"

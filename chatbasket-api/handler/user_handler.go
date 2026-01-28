@@ -6,8 +6,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"chatbasket/model"
-	"chatbasket/services"
+	"chatbasket-api/model"
+	"chatbasket-api/services"
 )
 
 type UserHandler struct {

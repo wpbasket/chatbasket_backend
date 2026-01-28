@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"chatbasket/utils"
+	"chatbasket-api/utils"
 )
 
 type appwriteConfig struct {

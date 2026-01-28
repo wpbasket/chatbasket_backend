@@ -1,12 +1,12 @@
 package personalservice
 
 import (
-	"chatbasket/internal/db/personal"
-	"chatbasket/model"
-	personalmodel "chatbasket/personal/personalmodel"
-	personalutils "chatbasket/personal/personalutils"
-	"chatbasket/services"
-	"chatbasket/utils"
+	"chatbasket-api/internal/db/personal"
+	"chatbasket-api/model"
+	personalmodel "chatbasket-api/personal/personalmodel"
+	personalutils "chatbasket-api/personal/personalutils"
+	"chatbasket-api/services"
+	"chatbasket-api/utils"
 	"context"
 	"mime/multipart"
 	"net/http"

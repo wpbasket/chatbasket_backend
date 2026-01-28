@@ -1,8 +1,8 @@
 package publichandler
 
 import (
-	"chatbasket/model"
-	"chatbasket/public/publicservice"
+	"chatbasket-api/model"
+	"chatbasket-api/public/publicservice"
 	"net/http"
 
 	"github.com/labstack/echo/v4"

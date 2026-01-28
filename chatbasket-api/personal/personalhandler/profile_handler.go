@@ -1,9 +1,9 @@
 package personalhandler
 
 import (
-	"chatbasket/model"
-	"chatbasket/personal/personalmodel"
-	"chatbasket/personal/personalservice"
+	"chatbasket-api/model"
+	"chatbasket-api/personal/personalmodel"
+	"chatbasket-api/personal/personalservice"
 	"net/http"
 	"strings"
 

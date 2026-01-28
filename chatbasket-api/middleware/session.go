@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"chatbasket/appwriteinternal"
-	"chatbasket/model"
-	"chatbasket/utils"
+	"chatbasket-api/appwriteinternal"
+	"chatbasket-api/model"
+	"chatbasket-api/utils"
 	"net/http"
 	"os"
 	"strings"

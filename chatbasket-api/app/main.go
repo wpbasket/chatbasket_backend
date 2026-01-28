@@ -1,10 +1,10 @@
 package main
 
 import (
-	"chatbasket/db"
-	"chatbasket/model"
-	"chatbasket/routes"
-	"chatbasket/utils"
+	"chatbasket-api/db"
+	"chatbasket-api/model"
+	"chatbasket-api/routes"
+	"chatbasket-api/utils"
 	"context"
 	"net/http"
 	"os"

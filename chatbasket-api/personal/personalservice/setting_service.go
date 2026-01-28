@@ -1,7 +1,7 @@
 package personalservice
 
 // import (
-// 	"chatbasket/model"
+// 	"chatbasket-api/model"
 // 	"context"
 // 	"net/http"
 // )

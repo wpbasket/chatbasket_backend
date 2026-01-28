@@ -1,8 +1,8 @@
 package services
 
 import (
-	"chatbasket/appwriteinternal"
-	"chatbasket/internal/db/personal"
+	"chatbasket-api/appwriteinternal"
+	"chatbasket-api/internal/db/personal"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/jackc/pgx/v5/pgxpool"
