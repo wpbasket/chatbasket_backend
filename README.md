@@ -24,18 +24,18 @@ The system operates as a **Secure Gateway** (BFF - Backend for Frontend), ensuri
 
 ```mermaid
 graph TD
-    User([User Device]) -->|HTTPS| CF[Cloudflare Edge<br>DDoS Protection]
-    CF -->|Strict SSL| Nginx[Nginx Reverse Proxy]
-    Nginx -->|Proxy| API[Go Backend API]
+    User(["User Device"]) -->|HTTPS| CF["Cloudflare Edge<br>DDoS Protection"]
+    CF -->|Strict SSL| Nginx["Nginx Reverse Proxy"]
+    Nginx -->|Proxy| API["Go Backend API"]
     
     subgraph "Secure Zone"
-    API -->|Validation| Layer1[Handlers]
-    Layer1 -->|Business Logic| Layer2[Services]
-    Layer2 -->|Persistence| Layer3[Repositories]
+    API -->|Validation| Layer1["Handlers"]
+    Layer1 -->|Business Logic| Layer2["Services"]
+    Layer2 -->|Persistence| Layer3["Repositories"]
     end
 
-    Layer2 -.->|Server SDK| Appwrite[Appwrite (Auth/Storage)]
-    Layer3 -.->|TCP| DB[(PostgreSQL)]
+    Layer2 -.->|Server SDK| Appwrite["Appwrite (Auth/Storage)"]
+    Layer3 -.->|TCP| DB[("PostgreSQL")]
 ```
 
 ### 1. Clean Architecture & Dependency Injection
