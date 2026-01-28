@@ -3,6 +3,7 @@
 ![Go Version](https://img.shields.io/badge/go-1.23+-00ADD8?style=for-the-badge&logo=go)
 ![Architecture](https://img.shields.io/badge/architecture-clean-success?style=for-the-badge)
 ![Security](https://img.shields.io/badge/security-hardened-blueviolet?style=for-the-badge)
+[![Website](https://img.shields.io/website?url=https%3A%2F%2Fchatbasket.live&up_message=online&down_message=offline&style=for-the-badge&label=chatbasket.live)](https://chatbasket.live)
 
 > **A simplified yet highly secure production-grade backend for the Chatbasket application.**
 
@@ -64,6 +65,8 @@ Security is not an afterthought; it is baked into the core application flow.
 - **Dual-Strategy Authentication**: The middleware (`middleware/session.go`) implements a flexible hybrid system:
     - **Native Apps**: Accepts standard `Authorization: Bearer <session_id>:<user_id>` headers.
     - **Web Clients**: Automatically detects and validates `HttpOnly` Secure Cookies, preventing XSS attacks.
+    
+- **Mandatory Two-Step Verification**: All sensitive entry points (Signup & Login) are enforced by a strict **2FA flow**. Users must verify ownership via OTP before receiving any session tokens, preventing unauthorized account enumeration or access.
 
 - **Credential Hashing**: Sensitive One-Time Passwords (OTPs) are hashed using **Argon2id**, ensuring that even temporary credentials are stored securely (memory-hardened against brute-force).
 
