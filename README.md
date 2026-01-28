@@ -1,88 +1,157 @@
 # Chatbasket Backend
 
-## Overview
+![Go Version](https://img.shields.io/badge/go-1.23+-00ADD8?style=for-the-badge&logo=go)
+![Architecture](https://img.shields.io/badge/architecture-clean-success?style=for-the-badge)
+![Security](https://img.shields.io/badge/security-hardened-blueviolet?style=for-the-badge)
 
-Chatbasket Backend is a Go-based HTTP API built with the Echo framework. It provides backend services for the Chatbasket application, including:
+> **A simplified yet highly secure production-grade backend for the Chatbasket application.**
 
-- User and personal contact management
-- Public and personal routes
-- PostgreSQL-backed persistence
-- Health checks and basic observability
-- **Fully Automated Deployment Pipeline**
+## 🚀 Overview
 
-## Tech Stack
+Chatbasket Backend is the high-performance foundation for a **privacy-first social platform**, designed to solve the engineering challenge of balancing **Public Discovery** with **Private Security**.
 
-- **Language:** Go (module: `chatbasket`)
-- **Framework:** Echo v4
-- **Database:** PostgreSQL (via `pgx` connection pool)
-- **Env Management:** `github.com/joho/godotenv`
-- **Infrastructure:** Docker, Nginx, DigitalOcean, GitHub Actions
+It acts as a **strict privacy enforcement engine** that bridges the gap between open user profiling and encrypted, isolated personal networks. By leveraging Go's concurrency models, it delivers a seamless real-time experience without compromising the rigid security boundaries required for modern social interactions.
 
-## 🚀 Automated Deployment
+Unlike standard boilerplate implementations, this project emphasizes **production readiness**—featuring bespoke cryptographic implementations, aggressive connection pooling strategies, and a "Zero-Touch" deployment pipeline.
 
-This repository features a **zero-touch deployment pipeline**.
+---
 
-### How it Works
-1. Push to `main` branch.
-2. GitHub Actions builds the Docker image and pushes to GHCR.
-3. Workflow SSHs into DigitalOcean droplet and:
-   - Updates `docker-compose.yml` and `nginx.conf`
-   - Generates `.env` from GitHub Secrets
-   - Pulls new images and restarts containers
+## 🏗️ System Architecture
 
-### Setup & Documentation
-Refactored deployment documentation is available in the `docs/` folder:
+The system operates as a **Secure Gateway** (BFF - Backend for Frontend), ensuring that the frontend never interacts directly with sensitive database layers or auth providers.
 
-- **[GitHub Secrets Setup](docs/GITHUB_SECRETS_SETUP.md)** - Required configuration for the pipeline
-- **[Deployment Verification](docs/DEPLOYMENT_VERIFICATION.md)** - How to verify deployments are working
-- **[Nginx Configuration](docs/nginxconf.md)** - Reverse proxy setup details
-- **[.env.example](docs/.env.example)** - Template for environment variables
+**[Frontend Repository (Expo Web + Native)](https://github.com/wpbasket/chatbasket)**
 
-### Manual Maintenance
-The only manual steps required are initial droplet setup or one-time secret updates:
-- **Reseved IP**: Ensure your Azure PostgreSQL Firewall allows the droplet's **Anchor IP** (check via `curl ifconfig.me`).
-- **Secret Rotation**: Update secrets in GitHub and push an empty commit to redeploy.
+```mermaid
+graph TD
+    User([User Device]) -->|HTTPS| CF[Cloudflare Edge<br>DDoS Protection]
+    CF -->|Strict SSL| Nginx[Nginx Reverse Proxy]
+    Nginx -->|Proxy| API[Go Backend API]
+    
+    subgraph "Secure Zone"
+    API -->|Validation| Layer1[Handlers]
+    Layer1 -->|Business Logic| Layer2[Services]
+    Layer2 -->|Persistence| Layer3[Repositories]
+    end
 
-## Project Structure
+    Layer2 -.->|Server SDK| Appwrite[Appwrite (Auth/Storage)]
+    Layer3 -.->|TCP| DB[(PostgreSQL)]
+```
 
-- **`chatbasket-api/`** – Application source code (`main.go`, `db/`, `routes/`, etc.)
-- **`deployment/`** – Infrastructure configuration (`docker-compose.yml`, `nginx.conf`)
-- **`docs/`** – Deployment and setup documentation
-- **`.github/workflows/`** – CI/CD Pipeline definitions
+### 1. Clean Architecture & Dependency Injection
+The codebase enforces a strict unidirectional dependency flow (`Handler` -> `Service` -> `Repository`). 
+- **Decoupling**: Services and Repositories are explicitly injected via factory functions (e.g., `NewUserHandler(service)`), making the system highly modular.
+- **Testability**: This pattern allows for effortless mocking of dependencies during unit testing.
 
-## Development
+### 2. Secure Gateway Pattern
+Crucially, **Appwrite** is used strictly as a backend infrastructure component via the Server API. The client (Expo) **never** holds API keys or talks to Appwrite directly. The Go API acts as the sole gatekeeper, enforcing business rules before any data persists.
 
-### Running Locally
+---
+
+## 📐 API Implementation Philosophy
+
+We prioritize **consistency** and **type safety** over speed of development.
+
+- **Strictly Typed Responses**: We avoid `map[string]interface{}`. All responses are defined in `model/` structs (e.g., `StatusOkay`, `ApiError`), ensuring the frontend has a predictable contract.
+- **Standardized Error Handling**: A centralized error model (`model.ApiError`) ensures that every failure—whether validation, db, or auth—returns a consistent JSON structure with actionable codes.
+
+---
+
+## 🔐 Security Architecture
+
+Security is not an afterthought; it is baked into the core application flow.
+
+- **Dual-Strategy Authentication**: The middleware (`middleware/session.go`) implements a flexible hybrid system:
+    - **Native Apps**: Accepts standard `Authorization: Bearer <session_id>:<user_id>` headers.
+    - **Web Clients**: Automatically detects and validates `HttpOnly` Secure Cookies, preventing XSS attacks.
+
+- **Credential Hashing**: Sensitive One-Time Passwords (OTPs) are hashed using **Argon2id**, ensuring that even temporary credentials are stored securely (memory-hardened against brute-force).
+
+---
+
+## ⚡ Performance & Reliability
+
+### 1. Advanced Connection Pooling
+Instead of default settings, the PostgreSQL connection pool (`db/pool.go`) is manually tuned for high concurrency:
+- **Jitter & Lifetimes**: Configured `MaxConnLifetimeJitter` to prevent thundering herd problems during connection recycles.
+- **Resource Caps**: Strict `MaxConns` limits to prevent database starvation under load.
+
+### 2. Production Hardening
+- **Graceful Shutdown**: The server captures OS signals (`SIGTERM`) to finish in-flight requests and close DB connections cleanly, ensuring zero dropped requests during deployments.
+- **Rate Limiting**: An in-memory rate limiter protects public endpoints from abuse.
+
+---
+
+## ☁️ Infrastructure & Operations
+
+The application operates on a hardened cloud infrastructure designed for zero-trust security:
+
+- **DigitalOcean Droplet**: Hosted on scalable compute instances for reliable performance.
+- **Cloudflare Full (Strict) SSL**: Traffic is end-to-end encrypted. We use **Cloudflare Origin Certificates** on Nginx to ensure that the origin server only communicates with Cloudflare, rejecting direct IP access.
+- **Reverse Proxy**: Nginx `1.23` handles SSL termination and header sanitization before requests reach the Go application.
+
+---
+
+## 🛠️ Tech Stack
+
+We choose tools that offer **Control** and **Predictability**.
+
+| Component | Technology | Rationale (Why?) |
+|-----------|------------|------------------|
+| **Core Logic** | **Go (Golang)** | Chosen for its superior concurrency model (Goroutines) and compile-time type safety.
+| **API Framework** | **Echo v4** | Lightweight and blazing fast. Offers extreme flexibility for custom middleware and handlers, avoiding the bloat of heavier frameworks. |
+| **Database** | **PostgreSQL** | ACID compliance is non-negotiable for user data. Powered by `pgx` for high-performance connection pooling. |
+| **Authentication** | **Appwrite (Current)** | Managed session infrastructure. *Planned for upgrade to native implementation (see Roadmap).* |
+| **Object Storage** | **Appwrite (Storage)** | Secure, scalable file storage for media and attachments. |
+| **Edge Security** | **Cloudflare** | Offloads SSL termination and acts as the first line of defense against volumetric attacks. |
+| **CI/CD** | **GitHub Actions** | Enables "Zero-Touch" deployment, ensuring code in `main` is always living in production. |
+
+---
+
+## 🔮 Future Roadmap
+
+We are actively developing advanced intelligence and architecture upgrades:
+
+- **🔐 Native Secure Authentication (In Development)**:
+    - **Appwrite Removal**: Migrating to a bespoke specialized auth service.
+    - **Hybrid Session Strategy**: Implementing **JWT + Database Persistence** (instead of stateless JWTs). This enables real-time tracking of active devices and allows users to **terminate specific sessions**, a critical security feature often missing in standard implementations.
+
+- **🔐 Advanced Privacy Layer (In Development)**:
+    - **Zero-Knowledge Privacy**: Embedding ChaCha20-Poly1305 encryption for sensitive user fields.
+    - **Blind Indexing**: Implementing HMAC-SHA256 for secure, opaque user lookups.
+
+- **📱 Cross-Platform Notifications (Upcoming)**:
+    - **FCM Universal Integration**: Unified push delivery for Android & iOS.
+    - **Dual-Payload Strategy**: Support for both System Alerts (`Notification`) and Silent Data Updates (`Data-Only`).
+
+- **🤖 AI & Vector Engine (Upcoming)**:
+    - **Azure Cosmos DB**: Serving as a high-dimensional **Vector Store** for RAG pipelines.
+    - **Semantic Search**: Enabling natural language discovery of profiles and content.
+
+---
+
+## 💻 Running the Project
+
+### Local Development (Standard)
+The `main` package is located in `app/`, keeping the root clean.
 
 ```bash
+# Clone and tidy
+git clone https://github.com/your-org/chatbasket-backend
 cd chatbasket-api
 go mod tidy
+
+# Run the server
 go run ./app
 ```
 
-### Running with Docker
+### Production Build (Docker)
+You can test the container build locally:
 
 ```bash
-cd chatbasket-api
+# Build optimized image
 docker build -t chatbasket-api .
-docker run -p 8080:8080 --env-file ../.env chatbasket-api
+
+# Run with local environment variables
+docker run -p 8080:8080 --env-file .env chatbasket-api
 ```
-
-## CORS and Frontend
-CORS allows:
-- `https://chatbasket.live` (Production)
-- `http://localhost:8081` (Local dev - uncomment in `main.go` if needed)
-
-## Graceful Shutdown & Health Checks
-
-The server supports production-friendly behavior:
-
-- Graceful shutdown on `SIGTERM` / interrupt
-- Connection pool cleanup with timeouts
-- Health check at `/healthz` that pings PostgreSQL with a short timeout
-
-## Development Notes
-
-- Update or extend routes in `routes/` and corresponding handlers/services.
-- Schema or query changes should be reflected in `db/` and any generated code.
-- Keep `.env` out of version control and use environment variables for secrets in production.
