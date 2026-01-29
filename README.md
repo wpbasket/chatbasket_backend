@@ -1,8 +1,9 @@
 # Chatbasket Backend
 
-![Go Version](https://img.shields.io/badge/go-1.25.2-00ADD8?style=flat-square&logo=go)
-![Architecture](https://img.shields.io/badge/architecture-clean-success?style=flat-square)
-![Security](https://img.shields.io/badge/security-privacy--first-blueviolet?style=flat-square)
+<img src="https://img.shields.io/badge/Go-1.25.2-00ADD8?style=flat-square&logo=go" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
+<img src="https://img.shields.io/badge/Architecture-clean-success?style=flat-square" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
+<img src="https://img.shields.io/badge/Security-privacy--first-blueviolet?style=flat-square" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
+
 
 > **A simplified yet highly secure production-grade backend for the Chatbasket application.**
 >
