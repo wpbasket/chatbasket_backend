@@ -57,6 +57,12 @@ jobs:
       - name: Deploy on Droplet
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.DROPLET_IP }} << 'ENDSSH'
+          # Ensure the SSL directory exists
+          mkdir -p /etc/ssl/cloudflare
+
+          # Download the Cloudflare Authenticated Origin Pull CA (Overwrite if exists to ensure freshness)
+          wget -q https://developers.cloudflare.com/ssl/static/authenticated_origin_pull_ca.pem -O /etc/ssl/cloudflare/authenticated_origin_pull_ca.pem
+
           cd /app/chatbasket
 
           # Create .env file with secrets
@@ -96,5 +102,5 @@ jobs:
           # --- CRITICAL CLEANUP STEP ---
           # Deletes the old "dangling" image to save disk space
           docker image prune -f
-          
+
           ENDSSH
