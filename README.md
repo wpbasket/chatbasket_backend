@@ -15,7 +15,7 @@ Chatbasket Backend is the high-performance foundation for a **privacy-first soci
 
 It acts as a **strict privacy enforcement engine** that bridges the gap between open user profiling and encrypted, isolated personal networks. By leveraging Go's concurrency models, it delivers a seamless real-time experience without compromising the rigid security boundaries required for modern social interactions.
 
-Unlike standard boilerplate implementations, this project emphasizes **production readiness**—featuring bespoke cryptographic implementations, aggressive connection pooling strategies, and a "Zero-Touch" deployment pipeline.
+Unlike standard boilerplate implementations, this project is built for **real-world production**—featuring custom security protections, aggressive connection pooling strategies, and a "Zero-Touch" deployment pipeline.
 
 ---
 
@@ -41,22 +41,17 @@ graph TD
     Layer3 -.->|TCP| DB[("PostgreSQL")]
 ```
 
-### 1. Clean Architecture & Dependency Injection
+#### 1. Clean Architecture & Dependency Injection
 The codebase enforces a strict unidirectional dependency flow (`Handler` -> `Service` -> `Repository`). 
 - **Decoupling**: Services and Repositories are explicitly injected via factory functions (e.g., `NewUserHandler(service)`), making the system highly modular.
 - **Testability**: This pattern allows for effortless mocking of dependencies during unit testing.
 
-### 2. Secure Gateway Pattern
+#### 2. Secure Gateway Pattern
 Crucially, **Appwrite** is used strictly as a backend infrastructure component via the Server API. The client (Expo) **never** holds API keys or talks to Appwrite directly. The Go API acts as the sole gatekeeper, enforcing business rules before any data persists.
 
----
-
-## 📐 API Implementation Philosophy
-
-We prioritize **consistency** and **type safety** over speed of development.
-
-- **Strictly Typed Responses**: We avoid `map[string]interface{}`. All responses are defined in `model/` structs (e.g., `StatusOkay`, `ApiError`), ensuring the frontend has a predictable contract.
-- **Standardized Error Handling**: A centralized error model (`model.ApiError`) ensures that every failure—whether validation, db, or auth—returns a consistent JSON structure with actionable codes.
+#### 3. Code Design Principles
+- **Strictly Typed Responses**: We avoid `map[string]interface{}`. All responses are defined in `model/` structs, ensuring the frontend has a predictable contract.
+- **Centralized Error Handling**: A unified error model (`model.ApiError`) ensures that every failure returns a consistent JSON structure with actionable codes.
 
 ---
 
@@ -68,32 +63,28 @@ Security is not an afterthought; it is baked into the core application flow.
     - **Native Apps**: Accepts standard `Authorization: Bearer <session_id>:<user_id>` headers.
     - **Web Clients**: Automatically detects and validates `HttpOnly` Secure Cookies, preventing XSS attacks.
     
-- **Mandatory Two-Step Verification**: All sensitive entry points (Signup & Login) are enforced by a strict **2FA flow**. Users must verify ownership via OTP before receiving any session tokens, preventing unauthorized account enumeration or access.
+- **Mandatory Two-Step Verification**: All sensitive entry points (Signup & Login) are enforced by a strict **2FA flow**. Users must verify ownership via OTP before receiving any session tokens.
 
-- **Credential Hashing**: Sensitive One-Time Passwords (OTPs) are hashed using **Argon2id**, ensuring that even temporary credentials are stored securely (memory-hardened against brute-force).
+- **Credential Hashing**: Sensitive One-Time Passwords (OTPs) are hashed using **Argon2id**, ensuring that even temporary credentials are stored securely.
 
 ---
 
-## ⚡ Performance & Reliability
+## ☁️ Infrastructure & Reliability
 
-### 1. Advanced Connection Pooling
-Instead of default settings, the PostgreSQL connection pool (`db/pool.go`) is manually tuned for high concurrency:
-- **Jitter & Lifetimes**: Configured `MaxConnLifetimeJitter` to prevent thundering herd problems during connection recycles.
-- **Resource Caps**: Strict `MaxConns` limits to prevent database starvation under load.
+The application operates on a hardened cloud infrastructure designed for zero-trust security and high availability.
 
-### 2. Production Hardening
+#### 1. High-Performance Engineering
+- **Advanced Connection Pooling**: The PostgreSQL pool is manually tuned with `MaxConnLifetimeJitter` and strict resource caps to prevent thundering herd issues.
 - **Graceful Shutdown**: The server captures OS signals (`SIGTERM`) to finish in-flight requests and close DB connections cleanly, ensuring zero dropped requests during deployments.
-- **Rate Limiting**: An in-memory rate limiter protects public endpoints from abuse.
+- **Hybrid Rate Limiting**: Features **Cloudflare WAF** for edge-level DDoS mitigation, backed by an in-memory application limiter for granular endpoint protection.
 
----
-
-## ☁️ Infrastructure & Operations
-
-The application operates on a hardened cloud infrastructure designed for zero-trust security:
-
+#### 2. Zero Trust Network
 - **DigitalOcean Droplet**: Hosted on scalable compute instances for reliable performance.
-- **Cloudflare Full (Strict) SSL**: Traffic is end-to-end encrypted. We use **Cloudflare Origin Certificates** on Nginx to ensure that the origin server only communicates with Cloudflare, rejecting direct IP access.
-- **Reverse Proxy**: Nginx `1.23` handles SSL termination and header sanitization before requests reach the Go application.
+- **Zero Trust Security Architecture**:
+    1. **Strict SSL (Identity)**: Encrypted via a 15-year Cloudflare Origin Certificate to prevent Man-in-the-Middle attacks.
+    2. **Mutual TLS (Access)**: Enforced **Authenticated Origin Pulls**, requiring Nginx to validate Cloudflare's cryptographic signature for every request.
+    3. **IP Firewall (Perimeter)**: Nginx strictly whitelists official Cloudflare CIDR ranges and drops all direct traffic.
+- **Reverse Proxy**: Nginx handles SSL termination and header sanitization before requests reach the Go application.
 
 ---
 
@@ -108,7 +99,7 @@ We choose tools that offer **Control** and **Predictability**.
 | **Database** | ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=flat-square&logo=postgresql&logoColor=white) | **Data Integrity**: Strict ACID compliance for user transactions and relations. |
 | **Authentication** | ![Appwrite](https://img.shields.io/badge/Appwrite-%23FD366E.svg?style=flat-square&logo=appwrite&logoColor=white) | **Managed Security**: Offloads session token management while sticking to a self-hostable open-source standard. |
 | **Object Storage** | ![Appwrite](https://img.shields.io/badge/Appwrite_Storage-%23FD366E.svg?style=flat-square&logo=appwrite&logoColor=white) | **Secure Uploads**: Handles chunked uploads and virus scanning for media. |
-| **Edge Security** | ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=flat-square&logo=Cloudflare&logoColor=white) | **DDoS Defense**: Proxies all traffic, hiding the origin server IP from direct attacks. |
+| **Edge Security** | ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=flat-square&logo=Cloudflare&logoColor=white) | **Zero Trust Gateway**: Beyond simple DDoS protection, it acts as an mTLS firewall (Authenticated Origin Pulls) and enforces strict end-to-end encryption, completely isolating the origin infrastructure. |
 | **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=flat-square&logo=githubactions&logoColor=white) | **Zero-Touch Deploy**: Commits to `main` automatically build and swap containers on DigitalOcean. |
 
 ---
@@ -118,8 +109,8 @@ We choose tools that offer **Control** and **Predictability**.
 We are actively developing advanced intelligence and architecture upgrades:
 
 - **🔐 Native Secure Authentication (In Development)**:
-    - **Appwrite Removal**: Migrating to a bespoke specialized auth service.
-    - **Hybrid Session Strategy**: Implementing **JWT + Database Persistence** (instead of stateless JWTs). This enables real-time tracking of active devices and allows users to **terminate specific sessions**, a critical security feature often missing in standard implementations.
+    - **Custom Auth Service**: Migrating away from generic providers.
+    - **Hybrid Session Strategy**: Implementing **JWT + Database Persistence**. This enables real-time tracking of active devices and allows users to **terminate specific sessions**, a critical security feature often missing in standard implementations.
 
 - **🔐 Advanced Privacy Layer (In Development)**:
     - **Zero-Knowledge Privacy**: Embedding ChaCha20-Poly1305 encryption for sensitive user fields.
@@ -137,7 +128,7 @@ We are actively developing advanced intelligence and architecture upgrades:
 
 ## 💻 Running the Project
 
-### Local Development (Standard)
+#### Local Development (Standard)
 The `main` package is located in `app/`, keeping the root clean.
 
 ```bash
@@ -150,7 +141,7 @@ go mod tidy
 go run ./app
 ```
 
-### Production Build (Docker)
+#### Production Build (Docker)
 You can test the container build locally:
 
 ```bash
