@@ -11,3 +11,9 @@ type ApiError struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 }
+
+// AppError is for internal/non-API errors
+type AppError struct {
+	Type    string
+	Message string
+}
