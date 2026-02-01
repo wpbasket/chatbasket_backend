@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/smtp"
 	"os"
+	"time"
 )
 
 // SendEmail sends an email using SMTP with STARTTLS (port 587)
@@ -42,13 +43,18 @@ func SendEmail(to []string, subject string, bodyHTML string) *model.AppError {
 	}
 	message += "\r\n" + bodyHTML
 
-	// Connect to SMTP server
+	// Connect to SMTP server with timeout
 	addr := host + ":" + port
-	conn, err := net.Dial("tcp", addr)
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return &model.AppError{Type: "email_send_error", Message: "dial failed: " + err.Error()}
 	}
 	defer conn.Close()
+
+	// Set a deadline for the entire interaction (e.g. 30 seconds)
+	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return &model.AppError{Type: "email_send_error", Message: "failed to set deadline: " + err.Error()}
+	}
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
