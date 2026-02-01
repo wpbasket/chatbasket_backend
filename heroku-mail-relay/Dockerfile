@@ -22,6 +22,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 # -------- Runtime stage --------
 FROM alpine:latest
 
+# Set Go memory limit for 512MB RAM dyno
+ENV GOMEMLIMIT=450MiB
+
 # Install CA certificates for HTTPS
 RUN apk --no-cache add ca-certificates
 

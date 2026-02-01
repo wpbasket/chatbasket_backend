@@ -151,6 +151,11 @@ func main() {
 		e.Logger.Warn("Database pool close timeout - forcing shutdown")
 	}
 
+	// Wait for background emails to finish
+	e.Logger.Info("Waiting for background email tasks...")
+	utils.WaitEmails()
+	e.Logger.Info("Background emails finished")
+
 	e.Logger.Info("Server exited")
 }
 
