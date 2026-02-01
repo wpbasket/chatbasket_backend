@@ -98,6 +98,8 @@ jobs:
           echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}" >> .env
           echo "SMTP_FROM=${{ secrets.SMTP_FROM }}" >> .env
           echo "SMTP_FROM_NAME=${{ secrets.SMTP_FROM_NAME }}" >> .env
+          echo "MAIL_RELAY_URL=${{ secrets.MAIL_RELAY_URL }}" >> .env
+          echo "MAIL_RELAY_SECRET=${{ secrets.MAIL_RELAY_SECRET }}" >> .env
 
           # Login to GHCR on the Droplet (Required to pull the private image)
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
