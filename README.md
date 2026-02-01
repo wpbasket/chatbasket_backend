@@ -32,13 +32,12 @@ graph TD
     Nginx -->|Proxy| API["Go Backend API"]
     
     subgraph "Secure Zone"
-    API -->|Validation| Layer1["Handlers"]
-    Layer1 -->|Business Logic| Layer2["Services"]
-    Layer2 -->|Persistence| Layer3["Repositories"]
+    API -->|Auth/Persistence| DB[("PostgreSQL")]
+    API -->|Email| Gateway["Heroku Email Gateway<br>(Worker Pool)"]
+    Gateway -->|SMTP| Zoho["Zoho Mail"]
     end
 
-    Layer2 -.->|Server SDK| Appwrite["Appwrite (Auth/Storage)"]
-    Layer3 -.->|TCP| DB[("PostgreSQL")]
+    API -.->|Storage| Appwrite["Appwrite (Files)"]
 ```
 
 #### 1. Clean Architecture & Dependency Injection
@@ -47,7 +46,7 @@ The codebase enforces a strict unidirectional dependency flow (`Handler` -> `Ser
 - **Testability**: This pattern allows for effortless mocking of dependencies during unit testing.
 
 #### 2. Secure Gateway Pattern
-Crucially, **Appwrite** is used strictly as a backend infrastructure component via the Server API. The client (Expo) **never** holds API keys or talks to Appwrite directly. The Go API acts as the sole gatekeeper, enforcing business rules before any data persists.
+The Go API acts as a strict **Security Gateway**. It manages proprietary Authentication, Authorization, and Session Persistence directly via **PostgreSQL**. External services like **Appwrite** (Storage) and the **Heroku Email Gateway** are abstracted away behind clean service interfaces, ensuring the core business logic remains independent and secure.
 
 #### 3. Code Design Principles
 - **Strictly Typed Responses**: We avoid `map[string]interface{}`. All responses are defined in `model/` structs, ensuring the frontend has a predictable contract.
@@ -59,8 +58,10 @@ Crucially, **Appwrite** is used strictly as a backend infrastructure component v
 
 Security is not an afterthought; it is baked into the core application flow.
 
-- **Dual-Strategy Authentication**: The middleware (`middleware/session.go`) implements a flexible hybrid system:
-    - **Native Apps**: Accepts standard `Authorization: Bearer <session_id>:<user_id>` headers.
+- **Native Custom Authentication**: A production-grade Auth system built directly into the Go core. 
+    - No external Auth dependencies for login/signup.
+    - Uses **Argon2id** for state-of-the-art password and OTP hashing.
+    - **Session Persistence**: Managed in PostgreSQL for real-time session tracking and remote logout capability.
     - **Web Clients**: Automatically detects and validates `HttpOnly` Secure Cookies, preventing XSS attacks.
     
 - **Mandatory Two-Step Verification**: All sensitive entry points (Signup & Login) are enforced by a strict **2FA flow**. Users must verify ownership via OTP before receiving any session tokens.
@@ -96,21 +97,17 @@ We choose tools that offer **Control** and **Predictability**.
 |-----------|------------|------------------|
 | **Core Logic** | ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat-square&logo=go&logoColor=white) | **Concurrency & Safety**: Goroutines handle thousands of concurrent WebSocket connections with minimal footprint. |
 | **API Framework** | ![Echo](https://img.shields.io/badge/Echo_v4-00ADD8?style=flat-square&logoColor=white) | **Performance**: Zero-allocation router that is significantly faster than Gin or Fiber in our benchmarks. |
-| **Database** | ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=flat-square&logo=postgresql&logoColor=white) | **Data Integrity**: Strict ACID compliance for user transactions and relations. |
-| **Authentication** | ![Appwrite](https://img.shields.io/badge/Appwrite-%23FD366E.svg?style=flat-square&logo=appwrite&logoColor=white) | **Managed Security**: Offloads session token management while sticking to a self-hostable open-source standard. |
-| **Object Storage** | ![Appwrite](https://img.shields.io/badge/Appwrite_Storage-%23FD366E.svg?style=flat-square&logo=appwrite&logoColor=white) | **Secure Uploads**: Handles chunked uploads and virus scanning for media. |
-| **Edge Security** | ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=flat-square&logo=Cloudflare&logoColor=white) | **Zero Trust Gateway**: Beyond simple DDoS protection, it acts as an mTLS firewall (Authenticated Origin Pulls) and enforces strict end-to-end encryption, completely isolating the origin infrastructure. |
-| **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=flat-square&logo=githubactions&logoColor=white) | **Zero-Touch Deploy**: Commits to `main` automatically build and swap containers on DigitalOcean. |
+| **Database** | ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=flat-square&logo=postgresql&logoColor=white) | **Primary Hub**: Handles all User Data, Custom Auth Sessions, and Relations with ACID compliance. |
+| **Email Gateway** | ![Go](https://img.shields.io/badge/Heroku_Gateway-00ADD8?style=flat-square&logo=go&logoColor=white) | **High Reliability**: A dedicated Go-based **HTTP-to-SMTP Gateway** featuring a **Worker Pool** and **Fire-and-Forget** asynchronous logic to bypass primary infrastructure port restrictions. |
+| **Object Storage** | ![Appwrite](https://img.shields.io/badge/Appwrite_Storage-%23FD366E.svg?style=flat-square&logo=appwrite&logoColor=white) | **Secure Uploads**: Offloads chunked uploads and media management. |
+| **Edge Security** | ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=flat-square&logo=Cloudflare&logoColor=white) | **Zero Trust Gateway**: Acts as an mTLS firewall (Authenticated Origin Pulls) and enforces strict end-to-end encryption. |
+| **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=flat-square&logo=githubactions&logoColor=white) | **Zero-Touch Deploy**: Commits to `main` automatically build and swap containers on both Heroku and DigitalOcean. |
 
 ---
 
 ## 🔮 Future Roadmap
 
 We are actively developing advanced intelligence and architecture upgrades:
-
-- **🔐 Native Secure Authentication (In Development)**:
-    - **Custom Auth Service**: Migrating away from generic providers.
-    - **Hybrid Session Strategy**: Implementing **JWT + Database Persistence**. This enables real-time tracking of active devices and allows users to **terminate specific sessions**, a critical security feature often missing in standard implementations.
 
 - **🔐 Advanced Privacy Layer (In Development)**:
     - **Zero-Knowledge Privacy**: Embedding ChaCha20-Poly1305 encryption for sensitive user fields.
