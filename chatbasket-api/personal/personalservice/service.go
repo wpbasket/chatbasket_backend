@@ -17,11 +17,15 @@ import (
 // Extend with personal-specific utilities as the feature evolves.
 type Service struct {
 	*services.GlobalService
+	AuthSecret []byte
 }
 
 // New constructs a personal Service from the shared GlobalService.
-func New(gs *services.GlobalService) *Service {
-	return &Service{GlobalService: gs}
+func New(gs *services.GlobalService, authSecret []byte) *Service {
+	return &Service{
+		GlobalService: gs,
+		AuthSecret:    authSecret,
+	}
 }
 
 func (ps *Service) buildAvatarURL(

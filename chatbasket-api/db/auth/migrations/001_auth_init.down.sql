@@ -1,18 +1,13 @@
 -- +migrate Down
 
 -- Drop verification_codes
-DROP INDEX IF EXISTS idx_verification_codes_expired;
--- Partial index for expired codes cleanup
-DROP INDEX IF EXISTS idx_verification_codes_lookup;
--- Email + type lookup index
 DROP TRIGGER IF EXISTS verification_codes_timestamps_trigger ON verification_codes;
 -- Timestamp trigger
 DROP TABLE IF EXISTS verification_codes CASCADE;
 -- Also drops PK, FK, CHECK constraints
 
 -- Drop sessions
-DROP INDEX IF EXISTS idx_sessions_expired;
--- Partial index for expired sessions cleanup
+-- Removed: idx_sessions_expired (partial index was removed from UP migration)
 DROP INDEX IF EXISTS idx_sessions_user_id;
 -- User session lookup index
 DROP TRIGGER IF EXISTS sessions_timestamps_trigger ON sessions;

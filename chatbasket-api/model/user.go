@@ -1,8 +1,9 @@
 package model
 
 import (
-	"github.com/labstack/echo/v4"
 	"net/http"
+
+	"github.com/labstack/echo/v4"
 )
 
 // AppwriteUserPayload is the structure for creating/updating user documents in Appwrite.
@@ -162,4 +163,32 @@ func CheckIfUserBlocked(user *User) error {
 		return echo.NewHTTPError(http.StatusForbidden, "Your account has been blocked "+user.AdminBlockReason)
 	}
 	return nil
+}
+
+// 🔄 Two-Step Password Update Models
+
+// RequestUpdateOTPPayload is used to request an OTP for update operations
+type RequestUpdateOTPPayload struct {
+	UpdateType string `json:"updateType"` // "password", "email", etc.
+}
+
+// ConfirmPasswordUpdatePayload is used to confirm password update with OTP
+type ConfirmPasswordUpdatePayload struct {
+	UpdateID    string `json:"updateId"`    // UUID from RequestUpdateOTP
+	Otp         string `json:"otp"`         // OTP code
+	NewPassword string `json:"newPassword"` // New password to set
+}
+
+// 🔄 Two-Step Email Update Models
+
+// RequestEmailUpdatePayload is used to request email update
+type RequestEmailUpdatePayload struct {
+	NewEmail string `json:"newEmail"` // New email address
+	Password string `json:"password"` // Current password for verification
+}
+
+// ConfirmEmailUpdatePayload is used to confirm email update with OTP
+type ConfirmEmailUpdatePayload struct {
+	UpdateID string `json:"updateId"` // UUID from RequestEmailUpdate
+	Otp      string `json:"otp"`      // OTP code
 }

@@ -1,6 +1,7 @@
-package publicservice
+package commonservice
 
 import (
+	"chatbasket-api/common/commonmodel"
 	"chatbasket-api/internal/db/auth"
 	"chatbasket-api/model"
 	"chatbasket-api/utils"
@@ -13,12 +14,12 @@ import (
 
 // RequestUpdateOTP sends OTP for update operations (password, email, etc.)
 // Step 1 of two-step update flow
-func (ps *Service) RequestUpdateOTP(ctx context.Context, payload *model.RequestUpdateOTPPayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
+func (s *Service) RequestUpdateOTP(ctx context.Context, payload *commonmodel.RequestUpdateOTPPayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
 	// Get user UUID from middleware
 	userUUID := userId.UuidUserId
 
 	// Get user from database
-	user, err := ps.AuthQueries.GetAuthUserByID(ctx, userUUID)
+	user, err := s.AuthQueries.GetAuthUserByID(ctx, userUUID)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    http.StatusInternalServerError,
@@ -51,12 +52,12 @@ func (ps *Service) RequestUpdateOTP(ctx context.Context, payload *model.RequestU
 	updateID := uuid.New()
 
 	// Store verification code with update_id
-	_, err = ps.AuthQueries.CreateVerificationCodeWithUpdateID(ctx, auth.CreateVerificationCodeWithUpdateIDParams{
+	_, err = s.AuthQueries.CreateVerificationCodeWithUpdateID(ctx, auth.CreateVerificationCodeWithUpdateIDParams{
 		ID:       userUUID,
 		UpdateID: pgtype.UUID{Bytes: updateID, Valid: true},
 		Email:    user.Email,
 		CodeHash: hashedOTP,
-		Type:     payload.UpdateType, // "password", "email", etc.
+		Type:     payload.UpdateType, // "password_update" or "email_update"
 	})
 	if err != nil {
 		return nil, &model.ApiError{
@@ -67,8 +68,8 @@ func (ps *Service) RequestUpdateOTP(ctx context.Context, payload *model.RequestU
 	}
 
 	// Send OTP email
-	subject := "OTP for " + payload.UpdateType + " update"
-	body := "<p>Hello,<br>Your OTP for " + payload.UpdateType + " update is:<br><h1>" + otp + "</h1></p><p>This code is valid for 3 minutes.<br>ChatBasket</p>"
+	subject := "OTP for " + payload.UpdateType
+	body := "<p>Hello,<br>Your OTP for " + payload.UpdateType + " is:<br><h1>" + otp + "</h1></p><p>This code is valid for 3 minutes.<br>ChatBasket</p>"
 	if appErr := utils.SendEmail([]string{user.Email}, subject, body); appErr != nil {
 		return nil, &model.ApiError{
 			Code:    http.StatusInternalServerError,
@@ -85,7 +86,7 @@ func (ps *Service) RequestUpdateOTP(ctx context.Context, payload *model.RequestU
 
 // ConfirmPasswordUpdate verifies OTP and updates password
 // Step 2 of two-step password update flow
-func (ps *Service) ConfirmPasswordUpdate(ctx context.Context, payload *model.ConfirmPasswordUpdatePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
+func (s *Service) ConfirmPasswordUpdate(ctx context.Context, payload *commonmodel.ConfirmPasswordUpdatePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
 	// Get user UUID from middleware
 	userUUID := userId.UuidUserId
 
@@ -100,7 +101,7 @@ func (ps *Service) ConfirmPasswordUpdate(ctx context.Context, payload *model.Con
 	}
 
 	// Get verification code by user ID
-	record, err := ps.AuthQueries.GetVerificationCode(ctx, auth.GetVerificationCodeParams{
+	record, err := s.AuthQueries.GetVerificationCode(ctx, auth.GetVerificationCodeParams{
 		ID:   userUUID,
 		Type: "password_update",
 	})
@@ -116,19 +117,19 @@ func (ps *Service) ConfirmPasswordUpdate(ctx context.Context, payload *model.Con
 	if !record.UpdateID.Valid || record.UpdateID.Bytes != updateID {
 		return nil, &model.ApiError{
 			Code:    http.StatusUnauthorized,
-			Message: "Invalid update ID",
-			Type:    "unauthorized",
+			Message: "Request session invalid",
+			Type:    "flow_error",
 		}
 	}
 
 	// Check expiry (3 minutes)
 	if utils.IsExpiredOTP(record.CreatedAt.Time, 3) {
 		// Delete expired code
-		_ = ps.AuthQueries.DeleteVerificationCode(ctx, userUUID)
+		_ = s.AuthQueries.DeleteVerificationCode(ctx, userUUID)
 		return nil, &model.ApiError{
 			Code:    http.StatusUnauthorized,
 			Message: "OTP has expired",
-			Type:    "unauthorized",
+			Type:    "otp_expired",
 		}
 	}
 
@@ -145,7 +146,7 @@ func (ps *Service) ConfirmPasswordUpdate(ctx context.Context, payload *model.Con
 		return nil, &model.ApiError{
 			Code:    http.StatusUnauthorized,
 			Message: "Invalid OTP",
-			Type:    "unauthorized",
+			Type:    "invalid_otp",
 		}
 	}
 
@@ -160,7 +161,7 @@ func (ps *Service) ConfirmPasswordUpdate(ctx context.Context, payload *model.Con
 	}
 
 	// Update password
-	err = ps.AuthQueries.UpdateAuthUserPassword(ctx, auth.UpdateAuthUserPasswordParams{
+	err = s.AuthQueries.UpdateAuthUserPassword(ctx, auth.UpdateAuthUserPasswordParams{
 		ID:           userUUID,
 		PasswordHash: hashedPassword,
 	})
@@ -173,7 +174,7 @@ func (ps *Service) ConfirmPasswordUpdate(ctx context.Context, payload *model.Con
 	}
 
 	// Delete verification code
-	_ = ps.AuthQueries.DeleteVerificationCode(ctx, userUUID)
+	_ = s.AuthQueries.DeleteVerificationCode(ctx, userUUID)
 
 	return &model.StatusOkay{
 		Status:  true,
@@ -183,12 +184,12 @@ func (ps *Service) ConfirmPasswordUpdate(ctx context.Context, payload *model.Con
 
 // RequestEmailUpdate sends OTP to new email for verification
 // Step 1 of two-step email update flow
-func (ps *Service) RequestEmailUpdate(ctx context.Context, payload *model.RequestEmailUpdatePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
+func (s *Service) RequestEmailUpdate(ctx context.Context, payload *commonmodel.RequestEmailUpdatePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
 	// Get user UUID from middleware
 	userUUID := userId.UuidUserId
 
 	// Get user from database
-	user, err := ps.AuthQueries.GetAuthUserByID(ctx, userUUID)
+	user, err := s.AuthQueries.GetAuthUserByID(ctx, userUUID)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    http.StatusInternalServerError,
@@ -210,12 +211,12 @@ func (ps *Service) RequestEmailUpdate(ctx context.Context, payload *model.Reques
 		return nil, &model.ApiError{
 			Code:    http.StatusUnauthorized,
 			Message: "Invalid password",
-			Type:    "unauthorized",
+			Type:    "invalid_password",
 		}
 	}
 
 	// Check if new email already exists
-	exists, err := ps.AuthQueries.CheckEmailExists(ctx, payload.NewEmail)
+	exists, err := s.AuthQueries.CheckEmailExists(ctx, payload.NewEmail)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    http.StatusInternalServerError,
@@ -255,7 +256,7 @@ func (ps *Service) RequestEmailUpdate(ctx context.Context, payload *model.Reques
 	updateID := uuid.New()
 
 	// Store verification code with update_id and new email
-	_, err = ps.AuthQueries.CreateVerificationCodeWithUpdateID(ctx, auth.CreateVerificationCodeWithUpdateIDParams{
+	_, err = s.AuthQueries.CreateVerificationCodeWithUpdateID(ctx, auth.CreateVerificationCodeWithUpdateIDParams{
 		ID:       userUUID,
 		UpdateID: pgtype.UUID{Bytes: updateID, Valid: true},
 		Email:    payload.NewEmail, // Store new email in verification code
@@ -289,7 +290,7 @@ func (ps *Service) RequestEmailUpdate(ctx context.Context, payload *model.Reques
 
 // ConfirmEmailUpdate verifies OTP and updates email
 // Step 2 of two-step email update flow
-func (ps *Service) ConfirmEmailUpdate(ctx context.Context, payload *model.ConfirmEmailUpdatePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
+func (s *Service) ConfirmEmailUpdate(ctx context.Context, payload *commonmodel.ConfirmEmailUpdatePayload, userId model.UserId) (*model.StatusOkay, *model.ApiError) {
 	// Get user UUID from middleware
 	userUUID := userId.UuidUserId
 
@@ -304,7 +305,7 @@ func (ps *Service) ConfirmEmailUpdate(ctx context.Context, payload *model.Confir
 	}
 
 	// Get verification code by user ID
-	record, err := ps.AuthQueries.GetVerificationCode(ctx, auth.GetVerificationCodeParams{
+	record, err := s.AuthQueries.GetVerificationCode(ctx, auth.GetVerificationCodeParams{
 		ID:   userUUID,
 		Type: "email_update",
 	})
@@ -320,19 +321,19 @@ func (ps *Service) ConfirmEmailUpdate(ctx context.Context, payload *model.Confir
 	if !record.UpdateID.Valid || record.UpdateID.Bytes != updateID {
 		return nil, &model.ApiError{
 			Code:    http.StatusUnauthorized,
-			Message: "Invalid update ID",
-			Type:    "unauthorized",
+			Message: "Request session invalid",
+			Type:    "flow_error",
 		}
 	}
 
 	// Check expiry (3 minutes)
 	if utils.IsExpiredOTP(record.CreatedAt.Time, 3) {
 		// Delete expired code
-		_ = ps.AuthQueries.DeleteVerificationCode(ctx, userUUID)
+		_ = s.AuthQueries.DeleteVerificationCode(ctx, userUUID)
 		return nil, &model.ApiError{
 			Code:    http.StatusUnauthorized,
 			Message: "OTP has expired",
-			Type:    "unauthorized",
+			Type:    "otp_expired",
 		}
 	}
 
@@ -349,12 +350,12 @@ func (ps *Service) ConfirmEmailUpdate(ctx context.Context, payload *model.Confir
 		return nil, &model.ApiError{
 			Code:    http.StatusUnauthorized,
 			Message: "Invalid OTP",
-			Type:    "unauthorized",
+			Type:    "invalid_otp",
 		}
 	}
 
 	// Update email (new email is stored in record.Email)
-	err = ps.AuthQueries.UpdateAuthUserEmail(ctx, auth.UpdateAuthUserEmailParams{
+	err = s.AuthQueries.UpdateAuthUserEmail(ctx, auth.UpdateAuthUserEmailParams{
 		ID:              userUUID,
 		Email:           record.Email, // Use email from verification code
 		IsEmailVerified: true,
@@ -368,7 +369,7 @@ func (ps *Service) ConfirmEmailUpdate(ctx context.Context, payload *model.Confir
 	}
 
 	// Delete verification code
-	_ = ps.AuthQueries.DeleteVerificationCode(ctx, userUUID)
+	_ = s.AuthQueries.DeleteVerificationCode(ctx, userUUID)
 
 	return &model.StatusOkay{
 		Status:  true,

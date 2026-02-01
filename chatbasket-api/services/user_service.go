@@ -1,584 +1,220 @@
 package services
 
 import (
-	// "chatbasket-api/appwriteinternal"
+	"chatbasket-api/internal/db/auth"
 	"chatbasket-api/model"
 	"chatbasket-api/utils"
 	"context"
 	"log"
-	"time"
+	"net/http"
 
-	"github.com/appwrite/sdk-for-go/id"
-	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
-// type UserService struct {
-// 	Appwrite *appwriteinternal.AppwriteService
-// }
-
-// func NewUserService(app *appwriteinternal.AppwriteService) *UserService {
-// 	return &UserService{Appwrite: app}
-// }
-
-func (us *GlobalService) Signup(ctx context.Context, payload *model.SignupPayload) (*model.StatusOkay, *model.ApiError) {
-	// 🔍 Step 1: Check if email already exists
-	emailRes, err := us.Appwrite.Users.List(
-		us.Appwrite.Users.WithListQueries([]string{
-			query.Equal("email", payload.Email),
-			query.Limit(1),
-		}),
-	)
-
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to query email: " + err.Error(),
-			Type:    "internal_server_error",
+// Signup handles user registration: Validates email, creates user (unverified), sends verification OTP.
+func (s *AuthService) Signup(ctx context.Context, payload *model.SignupPayload) (*model.StatusOkay, *model.ApiError) {
+	// 1. Check if email already exists
+	user, err := s.AuthQueries.GetAuthUserByEmail(ctx, payload.Email)
+	if err == nil {
+		// User exists - check if verified
+		if user.IsEmailVerified {
+			// Verified user cannot signup again
+			return nil, &model.ApiError{Code: http.StatusConflict, Message: "Email already registered", Type: "conflict"}
 		}
-	}
 
-	if emailRes.Total == 1 {
-		return nil, &model.ApiError{
-			Code:    409,
-			Message: "Email already registered",
-			Type:    "conflict",
-		}
-	}
-	pass := "00" + payload.Password
-
-	hashedPassword, err := utils.HashOTP(pass)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to hash password: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	// ✅ Step 2: Create account in Appwrite Auth
-	newUuid, err := uuid.NewV7()
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to generate UUID: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	userID := id.Custom(newUuid.String())
-	_, err = us.Appwrite.Users.CreateArgon2User(
-		userID,
-		payload.Email,
-		hashedPassword,
-		us.Appwrite.Users.WithCreateArgon2UserName(payload.Name),
-	)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Appwrite account creation failed: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	// Step 3: Send OTP (CreateEmailToken)
-	messageId := id.Custom(uuid.NewString())
-	subject := "Otp for email verification"
-	otp, err := utils.GenerateOTP()
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to generate OTP: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	content := "<p>Hello,<br>Please enter this code in the app to verify your email address. This code is valid for 3 minutes.Your One-Time Password (OTP) for verifying your email address is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
-
-	targetRes, err := us.Appwrite.Users.ListTargets(userID)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to list targets: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-	var target string
-	if targetRes.Total == 0 {
-		target = uuid.New().String()
-		createTargetRes, err := us.Appwrite.Users.CreateTarget(
-			userID,
-			target,
-			"email",
-			payload.Email,
-		)
+		// Unverified user - delete and recreate fresh
+		err = s.AuthQueries.DeleteAuthUser(ctx, user.ID)
 		if err != nil {
-			return nil, &model.ApiError{
-				Code:    500,
-				Message: "Failed to create target: " + err.Error(),
-				Type:    "internal_server_error",
-			}
+			return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to clean up unverified account", Type: "internal_server_error"}
 		}
-		target = createTargetRes.Id
-	}
-	if targetRes.Total > 0 {
-		target = targetRes.Targets[0].Id
+		log.Printf("Deleted unverified account for email: %s", payload.Email)
+		// Continue to create new user below
+	} else if err != pgx.ErrNoRows {
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to query email: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
 
-	_, err = us.Appwrite.Message.CreateEmail(
-		messageId,
-		subject,
-		content,
-		us.Appwrite.Message.WithCreateEmailUsers([]string{userID}),
-		us.Appwrite.Message.WithCreateEmailCc([]string{target}),
-	)
+	// 2. Hash Password
+	hashedPassword, appErr := utils.HashPassword(payload.Password)
+	if appErr != nil {
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to hash password: " + appErr.Message, Type: appErr.Type}
+	}
+
+	// 3. Create User (Unverified)
+	userID, err := uuid.NewV7()
 	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to send email: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to generate UUID", Type: "internal_server_error"}
 	}
 
-	doc, err := us.Appwrite.Database.ListDocuments(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.TempOtpCollectionID,
-		us.Appwrite.Database.WithListDocumentsQueries(
-			[]string{
-				query.Equal("userId", userID),
-				query.Limit(1),
-			},
-		),
-	)
-
+	_, err = s.AuthQueries.CreateAuthUser(ctx, auth.CreateAuthUserParams{
+		ID:              userID,
+		Name:            payload.Name,
+		Email:           payload.Email,
+		PasswordHash:    hashedPassword,
+		IsEmailVerified: false,
+	})
 	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to query otp data: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to create user: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
 
-	if doc.Total == 1 {
-		_, err = us.Appwrite.Database.DeleteDocument(
-			us.Appwrite.DatabaseID,
-			us.Appwrite.TempOtpCollectionID,
-			userID,
-		)
-		if err != nil {
-			return nil, &model.ApiError{
-				Code:    500,
-				Message: "Failed to delete existing otp: " + err.Error(),
-				Type:    "internal_server_error",
-			}
-		}
+	// 4. Send Verification OTP via Utils
+	if apiErr := utils.SendVerificationOTPFlow(ctx, s.AuthQueries, userID, payload.Email, "email_verification"); apiErr != nil {
+		log.Printf("Signup OTP Send Warning: %v", apiErr.Message)
 	}
 
-	hashedOtp, err := utils.HashOTP(otp)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to hash OTP: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	tempOtpPayload := model.TempOtpPayload{
-		Email:     payload.Email,
-		Otp:       hashedOtp,
-		UserId:    userID,
-		MessageId: messageId,
-	}
-
-	_, err = us.Appwrite.Database.CreateDocument(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.TempOtpCollectionID,
-		userID,
-		tempOtpPayload,
-	)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to save otp in database: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	// 👤 Step 4: Return success response
-	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
+	return &model.StatusOkay{Status: true, Message: "User created, OTP sent to email"}, nil
 }
 
-func (us *GlobalService) AccountVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, *model.ApiError) {
-
-	// Step1: Verify user
-	userRes, err := us.Appwrite.Users.List(
-		us.Appwrite.Users.WithListQueries([]string{
-			query.Equal("email", payload.Email),
-			query.Limit(1),
-		}),
-	)
+// AccountVerification verifies the OTP and activates the account/session.
+func (s *AuthService) AccountVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, *model.ApiError) {
+	// 1. Get User
+	user, err := s.AuthQueries.GetAuthUserByEmail(ctx, payload.Email)
 	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to query email: " + err.Error(), Type: "internal_server_error"}
-	}
-	if userRes.Total == 0 {
-		return nil, &model.ApiError{Code: 401, Message: "Email is not registered", Type: "unauthorized"}
-	}
-	userId := userRes.Users[0].Id
-	userName := userRes.Users[0].Name
-	userEmail := userRes.Users[0].Email
-
-	// Step2: verify otp
-
-	// Retrieve the temporary OTP document from the database
-	doc, err := us.Appwrite.Database.GetDocument(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.TempOtpCollectionID,
-		userId,
-	)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to query otp data: " + err.Error(), Type: "internal_server_error"}
-	}
-	var tempOtp model.TempOtp
-	if err := doc.Decode(&tempOtp); err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to parse otp data: " + err.Error(), Type: "internal_server_error"}
+		if err == pgx.ErrNoRows {
+			return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Email is not registered", Type: "unauthorized"}
+		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to query email: " + utils.GetPostgresError(err).Message, Type: "internal_server_error"}
 	}
 
-	if tempOtp.Email != payload.Email {
-		return nil, &model.ApiError{Code: 401, Message: "Email does not match with the sent OTP email", Type: "unauthorized"}
+	// 2. Verify OTP via Utils
+	if valid, apiErr := utils.VerifyOTPFlow(ctx, s.AuthQueries, user.ID, payload.Secret, "email_verification"); apiErr != nil || !valid {
+		if apiErr != nil {
+			return nil, apiErr
+		}
+		return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid OTP", Type: "unauthorized"}
 	}
 
-	match, err := utils.VerifyOTP(payload.Secret, tempOtp.Otp)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to verify OTP: " + err.Error(), Type: "internal_server_error"}
-	}
-	if !match {
-		return nil, &model.ApiError{Code: 401, Message: "Invalid OTP", Type: "unauthorized"}
-	}
-
-	// check if tempOtp has expired or not time limit is till 3 minutes after created at
-
-	createdAtTime, err := time.Parse(time.RFC3339, tempOtp.CreatedAt)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to parse OTP creation time: " + err.Error(), Type: "internal_server_error"}
+	// 3. Mark Email Verified (if not already)
+	if !user.IsEmailVerified {
+		err = s.AuthQueries.UpdateAuthUserEmailVerified(ctx, auth.UpdateAuthUserEmailVerifiedParams{
+			ID:              user.ID,
+			IsEmailVerified: true,
+		})
+		if err != nil {
+			return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to update verification status", Type: "internal_server_error"}
+		}
 	}
 
-	expired := utils.IsExpiredOTP(createdAtTime, 3)
-	if expired {
-		return nil, &model.ApiError{Code: 401, Message: "OTP has expired", Type: "unauthorized"}
+	// 4. Create Session via Utils
+	sessionRes, apiErr := utils.CreateSessionFlow(ctx, s.AuthQueries, user.ID, payload.Platform, s.AuthSecret)
+	if apiErr != nil {
+		return nil, apiErr
 	}
-
-	// Step3: Verify account using OTP and create session
-	session, err := us.Appwrite.Users.CreateSession(userId)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "OTP verification failed: " + err.Error(), Type: "internal_server_error"}
-	}
-	_, err = us.Appwrite.Users.UpdateEmailVerification(userId, true)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to update email verification status: " + err.Error(), Type: "internal_server_error"}
-	}
-
-	_, err = us.Appwrite.Message.Delete(tempOtp.MessageId)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to delete message: " + err.Error(), Type: "internal_server_error"}
-	}
-
-	_, err = us.Appwrite.Database.DeleteDocument(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.TempOtpCollectionID,
-		userId,
-	)
-	if err != nil {
-		log.Printf("Failed to delete otp: %v", err.Error())
-	}
-
-	sessionId := session.Id
-	resUserid := userId
-	sessionExpiry := session.Expire
 
 	return &model.SessionResponse{
-		UserId:        resUserid,
-		Name:          userName,
-		Email:         userEmail,
-		SessionID:     sessionId,
-		SessionExpiry: sessionExpiry,
+		UserId:        user.ID.String(),
+		Name:          user.Name,
+		Email:         user.Email,
+		SessionID:     sessionRes.Token,
+		SessionExpiry: sessionRes.ExpiresAt,
 	}, nil
 }
 
-func (us *GlobalService) Login(ctx context.Context, payload *model.LoginPayload) (*model.StatusOkay, *model.ApiError) {
-
-	// Step1: verify user
-	userRes, err := us.Appwrite.Users.List(
-		us.Appwrite.Users.WithListQueries([]string{
-			query.Equal("email", payload.Email),
-			query.Limit(1),
-		}),
-	)
+// Login validates password and sends OTP (2FA flow).
+func (s *AuthService) Login(ctx context.Context, payload *model.LoginPayload) (*model.StatusOkay, *model.ApiError) {
+	// 1. Get User
+	user, err := s.AuthQueries.GetAuthUserByEmail(ctx, payload.Email)
 	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to query email: " + err.Error(),
-			Type:    "internal_server_error",
+		if err == pgx.ErrNoRows {
+			// Generic message for security
+			return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid credentials", Type: "unauthorized"}
 		}
-	}
-	if (userRes.Total) == 0 {
-		return nil, &model.ApiError{
-			Code:    401,
-			Message: "Email is not registered",
-			Type:    "unauthorized",
-		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to query email", Type: "internal_server_error"}
 	}
 
-	if userRes.Users[0].Email != payload.Email {
-		return nil, &model.ApiError{
-			Code:    401,
-			Message: "Email is not registered",
-			Type:    "unauthorized",
-		}
-
+	// 2. Check if email is verified (treat unverified as non-existent)
+	if !user.IsEmailVerified {
+		// Generic message for security - don't reveal user exists but is unverified
+		return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid credentials", Type: "unauthorized"}
 	}
 
-	passWord := userRes.Users[0].Password
-	payloadPass := "00" + payload.Password
-	match, err := utils.VerifyOTP(payloadPass, passWord)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to verify password: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-
+	// 3. Validate Password
+	match, appErr := utils.VerifyPassword(payload.Password, user.PasswordHash)
+	if appErr != nil {
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to verify password: " + appErr.Message, Type: "internal_server_error"}
 	}
 	if !match {
-		return nil, &model.ApiError{
-			Code:    401,
-			Message: "Invalid credentials",
-			Type:    "unauthorized",
-		}
-
+		return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid credentials", Type: "unauthorized"}
 	}
 
-	// Step2: Generate otp to create session
-	messageId := id.Custom(uuid.NewString())
-	subject := "Otp for login verification"
-	otp, err := utils.GenerateOTP()
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to generate OTP: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-	content := "<p>Hello,<br>Please enter this code in the app to verify your login. This code is valid for 3 minutes.Your One-Time Password (OTP) for login verification is:<br><h1>" + otp + "</h1></p><p>Thank you,<br>ChatBasket</p>"
-	userId := userRes.Users[0].Id
-
-	emailTarget, err := us.Appwrite.Users.ListTargets(userId)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to list targets: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-	var emailT string
-
-	if emailTarget.Total == 0 {
-		targetId := uuid.New().String()
-		createTargetRes, err := us.Appwrite.Users.CreateTarget(
-			userId,
-			targetId,
-			"email",
-			payload.Email,
-		)
-		if err != nil {
-			return nil, &model.ApiError{
-				Code:    500,
-				Message: "Failed to create target: " + err.Error(),
-				Type:    "internal_server_error",
-			}
-		}
-		emailT = createTargetRes.Id
-
-	}
-
-	if emailTarget.Total > 0 {
-		emailT = emailTarget.Targets[0].Id
-	}
-
-	_, err = us.Appwrite.Message.CreateEmail(
-		messageId,
-		subject,
-		content,
-		us.Appwrite.Message.WithCreateEmailUsers([]string{userId}),
-		us.Appwrite.Message.WithCreateEmailCc([]string{emailT}),
-	)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to send email: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-
-	doc, err := us.Appwrite.Database.ListDocuments(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.TempOtpCollectionID,
-		us.Appwrite.Database.WithListDocumentsQueries(
-			[]string{
-				query.Equal("userId", userId),
-				query.Limit(1),
-			},
-		),
-	)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to query otp data: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-	}
-	if doc.Total == 1 {
-		_, err = us.Appwrite.Database.DeleteDocument(
-			us.Appwrite.DatabaseID,
-			us.Appwrite.TempOtpCollectionID,
-			userId,
-		)
-		if err != nil {
-			return nil, &model.ApiError{
-				Code:    500,
-				Message: "Failed to delete existing otp: " + err.Error(),
-				Type:    "internal_server_error",
-			}
-		}
-	}
-	hashedOtp, err := utils.HashOTP(otp)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to hash OTP: " + err.Error(),
-			Type:    "internal_server_error",
-		}
-
-	}
-	tempOtpPayload := model.TempOtpPayload{
-		Email:     payload.Email,
-		Otp:       hashedOtp,
-		UserId:    userId,
-		MessageId: messageId,
-	}
-
-	_, err = us.Appwrite.Database.CreateDocument(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.TempOtpCollectionID,
-		userId,
-		tempOtpPayload,
-	)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    500,
-			Message: "Failed to save otp in database: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+	// 4. Send Login OTP via Utils
+	if apiErr := utils.SendVerificationOTPFlow(ctx, s.AuthQueries, user.ID, user.Email, "login"); apiErr != nil {
+		return nil, apiErr
 	}
 
 	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
 
-func (us *GlobalService) LoginVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, *model.ApiError) {
-	// 🔍 Step 1: Find user by email
-	userRes, err := us.Appwrite.Users.List(
-		us.Appwrite.Users.WithListQueries([]string{
-			query.Equal("email", payload.Email),
-			query.Limit(1),
-		}),
-	)
+// LoginVerification verifies Login OTP and creates session.
+func (s *AuthService) LoginVerification(ctx context.Context, payload *model.AuthVerificationPayload) (*model.SessionResponse, *model.ApiError) {
+	// 1. Get User
+	user, err := s.AuthQueries.GetAuthUserByEmail(ctx, payload.Email)
 	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to query email: " + err.Error(), Type: "internal_server_error"}
-	}
-	if userRes.Total == 0 {
-		return nil, &model.ApiError{Code: 401, Message: "Email is not registered", Type: "unauthorized"}
-	}
-	userId := userRes.Users[0].Id
-	userName := userRes.Users[0].Name
-	userEmail := userRes.Users[0].Email
-
-	// 🔑 Step 2: Verify OTP
-	// Retrieve the temporary OTP document from the database
-	doc, err := us.Appwrite.Database.GetDocument(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.TempOtpCollectionID,
-		userId,
-	)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to query otp data: " + err.Error(), Type: "internal_server_error"}
-	}
-	var tempOtp model.TempOtp
-	if err := doc.Decode(&tempOtp); err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to parse otp data: " + err.Error(), Type: "internal_server_error"}
-	}
-
-	if tempOtp.Email != payload.Email {
-		return nil, &model.ApiError{Code: 401, Message: "Email does not match with the sent OTP email", Type: "unauthorized"}
-	}
-
-	match, err := utils.VerifyOTP(payload.Secret, tempOtp.Otp)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to verify OTP: " + err.Error(), Type: "internal_server_error"}
-	}
-	if !match {
-		return nil, &model.ApiError{Code: 401, Message: "Invalid OTP", Type: "unauthorized"}
-	}
-
-	// check if tempOtp has expired or not time limit is till 3 minutes after created at
-
-	createdAtTime, err := time.Parse(time.RFC3339, tempOtp.CreatedAt)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "Failed to parse OTP creation time: " + err.Error(), Type: "internal_server_error"}
-	}
-
-	expired := utils.IsExpiredOTP(createdAtTime, 3)
-	if expired {
-		return nil, &model.ApiError{Code: 401, Message: "OTP has expired", Type: "unauthorized"}
-	}
-
-	// 🔑 Step 3:  create session
-	session, err := us.Appwrite.Users.CreateSession(userId)
-	if err != nil {
-		return nil, &model.ApiError{Code: 500, Message: "OTP verification failed: " + err.Error(), Type: "internal_server_error"}
-	}
-
-	// if email not verified verfiy it
-	if !userRes.Users[0].EmailVerification {
-		_, err := us.Appwrite.Users.UpdateEmailVerification(userId, true)
-		if err != nil {
-			return nil, &model.ApiError{Code: 500, Message: "Failed to update email verification status: " + err.Error(), Type: "internal_server_error"}
-
+		if err == pgx.ErrNoRows {
+			return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Email is not registered", Type: "unauthorized"}
 		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Database error", Type: "internal_server_error"}
 	}
 
-	// delete message but even it fails continue dont return nil
-	_, err = us.Appwrite.Message.Delete(tempOtp.MessageId)
-	if err != nil {
-		log.Printf("could not delete message: %v", err.Error())
+	// 2. Verify OTP via Utils
+	if valid, apiErr := utils.VerifyOTPFlow(ctx, s.AuthQueries, user.ID, payload.Secret, "login"); apiErr != nil || !valid {
+		if apiErr != nil {
+			return nil, apiErr
+		}
+		return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid OTP", Type: "unauthorized"}
 	}
 
-	_, err = us.Appwrite.Database.DeleteDocument(
-		us.Appwrite.DatabaseID,
-		us.Appwrite.TempOtpCollectionID,
-		userId,
-	)
-	if err != nil {
-		log.Printf("Failed to delete otp: %v", err.Error())
+	// 3. Create Session via Utils
+	sessionRes, apiErr := utils.CreateSessionFlow(ctx, s.AuthQueries, user.ID, payload.Platform, s.AuthSecret)
+	if apiErr != nil {
+		return nil, apiErr
 	}
-
-	sessionId := session.Id
-	resUserid := userId
-	sessionExpiry := session.Expire
 
 	return &model.SessionResponse{
-		UserId:        resUserid,
-		Name:          userName,
-		Email:         userEmail,
-		SessionID:     sessionId,
-		SessionExpiry: sessionExpiry,
+		UserId:        user.ID.String(),
+		Name:          user.Name,
+		Email:         user.Email,
+		SessionID:     sessionRes.Token,
+		SessionExpiry: sessionRes.ExpiresAt,
 	}, nil
+}
+
+// ResendOTP handles OTP resend for both signup and login flows.
+func (s *AuthService) ResendOTP(ctx context.Context, payload *model.ResendOTPPayload) (*model.StatusOkay, *model.ApiError) {
+	// Validate type
+	if payload.Type != "signup" && payload.Type != "login" {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "Invalid type. Must be 'signup' or 'login'", Type: "bad_request"}
+	}
+
+	// Get user
+	user, err := s.AuthQueries.GetAuthUserByEmail(ctx, payload.Email)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid email", Type: "unauthorized"}
+		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to query email", Type: "internal_server_error"}
+	}
+
+	// Determine OTP type based on flow
+	var otpType string
+	if payload.Type == "signup" {
+		// For signup: user must be unverified
+		if user.IsEmailVerified {
+			return nil, &model.ApiError{Code: http.StatusConflict, Message: "Email already verified", Type: "conflict"}
+		}
+		otpType = "email_verification"
+	} else {
+		// For login: user must be verified
+		if !user.IsEmailVerified {
+			return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid email", Type: "unauthorized"}
+		}
+		otpType = "login"
+	}
+
+	// Send OTP
+	if apiErr := utils.SendVerificationOTPFlow(ctx, s.AuthQueries, user.ID, user.Email, otpType); apiErr != nil {
+		return nil, apiErr
+	}
+
+	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }

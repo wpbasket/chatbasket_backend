@@ -10,16 +10,15 @@ import (
 )
 
 // RegisterPersonalRoutes registers all personal domain routes
-func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService) {
-	perSvc := personalservice.New(globalService)
+func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService, authService *services.AuthService, authSecret []byte) {
+	perSvc := personalservice.New(globalService, authSecret)
 
 	// Personal Profile Routes
 	personalProfileGroup := e.Group("/personal/profile")
-	personalProfileGroup.Use(middleware.AppwriteSessionMiddleware(true))
+	personalProfileGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	personalProfileHandler := personalhandler.NewProfileHandler(perSvc)
 	personalProfileGroup.GET("/get-profile", personalProfileHandler.GetProfile)
 	personalProfileGroup.POST("/create-profile", personalProfileHandler.CreateUserProfile)
-	personalProfileGroup.POST("/logout", personalProfileHandler.Logout)
 	personalProfileGroup.POST("/upload-avatar", personalProfileHandler.UploadProfilePicture)
 	personalProfileGroup.DELETE("/remove-avatar", personalProfileHandler.RemoveProfilePicture)
 	personalProfileGroup.POST("/update-profile", personalProfileHandler.UpdateProfile)
@@ -27,7 +26,7 @@ func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService)
 
 	// Personal Contacts Routes
 	personalContactsGroup := e.Group("/personal/contacts")
-	personalContactsGroup.Use(middleware.AppwriteSessionMiddleware(true))
+	personalContactsGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	persContactsHandler := personalhandler.NewContactHandler(perSvc)
 	personalContactsGroup.GET("/get", persContactsHandler.GetContacts)
 	personalContactsGroup.POST("/check-existence", persContactsHandler.CheckContactExistance)

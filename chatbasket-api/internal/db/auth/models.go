@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package auth_db
+package auth
 
 import (
 	"github.com/google/uuid"
@@ -31,12 +31,11 @@ type Session struct {
 }
 
 type VerificationCode struct {
-	ID         uuid.UUID          `json:"id"`
-	AuthUserID pgtype.UUID        `json:"auth_user_id"`
-	Email      string             `json:"email"`
-	CodeHash   string             `json:"code_hash"`
-	Type       string             `json:"type"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID        uuid.UUID          `json:"id"`
+	UpdateID  pgtype.UUID        `json:"update_id"`
+	Email     string             `json:"email"`
+	CodeHash  string             `json:"code_hash"`
+	Type      string             `json:"type"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

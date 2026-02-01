@@ -1,6 +1,7 @@
 package personalservice
 
 import (
+	"chatbasket-api/internal/db/auth"
 	"chatbasket-api/internal/db/personal"
 	"chatbasket-api/model"
 	personalmodel "chatbasket-api/personal/personalmodel"
@@ -22,13 +23,13 @@ import (
 
 func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayload, userId model.UserId, sessionId string) (*model.StatusOkay, *model.ApiError) {
 	if payload.AllSessions {
-		// Logout from all sessions
-		_, err := ps.Appwrite.Users.DeleteSessions(userId.StringUserId)
+		// Logout from all sessions - delete from PostgreSQL
+		err := ps.AuthQueries.DeleteAllUserSessions(ctx, userId.UuidUserId)
 		if err != nil {
 			return nil, &model.ApiError{
-				Code:    401,
-				Message: "Failed to Logout from all sessions: " + err.Error(),
-				Type:    "unauthorized",
+				Code:    http.StatusInternalServerError,
+				Message: "Failed to logout from all sessions: " + err.Error(),
+				Type:    "internal_server_error",
 			}
 		}
 
@@ -39,31 +40,29 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 			// Tokens will be cleaned up by periodic cleanup job
 		}
 	} else {
-		// Logout from single session
-		_, err := ps.Appwrite.Users.DeleteSession(userId.StringUserId, sessionId)
+		// Logout from single session - delete from PostgreSQL using token hash
+		tokenHash, err := utils.ComputeHMAC(sessionId, ps.AuthSecret)
 		if err != nil {
 			return nil, &model.ApiError{
-				Code:    401,
-				Message: "Failed to Logout from session: " + err.Error(),
-				Type:    "unauthorized",
+				Code:    http.StatusInternalServerError,
+				Message: "Failed to hash session token: " + err.Error(),
+				Type:    "internal_server_error",
 			}
 		}
 
-		// Delete tokens for this session
-		hashedSessionId, err := utils.HashSessionId(sessionId, ps.Appwrite.PersonalUsernameKey)
+		err = ps.AuthQueries.DeleteSessionByToken(ctx, auth.DeleteSessionByTokenParams{
+			TokenHash:  tokenHash,
+			AuthUserID: userId.UuidUserId,
+		})
 		if err != nil {
-			// Log error but don't fail the logout
-			// Skip token deactivation if hashing fails
-		} else {
-			err = ps.PersonalQueries.DeleteSessionTokens(ctx, personal.DeleteSessionTokensParams{
-				Sha256HexSessionID: hashedSessionId,
-				UserID:             userId.UuidUserId,
-			})
-			if err != nil {
-				// Log error but don't fail the logout
-				// Tokens will be cleaned up by periodic cleanup job
+			return nil, &model.ApiError{
+				Code:    http.StatusInternalServerError,
+				Message: "Failed to logout from session: " + err.Error(),
+				Type:    "internal_server_error",
 			}
 		}
+
+		// Token cleanup will happen via periodic cleanup job
 	}
 
 	return &model.StatusOkay{Status: true, Message: "Logged out successfully"}, nil
@@ -91,7 +90,7 @@ func (ps *Service) CreateUserProfile(ctx context.Context, payload *personalmodel
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Username generation failed", Type: "internal_server_error"}
 	}
 	// hash username
-	sha256Username, err := utils.HashUsername(generatedUsername, ps.Appwrite.PersonalUsernameKey)
+	sha256Username, err := utils.ComputeHMAC(generatedUsername, ps.Appwrite.PersonalUsernameKey)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Username hashing failed", Type: "internal_server_error"}
 	}
@@ -337,7 +336,7 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *personalmodel
 
 func (ps *Service) RegisterOrUpdateFcmOrApnToken(ctx context.Context, payload *personalmodel.RegisterOrUpdateFcmOrApnTokenPayload, userId model.UserId, sessionId string) (*model.StatusOkay, *model.ApiError) {
 	// Hash the session ID (HMAC-SHA256 hex, 64 characters)
-	hashedSessionId, err := utils.HashSessionId(sessionId, ps.Appwrite.PersonalUsernameKey)
+	hashedSessionId, err := utils.ComputeHMAC(sessionId, ps.Appwrite.PersonalUsernameKey)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    http.StatusInternalServerError,

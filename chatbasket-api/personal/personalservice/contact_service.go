@@ -169,7 +169,7 @@ func (ps *Service) GetContacts(ctx context.Context, userId model.UserId) (*perso
 
 func (ps *Service) CheckContactExistance(ctx context.Context, payload *personalmodel.CheckContactExistancePayload, userId model.UserId) (*personalmodel.CheckContactExistanceResponse, *model.ApiError) {
 
-	hashContactUsername, err := utils.HashUsername(payload.ContactUsername, ps.Appwrite.PersonalUsernameKey)
+	hashContactUsername, err := utils.ComputeHMAC(payload.ContactUsername, ps.Appwrite.PersonalUsernameKey)
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "failed to hash contact username", Type: "internal_server_error"}
 	}

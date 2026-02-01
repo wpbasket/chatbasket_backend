@@ -11,11 +11,11 @@ import (
 )
 
 type UserHandler struct {
-	Service *services.GlobalService
+	AuthService *services.AuthService
 }
 
-func NewUserHandler(service *services.GlobalService) *UserHandler {
-	return &UserHandler{Service: service}
+func NewUserHandler(service *services.AuthService) *UserHandler {
+	return &UserHandler{AuthService: service}
 }
 
 func (h *UserHandler) Signup(c echo.Context) error {
@@ -40,7 +40,7 @@ func (h *UserHandler) Signup(c echo.Context) error {
 	}
 
 	// Create user via service
-	user, err := h.Service.Signup(c.Request().Context(), &payload)
+	user, err := h.AuthService.Signup(c.Request().Context(), &payload)
 	if err != nil {
 		return c.JSON(err.Code, err)
 		// return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -60,7 +60,7 @@ func (h *UserHandler) AcountVerification(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Missing required fields", Type: "missing_value"})
 	}
 
-	user, err := h.Service.AccountVerification(c.Request().Context(), &payload)
+	user, err := h.AuthService.AccountVerification(c.Request().Context(), &payload)
 	if err != nil {
 		return c.JSON(err.Code, err)
 	}
@@ -114,7 +114,6 @@ func (h *UserHandler) AcountVerification(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, user)
 }
-
 func (h *UserHandler) Login(c echo.Context) error {
 	var payload model.LoginPayload
 
@@ -129,7 +128,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 	}
 
 	// Login via service
-	user, err := h.Service.Login(c.Request().Context(), &payload)
+	user, err := h.AuthService.Login(c.Request().Context(), &payload)
 	if err != nil {
 		return c.JSON(err.Code, err)
 
@@ -149,7 +148,7 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Missing required fields", Type: "missing_value"})
 	}
 
-	user, err := h.Service.LoginVerification(c.Request().Context(), &payload)
+	user, err := h.AuthService.LoginVerification(c.Request().Context(), &payload)
 	if err != nil {
 		return c.JSON(err.Code, err)
 	}
@@ -202,4 +201,34 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, user)
+}
+
+func (h *UserHandler) ResendOTP(c echo.Context) error {
+	var payload model.ResendOTPPayload
+
+	// Parse and bind request body
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid resend OTP payload: " + err.Error(),
+			Type:    "bad_request",
+		})
+	}
+
+	// Validate required fields
+	if payload.Email == "" || payload.Type == "" {
+		return c.JSON(http.StatusBadRequest, model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Missing required fields",
+			Type:    "missing_value",
+		})
+	}
+
+	// Resend OTP via service
+	response, err := h.AuthService.ResendOTP(c.Request().Context(), &payload)
+	if err != nil {
+		return c.JSON(err.Code, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
 }

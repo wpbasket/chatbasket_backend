@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: auth.sql
 
-package auth_db
+package auth
 
 import (
 	"context"
@@ -12,8 +12,46 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createAuthUser = `-- name: CreateAuthUser :one
+const checkEmailExists = `-- name: CheckEmailExists :one
+SELECT EXISTS ( SELECT 1 FROM auth_users WHERE email = $1 )
+`
 
+func (q *Queries) CheckEmailExists(ctx context.Context, email string) (bool, error) {
+	row := q.db.QueryRow(ctx, checkEmailExists, email)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkSessionIsValid = `-- name: CheckSessionIsValid :one
+
+SELECT EXISTS (
+        SELECT 1
+        FROM sessions
+        WHERE
+            token_hash = $1
+            AND auth_user_id = $2
+            AND expires_at > now()
+    )
+`
+
+type CheckSessionIsValidParams struct {
+	TokenHash  string    `json:"token_hash"`
+	AuthUserID uuid.UUID `json:"auth_user_id"`
+}
+
+// ======================================
+// Auth Queries
+// ======================================
+// Checks if a session is valid for a specific user and not expired
+func (q *Queries) CheckSessionIsValid(ctx context.Context, arg CheckSessionIsValidParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkSessionIsValid, arg.TokenHash, arg.AuthUserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const createAuthUser = `-- name: CreateAuthUser :one
 INSERT INTO
     auth_users (
         id,
@@ -35,10 +73,6 @@ type CreateAuthUserParams struct {
 	IsEmailVerified bool      `json:"is_email_verified"`
 }
 
-// ======================================
-// Auth Tables Queries for sqlc
-// ======================================
-// Inserts a new auth user and returns all columns
 func (q *Queries) CreateAuthUser(ctx context.Context, arg CreateAuthUserParams) (AuthUser, error) {
 	row := q.db.QueryRow(ctx, createAuthUser,
 		arg.ID,
@@ -61,7 +95,6 @@ func (q *Queries) CreateAuthUser(ctx context.Context, arg CreateAuthUserParams) 
 }
 
 const createSession = `-- name: CreateSession :one
-
 INSERT INTO
     sessions (
         id,
@@ -85,10 +118,6 @@ type CreateSessionParams struct {
 	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
 }
 
-// ======================================
-// Sessions Table Queries
-// ======================================
-// Creates a new session and returns all columns
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
 	row := q.db.QueryRow(ctx, createSession,
 		arg.ID,
@@ -113,94 +142,156 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 }
 
 const createVerificationCode = `-- name: CreateVerificationCode :one
-
 INSERT INTO
-    verification_codes (
-        id,
-        auth_user_id,
-        email,
-        code_hash,
-        type,
-        expires_at
-    )
-VALUES ($1, $2, $3, $4, $5, $6)
+    verification_codes (id, email, code_hash, type)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO
+UPDATE
+SET
+    email = EXCLUDED.email,
+    code_hash = EXCLUDED.code_hash,
+    type = EXCLUDED.type,
+    created_at = now()
 RETURNING
-    id, auth_user_id, email, code_hash, type, expires_at, created_at, updated_at
+    id, update_id, email, code_hash, type, created_at, updated_at
 `
 
 type CreateVerificationCodeParams struct {
-	ID         uuid.UUID          `json:"id"`
-	AuthUserID pgtype.UUID        `json:"auth_user_id"`
-	Email      string             `json:"email"`
-	CodeHash   string             `json:"code_hash"`
-	Type       string             `json:"type"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	ID       uuid.UUID `json:"id"`
+	Email    string    `json:"email"`
+	CodeHash string    `json:"code_hash"`
+	Type     string    `json:"type"`
 }
 
-// ======================================
-// Verification Codes Table Queries
-// ======================================
-// Creates a new verification code and returns all columns
 func (q *Queries) CreateVerificationCode(ctx context.Context, arg CreateVerificationCodeParams) (VerificationCode, error) {
 	row := q.db.QueryRow(ctx, createVerificationCode,
 		arg.ID,
-		arg.AuthUserID,
 		arg.Email,
 		arg.CodeHash,
 		arg.Type,
-		arg.ExpiresAt,
 	)
 	var i VerificationCode
 	err := row.Scan(
 		&i.ID,
-		&i.AuthUserID,
+		&i.UpdateID,
 		&i.Email,
 		&i.CodeHash,
 		&i.Type,
-		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const deleteAllSessionsForUser = `-- name: DeleteAllSessionsForUser :exec
+const createVerificationCodeWithUpdateID = `-- name: CreateVerificationCodeWithUpdateID :one
+INSERT INTO
+    verification_codes (
+        id,
+        update_id,
+        email,
+        code_hash,
+        type
+    )
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (id) DO
+UPDATE
+SET
+    update_id = EXCLUDED.update_id,
+    email = EXCLUDED.email,
+    code_hash = EXCLUDED.code_hash,
+    type = EXCLUDED.type,
+    created_at = now()
+RETURNING
+    id, update_id, email, code_hash, type, created_at, updated_at
+`
+
+type CreateVerificationCodeWithUpdateIDParams struct {
+	ID       uuid.UUID   `json:"id"`
+	UpdateID pgtype.UUID `json:"update_id"`
+	Email    string      `json:"email"`
+	CodeHash string      `json:"code_hash"`
+	Type     string      `json:"type"`
+}
+
+func (q *Queries) CreateVerificationCodeWithUpdateID(ctx context.Context, arg CreateVerificationCodeWithUpdateIDParams) (VerificationCode, error) {
+	row := q.db.QueryRow(ctx, createVerificationCodeWithUpdateID,
+		arg.ID,
+		arg.UpdateID,
+		arg.Email,
+		arg.CodeHash,
+		arg.Type,
+	)
+	var i VerificationCode
+	err := row.Scan(
+		&i.ID,
+		&i.UpdateID,
+		&i.Email,
+		&i.CodeHash,
+		&i.Type,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteAllUserSessions = `-- name: DeleteAllUserSessions :exec
 DELETE FROM sessions WHERE auth_user_id = $1
 `
 
-// Deletes all sessions for a user (for logout from all devices)
-func (q *Queries) DeleteAllSessionsForUser(ctx context.Context, authUserID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteAllSessionsForUser, authUserID)
+func (q *Queries) DeleteAllUserSessions(ctx context.Context, authUserID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAllUserSessions, authUserID)
 	return err
 }
 
-const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
-DELETE FROM sessions WHERE expires_at < now()
+const deleteAllVerificationCodesForEmail = `-- name: DeleteAllVerificationCodesForEmail :exec
+DELETE FROM verification_codes WHERE email = $1 AND type = $2
 `
 
-// Cleanup query: deletes expired sessions
-func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredSessions)
+type DeleteAllVerificationCodesForEmailParams struct {
+	Email string `json:"email"`
+	Type  string `json:"type"`
+}
+
+func (q *Queries) DeleteAllVerificationCodesForEmail(ctx context.Context, arg DeleteAllVerificationCodesForEmailParams) error {
+	_, err := q.db.Exec(ctx, deleteAllVerificationCodesForEmail, arg.Email, arg.Type)
 	return err
 }
 
-const deleteExpiredVerificationCodes = `-- name: DeleteExpiredVerificationCodes :exec
-DELETE FROM verification_codes WHERE expires_at < now()
+const deleteAuthUser = `-- name: DeleteAuthUser :exec
+DELETE FROM auth_users WHERE id = $1
 `
 
-// Cleanup query: deletes expired verification codes
-func (q *Queries) DeleteExpiredVerificationCodes(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredVerificationCodes)
+// Delete auth user (cascade will automatically delete sessions and verification_codes)
+func (q *Queries) DeleteAuthUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAuthUser, id)
 	return err
 }
 
 const deleteSession = `-- name: DeleteSession :exec
-DELETE FROM sessions WHERE id = $1
+DELETE FROM sessions WHERE id = $1 AND auth_user_id = $2
 `
 
-// Deletes a session by ID (for logout)
-func (q *Queries) DeleteSession(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteSession, id)
+type DeleteSessionParams struct {
+	ID         uuid.UUID `json:"id"`
+	AuthUserID uuid.UUID `json:"auth_user_id"`
+}
+
+func (q *Queries) DeleteSession(ctx context.Context, arg DeleteSessionParams) error {
+	_, err := q.db.Exec(ctx, deleteSession, arg.ID, arg.AuthUserID)
+	return err
+}
+
+const deleteSessionByToken = `-- name: DeleteSessionByToken :exec
+DELETE FROM sessions WHERE token_hash = $1 AND auth_user_id = $2
+`
+
+type DeleteSessionByTokenParams struct {
+	TokenHash  string    `json:"token_hash"`
+	AuthUserID uuid.UUID `json:"auth_user_id"`
+}
+
+func (q *Queries) DeleteSessionByToken(ctx context.Context, arg DeleteSessionByTokenParams) error {
+	_, err := q.db.Exec(ctx, deleteSessionByToken, arg.TokenHash, arg.AuthUserID)
 	return err
 }
 
@@ -208,24 +299,8 @@ const deleteVerificationCode = `-- name: DeleteVerificationCode :exec
 DELETE FROM verification_codes WHERE id = $1
 `
 
-// Deletes a verification code by ID
 func (q *Queries) DeleteVerificationCode(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteVerificationCode, id)
-	return err
-}
-
-const deleteVerificationCodesByEmailAndType = `-- name: DeleteVerificationCodesByEmailAndType :exec
-DELETE FROM verification_codes WHERE email = $1 AND type = $2
-`
-
-type DeleteVerificationCodesByEmailAndTypeParams struct {
-	Email string `json:"email"`
-	Type  string `json:"type"`
-}
-
-// Deletes all verification codes for email and type (cleanup after verification)
-func (q *Queries) DeleteVerificationCodesByEmailAndType(ctx context.Context, arg DeleteVerificationCodesByEmailAndTypeParams) error {
-	_, err := q.db.Exec(ctx, deleteVerificationCodesByEmailAndType, arg.Email, arg.Type)
 	return err
 }
 
@@ -233,7 +308,6 @@ const getAuthUserByEmail = `-- name: GetAuthUserByEmail :one
 SELECT id, name, email, password_hash, is_email_verified, created_at, updated_at FROM auth_users WHERE email = $1
 `
 
-// Returns auth user by email (for login)
 func (q *Queries) GetAuthUserByEmail(ctx context.Context, email string) (AuthUser, error) {
 	row := q.db.QueryRow(ctx, getAuthUserByEmail, email)
 	var i AuthUser
@@ -253,7 +327,7 @@ const getAuthUserByID = `-- name: GetAuthUserByID :one
 SELECT id, name, email, password_hash, is_email_verified, created_at, updated_at FROM auth_users WHERE id = $1
 `
 
-// Returns auth user by ID (same as user ID)
+// Returns auth user by ID
 func (q *Queries) GetAuthUserByID(ctx context.Context, id uuid.UUID) (AuthUser, error) {
 	row := q.db.QueryRow(ctx, getAuthUserByID, id)
 	var i AuthUser
@@ -269,57 +343,49 @@ func (q *Queries) GetAuthUserByID(ctx context.Context, id uuid.UUID) (AuthUser, 
 	return i, err
 }
 
-const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
-SELECT id, auth_user_id, token_hash, user_agent, ip_address, expires_at, created_at, updated_at FROM sessions WHERE token_hash = $1
+const getVerificationCode = `-- name: GetVerificationCode :one
+SELECT id, update_id, email, code_hash, type, created_at, updated_at FROM verification_codes WHERE id = $1 AND type = $2
 `
 
-// Returns session by token hash (for session validation)
-func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (Session, error) {
-	row := q.db.QueryRow(ctx, getSessionByTokenHash, tokenHash)
-	var i Session
-	err := row.Scan(
-		&i.ID,
-		&i.AuthUserID,
-		&i.TokenHash,
-		&i.UserAgent,
-		&i.IpAddress,
-		&i.ExpiresAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+type GetVerificationCodeParams struct {
+	ID   uuid.UUID `json:"id"`
+	Type string    `json:"type"`
 }
 
-const getVerificationCodeByEmailAndType = `-- name: GetVerificationCodeByEmailAndType :one
-SELECT id, auth_user_id, email, code_hash, type, expires_at, created_at, updated_at
-FROM verification_codes
-WHERE
-    email = $1
-    AND type = $2
-ORDER BY created_at DESC
-LIMIT 1
-`
-
-type GetVerificationCodeByEmailAndTypeParams struct {
-	Email string `json:"email"`
-	Type  string `json:"type"`
-}
-
-// Returns the latest verification code for email and type
-func (q *Queries) GetVerificationCodeByEmailAndType(ctx context.Context, arg GetVerificationCodeByEmailAndTypeParams) (VerificationCode, error) {
-	row := q.db.QueryRow(ctx, getVerificationCodeByEmailAndType, arg.Email, arg.Type)
+// Get the verification code by User ID (PK) and Type
+func (q *Queries) GetVerificationCode(ctx context.Context, arg GetVerificationCodeParams) (VerificationCode, error) {
+	row := q.db.QueryRow(ctx, getVerificationCode, arg.ID, arg.Type)
 	var i VerificationCode
 	err := row.Scan(
 		&i.ID,
-		&i.AuthUserID,
+		&i.UpdateID,
 		&i.Email,
 		&i.CodeHash,
 		&i.Type,
-		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateAuthUserEmail = `-- name: UpdateAuthUserEmail :exec
+UPDATE auth_users
+SET
+    email = $2,
+    is_email_verified = $3
+WHERE
+    id = $1
+`
+
+type UpdateAuthUserEmailParams struct {
+	ID              uuid.UUID `json:"id"`
+	Email           string    `json:"email"`
+	IsEmailVerified bool      `json:"is_email_verified"`
+}
+
+func (q *Queries) UpdateAuthUserEmail(ctx context.Context, arg UpdateAuthUserEmailParams) error {
+	_, err := q.db.Exec(ctx, updateAuthUserEmail, arg.ID, arg.Email, arg.IsEmailVerified)
+	return err
 }
 
 const updateAuthUserEmailVerified = `-- name: UpdateAuthUserEmailVerified :exec
@@ -331,8 +397,21 @@ type UpdateAuthUserEmailVerifiedParams struct {
 	IsEmailVerified bool      `json:"is_email_verified"`
 }
 
-// Marks user email as verified
 func (q *Queries) UpdateAuthUserEmailVerified(ctx context.Context, arg UpdateAuthUserEmailVerifiedParams) error {
 	_, err := q.db.Exec(ctx, updateAuthUserEmailVerified, arg.ID, arg.IsEmailVerified)
+	return err
+}
+
+const updateAuthUserPassword = `-- name: UpdateAuthUserPassword :exec
+UPDATE auth_users SET password_hash = $2 WHERE id = $1
+`
+
+type UpdateAuthUserPasswordParams struct {
+	ID           uuid.UUID `json:"id"`
+	PasswordHash string    `json:"password_hash"`
+}
+
+func (q *Queries) UpdateAuthUserPassword(ctx context.Context, arg UpdateAuthUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateAuthUserPassword, arg.ID, arg.PasswordHash)
 	return err
 }

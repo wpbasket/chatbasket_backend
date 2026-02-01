@@ -56,10 +56,9 @@ EXECUTE FUNCTION set_timestamps();
 -- Index: user session lookup for logout all
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (auth_user_id);
 
--- Index: partial index for expired sessions cleanup (only indexes expired rows)
-CREATE INDEX IF NOT EXISTS idx_sessions_expired ON sessions (expires_at)
-WHERE
-    expires_at < now();
+-- Removed partial index due to IMMUTABLE function requirement
+-- CREATE INDEX IF NOT EXISTS idx_sessions_expired ON sessions (expires_at)
+-- WHERE expires_at < now();
 
 -- ======================================
 -- Create verification_codes table
@@ -67,8 +66,8 @@ WHERE
 
 -- Create table
 CREATE TABLE IF NOT EXISTS verification_codes (
-    id UUID PRIMARY KEY,
-    auth_user_id UUID NULL REFERENCES auth_users (id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY REFERENCES auth_users (id) ON DELETE CASCADE,
+    update_id UUID UNIQUE, -- For independent update operations (nullable)
     email TEXT NOT NULL CHECK (email = lower(email)),
     code_hash TEXT NOT NULL,
     type TEXT NOT NULL,
@@ -76,10 +75,12 @@ CREATE TABLE IF NOT EXISTS verification_codes (
         type IN (
             'email_verification',
             'login',
-            'password_reset'
+            'password_reset',
+            'email_update',
+            'password_update',
+            'account_deletion'
         )
     ),
-    expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
 );
@@ -92,14 +93,6 @@ CREATE TRIGGER verification_codes_timestamps_trigger
 BEFORE INSERT OR UPDATE ON verification_codes
 FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
-
--- Index: email + type lookup with ORDER BY created_at DESC (covers GetVerificationCodeByEmailAndType)
-CREATE INDEX IF NOT EXISTS idx_verification_codes_lookup ON verification_codes (email, type, created_at DESC);
-
--- Index: partial index for expired codes cleanup (only indexes expired rows)
-CREATE INDEX IF NOT EXISTS idx_verification_codes_expired ON verification_codes (expires_at)
-WHERE
-    expires_at < now();
 
 -- ======================================
 -- End of auth tables section

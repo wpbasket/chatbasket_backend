@@ -1,17 +1,18 @@
 package middleware
 
 import (
-	"chatbasket-api/appwriteinternal"
+	"chatbasket-api/internal/db/auth"
 	"chatbasket-api/model"
+	"chatbasket-api/services"
 	"chatbasket-api/utils"
 	"net/http"
-	"os"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 )
 
-func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
+func AuthSessionMiddleware(authService *services.AuthService, requireVerified bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			var sessionId, userId string
@@ -55,68 +56,71 @@ func AppwriteSessionMiddleware(requireVerified bool) echo.MiddlewareFunc {
 				})
 			}
 
-			// 🔐 Initialize Appwrite session service
-			appwriteService := appwriteinternal.NewAppwriteServiceSession(
-				os.Getenv("APPWRITE_ENDPOINT"),
-				os.Getenv("APPWRITE_PROJECT_ID"),
-				os.Getenv("APPWRITE_API_KEY"),
-			)
+			// 🔐 Verify session using internal Auth Service (HMAC + User Check)
+			// Secret Key is injected via AuthService
+			secretKey := authService.AuthSecret
 
-			account, err := appwriteService.Users.ListSessions(userId)
+			// 1. Hash the sessionId (token)
+			tokenHash, err := utils.ComputeHMAC(sessionId, secretKey)
 			if err != nil {
-				statusCode := http.StatusInternalServerError
-				if he, ok := err.(*echo.HTTPError); ok {
-					statusCode = he.Code
-				}
-
-				return c.JSON(statusCode, model.SessionError{
-					Code:    statusCode,
-					Type:    "session_list_failed",
-					Message: err.Error(),
+				return c.JSON(http.StatusInternalServerError, model.SessionError{
+					Code:    http.StatusInternalServerError,
+					Type:    "internal_error",
+					Message: "Failed to process session token",
 				})
 			}
 
-			// ✅ Search session ID match
-			var sessionFound bool
-			for _, session := range account.Sessions {
-				if session.Id == sessionId {
-					sessionFound = true
-					break
-				}
+			// 2. Parse User ID to UUID for DB check
+			uuidVal, err := utils.StringToUUID(userId)
+			if err != nil {
+				return c.JSON(http.StatusUnauthorized, model.SessionError{
+					Code:    http.StatusUnauthorized,
+					Type:    "invalid_user_id",
+					Message: "Invalid user format",
+				})
 			}
 
-			if !sessionFound {
-				// log.Printf("401 returned: Invalid session ID. userId='%s', sessionId='%s', platform='%s'", userId, sessionId, platform)
+			// 3. Check if Session is Valid (Exact token match, Exact user match, Not expired)
+			ctx := c.Request().Context()
+			isValid, err := authService.AuthQueries.CheckSessionIsValid(ctx, auth.CheckSessionIsValidParams{
+				TokenHash:  tokenHash,
+				AuthUserID: uuidVal,
+			})
+			if err != nil || !isValid {
 				return c.JSON(http.StatusUnauthorized, model.SessionError{
 					Code:    http.StatusUnauthorized,
 					Type:    "session_invalid",
-					Message: "Invalid session ID",
+					Message: "Invalid or expired session",
 				})
 			}
 
-			getEmail, err := appwriteService.Users.Get(userId)
+			// 4. Get User details
+			authUser, err := authService.AuthQueries.GetAuthUserByID(ctx, uuidVal)
 			if err != nil {
+				if err == pgx.ErrNoRows {
+					return c.JSON(http.StatusUnauthorized, model.SessionError{
+						Code:    http.StatusUnauthorized,
+						Type:    "user_not_found",
+						Message: "User not found",
+					})
+				}
 				return c.JSON(http.StatusInternalServerError, model.SessionError{
 					Code:    http.StatusInternalServerError,
 					Type:    "internal_server_error",
-					Message: err.Error(),
+					Message: "Failed to fetch user: " + utils.GetPostgresError(err).Message,
 				})
 			}
 
-			// Set to context for handler access
-			uuidUserId, err := utils.StringToUUID(userId)
-			if err != nil {
-				return c.JSON(http.StatusInternalServerError, model.SessionError{
-					Code:    http.StatusInternalServerError,
-					Type:    "internal_server_error",
-					Message: err.Error(),
-				})
-			}
-			c.Set("uuidUserId", uuidUserId)
-			c.Set("userId", userId)
-			c.Set("sessionId", sessionId)
+			// 5. Check Verification (if required)
+			// Removed as per user request (was not in original implementation)
+			// if requireVerified && !authUser.IsEmailVerified { ... }
+
+			// ✅ Set context for handler access
+			c.Set("uuidUserId", authUser.ID) // auth_users.ID is same as users.ID
+			c.Set("userId", authUser.ID.String())
+			c.Set("sessionId", sessionId) // Context keeps original input sessionId
 			c.Set("platform", platform)
-			c.Set("email", getEmail.Email)
+			c.Set("email", authUser.Email)
 
 			return next(c)
 		}

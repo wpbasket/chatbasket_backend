@@ -1,24 +1,26 @@
-package publichandler
+package commonhandler
 
 import (
+	"chatbasket-api/common/commonmodel"
+	"chatbasket-api/common/commonservice"
 	"chatbasket-api/model"
-	"chatbasket-api/public/publicservice"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
 type SettingHandler struct {
-	Service *publicservice.Service
+	Service *commonservice.Service
 }
 
-func NewSettingHandler(service *publicservice.Service) *SettingHandler {
+func NewSettingHandler(service *commonservice.Service) *SettingHandler {
 	return &SettingHandler{Service: service}
 }
 
 // RequestUpdateOTP handles OTP request for update operations
 func (h *SettingHandler) RequestUpdateOTP(c echo.Context) error {
-	var payload model.RequestUpdateOTPPayload
+	var payload commonmodel.RequestUpdateOTPPayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
 			Code:    http.StatusBadRequest,
@@ -28,7 +30,12 @@ func (h *SettingHandler) RequestUpdateOTP(c echo.Context) error {
 	}
 
 	// Get userId from context (set by auth middleware)
-	userId := c.Get("userId").(model.UserId)
+	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	stringUserId := c.Get("userId").(string)
+	userId := model.UserId{
+		StringUserId: stringUserId,
+		UuidUserId:   uuidUserId,
+	}
 
 	// Call service
 	response, apiErr := h.Service.RequestUpdateOTP(c.Request().Context(), &payload, userId)
@@ -41,7 +48,7 @@ func (h *SettingHandler) RequestUpdateOTP(c echo.Context) error {
 
 // ConfirmPasswordUpdate handles password update confirmation with OTP
 func (h *SettingHandler) ConfirmPasswordUpdate(c echo.Context) error {
-	var payload model.ConfirmPasswordUpdatePayload
+	var payload commonmodel.ConfirmPasswordUpdatePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
 			Code:    http.StatusBadRequest,
@@ -51,7 +58,12 @@ func (h *SettingHandler) ConfirmPasswordUpdate(c echo.Context) error {
 	}
 
 	// Get userId from context (set by auth middleware)
-	userId := c.Get("userId").(model.UserId)
+	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	stringUserId := c.Get("userId").(string)
+	userId := model.UserId{
+		StringUserId: stringUserId,
+		UuidUserId:   uuidUserId,
+	}
 
 	// Call service
 	response, apiErr := h.Service.ConfirmPasswordUpdate(c.Request().Context(), &payload, userId)
@@ -64,7 +76,7 @@ func (h *SettingHandler) ConfirmPasswordUpdate(c echo.Context) error {
 
 // RequestEmailUpdate handles email update request
 func (h *SettingHandler) RequestEmailUpdate(c echo.Context) error {
-	var payload model.RequestEmailUpdatePayload
+	var payload commonmodel.RequestEmailUpdatePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
 			Code:    http.StatusBadRequest,
@@ -74,7 +86,12 @@ func (h *SettingHandler) RequestEmailUpdate(c echo.Context) error {
 	}
 
 	// Get userId from context (set by auth middleware)
-	userId := c.Get("userId").(model.UserId)
+	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	stringUserId := c.Get("userId").(string)
+	userId := model.UserId{
+		StringUserId: stringUserId,
+		UuidUserId:   uuidUserId,
+	}
 
 	// Call service
 	response, apiErr := h.Service.RequestEmailUpdate(c.Request().Context(), &payload, userId)
@@ -87,7 +104,7 @@ func (h *SettingHandler) RequestEmailUpdate(c echo.Context) error {
 
 // ConfirmEmailUpdate handles email update confirmation with OTP
 func (h *SettingHandler) ConfirmEmailUpdate(c echo.Context) error {
-	var payload model.ConfirmEmailUpdatePayload
+	var payload commonmodel.ConfirmEmailUpdatePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
 			Code:    http.StatusBadRequest,
@@ -97,7 +114,12 @@ func (h *SettingHandler) ConfirmEmailUpdate(c echo.Context) error {
 	}
 
 	// Get userId from context (set by auth middleware)
-	userId := c.Get("userId").(model.UserId)
+	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	stringUserId := c.Get("userId").(string)
+	userId := model.UserId{
+		StringUserId: stringUserId,
+		UuidUserId:   uuidUserId,
+	}
 
 	// Call service
 	response, apiErr := h.Service.ConfirmEmailUpdate(c.Request().Context(), &payload, userId)
