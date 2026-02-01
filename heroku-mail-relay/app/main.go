@@ -21,7 +21,7 @@ func main() {
 		port = "8080"
 	}
 
-	http.HandleFunc("/send", handleSendEmail)
+	http.HandleFunc("/", handleSendEmail)
 
 	log.Printf("Relay listening on port %s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
@@ -66,7 +66,7 @@ func handleSendEmail(w http.ResponseWriter, r *http.Request) {
 	// Prepare Email
 	addr := fmt.Sprintf("%s:%s", host, smtpPort)
 	auth := smtp.PlainAuth("", username, password, host)
-	
+
 	msg := fmt.Sprintf("From: %s <%s>\r\n"+
 		"To: %s\r\n"+
 		"Subject: %s\r\n"+
