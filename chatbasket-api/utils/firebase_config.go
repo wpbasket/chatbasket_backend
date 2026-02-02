@@ -39,12 +39,12 @@ func InitializeFirebase(ctx context.Context) error {
 			if err != nil {
 				// File not found, try environment variable (for Heroku/production)
 				firebaseCredsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON")
-				
+
 				if firebaseCredsJSON == "" {
 					initErr = fmt.Errorf("Firebase credentials not found: no file '%s' and no FIREBASE_CREDENTIALS_JSON env var", filename)
 					return
 				}
-				
+
 				serviceAccountBytes = []byte(firebaseCredsJSON)
 				log.Println("📍 Using Firebase credentials from environment variable")
 			} else {
@@ -66,6 +66,13 @@ func InitializeFirebase(ctx context.Context) error {
 		creds, err := google.CredentialsFromJSON(ctx, serviceAccountBytes, "https://www.googleapis.com/auth/cloud-platform")
 		if err != nil {
 			initErr = fmt.Errorf("failed to parse service account credentials: %w", err)
+			return
+		}
+
+		// Verify credentials by attempting to fetch a token
+		// This ensures the service account details are valid and can authenticate
+		if _, err := creds.TokenSource.Token(); err != nil {
+			initErr = fmt.Errorf("failed to verify Firebase credentials: %w", err)
 			return
 		}
 
