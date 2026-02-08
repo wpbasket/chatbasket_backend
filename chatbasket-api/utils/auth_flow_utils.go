@@ -97,12 +97,14 @@ func VerifyOTPFlow(ctx context.Context, q *auth.Queries, userID uuid.UUID, secre
 }
 
 type SessionResult struct {
-	Token     string
-	ExpiresAt string
+	Token             string
+	ExpiresAt         string
+	IsPrimary         bool
+	PrimaryDeviceName string
 }
 
 // CreateSessionFlow generates token, hashes, stores session, returns token + expiry string.
-func CreateSessionFlow(ctx context.Context, q *auth.Queries, userID uuid.UUID, platform string, sessionSecret []byte) (*SessionResult, *model.ApiError) {
+func CreateSessionFlow(ctx context.Context, q *auth.Queries, userID uuid.UUID, platform, deviceToken string, sessionSecret []byte) (*SessionResult, *model.ApiError) {
 	tokenEnv := uuid.New().String()
 	tokenHash, err := ComputeHMAC(tokenEnv, sessionSecret)
 	if err != nil {
@@ -113,18 +115,42 @@ func CreateSessionFlow(ctx context.Context, q *auth.Queries, userID uuid.UUID, p
 	expiresAt := time.Now().Add(3 * 365 * 24 * time.Hour)
 	sid, _ := uuid.NewV7()
 
+	// Logic: If user has NO primary device, and this is a native platform, make this the primary device.
+	isPrimary := false
+	primaryDeviceName := ""
+
+	// Check for existing primary device
+	existingPrimary, err := q.GetCentralSession(ctx, userID)
+	if err == nil {
+		// Existing primary device found
+		if existingPrimary.DeviceName != nil {
+			primaryDeviceName = *existingPrimary.DeviceName
+		}
+	} else {
+		// No primary device found, auto-promote if native
+		if platform == "android" || platform == "ios" {
+			isPrimary = true
+		}
+	}
+
 	_, err = q.CreateSession(ctx, auth.CreateSessionParams{
-		ID:         sid,
-		AuthUserID: userID,
-		TokenHash:  tokenHash,
-		ExpiresAt:  pgtype.Timestamptz{Valid: true, Time: expiresAt},
+		ID:          sid,
+		AuthUserID:  userID,
+		TokenHash:   tokenHash,
+		ExpiresAt:   pgtype.Timestamptz{Valid: true, Time: expiresAt},
+		Platform:    &platform,
+		DeviceToken: &deviceToken,
+		DeviceName:  nil, // To be set later via settings
+		IsCentral:   isPrimary,
 	})
 	if err != nil {
 		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to create session: " + err.Error(), Type: "internal_server_error"}
 	}
 
 	return &SessionResult{
-		Token:     tokenEnv,
-		ExpiresAt: expiresAt.Format(time.RFC3339),
+		Token:             tokenEnv,
+		ExpiresAt:         expiresAt.Format(time.RFC3339),
+		IsPrimary:         isPrimary,
+		PrimaryDeviceName: primaryDeviceName,
 	}, nil
 }

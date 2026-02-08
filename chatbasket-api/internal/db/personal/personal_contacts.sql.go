@@ -47,6 +47,23 @@ func (q *Queries) AcceptContactRequest(ctx context.Context, arg AcceptContactReq
 	return outcome, err
 }
 
+const createUserBlock = `-- name: CreateUserBlock :exec
+INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
+VALUES ($1, $2, $3)
+ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING
+`
+
+type CreateUserBlockParams struct {
+	ID            uuid.UUID `json:"id"`
+	BlockerUserID uuid.UUID `json:"blocker_user_id"`
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+}
+
+func (q *Queries) CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error {
+	_, err := q.db.Exec(ctx, createUserBlock, arg.ID, arg.BlockerUserID, arg.BlockedUserID)
+	return err
+}
+
 const deleteAndInsertContactRequest = `-- name: DeleteAndInsertContactRequest :exec
 WITH deleted AS (
     DELETE FROM contact_requests

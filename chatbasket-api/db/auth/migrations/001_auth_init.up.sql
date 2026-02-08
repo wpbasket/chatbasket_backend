@@ -36,12 +36,19 @@ CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY,
     auth_user_id UUID NOT NULL REFERENCES auth_users (id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL,
+    device_token TEXT, -- FCM Token
+    platform TEXT,
+    device_name TEXT, -- Human readable name
+    is_central BOOLEAN NOT NULL DEFAULT FALSE,
     user_agent TEXT,
     ip_address TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
-    CONSTRAINT sessions_token_hash_unique UNIQUE (token_hash)
+    CONSTRAINT sessions_token_hash_unique UNIQUE (token_hash),
+    CONSTRAINT sessions_platform_check CHECK (
+        platform IN ('ios', 'android', 'web')
+    )
 );
 
 -- Drop existing trigger if present (safe idempotent)
@@ -56,9 +63,10 @@ EXECUTE FUNCTION set_timestamps();
 -- Index: user session lookup for logout all
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (auth_user_id);
 
--- Removed partial index due to IMMUTABLE function requirement
--- CREATE INDEX IF NOT EXISTS idx_sessions_expired ON sessions (expires_at)
--- WHERE expires_at < now();
+-- Index: Enforce EXACTLY ONE Central Device per user (Business Logic Integrity)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_central_session ON sessions (auth_user_id)
+WHERE
+    is_central = TRUE;
 
 -- ======================================
 -- Create verification_codes table

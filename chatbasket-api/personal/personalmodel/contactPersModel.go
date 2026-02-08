@@ -88,3 +88,11 @@ type UpdateContactNicknamePayload struct {
 type RemoveContactNicknamePayload struct {
 	ContactUserId string `json:"contact_user_id"`
 }
+
+type BlockUserPayload struct {
+	BlockedUserId string `json:"blocked_user_id" validate:"required,uuid"`
+}
+
+type BlockUserResponse struct {
+	Blocked bool `json:"blocked"`
+}

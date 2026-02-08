@@ -23,6 +23,24 @@ func (q *Queries) CheckEmailExists(ctx context.Context, email string) (bool, err
 	return exists, err
 }
 
+const checkHasCentralDevice = `-- name: CheckHasCentralDevice :one
+SELECT EXISTS (
+        SELECT 1
+        FROM sessions
+        WHERE
+            auth_user_id = $1
+            AND is_central = TRUE
+    )
+`
+
+// Checks if the user already has a central device
+func (q *Queries) CheckHasCentralDevice(ctx context.Context, authUserID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, checkHasCentralDevice, authUserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const checkSessionIsValid = `-- name: CheckSessionIsValid :one
 
 SELECT EXISTS (
@@ -102,20 +120,39 @@ INSERT INTO
         token_hash,
         user_agent,
         ip_address,
-        expires_at
+        expires_at,
+        device_token,
+        platform,
+        device_name,
+        is_central
     )
-VALUES ($1, $2, $3, $4, $5, $6)
+VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10
+    )
 RETURNING
-    id, auth_user_id, token_hash, user_agent, ip_address, expires_at, created_at, updated_at
+    id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at
 `
 
 type CreateSessionParams struct {
-	ID         uuid.UUID          `json:"id"`
-	AuthUserID uuid.UUID          `json:"auth_user_id"`
-	TokenHash  string             `json:"token_hash"`
-	UserAgent  *string            `json:"user_agent"`
-	IpAddress  *string            `json:"ip_address"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	ID          uuid.UUID          `json:"id"`
+	AuthUserID  uuid.UUID          `json:"auth_user_id"`
+	TokenHash   string             `json:"token_hash"`
+	UserAgent   *string            `json:"user_agent"`
+	IpAddress   *string            `json:"ip_address"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	DeviceToken *string            `json:"device_token"`
+	Platform    *string            `json:"platform"`
+	DeviceName  *string            `json:"device_name"`
+	IsCentral   bool               `json:"is_central"`
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
@@ -126,12 +163,20 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		arg.UserAgent,
 		arg.IpAddress,
 		arg.ExpiresAt,
+		arg.DeviceToken,
+		arg.Platform,
+		arg.DeviceName,
+		arg.IsCentral,
 	)
 	var i Session
 	err := row.Scan(
 		&i.ID,
 		&i.AuthUserID,
 		&i.TokenHash,
+		&i.DeviceToken,
+		&i.Platform,
+		&i.DeviceName,
+		&i.IsCentral,
 		&i.UserAgent,
 		&i.IpAddress,
 		&i.ExpiresAt,
@@ -343,6 +388,96 @@ func (q *Queries) GetAuthUserByID(ctx context.Context, id uuid.UUID) (AuthUser, 
 	return i, err
 }
 
+const getCentralSession = `-- name: GetCentralSession :one
+SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at
+FROM sessions
+WHERE
+    auth_user_id = $1
+    AND is_central = TRUE
+LIMIT 1
+`
+
+// Returns the details of the central session for a user
+func (q *Queries) GetCentralSession(ctx context.Context, authUserID uuid.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, getCentralSession, authUserID)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AuthUserID,
+		&i.TokenHash,
+		&i.DeviceToken,
+		&i.Platform,
+		&i.DeviceName,
+		&i.IsCentral,
+		&i.UserAgent,
+		&i.IpAddress,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getSessionByToken = `-- name: GetSessionByToken :one
+SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at FROM sessions WHERE token_hash = $1 AND auth_user_id = $2
+`
+
+type GetSessionByTokenParams struct {
+	TokenHash  string    `json:"token_hash"`
+	AuthUserID uuid.UUID `json:"auth_user_id"`
+}
+
+func (q *Queries) GetSessionByToken(ctx context.Context, arg GetSessionByTokenParams) (Session, error) {
+	row := q.db.QueryRow(ctx, getSessionByToken, arg.TokenHash, arg.AuthUserID)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AuthUserID,
+		&i.TokenHash,
+		&i.DeviceToken,
+		&i.Platform,
+		&i.DeviceName,
+		&i.IsCentral,
+		&i.UserAgent,
+		&i.IpAddress,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserPrimarySession = `-- name: GetUserPrimarySession :one
+SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at
+FROM sessions
+WHERE
+    auth_user_id = $1
+    AND is_central = TRUE
+    AND expires_at > now()
+LIMIT 1
+`
+
+// Returns user's primary device session (for Phase 6 messaging eligibility)
+func (q *Queries) GetUserPrimarySession(ctx context.Context, authUserID uuid.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, getUserPrimarySession, authUserID)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AuthUserID,
+		&i.TokenHash,
+		&i.DeviceToken,
+		&i.Platform,
+		&i.DeviceName,
+		&i.IsCentral,
+		&i.UserAgent,
+		&i.IpAddress,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getVerificationCode = `-- name: GetVerificationCode :one
 SELECT id, update_id, email, code_hash, type, created_at, updated_at FROM verification_codes WHERE id = $1 AND type = $2
 `
@@ -366,6 +501,56 @@ func (q *Queries) GetVerificationCode(ctx context.Context, arg GetVerificationCo
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const resetCentralSessions = `-- name: ResetCentralSessions :exec
+UPDATE sessions SET is_central = FALSE WHERE auth_user_id = $1
+`
+
+// Sets is_central = false for ALL sessions of this user (Upgrade preparation)
+func (q *Queries) ResetCentralSessions(ctx context.Context, authUserID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, resetCentralSessions, authUserID)
+	return err
+}
+
+const setSessionCentral = `-- name: SetSessionCentral :exec
+UPDATE sessions
+SET
+    is_central = TRUE
+WHERE
+    id = $1
+    AND auth_user_id = $2
+`
+
+type SetSessionCentralParams struct {
+	ID         uuid.UUID `json:"id"`
+	AuthUserID uuid.UUID `json:"auth_user_id"`
+}
+
+// Sets is_central = true for a specific session
+func (q *Queries) SetSessionCentral(ctx context.Context, arg SetSessionCentralParams) error {
+	_, err := q.db.Exec(ctx, setSessionCentral, arg.ID, arg.AuthUserID)
+	return err
+}
+
+const setSessionCentralByToken = `-- name: SetSessionCentralByToken :exec
+UPDATE sessions
+SET
+    is_central = TRUE
+WHERE
+    token_hash = $1
+    AND auth_user_id = $2
+`
+
+type SetSessionCentralByTokenParams struct {
+	TokenHash  string    `json:"token_hash"`
+	AuthUserID uuid.UUID `json:"auth_user_id"`
+}
+
+// Sets is_central = true for a session identified by token hash
+func (q *Queries) SetSessionCentralByToken(ctx context.Context, arg SetSessionCentralByTokenParams) error {
+	_, err := q.db.Exec(ctx, setSessionCentralByToken, arg.TokenHash, arg.AuthUserID)
+	return err
 }
 
 const updateAuthUserEmail = `-- name: UpdateAuthUserEmail :exec
@@ -413,5 +598,36 @@ type UpdateAuthUserPasswordParams struct {
 
 func (q *Queries) UpdateAuthUserPassword(ctx context.Context, arg UpdateAuthUserPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateAuthUserPassword, arg.ID, arg.PasswordHash)
+	return err
+}
+
+const updateSessionDeviceToken = `-- name: UpdateSessionDeviceToken :exec
+UPDATE sessions
+SET
+    device_token = $1,
+    platform = $2,
+    device_name = $3,
+    updated_at = now()
+WHERE
+    token_hash = $4
+    AND auth_user_id = $5
+`
+
+type UpdateSessionDeviceTokenParams struct {
+	DeviceToken *string   `json:"device_token"`
+	Platform    *string   `json:"platform"`
+	DeviceName  *string   `json:"device_name"`
+	TokenHash   string    `json:"token_hash"`
+	AuthUserID  uuid.UUID `json:"auth_user_id"`
+}
+
+func (q *Queries) UpdateSessionDeviceToken(ctx context.Context, arg UpdateSessionDeviceTokenParams) error {
+	_, err := q.db.Exec(ctx, updateSessionDeviceToken,
+		arg.DeviceToken,
+		arg.Platform,
+		arg.DeviceName,
+		arg.TokenHash,
+		arg.AuthUserID,
+	)
 	return err
 }

@@ -1,6 +1,8 @@
 package personalservice
 
 import (
+	"chatbasket-api/appwriteinternal"
+	"chatbasket-api/internal/db/auth"
 	"chatbasket-api/internal/db/personal"
 	"chatbasket-api/model"
 	"chatbasket-api/services"
@@ -16,15 +18,21 @@ import (
 // Service wraps the shared GlobalService for personal-mode endpoints.
 // Extend with personal-specific utilities as the feature evolves.
 type Service struct {
+	PersonalQueries *personal.Queries
+	AuthQueries     *auth.Queries
+	Appwrite        *appwriteinternal.AppwriteService
+	AuthSecret      []byte
 	*services.GlobalService
-	AuthSecret []byte
 }
 
 // New constructs a personal Service from the shared GlobalService.
 func New(gs *services.GlobalService, authSecret []byte) *Service {
 	return &Service{
-		GlobalService: gs,
-		AuthSecret:    authSecret,
+		GlobalService:   gs,
+		AuthSecret:      authSecret,
+		PersonalQueries: gs.PersonalQueries,
+		AuthQueries:     gs.AuthQueries,
+		Appwrite:        gs.Appwrite,
 	}
 }
 

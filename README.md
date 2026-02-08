@@ -109,15 +109,11 @@ We choose tools that offer **Control** and **Predictability**.
 
 We are actively developing advanced intelligence and architecture upgrades:
 
-- **🔐 Advanced Privacy Layer (In Development)**:
-    - **Zero-Knowledge Privacy**: Embedding ChaCha20-Poly1305 encryption for sensitive user fields.
-    - **Blind Indexing**: Implementing HMAC-SHA256 for secure, opaque user lookups.
-
-- **📱 Cross-Platform Notifications (Upcoming)**:
+- ** Cross-Platform Notifications (Upcoming)**:
     - **FCM Universal Integration**: Unified push delivery for Android & iOS.
     - **Dual-Payload Strategy**: Support for both System Alerts (`Notification`) and Silent Data Updates (`Data-Only`).
 
-- **🤖 AI & Vector Engine (Upcoming)**:
+- ** AI & Vector Engine (Upcoming)**:
     - **Azure Cosmos DB**: Serving as a high-dimensional **Vector Store** for RAG pipelines.
     - **Semantic Search**: Enabling natural language discovery of profiles and content.
 

@@ -108,6 +108,7 @@ func (h *UserHandler) AcountVerification(c echo.Context) error {
 			Email:         user.Email,
 			SessionID:     "",
 			SessionExpiry: user.SessionExpiry,
+			IsPrimary:     user.IsPrimary,
 		}
 		return c.JSON(http.StatusOK, webResponse)
 	}
@@ -196,6 +197,7 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 			Email:         user.Email,
 			SessionID:     "",
 			SessionExpiry: user.SessionExpiry,
+			IsPrimary:     user.IsPrimary,
 		}
 		return c.JSON(http.StatusOK, webResponse)
 	}

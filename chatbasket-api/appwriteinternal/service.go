@@ -19,6 +19,8 @@ type AppwriteService struct {
 	Users                      *users.Users
 	Message                    *messaging.Messaging
 	Tokens                     *tokens.Tokens
+	Endpoint                   string
+	ProjectID                  string
 	DatabaseID                 string
 	UsersCollectionID          string
 	PostsCollectionID          string
@@ -72,6 +74,8 @@ func NewAppwriteService(
 		Users:                      appwrite.NewUsers(c),
 		Message:                    appwrite.NewMessaging(c),
 		Tokens:                     appwrite.NewTokens(c),
+		Endpoint:                   endpoint,
+		ProjectID:                  projectID,
 		DatabaseID:                 databaseID,
 		UsersCollectionID:          usersCollectionID,
 		PostsCollectionID:          postsCollectionID,

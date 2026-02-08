@@ -29,9 +29,23 @@ func (h *SettingHandler) RequestUpdateOTP(c echo.Context) error {
 		})
 	}
 
-	// Get userId from context (set by auth middleware)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
-	stringUserId := c.Get("userId").(string)
+	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	stringUserId, okString := c.Get("userId").(string)
+	if !okString {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 	userId := model.UserId{
 		StringUserId: stringUserId,
 		UuidUserId:   uuidUserId,
@@ -57,9 +71,23 @@ func (h *SettingHandler) ConfirmPasswordUpdate(c echo.Context) error {
 		})
 	}
 
-	// Get userId from context (set by auth middleware)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
-	stringUserId := c.Get("userId").(string)
+	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	stringUserId, okString := c.Get("userId").(string)
+	if !okString {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 	userId := model.UserId{
 		StringUserId: stringUserId,
 		UuidUserId:   uuidUserId,
@@ -85,9 +113,23 @@ func (h *SettingHandler) RequestEmailUpdate(c echo.Context) error {
 		})
 	}
 
-	// Get userId from context (set by auth middleware)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
-	stringUserId := c.Get("userId").(string)
+	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	stringUserId, okString := c.Get("userId").(string)
+	if !okString {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 	userId := model.UserId{
 		StringUserId: stringUserId,
 		UuidUserId:   uuidUserId,
@@ -113,9 +155,23 @@ func (h *SettingHandler) ConfirmEmailUpdate(c echo.Context) error {
 		})
 	}
 
-	// Get userId from context (set by auth middleware)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
-	stringUserId := c.Get("userId").(string)
+	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	stringUserId, okString := c.Get("userId").(string)
+	if !okString {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 	userId := model.UserId{
 		StringUserId: stringUserId,
 		UuidUserId:   uuidUserId,

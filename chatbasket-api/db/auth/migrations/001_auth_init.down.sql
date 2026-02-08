@@ -7,7 +7,8 @@ DROP TABLE IF EXISTS verification_codes CASCADE;
 -- Also drops PK, FK, CHECK constraints
 
 -- Drop sessions
--- Removed: idx_sessions_expired (partial index was removed from UP migration)
+DROP INDEX IF EXISTS idx_unique_central_session;
+-- Enforce EXACTLY ONE Central Device per user (Business Logic Integrity)
 DROP INDEX IF EXISTS idx_sessions_user_id;
 -- User session lookup index
 DROP TRIGGER IF EXISTS sessions_timestamps_trigger ON sessions;

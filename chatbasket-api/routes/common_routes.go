@@ -28,4 +28,5 @@ func RegisterCommonRoutes(e *echo.Echo, globalService *services.GlobalService, a
 	commonAuthGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	commonAuthHandler := commonhandler.NewAuthHandler(commonSvc)
 	commonAuthGroup.POST("/logout", commonAuthHandler.Logout)
+	commonAuthGroup.GET("/me", commonAuthHandler.GetUser)
 }

@@ -96,17 +96,19 @@ func (s *AuthService) AccountVerification(ctx context.Context, payload *model.Au
 	}
 
 	// 4. Create Session via Utils
-	sessionRes, apiErr := utils.CreateSessionFlow(ctx, s.AuthQueries, user.ID, payload.Platform, s.AuthSecret)
+	sessionRes, apiErr := utils.CreateSessionFlow(ctx, s.AuthQueries, user.ID, payload.Platform, "", s.AuthSecret)
 	if apiErr != nil {
 		return nil, apiErr
 	}
 
 	return &model.SessionResponse{
-		UserId:        user.ID.String(),
-		Name:          user.Name,
-		Email:         user.Email,
-		SessionID:     sessionRes.Token,
-		SessionExpiry: sessionRes.ExpiresAt,
+		UserId:            user.ID.String(),
+		Name:              user.Name,
+		Email:             user.Email,
+		SessionID:         sessionRes.Token,
+		SessionExpiry:     sessionRes.ExpiresAt,
+		IsPrimary:         sessionRes.IsPrimary,
+		PrimaryDeviceName: sessionRes.PrimaryDeviceName,
 	}, nil
 }
 
@@ -165,17 +167,19 @@ func (s *AuthService) LoginVerification(ctx context.Context, payload *model.Auth
 	}
 
 	// 3. Create Session via Utils
-	sessionRes, apiErr := utils.CreateSessionFlow(ctx, s.AuthQueries, user.ID, payload.Platform, s.AuthSecret)
+	sessionRes, apiErr := utils.CreateSessionFlow(ctx, s.AuthQueries, user.ID, payload.Platform, "", s.AuthSecret)
 	if apiErr != nil {
 		return nil, apiErr
 	}
 
 	return &model.SessionResponse{
-		UserId:        user.ID.String(),
-		Name:          user.Name,
-		Email:         user.Email,
-		SessionID:     sessionRes.Token,
-		SessionExpiry: sessionRes.ExpiresAt,
+		UserId:            user.ID.String(),
+		Name:              user.Name,
+		Email:             user.Email,
+		SessionID:         sessionRes.Token,
+		SessionExpiry:     sessionRes.ExpiresAt,
+		IsPrimary:         sessionRes.IsPrimary,
+		PrimaryDeviceName: sessionRes.PrimaryDeviceName,
 	}, nil
 }
 

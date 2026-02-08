@@ -22,7 +22,6 @@ func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService,
 	personalProfileGroup.POST("/upload-avatar", personalProfileHandler.UploadProfilePicture)
 	personalProfileGroup.DELETE("/remove-avatar", personalProfileHandler.RemoveProfilePicture)
 	personalProfileGroup.POST("/update-profile", personalProfileHandler.UpdateProfile)
-	personalProfileGroup.POST("/token/register", personalProfileHandler.RegisterOrUpdateToken)
 
 	// Personal Contacts Routes
 	personalContactsGroup := e.Group("/personal/contacts")
@@ -37,5 +36,25 @@ func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService,
 	personalContactsGroup.POST("/requests/reject", persContactsHandler.RejectContactRequest)
 	personalContactsGroup.POST("/requests/undo", persContactsHandler.UndoContactRequest)
 	personalContactsGroup.POST("/update-nickname", persContactsHandler.UpdateContactNickname)
+	personalContactsGroup.POST("/block", persContactsHandler.BlockUser)
 	personalContactsGroup.POST("/remove-nickname", persContactsHandler.RemoveContactNickname)
+	// Personal Settings Routes
+	persSettingGroup := e.Group("/personal/settings")
+	persSettingGroup.Use(middleware.AuthSessionMiddleware(authService, true))
+	persSettingHandler := personalhandler.NewSettingHandler(perSvc)
+	persSettingGroup.POST("/session/central", persSettingHandler.UpdateSessionCentral)
+	persSettingGroup.POST("/session/notification-token", persSettingHandler.UpdateSessionNotificationToken)
+
+	// Personal Chat Routes
+	personalChatGroup := e.Group("/personal/chat")
+	personalChatGroup.Use(middleware.AuthSessionMiddleware(authService, true))
+	persChatHandler := personalhandler.NewChatHandler(perSvc)
+	personalChatGroup.POST("/check-eligibility", persChatHandler.CheckEligibility)
+	personalChatGroup.POST("/create", persChatHandler.CreateChat)
+	personalChatGroup.POST("/send", persChatHandler.SendMessage)
+	personalChatGroup.GET("/messages", persChatHandler.GetMessages)
+	personalChatGroup.POST("/ack", persChatHandler.AcknowledgeDelivery)
+	personalChatGroup.GET("/list", persChatHandler.GetUserChats)
+	personalChatGroup.POST("/upload", persChatHandler.UploadFileForMessage)
+	personalChatGroup.GET("/file-url", persChatHandler.GetFileURL)
 }

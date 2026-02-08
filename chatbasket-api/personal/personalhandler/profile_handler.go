@@ -233,8 +233,15 @@ func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
 		})
 	}
 	userId, ok := c.Get("userId").(string)
-	uuidUserId := c.Get("uuidUserId").(uuid.UUID)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
 	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	if !okUUID {
 		return c.JSON(http.StatusInternalServerError, &model.ApiError{
 			Code:    http.StatusInternalServerError,
 			Message: "Invalid user context",
@@ -251,58 +258,4 @@ func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
 
 }
 
-func (h *ProfileHandler) RegisterOrUpdateToken(c echo.Context) error {
-	// Parse and bind payload
-	var payload personalmodel.RegisterOrUpdateFcmOrApnTokenPayload
-	if err := c.Bind(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, &model.ApiError{
-			Code:    http.StatusBadRequest,
-			Message: "Invalid token registration payload: " + err.Error(),
-			Type:    "bad_request",
-		})
-	}
 
-	// Validate payload
-	// Validate payload
-	// if err := c.Validate(&payload); err != nil {
-	// 	return c.JSON(http.StatusBadRequest, &model.ApiError{
-	// 		Code:    http.StatusBadRequest,
-	// 		Message: "Validation failed: " + err.Error(),
-	// 		Type:    "validation_error",
-	// 	})
-	// }
-
-	// Extract session ID from context
-	sessionId, ok := c.Get("sessionId").(string)
-	if !ok || sessionId == "" {
-		return c.JSON(http.StatusUnauthorized, &model.ApiError{
-			Code:    http.StatusUnauthorized,
-			Message: "Missing or invalid session ID",
-			Type:    "unauthorized",
-		})
-	}
-
-	// Extract user ID from context
-	userId, ok := c.Get("userId").(string)
-	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !ok || !okUUID {
-		return c.JSON(http.StatusInternalServerError, &model.ApiError{
-			Code:    http.StatusInternalServerError,
-			Message: "Invalid user context",
-			Type:    "internal_server_error",
-		})
-	}
-
-	// Call service
-	result, apiErr := h.Service.RegisterOrUpdateFcmOrApnToken(
-		c.Request().Context(),
-		&payload,
-		model.UserId{StringUserId: userId, UuidUserId: uuidUserId},
-		sessionId,
-	)
-	if apiErr != nil {
-		return c.JSON(apiErr.Code, apiErr)
-	}
-
-	return c.JSON(http.StatusOK, result)
-}

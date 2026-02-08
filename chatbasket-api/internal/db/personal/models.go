@@ -28,6 +28,14 @@ type Avatar struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Chat struct {
+	ID             uuid.UUID          `json:"id"`
+	Participant1ID uuid.UUID          `json:"participant_1_id"`
+	Participant2ID uuid.UUID          `json:"participant_2_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ContactRequest struct {
 	ID              uuid.UUID          `json:"id"`
 	RequesterUserID uuid.UUID          `json:"requester_user_id"`
@@ -36,6 +44,42 @@ type ContactRequest struct {
 	Nickname        *string            `json:"nickname"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Message struct {
+	ID                    uuid.UUID          `json:"id"`
+	ChatID                uuid.UUID          `json:"chat_id"`
+	SenderID              uuid.UUID          `json:"sender_id"`
+	RecipientID           uuid.UUID          `json:"recipient_id"`
+	Content               string             `json:"content"`
+	MessageType           string             `json:"message_type"`
+	DeliveredToRecipient  bool               `json:"delivered_to_recipient"`
+	SyncedToSenderPrimary bool               `json:"synced_to_sender_primary"`
+	DeliveryAttempts      int32              `json:"delivery_attempts"`
+	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	FileID                *string            `json:"file_id"`
+	FileName              *string            `json:"file_name"`
+	FileSize              *int64             `json:"file_size"`
+	FileMimeType          *string            `json:"file_mime_type"`
+	FileTokenID           *string            `json:"file_token_id"`
+	FileTokenSecret       *string            `json:"file_token_secret"`
+	FileTokenExpiry       pgtype.Timestamptz `json:"file_token_expiry"`
+	ThumbnailFileID       *string            `json:"thumbnail_file_id"`
+	ThumbnailTokenID      *string            `json:"thumbnail_token_id"`
+	ThumbnailTokenSecret  *string            `json:"thumbnail_token_secret"`
+}
+
+type MessageDeliveryLog struct {
+	ID            uuid.UUID          `json:"id"`
+	MessageID     uuid.UUID          `json:"message_id"`
+	AttemptNumber int32              `json:"attempt_number"`
+	Status        string             `json:"status"`
+	ErrorReason   *string            `json:"error_reason"`
+	AttemptedAt   pgtype.Timestamptz `json:"attempted_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Token struct {

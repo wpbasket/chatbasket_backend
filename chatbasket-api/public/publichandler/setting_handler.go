@@ -27,8 +27,15 @@ func (h *SettingHandler) RequestUpdateOTP(c echo.Context) error {
 		})
 	}
 
-	// Get userId from context (set by auth middleware)
-	userId := c.Get("userId").(model.UserId)
+	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
+	userId, ok := c.Get("userId").(model.UserId)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	// Call service
 	response, apiErr := h.Service.RequestUpdateOTP(c.Request().Context(), &payload, userId)
@@ -50,8 +57,15 @@ func (h *SettingHandler) ConfirmPasswordUpdate(c echo.Context) error {
 		})
 	}
 
-	// Get userId from context (set by auth middleware)
-	userId := c.Get("userId").(model.UserId)
+	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
+	userId, ok := c.Get("userId").(model.UserId)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	// Call service
 	response, apiErr := h.Service.ConfirmPasswordUpdate(c.Request().Context(), &payload, userId)
@@ -73,8 +87,15 @@ func (h *SettingHandler) RequestEmailUpdate(c echo.Context) error {
 		})
 	}
 
-	// Get userId from context (set by auth middleware)
-	userId := c.Get("userId").(model.UserId)
+	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
+	userId, ok := c.Get("userId").(model.UserId)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	// Call service
 	response, apiErr := h.Service.RequestEmailUpdate(c.Request().Context(), &payload, userId)
@@ -96,8 +117,15 @@ func (h *SettingHandler) ConfirmEmailUpdate(c echo.Context) error {
 		})
 	}
 
-	// Get userId from context (set by auth middleware)
-	userId := c.Get("userId").(model.UserId)
+	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
+	userId, ok := c.Get("userId").(model.UserId)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
 
 	// Call service
 	response, apiErr := h.Service.ConfirmEmailUpdate(c.Request().Context(), &payload, userId)

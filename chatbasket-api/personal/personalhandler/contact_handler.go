@@ -276,3 +276,25 @@ func (h *ContactHandler) UpdateContactNickname(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, res)
 }
+
+func (h *ContactHandler) BlockUser(c echo.Context) error {
+	userId, ok := c.Get("userId").(string)
+	if !ok || userId == "" {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
+	}
+	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
+	}
+
+	var payload personalmodel.BlockUserPayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid request payload", Type: "bad_request"})
+	}
+
+	res, apiErr := h.Service.BlockUser(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uid})
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, res)
+}

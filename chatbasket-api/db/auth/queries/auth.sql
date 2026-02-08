@@ -51,9 +51,24 @@ INSERT INTO
         token_hash,
         user_agent,
         ip_address,
-        expires_at
+        expires_at,
+        device_token,
+        platform,
+        device_name,
+        is_central
     )
-VALUES ($1, $2, $3, $4, $5, $6)
+VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10
+    )
 RETURNING
     *;
 
@@ -120,3 +135,68 @@ DELETE FROM sessions WHERE id = $1 AND auth_user_id = $2;
 DELETE FROM sessions WHERE auth_user_id = $1;
 -- name: DeleteSessionByToken :exec
 DELETE FROM sessions WHERE token_hash = $1 AND auth_user_id = $2;
+
+-- name: ResetCentralSessions :exec
+-- Sets is_central = false for ALL sessions of this user (Upgrade preparation)
+UPDATE sessions SET is_central = FALSE WHERE auth_user_id = $1;
+
+-- name: SetSessionCentral :exec
+-- Sets is_central = true for a specific session
+UPDATE sessions
+SET
+    is_central = TRUE
+WHERE
+    id = $1
+    AND auth_user_id = $2;
+
+-- name: SetSessionCentralByToken :exec
+-- Sets is_central = true for a session identified by token hash
+UPDATE sessions
+SET
+    is_central = TRUE
+WHERE
+    token_hash = $1
+    AND auth_user_id = $2;
+
+-- name: CheckHasCentralDevice :one
+-- Checks if the user already has a central device
+SELECT EXISTS (
+        SELECT 1
+        FROM sessions
+        WHERE
+            auth_user_id = $1
+            AND is_central = TRUE
+    );
+
+-- name: UpdateSessionDeviceToken :exec
+UPDATE sessions
+SET
+    device_token = $1,
+    platform = $2,
+    device_name = $3,
+    updated_at = now()
+WHERE
+    token_hash = $4
+    AND auth_user_id = $5;
+
+-- name: GetCentralSession :one
+-- Returns the details of the central session for a user
+SELECT *
+FROM sessions
+WHERE
+    auth_user_id = $1
+    AND is_central = TRUE
+LIMIT 1;
+
+-- name: GetSessionByToken :one
+SELECT * FROM sessions WHERE token_hash = $1 AND auth_user_id = $2;
+
+-- name: GetUserPrimarySession :one
+-- Returns user's primary device session (for Phase 6 messaging eligibility)
+SELECT *
+FROM sessions
+WHERE
+    auth_user_id = $1
+    AND is_central = TRUE
+    AND expires_at > now()
+LIMIT 1;

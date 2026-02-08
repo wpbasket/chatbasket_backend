@@ -771,3 +771,70 @@ func (ps *Service) RemoveContactNickname(ctx context.Context, payload *personalm
 
 	return &model.StatusOkay{Status: true, Message: "contact_nickname_removed"}, nil
 }
+
+func (ps *Service) BlockUser(ctx context.Context, payload *personalmodel.BlockUserPayload, userId model.UserId) (*personalmodel.BlockUserResponse, *model.ApiError) {
+	if payload == nil || payload.BlockedUserId == "" {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid request payload", Type: "bad_request"}
+	}
+
+	blockedUUID, err := uuid.Parse(payload.BlockedUserId)
+	if err != nil {
+		return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid blockedUserId", Type: "bad_request"}
+	}
+
+	if blockedUUID == userId.UuidUserId {
+		return nil, &model.ApiError{Code: http.StatusConflict, Message: "self_block_not_allowed", Type: "conflict"}
+	}
+
+	// Check if target exists and is not admin-blocked
+	targetProfile, err := ps.PersonalQueries.GetUserCoreProfile(ctx, blockedUUID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, &model.ApiError{Code: http.StatusNotFound, Message: "user_not_found", Type: "not_found"}
+		}
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+	}
+
+	if targetProfile.IsAdminBlocked {
+		return nil, &model.ApiError{Code: http.StatusForbidden, Message: "user_admin_blocked", Type: "forbidden"}
+	}
+
+	// Check if already blocked
+	blockStatus, err := ps.PersonalQueries.IsEitherBlocked(ctx, personal.IsEitherBlockedParams{
+		BlockerUserID: userId.UuidUserId,
+		BlockedUserID: blockedUUID,
+	})
+	if err != nil {
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+	}
+
+	if blockStatus == 1 {
+		// Already blocked by current user
+		return &personalmodel.BlockUserResponse{Blocked: true}, nil
+	}
+
+	if blockStatus == 2 {
+		// Target has already blocked current user - allow reciprocal block
+		// Continue to create the block
+	}
+
+	// Create the block - note: this requires sqlc regeneration for CreateUserBlock
+	// For now, we'll use the pattern that sqlc would generate
+	err = ps.PersonalQueries.CreateUserBlock(ctx, personal.CreateUserBlockParams{
+		ID:            uuid.New(),
+		BlockerUserID: userId.UuidUserId,
+		BlockedUserID: blockedUUID,
+	})
+	if err != nil {
+		return nil, &model.ApiError{Code: http.StatusInternalServerError, Message: utils.GetPostgresError(err).Message, Type: "internal_server_error"}
+	}
+
+	// Drop pending messages between users (both directions)
+	err = ps.DropPendingMessagesBetweenUsers(ctx, userId.UuidUserId, blockedUUID)
+	if err != nil {
+		// Log but don't fail the block operation
+		// Messages will eventually expire via TTL anyway
+	}
+
+	return &personalmodel.BlockUserResponse{Blocked: true}, nil
+}

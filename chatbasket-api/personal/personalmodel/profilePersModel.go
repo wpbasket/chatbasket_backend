@@ -49,8 +49,9 @@ type UpdateUserProfilePayload struct {
 }
 
 type RegisterOrUpdateFcmOrApnTokenPayload struct {
-	Token string `json:"token" validate:"required,min=1"`
-	Type  string `json:"type" validate:"required,oneof=fcm apn"`
+	Token      string  `json:"token" validate:"required,min=1"`
+	Type       string  `json:"type" validate:"required,oneof=fcm apn"`
+	DeviceName *string `json:"device_name,omitempty"`
 }
 
 func ToPrivateUserWithAvatar(user *personal.GetUserProfileRow, username string, email string, avatarUrl *string) *PrivateUser {

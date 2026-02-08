@@ -52,3 +52,32 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, res)
 }
+
+// GetUser returns the current user and session details
+func (h *AuthHandler) GetUser(c echo.Context) error {
+	// Extract user ID from context
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusUnauthorized, model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "Invalid user context",
+			Type:    "unauthorized",
+		})
+	}
+
+	// Extract session ID from context
+	sessionId, ok := c.Get("sessionId").(string)
+	if !ok || sessionId == "" {
+		return c.JSON(http.StatusUnauthorized, model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "No session context",
+			Type:    "unauthorized",
+		})
+	}
+
+	res, apiErr := h.Service.GetUserWithSession(c.Request().Context(), uuidUserId, sessionId)
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, res)
+}

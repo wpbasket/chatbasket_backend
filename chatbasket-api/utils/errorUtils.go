@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v4"
@@ -9,8 +10,11 @@ import (
 
 // GetStatusCodeFromError extracts the HTTP status code from an error.
 func GetStatusCodeFromError(err error) int {
-	he := err.(*echo.HTTPError)
-	return he.Code
+	var he *echo.HTTPError
+	if errors.As(err, &he) {
+		return he.Code
+	}
+	return http.StatusInternalServerError // fallback for non-HTTP errors
 }
 
 type PostgresError struct {

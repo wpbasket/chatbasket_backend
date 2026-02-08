@@ -252,6 +252,11 @@ WHERE owner_user_id = $1
   AND contact_user_id = $2
 RETURNING true AS updated;
 
+-- name: CreateUserBlock :exec
+INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
+VALUES ($1, $2, $3)
+ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING;
+
 -- name: GetPendingContactRequests :many
 SELECT
     ru.id,

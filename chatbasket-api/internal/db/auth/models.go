@@ -20,14 +20,18 @@ type AuthUser struct {
 }
 
 type Session struct {
-	ID         uuid.UUID          `json:"id"`
-	AuthUserID uuid.UUID          `json:"auth_user_id"`
-	TokenHash  string             `json:"token_hash"`
-	UserAgent  *string            `json:"user_agent"`
-	IpAddress  *string            `json:"ip_address"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	ID          uuid.UUID          `json:"id"`
+	AuthUserID  uuid.UUID          `json:"auth_user_id"`
+	TokenHash   string             `json:"token_hash"`
+	DeviceToken *string            `json:"device_token"`
+	Platform    *string            `json:"platform"`
+	DeviceName  *string            `json:"device_name"`
+	IsCentral   bool               `json:"is_central"`
+	UserAgent   *string            `json:"user_agent"`
+	IpAddress   *string            `json:"ip_address"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type VerificationCode struct {

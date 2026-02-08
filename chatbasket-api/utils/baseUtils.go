@@ -54,3 +54,16 @@ func BuildAvatarURI(ad *AppwriteFileData) *string {
 		*ad.FileId, *ad.FileSecret)
 	return &uri
 }
+
+// BuildFileDownloadURL constructs a download URL for chat files
+// Uses /download endpoint instead of /view for proper file downloads
+// Pattern: {endpoint}/storage/buckets/{bucketId}/files/{fileId}/download?project={projectId}&token={tokenSecret}
+func BuildFileDownloadURL(endpoint, projectID, bucketID string, ad *AppwriteFileData) *string {
+	if ad == nil || ad.FileId == nil || *ad.FileId == "" || ad.FileSecret == nil || *ad.FileSecret == "" {
+		return nil
+	}
+
+	uri := fmt.Sprintf("%s/storage/buckets/%s/files/%s/download?project=%s&token=%s",
+		endpoint, bucketID, *ad.FileId, projectID, *ad.FileSecret)
+	return &uri
+}
