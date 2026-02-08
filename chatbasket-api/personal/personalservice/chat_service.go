@@ -31,6 +31,28 @@ const (
 	MaxDeliveryAttempts = 5
 )
 
+func messagingEligibilityError(eligibility string) *model.ApiError {
+	errType := "messaging_not_allowed"
+	switch eligibility {
+	case EligibilityNotInContacts:
+		errType = "messaging_not_allowed_not_in_contacts"
+	case EligibilityRecipientPrivate:
+		errType = "messaging_not_allowed_recipient_private"
+	case EligibilityBlocked:
+		errType = "messaging_not_allowed_blocked"
+	case EligibilityAdminBlocked:
+		errType = "messaging_not_allowed_admin_blocked"
+	case EligibilityNoPrimaryDevice:
+		errType = "messaging_not_allowed_no_primary_device"
+	}
+
+	return &model.ApiError{
+		Code:    http.StatusForbidden,
+		Message: eligibility,
+		Type:    errType,
+	}
+}
+
 func (ps *Service) CreateOrGetChat(ctx context.Context, user1ID, user2ID uuid.UUID) (*personal.Chat, *model.ApiError) {
 	chatID := uuid.New()
 
@@ -52,18 +74,23 @@ func (ps *Service) CreateOrGetChat(ctx context.Context, user1ID, user2ID uuid.UU
 }
 
 func (ps *Service) CheckMessagingEligibility(ctx context.Context, senderID, recipientID uuid.UUID) (string, *model.ApiError) {
+	fmt.Printf("[DEBUG] CheckMessagingEligibility: sender=%s, recipient=%s\n", senderID, recipientID)
+
 	status, err := ps.PersonalQueries.CanSendMessage(ctx, personal.CanSendMessageParams{
 		Column1: senderID,
 		Column2: recipientID,
 	})
 
 	if err != nil {
+		fmt.Printf("[DEBUG] CanSendMessage query error: %v\n", err)
 		return "", &model.ApiError{
 			Code:    http.StatusInternalServerError,
 			Message: utils.GetPostgresError(err).Message,
 			Type:    "eligibility_check_failed",
 		}
 	}
+
+	fmt.Printf("[DEBUG] CanSendMessage status: %s\n", status)
 
 	if status != EligibilityAllowed {
 		return status, nil
@@ -72,6 +99,7 @@ func (ps *Service) CheckMessagingEligibility(ctx context.Context, senderID, reci
 	senderPrimary, err := ps.AuthQueries.GetUserPrimarySession(ctx, senderID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
+			fmt.Printf("[DEBUG] Sender has no primary device\n")
 			return EligibilityNoPrimaryDevice, nil
 		}
 		return "", &model.ApiError{
@@ -82,12 +110,14 @@ func (ps *Service) CheckMessagingEligibility(ctx context.Context, senderID, reci
 	}
 
 	if senderPrimary.ID == uuid.Nil {
+		fmt.Printf("[DEBUG] Sender primary device is nil\n")
 		return EligibilityNoPrimaryDevice, nil
 	}
 
 	recipientPrimary, err := ps.AuthQueries.GetUserPrimarySession(ctx, recipientID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
+			fmt.Printf("[DEBUG] Recipient has no primary device\n")
 			return EligibilityNoPrimaryDevice, nil
 		}
 		return "", &model.ApiError{
@@ -98,9 +128,11 @@ func (ps *Service) CheckMessagingEligibility(ctx context.Context, senderID, reci
 	}
 
 	if recipientPrimary.ID == uuid.Nil {
+		fmt.Printf("[DEBUG] Recipient primary device is nil\n")
 		return EligibilityNoPrimaryDevice, nil
 	}
 
+	fmt.Printf("[DEBUG] All checks passed - allowed\n")
 	return EligibilityAllowed, nil
 }
 
@@ -118,11 +150,7 @@ func (ps *Service) SendMessage(ctx context.Context, params SendMessageParams) (*
 	}
 
 	if eligibility != EligibilityAllowed {
-		return nil, &model.ApiError{
-			Code:    http.StatusForbidden,
-			Message: fmt.Sprintf("messaging not allowed: %s", eligibility),
-			Type:    "messaging_not_allowed",
-		}
+		return nil, messagingEligibilityError(eligibility)
 	}
 
 	chat, apiErr := ps.CreateOrGetChat(ctx, params.SenderID, params.RecipientID)
@@ -353,11 +381,7 @@ func (ps *Service) CreateChatHandler(ctx context.Context, payload *personalmodel
 	}
 
 	if eligibility != EligibilityAllowed {
-		return nil, &model.ApiError{
-			Code:    http.StatusForbidden,
-			Message: eligibility,
-			Type:    "messaging_not_allowed",
-		}
+		return nil, messagingEligibilityError(eligibility)
 	}
 
 	chat, apiErr := ps.CreateOrGetChat(ctx, userId.UuidUserId, recipientID)
@@ -432,8 +456,8 @@ func (ps *Service) GetMessagesHandler(ctx context.Context, payload *personalmode
 	if !isParticipant {
 		return nil, &model.ApiError{
 			Code:    http.StatusForbidden,
-			Message: "You are not a participant in this chat",
-			Type:    "forbidden",
+			Message: "not_chat_participant",
+			Type:    "chat_access_denied",
 		}
 	}
 
@@ -502,14 +526,42 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 		return nil, apiErr
 	}
 
+	// Helper for privacy logic (same as in contact_service.go)
+	shouldExposeAvatar := func(globalRestrictProfile, exceptionGlobalProfile, globalRestrictAvatar, exceptionGlobalAvatar, userRestrictProfile, userRestrictAvatar bool) bool {
+		if globalRestrictProfile {
+			return exceptionGlobalProfile
+		}
+		if globalRestrictAvatar {
+			return exceptionGlobalAvatar
+		}
+		if userRestrictProfile {
+			return false
+		}
+		if userRestrictAvatar {
+			return false
+		}
+		return true
+	}
+
 	chatResponses := make([]personalmodel.ChatResponse, len(chats))
 	for i, chat := range chats {
-		otherUserID, _ := chat.OtherUserID.(uuid.UUID)
+		var avatarURL *string
+		if shouldExposeAvatar(chat.GlobalRestrictProfile, chat.ExceptionGlobalProfile, chat.GlobalRestrictAvatar, chat.ExceptionGlobalAvatar, chat.UserRestrictProfile, chat.UserRestrictAvatar) {
+			url, apiErr := ps.buildAvatarURL(ctx, chat.AvatarFileID, chat.AvatarTokenID, chat.AvatarTokenSecret, chat.AvatarTokenExpiry, chat.OtherUserID)
+			if apiErr != nil {
+				return nil, apiErr
+			}
+			avatarURL = url
+		}
+
 		chatResponses[i] = personalmodel.ChatResponse{
-			ChatID:      chat.ID.String(),
-			OtherUserID: otherUserID.String(),
-			CreatedAt:   chat.CreatedAt.Time,
-			UpdatedAt:   chat.UpdatedAt.Time,
+			ChatID:            chat.ID.String(),
+			OtherUserID:       chat.OtherUserID.String(),
+			OtherUserName:     chat.OtherUserName,
+			OtherUserUsername: chat.OtherUserUsername,
+			AvatarURL:         avatarURL,
+			CreatedAt:         chat.CreatedAt.Time,
+			UpdatedAt:         chat.UpdatedAt.Time,
 		}
 	}
 

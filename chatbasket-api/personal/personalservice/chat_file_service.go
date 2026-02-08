@@ -36,11 +36,7 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 		return nil, apiErr
 	}
 	if eligibility != EligibilityAllowed {
-		return nil, &model.ApiError{
-			Code:    http.StatusForbidden,
-			Message: fmt.Sprintf("messaging not allowed: %s", eligibility),
-			Type:    "messaging_not_allowed",
-		}
+		return nil, messagingEligibilityError(eligibility)
 	}
 
 	if params.FileHeader.Size > MaxFileSize {

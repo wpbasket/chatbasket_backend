@@ -5,10 +5,13 @@ import (
 )
 
 type ChatResponse struct {
-	ChatID      string    `json:"chat_id"`
-	OtherUserID string    `json:"other_user_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ChatID            string    `json:"chat_id"`
+	OtherUserID       string    `json:"other_user_id"`
+	OtherUserName     string    `json:"other_user_name"`
+	OtherUserUsername string    `json:"other_user_username"`
+	AvatarURL         *string   `json:"avatar_url"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 type MessageResponse struct {
@@ -75,9 +78,9 @@ type AcknowledgeDeliveryPayload struct {
 }
 
 type GetMessagesPayload struct {
-	ChatID string `json:"chat_id" validate:"required,uuid"`
-	Limit  int32  `json:"limit,omitempty"`
-	Offset int32  `json:"offset,omitempty"`
+	ChatID string `query:"chat_id" validate:"required,uuid"`
+	Limit  int32  `query:"limit"`
+	Offset int32  `query:"offset"`
 }
 
 type GetFileURLPayload struct {

@@ -14,29 +14,41 @@ import (
 
 const canSendMessage = `-- name: CanSendMessage :one
 
-SELECT 
+SELECT
     CASE
         WHEN NOT EXISTS (
-            SELECT 1 FROM user_contacts 
-            WHERE owner_user_id = $1::uuid AND contact_user_id = $2::uuid
+            SELECT 1
+            FROM user_contacts
+            WHERE
+                owner_user_id = $1::uuid
+                AND contact_user_id = $2::uuid
         ) THEN 'not_in_contacts'
-        
         WHEN EXISTS (
-            SELECT 1 FROM users 
-            WHERE id = $2::uuid AND profile_type = 'private'
+            SELECT 1
+            FROM users
+            WHERE
+                id = $2::uuid
+                AND profile_type = 'private'
         ) THEN 'recipient_private'
-        
         WHEN EXISTS (
-            SELECT 1 FROM user_blocks 
-            WHERE (blocker_user_id = $1::uuid AND blocked_user_id = $2::uuid)
-               OR (blocker_user_id = $2::uuid AND blocked_user_id = $1::uuid)
+            SELECT 1
+            FROM user_blocks
+            WHERE (
+                    blocker_user_id = $1::uuid
+                    AND blocked_user_id = $2::uuid
+                )
+                OR (
+                    blocker_user_id = $2::uuid
+                    AND blocked_user_id = $1::uuid
+                )
         ) THEN 'blocked'
-        
         WHEN EXISTS (
-            SELECT 1 FROM users 
-            WHERE id IN ($1::uuid, $2::uuid) AND is_admin_blocked = TRUE
+            SELECT 1
+            FROM users
+            WHERE
+                id IN ($1::uuid, $2::uuid)
+                AND is_admin_blocked = TRUE
         ) THEN 'admin_blocked'
-        
         ELSE 'allowed'
     END AS eligibility_status
 `
@@ -58,11 +70,26 @@ func (q *Queries) CanSendMessage(ctx context.Context, arg CanSendMessageParams) 
 
 const createChat = `-- name: CreateChat :one
 
-INSERT INTO chats (id, participant_1_id, participant_2_id)
-VALUES ($1, LEAST($2::uuid, $3::uuid), GREATEST($2::uuid, $3::uuid))
-ON CONFLICT (participant_1_id, participant_2_id) DO UPDATE
-    SET updated_at = now()
-RETURNING id, participant_1_id, participant_2_id, created_at, updated_at
+INSERT INTO
+    chats (
+        id,
+        participant_1_id,
+        participant_2_id
+    )
+VALUES (
+        $1,
+        LEAST($2::uuid, $3::uuid),
+        GREATEST($2::uuid, $3::uuid)
+    )
+ON CONFLICT (
+    participant_1_id,
+    participant_2_id
+) DO
+UPDATE
+SET
+    updated_at = now()
+RETURNING
+    id, participant_1_id, participant_2_id, created_at, updated_at
 `
 
 type CreateChatParams struct {
@@ -89,9 +116,14 @@ func (q *Queries) CreateChat(ctx context.Context, arg CreateChatParams) (Chat, e
 
 const createDeliveryLog = `-- name: CreateDeliveryLog :exec
 
-INSERT INTO message_delivery_log (
-    id, message_id, attempt_number, status, error_reason
-)
+INSERT INTO
+    message_delivery_log (
+        id,
+        message_id,
+        attempt_number,
+        status,
+        error_reason
+    )
 VALUES ($1, $2, $3, $4, $5)
 `
 
@@ -119,12 +151,19 @@ func (q *Queries) CreateDeliveryLog(ctx context.Context, arg CreateDeliveryLogPa
 
 const createMessage = `-- name: CreateMessage :one
 
-INSERT INTO messages (
-    id, chat_id, sender_id, recipient_id, 
-    content, message_type, expires_at
-)
+INSERT INTO
+    messages (
+        id,
+        chat_id,
+        sender_id,
+        recipient_id,
+        content,
+        message_type,
+        expires_at
+    )
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+RETURNING
+    id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
 `
 
 type CreateMessageParams struct {
@@ -180,15 +219,41 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 
 const createMessageWithFile = `-- name: CreateMessageWithFile :one
 
-INSERT INTO messages (
-    id, chat_id, sender_id, recipient_id, 
-    content, message_type, 
-    file_id, file_name, file_size, file_mime_type,
-    file_token_id, file_token_secret, file_token_expiry,
-    expires_at
-)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+INSERT INTO
+    messages (
+        id,
+        chat_id,
+        sender_id,
+        recipient_id,
+        content,
+        message_type,
+        file_id,
+        file_name,
+        file_size,
+        file_mime_type,
+        file_token_id,
+        file_token_secret,
+        file_token_expiry,
+        expires_at
+    )
+VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        $13,
+        $14
+    )
+RETURNING
+    id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
 `
 
 type CreateMessageWithFileParams struct {
@@ -258,8 +323,9 @@ func (q *Queries) CreateMessageWithFile(ctx context.Context, arg CreateMessageWi
 
 const deleteDeliveredMessages = `-- name: DeleteDeliveredMessages :exec
 DELETE FROM messages
-WHERE delivered_to_recipient = TRUE
-  AND synced_to_sender_primary = TRUE
+WHERE
+    delivered_to_recipient = TRUE
+    AND synced_to_sender_primary = TRUE
 `
 
 func (q *Queries) DeleteDeliveredMessages(ctx context.Context) error {
@@ -268,8 +334,7 @@ func (q *Queries) DeleteDeliveredMessages(ctx context.Context) error {
 }
 
 const deleteExpiredMessages = `-- name: DeleteExpiredMessages :exec
-DELETE FROM messages
-WHERE expires_at < now()
+DELETE FROM messages WHERE expires_at < now()
 `
 
 func (q *Queries) DeleteExpiredMessages(ctx context.Context) error {
@@ -278,8 +343,7 @@ func (q *Queries) DeleteExpiredMessages(ctx context.Context) error {
 }
 
 const deleteMessage = `-- name: DeleteMessage :exec
-DELETE FROM messages
-WHERE id = $1
+DELETE FROM messages WHERE id = $1
 `
 
 func (q *Queries) DeleteMessage(ctx context.Context, id uuid.UUID) error {
@@ -289,8 +353,14 @@ func (q *Queries) DeleteMessage(ctx context.Context, id uuid.UUID) error {
 
 const deletePendingMessagesBetweenUsers = `-- name: DeletePendingMessagesBetweenUsers :exec
 DELETE FROM messages
-WHERE (sender_id = $1 AND recipient_id = $2)
-   OR (sender_id = $2 AND recipient_id = $1)
+WHERE (
+        sender_id = $1
+        AND recipient_id = $2
+    )
+    OR (
+        sender_id = $2
+        AND recipient_id = $1
+    )
 `
 
 type DeletePendingMessagesBetweenUsersParams struct {
@@ -304,9 +374,7 @@ func (q *Queries) DeletePendingMessagesBetweenUsers(ctx context.Context, arg Del
 }
 
 const getChatByID = `-- name: GetChatByID :one
-SELECT id, participant_1_id, participant_2_id, created_at, updated_at FROM chats
-WHERE id = $1
-LIMIT 1
+SELECT id, participant_1_id, participant_2_id, created_at, updated_at FROM chats WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error) {
@@ -323,9 +391,11 @@ func (q *Queries) GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error) {
 }
 
 const getChatByParticipants = `-- name: GetChatByParticipants :one
-SELECT id, participant_1_id, participant_2_id, created_at, updated_at FROM chats
-WHERE participant_1_id = LEAST($1::uuid, $2::uuid)
-  AND participant_2_id = GREATEST($1::uuid, $2::uuid)
+SELECT id, participant_1_id, participant_2_id, created_at, updated_at
+FROM chats
+WHERE
+    participant_1_id = LEAST($1::uuid, $2::uuid)
+    AND participant_2_id = GREATEST($1::uuid, $2::uuid)
 LIMIT 1
 `
 
@@ -348,11 +418,15 @@ func (q *Queries) GetChatByParticipants(ctx context.Context, arg GetChatByPartic
 }
 
 const getChatMessages = `-- name: GetChatMessages :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret FROM messages
-WHERE chat_id = $1
-  AND expires_at > now()
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+FROM messages
+WHERE
+    chat_id = $1
+    AND expires_at > now()
 ORDER BY created_at DESC
-LIMIT $2 OFFSET $3
+LIMIT $2
+OFFSET
+    $3
 `
 
 type GetChatMessagesParams struct {
@@ -405,8 +479,10 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 }
 
 const getDeliveryLogsByMessage = `-- name: GetDeliveryLogsByMessage :many
-SELECT id, message_id, attempt_number, status, error_reason, attempted_at, created_at, updated_at FROM message_delivery_log
-WHERE message_id = $1
+SELECT id, message_id, attempt_number, status, error_reason, attempted_at, created_at, updated_at
+FROM message_delivery_log
+WHERE
+    message_id = $1
 ORDER BY attempted_at DESC
 `
 
@@ -440,9 +516,11 @@ func (q *Queries) GetDeliveryLogsByMessage(ctx context.Context, messageID uuid.U
 }
 
 const getExpiredMessagesWithFiles = `-- name: GetExpiredMessagesWithFiles :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret FROM messages
-WHERE expires_at < now()
-  AND file_id IS NOT NULL
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+FROM messages
+WHERE
+    expires_at < now()
+    AND file_id IS NOT NULL
 ORDER BY expires_at ASC
 LIMIT $1
 `
@@ -491,9 +569,7 @@ func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, limit int32) 
 }
 
 const getMessageByID = `-- name: GetMessageByID :one
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret FROM messages
-WHERE id = $1
-LIMIT 1
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret FROM messages WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error) {
@@ -527,11 +603,13 @@ func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, er
 }
 
 const getMessagesWithExpiredFileTokens = `-- name: GetMessagesWithExpiredFileTokens :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret FROM messages
-WHERE file_id IS NOT NULL
-  AND file_token_expiry IS NOT NULL
-  AND file_token_expiry < now()
-  AND expires_at > now()
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+FROM messages
+WHERE
+    file_id IS NOT NULL
+    AND file_token_expiry IS NOT NULL
+    AND file_token_expiry < now()
+    AND expires_at > now()
 ORDER BY created_at ASC
 LIMIT $1
 `
@@ -580,10 +658,12 @@ func (q *Queries) GetMessagesWithExpiredFileTokens(ctx context.Context, limit in
 }
 
 const getPendingMessagesForRecipient = `-- name: GetPendingMessagesForRecipient :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret FROM messages
-WHERE recipient_id = $1
-  AND delivered_to_recipient = FALSE
-  AND expires_at > now()
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+FROM messages
+WHERE
+    recipient_id = $1
+    AND delivered_to_recipient = FALSE
+    AND expires_at > now()
 ORDER BY created_at ASC
 LIMIT $2
 `
@@ -637,10 +717,12 @@ func (q *Queries) GetPendingMessagesForRecipient(ctx context.Context, arg GetPen
 }
 
 const getPendingSenderSyncMessages = `-- name: GetPendingSenderSyncMessages :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret FROM messages
-WHERE sender_id = $1
-  AND synced_to_sender_primary = FALSE
-  AND expires_at > now()
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+FROM messages
+WHERE
+    sender_id = $1
+    AND synced_to_sender_primary = FALSE
+    AND expires_at > now()
 ORDER BY created_at ASC
 LIMIT $2
 `
@@ -694,26 +776,65 @@ func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendi
 }
 
 const getUserChats = `-- name: GetUserChats :many
-SELECT 
+SELECT
     c.id, c.participant_1_id, c.participant_2_id, c.created_at, c.updated_at,
-    CASE 
+    u.name AS other_user_name,
+    u.b64_cipher_chacha20poly1305_username AS other_user_username,
+    u.id AS other_user_id,
+
+a.file_id AS avatar_file_id,
+a.token_id AS avatar_token_id,
+a.token_secret AS avatar_token_secret,
+a.token_expiry AS avatar_token_expiry,
+
+COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
+COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
+COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
+COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
+COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
+COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
+FROM
+    chats c
+    JOIN users u ON u.id = CASE
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
-    END AS other_user_id
-FROM chats c
-WHERE c.participant_1_id = $1 OR c.participant_2_id = $1
+    END
+    LEFT JOIN avatars a ON u.id = a.user_id
+    AND a.avatar_type = 'profile'
+    LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
+    LEFT JOIN user_global_restriction_exemptions ugre ON u.id = ugre.user_id
+    AND ugre.exempted_user_id = $1
+    LEFT JOIN user_restrictions ur ON u.id = ur.user_id
+    AND ur.restricted_user_id = $1
+WHERE
+    c.participant_1_id = $1
+    OR c.participant_2_id = $1
 ORDER BY c.updated_at DESC
 `
 
 type GetUserChatsRow struct {
-	ID             uuid.UUID          `json:"id"`
-	Participant1ID uuid.UUID          `json:"participant_1_id"`
-	Participant2ID uuid.UUID          `json:"participant_2_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-	OtherUserID    interface{}        `json:"other_user_id"`
+	ID                     uuid.UUID          `json:"id"`
+	Participant1ID         uuid.UUID          `json:"participant_1_id"`
+	Participant2ID         uuid.UUID          `json:"participant_2_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	OtherUserName          string             `json:"other_user_name"`
+	OtherUserUsername      string             `json:"other_user_username"`
+	OtherUserID            uuid.UUID          `json:"other_user_id"`
+	AvatarFileID           *string            `json:"avatar_file_id"`
+	AvatarTokenID          *string            `json:"avatar_token_id"`
+	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
+	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
+	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
+	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
+	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
+	ExceptionGlobalAvatar  bool               `json:"exception_global_avatar"`
+	UserRestrictProfile    bool               `json:"user_restrict_profile"`
+	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
 }
 
+// Raw avatar data
+// Privacy flags
 func (q *Queries) GetUserChats(ctx context.Context, participant1ID uuid.UUID) ([]GetUserChatsRow, error) {
 	rows, err := q.db.Query(ctx, getUserChats, participant1ID)
 	if err != nil {
@@ -729,7 +850,19 @@ func (q *Queries) GetUserChats(ctx context.Context, participant1ID uuid.UUID) ([
 			&i.Participant2ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.OtherUserName,
+			&i.OtherUserUsername,
 			&i.OtherUserID,
+			&i.AvatarFileID,
+			&i.AvatarTokenID,
+			&i.AvatarTokenSecret,
+			&i.AvatarTokenExpiry,
+			&i.GlobalRestrictProfile,
+			&i.GlobalRestrictAvatar,
+			&i.ExceptionGlobalProfile,
+			&i.ExceptionGlobalAvatar,
+			&i.UserRestrictProfile,
+			&i.UserRestrictAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -743,9 +876,11 @@ func (q *Queries) GetUserChats(ctx context.Context, participant1ID uuid.UUID) ([
 
 const incrementDeliveryAttempts = `-- name: IncrementDeliveryAttempts :exec
 UPDATE messages
-SET delivery_attempts = delivery_attempts + 1,
+SET
+    delivery_attempts = delivery_attempts + 1,
     updated_at = now()
-WHERE id = $1
+WHERE
+    id = $1
 `
 
 func (q *Queries) IncrementDeliveryAttempts(ctx context.Context, id uuid.UUID) error {
@@ -754,11 +889,16 @@ func (q *Queries) IncrementDeliveryAttempts(ctx context.Context, id uuid.UUID) e
 }
 
 const isChatParticipant = `-- name: IsChatParticipant :one
-SELECT EXISTS(
-    SELECT 1 FROM chats
-    WHERE id = $1::uuid
-      AND ($2::uuid = participant_1_id OR $2::uuid = participant_2_id)
-)
+SELECT EXISTS (
+        SELECT 1
+        FROM chats
+        WHERE
+            id = $1::uuid
+            AND (
+                $2::uuid = participant_1_id
+                OR $2::uuid = participant_2_id
+            )
+    )
 `
 
 type IsChatParticipantParams struct {
@@ -775,9 +915,11 @@ func (q *Queries) IsChatParticipant(ctx context.Context, arg IsChatParticipantPa
 
 const markMessageDeliveredToRecipient = `-- name: MarkMessageDeliveredToRecipient :exec
 UPDATE messages
-SET delivered_to_recipient = TRUE,
+SET
+    delivered_to_recipient = TRUE,
     updated_at = now()
-WHERE id = $1
+WHERE
+    id = $1
 `
 
 func (q *Queries) MarkMessageDeliveredToRecipient(ctx context.Context, id uuid.UUID) error {
@@ -787,9 +929,11 @@ func (q *Queries) MarkMessageDeliveredToRecipient(ctx context.Context, id uuid.U
 
 const markMessageSyncedToSenderPrimary = `-- name: MarkMessageSyncedToSenderPrimary :exec
 UPDATE messages
-SET synced_to_sender_primary = TRUE,
+SET
+    synced_to_sender_primary = TRUE,
     updated_at = now()
-WHERE id = $1
+WHERE
+    id = $1
 `
 
 func (q *Queries) MarkMessageSyncedToSenderPrimary(ctx context.Context, id uuid.UUID) error {
@@ -799,11 +943,13 @@ func (q *Queries) MarkMessageSyncedToSenderPrimary(ctx context.Context, id uuid.
 
 const updateMessageFileToken = `-- name: UpdateMessageFileToken :exec
 UPDATE messages
-SET file_token_id = $2,
+SET
+    file_token_id = $2,
     file_token_secret = $3,
     file_token_expiry = $4,
     updated_at = now()
-WHERE id = $1
+WHERE
+    id = $1
 `
 
 type UpdateMessageFileTokenParams struct {
