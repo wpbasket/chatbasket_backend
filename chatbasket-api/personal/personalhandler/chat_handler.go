@@ -271,3 +271,37 @@ func (h *ChatHandler) GetFileURL(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, resp)
 }
+
+func (h *ChatHandler) MarkChatRead(c echo.Context) error {
+	userId, ok := c.Get("userId").(string)
+	if !ok || userId == "" {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+
+	var payload personalmodel.MarkChatReadPayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "invalid request payload",
+			Type:    "bad_request",
+		})
+	}
+
+	apiErr := h.service.MarkChatReadHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, map[string]bool{"success": true})
+}

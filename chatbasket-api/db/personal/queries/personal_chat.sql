@@ -34,11 +34,28 @@ LIMIT 1;
 
 -- name: GetUserChats :many
 -- name: GetUserChats :many
-SELECT
-    c.*,
+SELECT DISTINCT
+    ON (c.id) c.*,
     u.name AS other_user_name,
     u.b64_cipher_chacha20poly1305_username AS other_user_username,
     u.id AS other_user_id,
+
+-- Last Message
+m.content AS last_message_content,
+m.created_at AS last_message_created_at,
+m.message_type AS last_message_type,
+m.sender_id AS last_message_sender_id,
+
+-- Unread Count
+(
+    SELECT COUNT(*)
+    FROM messages m2
+    WHERE
+        m2.chat_id = c.id
+        AND m2.recipient_id = $1
+        AND m2.delivered_to_recipient = FALSE
+        AND m2.expires_at > now()
+)::INT AS unread_count,
 
 -- Raw avatar data
 a.file_id AS avatar_file_id,
@@ -59,6 +76,7 @@ FROM
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
     END
+    LEFT JOIN messages m ON m.chat_id = c.id
     LEFT JOIN avatars a ON u.id = a.user_id
     AND a.avatar_type = 'profile'
     LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
@@ -69,7 +87,7 @@ FROM
 WHERE
     c.participant_1_id = $1
     OR c.participant_2_id = $1
-ORDER BY c.updated_at DESC;
+ORDER BY c.id, m.created_at DESC;
 
 -- name: GetChatByID :one
 SELECT * FROM chats WHERE id = $1 LIMIT 1;
@@ -134,6 +152,16 @@ WHERE
 
 -- name: DeleteMessage :exec
 DELETE FROM messages WHERE id = $1;
+
+-- name: MarkChatMessagesAsRead :exec
+UPDATE messages
+SET
+    delivered_to_recipient = TRUE,
+    updated_at = now()
+WHERE
+    chat_id = $1
+    AND recipient_id = $2
+    AND delivered_to_recipient = FALSE;
 
 -- name: DeleteDeliveredMessages :exec
 DELETE FROM messages

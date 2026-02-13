@@ -554,14 +554,44 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 			avatarURL = url
 		}
 
+		var lastMessageContent *string
+		var lastMessageCreatedAt *time.Time
+		var lastMessageType *string
+		var lastMessageSenderID *string
+
+		if chat.LastMessageContent != nil {
+			lastMessageContent = chat.LastMessageContent
+
+			if chat.LastMessageCreatedAt.Valid {
+				t := chat.LastMessageCreatedAt.Time
+				lastMessageCreatedAt = &t
+			}
+
+			lastMessageType = chat.LastMessageType
+
+			if chat.LastMessageSenderID.Valid {
+				// Convert [16]byte to slice for FromBytes
+				uid, err := uuid.FromBytes(chat.LastMessageSenderID.Bytes[:])
+				if err == nil {
+					s := uid.String()
+					lastMessageSenderID = &s
+				}
+			}
+		}
+
 		chatResponses[i] = personalmodel.ChatResponse{
-			ChatID:            chat.ID.String(),
-			OtherUserID:       chat.OtherUserID.String(),
-			OtherUserName:     chat.OtherUserName,
-			OtherUserUsername: chat.OtherUserUsername,
-			AvatarURL:         avatarURL,
-			CreatedAt:         chat.CreatedAt.Time,
-			UpdatedAt:         chat.UpdatedAt.Time,
+			ChatID:               chat.ID.String(),
+			OtherUserID:          chat.OtherUserID.String(),
+			OtherUserName:        chat.OtherUserName,
+			OtherUserUsername:    chat.OtherUserUsername,
+			AvatarURL:            avatarURL,
+			CreatedAt:            chat.CreatedAt.Time,
+			UpdatedAt:            chat.UpdatedAt.Time,
+			LastMessageContent:   lastMessageContent,
+			LastMessageCreatedAt: lastMessageCreatedAt,
+			LastMessageType:      lastMessageType,
+			LastMessageSenderID:  lastMessageSenderID,
+			UnreadCount:          int(chat.UnreadCount),
 		}
 	}
 
@@ -659,4 +689,54 @@ func (ps *Service) GetFileURLHandler(ctx context.Context, payload *personalmodel
 	return &personalmodel.GetFileURLResponse{
 		FileURL: fileURL,
 	}, nil
+}
+
+func (ps *Service) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) *model.ApiError {
+	// Verify user is participant
+	isParticipant, err := ps.PersonalQueries.IsChatParticipant(ctx, personal.IsChatParticipantParams{
+		Column1: chatID,
+		Column2: userID,
+	})
+	if err != nil {
+		return &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Failed to check chat participation",
+			Type:    "server_error",
+		}
+	}
+	if !isParticipant {
+		return &model.ApiError{
+			Code:    http.StatusForbidden,
+			Message: "User is not a participant of this chat",
+			Type:    "forbidden",
+		}
+	}
+
+	// Mark messages as read
+	err = ps.PersonalQueries.MarkChatMessagesAsRead(ctx, personal.MarkChatMessagesAsReadParams{
+		ChatID:      chatID,
+		RecipientID: userID,
+	})
+	if err != nil {
+		return &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Failed to mark messages as read",
+			Type:    "server_error",
+		}
+	}
+
+	return nil
+}
+
+func (ps *Service) MarkChatReadHandler(ctx context.Context, payload *personalmodel.MarkChatReadPayload, userId model.UserId) *model.ApiError {
+	chatID, err := uuid.Parse(payload.ChatID)
+	if err != nil {
+		return &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid chat ID",
+			Type:    "invalid_request",
+		}
+	}
+
+	return ps.MarkChatRead(ctx, userId.UuidUserId, chatID)
 }

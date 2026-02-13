@@ -57,4 +57,5 @@ func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService,
 	personalChatGroup.GET("/list", persChatHandler.GetUserChats)
 	personalChatGroup.POST("/upload", persChatHandler.UploadFileForMessage)
 	personalChatGroup.GET("/file-url", persChatHandler.GetFileURL)
+	personalChatGroup.POST("/mark-read", persChatHandler.MarkChatRead)
 }

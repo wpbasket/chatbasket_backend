@@ -5,13 +5,18 @@ import (
 )
 
 type ChatResponse struct {
-	ChatID            string    `json:"chat_id"`
-	OtherUserID       string    `json:"other_user_id"`
-	OtherUserName     string    `json:"other_user_name"`
-	OtherUserUsername string    `json:"other_user_username"`
-	AvatarURL         *string   `json:"avatar_url"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ChatID               string     `json:"chat_id"`
+	OtherUserID          string     `json:"other_user_id"`
+	OtherUserName        string     `json:"other_user_name"`
+	OtherUserUsername    string     `json:"other_user_username"`
+	AvatarURL            *string    `json:"avatar_url"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	LastMessageContent   *string    `json:"last_message_content"`
+	LastMessageCreatedAt *time.Time `json:"last_message_created_at"`
+	LastMessageType      *string    `json:"last_message_type"`
+	LastMessageSenderID  *string    `json:"last_message_sender_id"`
+	UnreadCount          int        `json:"unread_count"`
 }
 
 type MessageResponse struct {
@@ -81,6 +86,10 @@ type GetMessagesPayload struct {
 	ChatID string `query:"chat_id" validate:"required,uuid"`
 	Limit  int32  `query:"limit"`
 	Offset int32  `query:"offset"`
+}
+
+type MarkChatReadPayload struct {
+	ChatID string `json:"chat_id" validate:"required,uuid"`
 }
 
 type GetFileURLPayload struct {

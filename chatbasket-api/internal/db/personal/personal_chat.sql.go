@@ -776,11 +776,26 @@ func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendi
 }
 
 const getUserChats = `-- name: GetUserChats :many
-SELECT
-    c.id, c.participant_1_id, c.participant_2_id, c.created_at, c.updated_at,
+SELECT DISTINCT
+    ON (c.id) c.id, c.participant_1_id, c.participant_2_id, c.created_at, c.updated_at,
     u.name AS other_user_name,
     u.b64_cipher_chacha20poly1305_username AS other_user_username,
     u.id AS other_user_id,
+
+m.content AS last_message_content,
+m.created_at AS last_message_created_at,
+m.message_type AS last_message_type,
+m.sender_id AS last_message_sender_id,
+
+(
+    SELECT COUNT(*)
+    FROM messages m2
+    WHERE
+        m2.chat_id = c.id
+        AND m2.recipient_id = $1
+        AND m2.delivered_to_recipient = FALSE
+        AND m2.expires_at > now()
+)::INT AS unread_count,
 
 a.file_id AS avatar_file_id,
 a.token_id AS avatar_token_id,
@@ -799,6 +814,7 @@ FROM
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
     END
+    LEFT JOIN messages m ON m.chat_id = c.id
     LEFT JOIN avatars a ON u.id = a.user_id
     AND a.avatar_type = 'profile'
     LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
@@ -809,7 +825,7 @@ FROM
 WHERE
     c.participant_1_id = $1
     OR c.participant_2_id = $1
-ORDER BY c.updated_at DESC
+ORDER BY c.id, m.created_at DESC
 `
 
 type GetUserChatsRow struct {
@@ -821,6 +837,11 @@ type GetUserChatsRow struct {
 	OtherUserName          string             `json:"other_user_name"`
 	OtherUserUsername      string             `json:"other_user_username"`
 	OtherUserID            uuid.UUID          `json:"other_user_id"`
+	LastMessageContent     *string            `json:"last_message_content"`
+	LastMessageCreatedAt   pgtype.Timestamptz `json:"last_message_created_at"`
+	LastMessageType        *string            `json:"last_message_type"`
+	LastMessageSenderID    pgtype.UUID        `json:"last_message_sender_id"`
+	UnreadCount            int32              `json:"unread_count"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
 	AvatarTokenID          *string            `json:"avatar_token_id"`
 	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
@@ -833,10 +854,12 @@ type GetUserChatsRow struct {
 	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
 }
 
+// Last Message
+// Unread Count
 // Raw avatar data
 // Privacy flags
-func (q *Queries) GetUserChats(ctx context.Context, participant1ID uuid.UUID) ([]GetUserChatsRow, error) {
-	rows, err := q.db.Query(ctx, getUserChats, participant1ID)
+func (q *Queries) GetUserChats(ctx context.Context, recipientID uuid.UUID) ([]GetUserChatsRow, error) {
+	rows, err := q.db.Query(ctx, getUserChats, recipientID)
 	if err != nil {
 		return nil, err
 	}
@@ -853,6 +876,11 @@ func (q *Queries) GetUserChats(ctx context.Context, participant1ID uuid.UUID) ([
 			&i.OtherUserName,
 			&i.OtherUserUsername,
 			&i.OtherUserID,
+			&i.LastMessageContent,
+			&i.LastMessageCreatedAt,
+			&i.LastMessageType,
+			&i.LastMessageSenderID,
+			&i.UnreadCount,
 			&i.AvatarFileID,
 			&i.AvatarTokenID,
 			&i.AvatarTokenSecret,
@@ -911,6 +939,27 @@ func (q *Queries) IsChatParticipant(ctx context.Context, arg IsChatParticipantPa
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const markChatMessagesAsRead = `-- name: MarkChatMessagesAsRead :exec
+UPDATE messages
+SET
+    delivered_to_recipient = TRUE,
+    updated_at = now()
+WHERE
+    chat_id = $1
+    AND recipient_id = $2
+    AND delivered_to_recipient = FALSE
+`
+
+type MarkChatMessagesAsReadParams struct {
+	ChatID      uuid.UUID `json:"chat_id"`
+	RecipientID uuid.UUID `json:"recipient_id"`
+}
+
+func (q *Queries) MarkChatMessagesAsRead(ctx context.Context, arg MarkChatMessagesAsReadParams) error {
+	_, err := q.db.Exec(ctx, markChatMessagesAsRead, arg.ChatID, arg.RecipientID)
+	return err
 }
 
 const markMessageDeliveredToRecipient = `-- name: MarkMessageDeliveredToRecipient :exec
