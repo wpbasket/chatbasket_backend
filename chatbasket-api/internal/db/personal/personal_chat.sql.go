@@ -18,6 +18,12 @@ SELECT
     CASE
         WHEN NOT EXISTS (
             SELECT 1
+            FROM users
+            WHERE
+                id = $2::uuid
+        ) THEN 'recipient_not_found'
+        WHEN NOT EXISTS (
+            SELECT 1
             FROM user_contacts
             WHERE
                 owner_user_id = $1::uuid
@@ -33,15 +39,17 @@ SELECT
         WHEN EXISTS (
             SELECT 1
             FROM user_blocks
-            WHERE (
-                    blocker_user_id = $1::uuid
-                    AND blocked_user_id = $2::uuid
-                )
-                OR (
-                    blocker_user_id = $2::uuid
-                    AND blocked_user_id = $1::uuid
-                )
-        ) THEN 'blocked'
+            WHERE
+                blocker_user_id = $2::uuid
+                AND blocked_user_id = $1::uuid
+        ) THEN 'blocked_by_recipient'
+        WHEN EXISTS (
+            SELECT 1
+            FROM user_blocks
+            WHERE
+                blocker_user_id = $1::uuid
+                AND blocked_user_id = $2::uuid
+        ) THEN 'blocked_by_me'
         WHEN EXISTS (
             SELECT 1
             FROM users
