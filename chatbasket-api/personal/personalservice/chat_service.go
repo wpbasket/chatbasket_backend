@@ -186,6 +186,21 @@ func (ps *Service) SendMessage(ctx context.Context, params SendMessageParams) (*
 		}
 	}
 
+	// Update chat status (Last Message + Unread Count)
+	// We ignore error here to not fail the request if the message was sent successfully
+	// but we should log it.
+	content := message.Content
+	msgType := message.MessageType
+	senderID := message.SenderID
+
+	_ = ps.PersonalQueries.UpdateChatStatus(ctx, personal.UpdateChatStatusParams{
+		ID:                   chat.ID,
+		LastMessageContent:   &content,
+		LastMessageCreatedAt: message.CreatedAt,
+		LastMessageType:      &msgType,
+		LastMessageSenderID:  pgtype.UUID{Bytes: senderID, Valid: true},
+	})
+
 	return &message, nil
 }
 
@@ -212,17 +227,21 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 	}
 
 	if message.DeliveredToRecipient && message.SyncedToSenderPrimary {
-		if err := ps.CleanupMessageFile(ctx, messageID); err != nil {
-		}
-
-		err = ps.PersonalQueries.DeleteMessage(ctx, messageID)
-		if err != nil {
-			return &model.ApiError{
-				Code:    http.StatusInternalServerError,
-				Message: "failed to cleanup delivered message",
-				Type:    "cleanup_failed",
+		// TODO: Re-enable this ONLY after Local Storage is fully verified.
+		// For now, we keep messages on the server to prevent data loss.
+		/*
+			if err := ps.CleanupMessageFile(ctx, messageID); err != nil {
 			}
-		}
+
+			err = ps.PersonalQueries.DeleteMessage(ctx, messageID)
+			if err != nil {
+				return &model.ApiError{
+					Code:    http.StatusInternalServerError,
+					Message: "failed to cleanup delivered message",
+					Type:    "cleanup_failed",
+				}
+			}
+		*/
 	}
 
 	return nil
@@ -484,15 +503,16 @@ func (ps *Service) GetMessagesHandler(ctx context.Context, payload *personalmode
 	messageResponses := make([]personalmodel.MessageResponse, len(messages))
 	for i, msg := range messages {
 		messageResponses[i] = personalmodel.MessageResponse{
-			MessageID:   msg.ID.String(),
-			ChatID:      msg.ChatID.String(),
-			SenderID:    msg.SenderID.String(),
-			IsFromMe:    msg.SenderID == userId.UuidUserId,
-			RecipientID: msg.RecipientID.String(),
-			Content:     msg.Content,
-			MessageType: msg.MessageType,
-			CreatedAt:   msg.CreatedAt.Time,
-			ExpiresAt:   msg.ExpiresAt.Time,
+			MessageID:            msg.ID.String(),
+			ChatID:               msg.ChatID.String(),
+			SenderID:             msg.SenderID.String(),
+			IsFromMe:             msg.SenderID == userId.UuidUserId,
+			RecipientID:          msg.RecipientID.String(),
+			Content:              msg.Content,
+			MessageType:          msg.MessageType,
+			DeliveredToRecipient: msg.DeliveredToRecipient,
+			CreatedAt:            msg.CreatedAt.Time,
+			ExpiresAt:            msg.ExpiresAt.Time,
 		}
 	}
 
@@ -589,6 +609,13 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 			}
 		}
 
+		var otherUserLastReadAt time.Time
+		if chat.Participant1ID == userId.UuidUserId {
+			otherUserLastReadAt = chat.P2LastReadAt.Time
+		} else {
+			otherUserLastReadAt = chat.P1LastReadAt.Time
+		}
+
 		chatResponses[i] = personalmodel.ChatResponse{
 			ChatID:               chat.ID.String(),
 			OtherUserID:          chat.OtherUserID.String(),
@@ -597,11 +624,13 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 			AvatarURL:            avatarURL,
 			CreatedAt:            chat.CreatedAt.Time,
 			UpdatedAt:            chat.UpdatedAt.Time,
+			OtherUserLastReadAt:  otherUserLastReadAt,
 			LastMessageContent:   lastMessageContent,
 			LastMessageCreatedAt: lastMessageCreatedAt,
 			LastMessageType:      lastMessageType,
 			LastMessageSenderID:  lastMessageSenderID,
 			LastMessageIsFromMe:  chat.LastMessageSenderID.Valid && uuid.Must(uuid.FromBytes(chat.LastMessageSenderID.Bytes[:])) == userId.UuidUserId,
+			LastMessageStatus:    chat.LastMessageStatus,
 			UnreadCount:          int(chat.UnreadCount),
 		}
 	}
@@ -723,15 +752,15 @@ func (ps *Service) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID uu
 		}
 	}
 
-	// Mark messages as read
-	err = ps.PersonalQueries.MarkChatMessagesAsRead(ctx, personal.MarkChatMessagesAsReadParams{
-		ChatID:      chatID,
-		RecipientID: userID,
+	// Mark chat as read (updates metadata only)
+	err = ps.PersonalQueries.ResetChatReadStatus(ctx, personal.ResetChatReadStatusParams{
+		ID:             chatID,
+		Participant1ID: userID,
 	})
 	if err != nil {
 		return &model.ApiError{
 			Code:    http.StatusInternalServerError,
-			Message: "Failed to mark messages as read",
+			Message: "Failed to mark chat as read",
 			Type:    "server_error",
 		}
 	}

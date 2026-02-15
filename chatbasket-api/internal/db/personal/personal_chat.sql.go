@@ -97,7 +97,7 @@ UPDATE
 SET
     updated_at = now()
 RETURNING
-    id, participant_1_id, participant_2_id, created_at, updated_at
+    id, participant_1_id, participant_2_id, created_at, updated_at, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id
 `
 
 type CreateChatParams struct {
@@ -118,6 +118,14 @@ func (q *Queries) CreateChat(ctx context.Context, arg CreateChatParams) (Chat, e
 		&i.Participant2ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.P1UnreadCount,
+		&i.P2UnreadCount,
+		&i.P1LastReadAt,
+		&i.P2LastReadAt,
+		&i.LastMessageContent,
+		&i.LastMessageCreatedAt,
+		&i.LastMessageType,
+		&i.LastMessageSenderID,
 	)
 	return i, err
 }
@@ -382,7 +390,7 @@ func (q *Queries) DeletePendingMessagesBetweenUsers(ctx context.Context, arg Del
 }
 
 const getChatByID = `-- name: GetChatByID :one
-SELECT id, participant_1_id, participant_2_id, created_at, updated_at FROM chats WHERE id = $1 LIMIT 1
+SELECT id, participant_1_id, participant_2_id, created_at, updated_at, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id FROM chats WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error) {
@@ -394,12 +402,20 @@ func (q *Queries) GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error) {
 		&i.Participant2ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.P1UnreadCount,
+		&i.P2UnreadCount,
+		&i.P1LastReadAt,
+		&i.P2LastReadAt,
+		&i.LastMessageContent,
+		&i.LastMessageCreatedAt,
+		&i.LastMessageType,
+		&i.LastMessageSenderID,
 	)
 	return i, err
 }
 
 const getChatByParticipants = `-- name: GetChatByParticipants :one
-SELECT id, participant_1_id, participant_2_id, created_at, updated_at
+SELECT id, participant_1_id, participant_2_id, created_at, updated_at, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id
 FROM chats
 WHERE
     participant_1_id = LEAST($1::uuid, $2::uuid)
@@ -421,6 +437,14 @@ func (q *Queries) GetChatByParticipants(ctx context.Context, arg GetChatByPartic
 		&i.Participant2ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.P1UnreadCount,
+		&i.P2UnreadCount,
+		&i.P1LastReadAt,
+		&i.P2LastReadAt,
+		&i.LastMessageContent,
+		&i.LastMessageCreatedAt,
+		&i.LastMessageType,
+		&i.LastMessageSenderID,
 	)
 	return i, err
 }
@@ -784,26 +808,32 @@ func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendi
 }
 
 const getUserChats = `-- name: GetUserChats :many
-SELECT DISTINCT
-    ON (c.id) c.id, c.participant_1_id, c.participant_2_id, c.created_at, c.updated_at,
+SELECT
+    c.id, c.participant_1_id, c.participant_2_id, c.created_at, c.updated_at, c.p1_unread_count, c.p2_unread_count, c.p1_last_read_at, c.p2_last_read_at, c.last_message_content, c.last_message_created_at, c.last_message_type, c.last_message_sender_id,
     u.name AS other_user_name,
     u.b64_cipher_chacha20poly1305_username AS other_user_username,
     u.id AS other_user_id,
 
-m.content AS last_message_content,
-m.created_at AS last_message_created_at,
-m.message_type AS last_message_type,
-m.sender_id AS last_message_sender_id,
+c.last_message_content AS last_message_content,
+c.last_message_created_at AS last_message_created_at,
+c.last_message_type AS last_message_type,
+c.last_message_sender_id AS last_message_sender_id,
 
-(
-    SELECT COUNT(*)
-    FROM messages m2
-    WHERE
-        m2.chat_id = c.id
-        AND m2.recipient_id = $1
-        AND m2.delivered_to_recipient = FALSE
-        AND m2.expires_at > now()
-)::INT AS unread_count,
+CASE
+    WHEN c.participant_1_id = $1 THEN c.p1_unread_count
+    ELSE c.p2_unread_count
+END::INT AS unread_count,
+
+CASE
+    WHEN c.last_message_created_at IS NULL THEN NULL
+    WHEN c.last_message_created_at <= (
+        CASE
+            WHEN c.participant_1_id = $1 THEN c.p2_last_read_at
+            ELSE c.p1_last_read_at
+        END
+    ) THEN 'read'
+    ELSE 'sent'
+END::text AS last_message_status,
 
 a.file_id AS avatar_file_id,
 a.token_id AS avatar_token_id,
@@ -822,7 +852,6 @@ FROM
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
     END
-    LEFT JOIN messages m ON m.chat_id = c.id
     LEFT JOIN avatars a ON u.id = a.user_id
     AND a.avatar_type = 'profile'
     LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
@@ -833,7 +862,7 @@ FROM
 WHERE
     c.participant_1_id = $1
     OR c.participant_2_id = $1
-ORDER BY c.id, m.created_at DESC
+ORDER BY c.updated_at DESC
 `
 
 type GetUserChatsRow struct {
@@ -842,14 +871,23 @@ type GetUserChatsRow struct {
 	Participant2ID         uuid.UUID          `json:"participant_2_id"`
 	CreatedAt              pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
-	OtherUserName          string             `json:"other_user_name"`
-	OtherUserUsername      string             `json:"other_user_username"`
-	OtherUserID            uuid.UUID          `json:"other_user_id"`
+	P1UnreadCount          int32              `json:"p1_unread_count"`
+	P2UnreadCount          int32              `json:"p2_unread_count"`
+	P1LastReadAt           pgtype.Timestamptz `json:"p1_last_read_at"`
+	P2LastReadAt           pgtype.Timestamptz `json:"p2_last_read_at"`
 	LastMessageContent     *string            `json:"last_message_content"`
 	LastMessageCreatedAt   pgtype.Timestamptz `json:"last_message_created_at"`
 	LastMessageType        *string            `json:"last_message_type"`
 	LastMessageSenderID    pgtype.UUID        `json:"last_message_sender_id"`
+	OtherUserName          string             `json:"other_user_name"`
+	OtherUserUsername      string             `json:"other_user_username"`
+	OtherUserID            uuid.UUID          `json:"other_user_id"`
+	LastMessageContent_2   *string            `json:"last_message_content_2"`
+	LastMessageCreatedAt_2 pgtype.Timestamptz `json:"last_message_created_at_2"`
+	LastMessageType_2      *string            `json:"last_message_type_2"`
+	LastMessageSenderID_2  pgtype.UUID        `json:"last_message_sender_id_2"`
 	UnreadCount            int32              `json:"unread_count"`
+	LastMessageStatus      string             `json:"last_message_status"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
 	AvatarTokenID          *string            `json:"avatar_token_id"`
 	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
@@ -862,12 +900,13 @@ type GetUserChatsRow struct {
 	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
 }
 
-// Last Message
-// Unread Count
+// Last Message (Direct from Metadata)
+// Unread Count (From Metadata)
+// Last Message Status (Calculated)
 // Raw avatar data
 // Privacy flags
-func (q *Queries) GetUserChats(ctx context.Context, recipientID uuid.UUID) ([]GetUserChatsRow, error) {
-	rows, err := q.db.Query(ctx, getUserChats, recipientID)
+func (q *Queries) GetUserChats(ctx context.Context, participant1ID uuid.UUID) ([]GetUserChatsRow, error) {
+	rows, err := q.db.Query(ctx, getUserChats, participant1ID)
 	if err != nil {
 		return nil, err
 	}
@@ -881,14 +920,23 @@ func (q *Queries) GetUserChats(ctx context.Context, recipientID uuid.UUID) ([]Ge
 			&i.Participant2ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.OtherUserName,
-			&i.OtherUserUsername,
-			&i.OtherUserID,
+			&i.P1UnreadCount,
+			&i.P2UnreadCount,
+			&i.P1LastReadAt,
+			&i.P2LastReadAt,
 			&i.LastMessageContent,
 			&i.LastMessageCreatedAt,
 			&i.LastMessageType,
 			&i.LastMessageSenderID,
+			&i.OtherUserName,
+			&i.OtherUserUsername,
+			&i.OtherUserID,
+			&i.LastMessageContent_2,
+			&i.LastMessageCreatedAt_2,
+			&i.LastMessageType_2,
+			&i.LastMessageSenderID_2,
 			&i.UnreadCount,
+			&i.LastMessageStatus,
 			&i.AvatarFileID,
 			&i.AvatarTokenID,
 			&i.AvatarTokenSecret,
@@ -976,7 +1024,25 @@ SET
     delivered_to_recipient = TRUE,
     updated_at = now()
 WHERE
-    id = $1
+    chat_id = (
+        SELECT m2.chat_id
+        FROM messages m2
+        WHERE
+            m2.id = $1
+    )
+    AND recipient_id = (
+        SELECT m3.recipient_id
+        FROM messages m3
+        WHERE
+            m3.id = $1
+    )
+    AND created_at <= (
+        SELECT m4.created_at
+        FROM messages m4
+        WHERE
+            m4.id = $1
+    )
+    AND delivered_to_recipient = FALSE
 `
 
 func (q *Queries) MarkMessageDeliveredToRecipient(ctx context.Context, id uuid.UUID) error {
@@ -995,6 +1061,87 @@ WHERE
 
 func (q *Queries) MarkMessageSyncedToSenderPrimary(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, markMessageSyncedToSenderPrimary, id)
+	return err
+}
+
+const resetChatReadStatus = `-- name: ResetChatReadStatus :exec
+UPDATE chats
+SET
+    p1_unread_count = CASE
+        WHEN participant_1_id = $2 THEN 0
+        ELSE p1_unread_count
+    END,
+    p1_last_read_at = CASE
+        WHEN participant_1_id = $2 THEN now()
+        ELSE p1_last_read_at
+    END,
+    p2_unread_count = CASE
+        WHEN participant_2_id = $2 THEN 0
+        ELSE p2_unread_count
+    END,
+    p2_last_read_at = CASE
+        WHEN participant_2_id = $2 THEN now()
+        ELSE p2_last_read_at
+    END,
+    updated_at = now()
+WHERE
+    id = $1
+    AND (
+        participant_1_id = $2
+        OR participant_2_id = $2
+    )
+`
+
+type ResetChatReadStatusParams struct {
+	ID             uuid.UUID `json:"id"`
+	Participant1ID uuid.UUID `json:"participant_1_id"`
+}
+
+func (q *Queries) ResetChatReadStatus(ctx context.Context, arg ResetChatReadStatusParams) error {
+	_, err := q.db.Exec(ctx, resetChatReadStatus, arg.ID, arg.Participant1ID)
+	return err
+}
+
+const updateChatStatus = `-- name: UpdateChatStatus :exec
+
+UPDATE chats
+SET
+    last_message_content = $2,
+    last_message_created_at = $3,
+    last_message_type = $4,
+    last_message_sender_id = $5,
+    p1_unread_count = CASE
+        WHEN participant_1_id != $5 THEN p1_unread_count + 1
+        ELSE p1_unread_count
+    END,
+    p2_unread_count = CASE
+        WHEN participant_2_id != $5 THEN p2_unread_count + 1
+        ELSE p2_unread_count
+    END,
+    updated_at = now()
+WHERE
+    id = $1
+`
+
+type UpdateChatStatusParams struct {
+	ID                   uuid.UUID          `json:"id"`
+	LastMessageContent   *string            `json:"last_message_content"`
+	LastMessageCreatedAt pgtype.Timestamptz `json:"last_message_created_at"`
+	LastMessageType      *string            `json:"last_message_type"`
+	LastMessageSenderID  pgtype.UUID        `json:"last_message_sender_id"`
+}
+
+// ===========================================
+// Chat Status Update Operations (Phase 2b)
+// ===========================================
+func (q *Queries) UpdateChatStatus(ctx context.Context, arg UpdateChatStatusParams) error {
+	_, err := q.db.Exec(ctx, updateChatStatus,
+		arg.ID,
+		arg.LastMessageContent,
+		arg.LastMessageCreatedAt,
+		arg.LastMessageType,
+		arg.LastMessageSenderID,
+	)
 	return err
 }
 

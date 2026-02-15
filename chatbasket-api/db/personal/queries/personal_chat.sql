@@ -34,28 +34,35 @@ LIMIT 1;
 
 -- name: GetUserChats :many
 -- name: GetUserChats :many
-SELECT DISTINCT
-    ON (c.id) c.*,
+SELECT
+    c.*,
     u.name AS other_user_name,
     u.b64_cipher_chacha20poly1305_username AS other_user_username,
     u.id AS other_user_id,
 
--- Last Message
-m.content AS last_message_content,
-m.created_at AS last_message_created_at,
-m.message_type AS last_message_type,
-m.sender_id AS last_message_sender_id,
+-- Last Message (Direct from Metadata)
+c.last_message_content AS last_message_content,
+c.last_message_created_at AS last_message_created_at,
+c.last_message_type AS last_message_type,
+c.last_message_sender_id AS last_message_sender_id,
 
--- Unread Count
-(
-    SELECT COUNT(*)
-    FROM messages m2
-    WHERE
-        m2.chat_id = c.id
-        AND m2.recipient_id = $1
-        AND m2.delivered_to_recipient = FALSE
-        AND m2.expires_at > now()
-)::INT AS unread_count,
+-- Unread Count (From Metadata)
+CASE
+    WHEN c.participant_1_id = $1 THEN c.p1_unread_count
+    ELSE c.p2_unread_count
+END::INT AS unread_count,
+
+-- Last Message Status (Calculated)
+CASE
+    WHEN c.last_message_created_at IS NULL THEN NULL
+    WHEN c.last_message_created_at <= (
+        CASE
+            WHEN c.participant_1_id = $1 THEN c.p2_last_read_at
+            ELSE c.p1_last_read_at
+        END
+    ) THEN 'read'
+    ELSE 'sent'
+END::text AS last_message_status,
 
 -- Raw avatar data
 a.file_id AS avatar_file_id,
@@ -76,7 +83,6 @@ FROM
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
     END
-    LEFT JOIN messages m ON m.chat_id = c.id
     LEFT JOIN avatars a ON u.id = a.user_id
     AND a.avatar_type = 'profile'
     LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
@@ -87,7 +93,7 @@ FROM
 WHERE
     c.participant_1_id = $1
     OR c.participant_2_id = $1
-ORDER BY c.id, m.created_at DESC;
+ORDER BY c.updated_at DESC;
 
 -- name: GetChatByID :one
 SELECT * FROM chats WHERE id = $1 LIMIT 1;
@@ -140,7 +146,25 @@ SET
     delivered_to_recipient = TRUE,
     updated_at = now()
 WHERE
-    id = $1;
+    chat_id = (
+        SELECT m2.chat_id
+        FROM messages m2
+        WHERE
+            m2.id = $1
+    )
+    AND recipient_id = (
+        SELECT m3.recipient_id
+        FROM messages m3
+        WHERE
+            m3.id = $1
+    )
+    AND created_at <= (
+        SELECT m4.created_at
+        FROM messages m4
+        WHERE
+            m4.id = $1
+    )
+    AND delivered_to_recipient = FALSE;
 
 -- name: MarkMessageSyncedToSenderPrimary :exec
 UPDATE messages
@@ -348,6 +372,56 @@ WHERE
     AND expires_at > now()
 ORDER BY created_at ASC
 LIMIT $1;
+
+-- ===========================================
+-- Chat Status Update Operations (Phase 2b)
+-- ===========================================
+
+-- name: UpdateChatStatus :exec
+UPDATE chats
+SET
+    last_message_content = $2,
+    last_message_created_at = $3,
+    last_message_type = $4,
+    last_message_sender_id = $5,
+    p1_unread_count = CASE
+        WHEN participant_1_id != $5 THEN p1_unread_count + 1
+        ELSE p1_unread_count
+    END,
+    p2_unread_count = CASE
+        WHEN participant_2_id != $5 THEN p2_unread_count + 1
+        ELSE p2_unread_count
+    END,
+    updated_at = now()
+WHERE
+    id = $1;
+
+-- name: ResetChatReadStatus :exec
+UPDATE chats
+SET
+    p1_unread_count = CASE
+        WHEN participant_1_id = $2 THEN 0
+        ELSE p1_unread_count
+    END,
+    p1_last_read_at = CASE
+        WHEN participant_1_id = $2 THEN now()
+        ELSE p1_last_read_at
+    END,
+    p2_unread_count = CASE
+        WHEN participant_2_id = $2 THEN 0
+        ELSE p2_unread_count
+    END,
+    p2_last_read_at = CASE
+        WHEN participant_2_id = $2 THEN now()
+        ELSE p2_last_read_at
+    END,
+    updated_at = now()
+WHERE
+    id = $1
+    AND (
+        participant_1_id = $2
+        OR participant_2_id = $2
+    );
 
 -- name: GetExpiredMessagesWithFiles :many
 SELECT *

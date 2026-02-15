@@ -12,24 +12,27 @@ type ChatResponse struct {
 	AvatarURL            *string    `json:"avatar_url"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
+	OtherUserLastReadAt  time.Time  `json:"other_user_last_read_at"`
 	LastMessageContent   *string    `json:"last_message_content"`
 	LastMessageCreatedAt *time.Time `json:"last_message_created_at"`
 	LastMessageType      *string    `json:"last_message_type"`
 	LastMessageSenderID  *string    `json:"-"`
 	LastMessageIsFromMe  bool       `json:"last_message_is_from_me"`
+	LastMessageStatus    string     `json:"last_message_status"`
 	UnreadCount          int        `json:"unread_count"`
 }
 
 type MessageResponse struct {
-	MessageID   string    `json:"message_id"`
-	ChatID      string    `json:"chat_id"`
-	SenderID    string    `json:"-"`
-	IsFromMe    bool      `json:"is_from_me"`
-	RecipientID string    `json:"recipient_id"`
-	Content     string    `json:"content"`
-	MessageType string    `json:"message_type"`
-	CreatedAt   time.Time `json:"created_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
+	MessageID            string    `json:"message_id"`
+	ChatID               string    `json:"chat_id"`
+	SenderID             string    `json:"-"`
+	IsFromMe             bool      `json:"is_from_me"`
+	RecipientID          string    `json:"recipient_id"`
+	Content              string    `json:"content"`
+	MessageType          string    `json:"message_type"`
+	DeliveredToRecipient bool      `json:"delivered_to_recipient"`
+	CreatedAt            time.Time `json:"created_at"`
+	ExpiresAt            time.Time `json:"expires_at"`
 }
 
 type MessagingEligibilityResponse struct {

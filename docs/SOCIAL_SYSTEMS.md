@@ -405,6 +405,26 @@ These are the default policies to implement unless product requirements change:
   - Require old primary online
   - If old primary offline: warn data loss; do not switch without explicit confirmation
 
+### 8.7 Chat Status & Receipts (3-Icon System)
+
+To support the ephemeral relay without storing permanent history, we use a **Metadata-based Read Status**:
+
+#### 8.7.1 Visual States
+- **Pending (Clock 🕒)**: Message stored on device, not yet acked by API.
+- **Sent (Yellow Tick ✅)**: Message stored in Backend DB (`created_at` confirmed).
+- **Read (Green Tick ✅)**: Recipient has opened the chat.
+
+#### 8.7.2 Logic Implementation
+- **Sent/Delivered**: The backend tracks `delivered_to_recipient` for deletion purposes, but the UI treats "Delivered" as simply "Sent" (Yellow). We do not show a separate "Delivered" icon.
+- **Read**:
+  - **No per-message flag**: The `messages` table does *not* store a `read_at` timestamp.
+  - **Chat Metadata**: The `chats` table stores `p1_last_read_at` and `p2_last_read_at`.
+  - **Calculation**: Frontend compares `message.created_at <= chat.other_user_last_read_at` to determine if a message is Read.
+
+#### 8.7.3 Deletion Rules (Ephemeral)
+- Messages are eligible for deletion once `delivered_to_recipient = TRUE` (and `synced_to_sender = TRUE`).
+- Deletion is **independent** of Read status. A message can be deleted from the server even if it hasn't been "Read" (Green Tick), as long as it has been "Delivered" (Yellow Tick) to the device.
+
 ### 8.5 P2P WebRTC Sync Architecture (Secondary ↔ Primary)
 
 #### 8.5.1 Design rationale

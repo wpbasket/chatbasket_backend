@@ -127,6 +127,38 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 		}
 	}
 
+	// Update chat status (Last Message + Unread Count)
+	// We ignore error here to not fail the request if the message was sent successfully
+	// but we should log it.
+
+	// Determine fallback preview if caption is empty
+	previewContent := params.Caption
+	if previewContent == "" {
+		switch params.MessageType {
+		case "image":
+			previewContent = "Sent an image 📷"
+		case "video":
+			previewContent = "Sent a video 🎥"
+		case "audio":
+			previewContent = "Sent an audio 🎤"
+		case "file":
+			previewContent = "Sent a file 📄"
+		default:
+			previewContent = "Sent a file"
+		}
+	}
+
+	msgType := message.MessageType
+	senderID := message.SenderID
+
+	_ = ps.PersonalQueries.UpdateChatStatus(ctx, personal.UpdateChatStatusParams{
+		ID:                   chat.ID,
+		LastMessageContent:   &previewContent,
+		LastMessageCreatedAt: message.CreatedAt,
+		LastMessageType:      &msgType,
+		LastMessageSenderID:  pgtype.UUID{Bytes: senderID, Valid: true},
+	})
+
 	return &message, nil
 }
 
