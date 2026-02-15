@@ -17,15 +17,15 @@ import (
 )
 
 const (
-	EligibilityAllowed           = "allowed"
-	EligibilityNotInContacts     = "not_in_contacts"
-	EligibilityRecipientPrivate  = "recipient_private"
-	EligibilityBlocked           = "blocked" // Legacy, keep for safety
+	EligibilityAllowed            = "allowed"
+	EligibilityNotInContacts      = "not_in_contacts"
+	EligibilityRecipientPrivate   = "recipient_private"
+	EligibilityBlocked            = "blocked" // Legacy, keep for safety
 	EligibilityBlockedByRecipient = "blocked_by_recipient"
 	EligibilityBlockedByMe        = "blocked_by_me"
-	EligibilityAdminBlocked      = "admin_blocked"
-	EligibilityNoPrimaryDevice   = "no_primary_device"
-	EligibilityRecipientNotFound = "recipient_not_found"
+	EligibilityAdminBlocked       = "admin_blocked"
+	EligibilityNoPrimaryDevice    = "no_primary_device"
+	EligibilityRecipientNotFound  = "recipient_not_found"
 )
 
 const (
