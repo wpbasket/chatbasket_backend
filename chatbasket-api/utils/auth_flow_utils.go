@@ -127,10 +127,8 @@ func CreateSessionFlow(ctx context.Context, q *auth.Queries, userID uuid.UUID, p
 			primaryDeviceName = *existingPrimary.DeviceName
 		}
 	} else {
-		// No primary device found, auto-promote if native
-		if platform == "android" || platform == "ios" {
-			isPrimary = true
-		}
+		// No primary device found, auto-promote ANY platform for now (Temporary Fix for Web Messaging)
+		isPrimary = true
 	}
 
 	_, err = q.CreateSession(ctx, auth.CreateSessionParams{
