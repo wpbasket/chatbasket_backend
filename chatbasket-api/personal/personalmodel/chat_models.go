@@ -15,14 +15,16 @@ type ChatResponse struct {
 	LastMessageContent   *string    `json:"last_message_content"`
 	LastMessageCreatedAt *time.Time `json:"last_message_created_at"`
 	LastMessageType      *string    `json:"last_message_type"`
-	LastMessageSenderID  *string    `json:"last_message_sender_id"`
+	LastMessageSenderID  *string    `json:"-"`
+	LastMessageIsFromMe  bool       `json:"last_message_is_from_me"`
 	UnreadCount          int        `json:"unread_count"`
 }
 
 type MessageResponse struct {
 	MessageID   string    `json:"message_id"`
 	ChatID      string    `json:"chat_id"`
-	SenderID    string    `json:"sender_id"`
+	SenderID    string    `json:"-"`
+	IsFromMe    bool      `json:"is_from_me"`
 	RecipientID string    `json:"recipient_id"`
 	Content     string    `json:"content"`
 	MessageType string    `json:"message_type"`

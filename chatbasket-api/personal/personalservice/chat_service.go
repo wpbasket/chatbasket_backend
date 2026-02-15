@@ -397,10 +397,11 @@ func (ps *Service) CreateChatHandler(ctx context.Context, payload *personalmodel
 	}
 
 	return &personalmodel.ChatResponse{
-		ChatID:      chat.ID.String(),
-		OtherUserID: recipientID.String(),
-		CreatedAt:   chat.CreatedAt.Time,
-		UpdatedAt:   chat.UpdatedAt.Time,
+		ChatID:              chat.ID.String(),
+		OtherUserID:         recipientID.String(),
+		CreatedAt:           chat.CreatedAt.Time,
+		UpdatedAt:           chat.UpdatedAt.Time,
+		LastMessageIsFromMe: false, // New chat, no messages yet
 	}, nil
 }
 
@@ -437,6 +438,7 @@ func (ps *Service) SendMessageHandler(ctx context.Context, payload *personalmode
 		MessageID:   message.ID.String(),
 		ChatID:      message.ChatID.String(),
 		SenderID:    message.SenderID.String(),
+		IsFromMe:    true, // Just sent by me
 		RecipientID: message.RecipientID.String(),
 		Content:     message.Content,
 		MessageType: message.MessageType,
@@ -485,6 +487,7 @@ func (ps *Service) GetMessagesHandler(ctx context.Context, payload *personalmode
 			MessageID:   msg.ID.String(),
 			ChatID:      msg.ChatID.String(),
 			SenderID:    msg.SenderID.String(),
+			IsFromMe:    msg.SenderID == userId.UuidUserId,
 			RecipientID: msg.RecipientID.String(),
 			Content:     msg.Content,
 			MessageType: msg.MessageType,
@@ -598,6 +601,7 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 			LastMessageCreatedAt: lastMessageCreatedAt,
 			LastMessageType:      lastMessageType,
 			LastMessageSenderID:  lastMessageSenderID,
+			LastMessageIsFromMe:  chat.LastMessageSenderID.Valid && uuid.Must(uuid.FromBytes(chat.LastMessageSenderID.Bytes[:])) == userId.UuidUserId,
 			UnreadCount:          int(chat.UnreadCount),
 		}
 	}
