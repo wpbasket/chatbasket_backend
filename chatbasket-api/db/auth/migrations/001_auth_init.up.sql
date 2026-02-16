@@ -1,6 +1,28 @@
 -- +migrate Up
 
 -- ======================================
+-- Function: set_timestamps()
+-- Automatically sets created_at and updated_at fields
+-- ======================================
+CREATE OR REPLACE FUNCTION set_timestamps()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        NEW.created_at := now();
+        NEW.updated_at := now();
+        RETURN NEW;
+    END IF;
+
+    IF TG_OP = 'UPDATE' THEN
+        NEW.updated_at := now();
+        RETURN NEW;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ======================================
 -- Create auth_users table
 -- ======================================
 

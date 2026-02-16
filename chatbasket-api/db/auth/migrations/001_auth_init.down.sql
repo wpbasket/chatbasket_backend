@@ -23,3 +23,6 @@ DROP INDEX IF EXISTS idx_auth_users_email;
 -- Unique email index
 DROP TABLE IF EXISTS auth_users CASCADE;
 -- Also drops PK constraints
+
+-- Drop timestamp function
+DROP FUNCTION IF EXISTS set_timestamps ();
