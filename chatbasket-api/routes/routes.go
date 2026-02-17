@@ -52,8 +52,8 @@ func RegisterRoutes(
 		// authSecret will be nil/empty, triggering NewAuthService fallback
 	}
 
-	globalService := services.NewGlobalService(as, pool, cosmosClient)
 	authService := services.NewAuthService(pool, authSecret)
+	globalService := services.NewGlobalService(as, pool, cosmosClient, authService)
 	userHandler := handler.NewUserHandler(authService)
 
 	// Auth Routes (shared across domains)

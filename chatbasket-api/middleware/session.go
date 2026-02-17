@@ -7,6 +7,7 @@ import (
 	"chatbasket-api/utils"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
@@ -80,13 +81,16 @@ func AuthSessionMiddleware(authService *services.AuthService, requireVerified bo
 				})
 			}
 
-			// 3. Check if Session is Valid (Exact token match, Exact user match, Not expired)
+			// 3. Get Session details (Validate token & Get is_central flag)
 			ctx := c.Request().Context()
-			isValid, err := authService.AuthQueries.CheckSessionIsValid(ctx, auth.CheckSessionIsValidParams{
+			session, err := authService.AuthQueries.GetSessionByToken(ctx, auth.GetSessionByTokenParams{
 				TokenHash:  tokenHash,
 				AuthUserID: uuidVal,
 			})
-			if err != nil || !isValid {
+
+			// Check if session found and not expired
+			if err != nil || session.ExpiresAt.Time.Before(time.Now()) {
+				// If error is no rows, it means invalid token/user combo
 				return c.JSON(http.StatusUnauthorized, model.SessionError{
 					Code:    http.StatusUnauthorized,
 					Type:    "session_invalid",
@@ -121,6 +125,7 @@ func AuthSessionMiddleware(authService *services.AuthService, requireVerified bo
 			c.Set("sessionId", sessionId) // Context keeps original input sessionId
 			c.Set("platform", platform)
 			c.Set("email", authUser.Email)
+			c.Set("isPrimary", session.IsCentral) // Trusted flag from DB
 
 			return next(c)
 		}

@@ -27,6 +27,10 @@ type Service struct {
 
 // New constructs a personal Service from the shared GlobalService.
 func New(gs *services.GlobalService, authSecret []byte) *Service {
+	if len(authSecret) == 0 {
+		// Use a hardcoded dev key if missing (matches services.NewAuthService)
+		authSecret = []byte("super-secret-key")
+	}
 	return &Service{
 		GlobalService:   gs,
 		AuthSecret:      authSecret,

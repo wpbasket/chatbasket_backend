@@ -29,11 +29,9 @@ type Avatar struct {
 }
 
 type Chat struct {
-	ID             uuid.UUID          `json:"id"`
-	Participant1ID uuid.UUID          `json:"participant_1_id"`
-	Participant2ID uuid.UUID          `json:"participant_2_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID             uuid.UUID `json:"id"`
+	Participant1ID uuid.UUID `json:"participant_1_id"`
+	Participant2ID uuid.UUID `json:"participant_2_id"`
 	// Unread count for participant_1_id
 	P1UnreadCount int32 `json:"p1_unread_count"`
 	// Unread count for participant_2_id
@@ -45,6 +43,10 @@ type Chat struct {
 	LastMessageCreatedAt pgtype.Timestamptz `json:"last_message_created_at"`
 	LastMessageType      *string            `json:"last_message_type"`
 	LastMessageSenderID  pgtype.UUID        `json:"last_message_sender_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	// UUID of the message currently displayed as the preview
+	LastMessageID pgtype.UUID `json:"last_message_id"`
 }
 
 type ContactRequest struct {
@@ -58,28 +60,29 @@ type ContactRequest struct {
 }
 
 type Message struct {
-	ID                    uuid.UUID          `json:"id"`
-	ChatID                uuid.UUID          `json:"chat_id"`
-	SenderID              uuid.UUID          `json:"sender_id"`
-	RecipientID           uuid.UUID          `json:"recipient_id"`
-	Content               string             `json:"content"`
-	MessageType           string             `json:"message_type"`
-	DeliveredToRecipient  bool               `json:"delivered_to_recipient"`
-	SyncedToSenderPrimary bool               `json:"synced_to_sender_primary"`
-	DeliveryAttempts      int32              `json:"delivery_attempts"`
-	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt             pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
-	FileID                *string            `json:"file_id"`
-	FileName              *string            `json:"file_name"`
-	FileSize              *int64             `json:"file_size"`
-	FileMimeType          *string            `json:"file_mime_type"`
-	FileTokenID           *string            `json:"file_token_id"`
-	FileTokenSecret       *string            `json:"file_token_secret"`
-	FileTokenExpiry       pgtype.Timestamptz `json:"file_token_expiry"`
-	ThumbnailFileID       *string            `json:"thumbnail_file_id"`
-	ThumbnailTokenID      *string            `json:"thumbnail_token_id"`
-	ThumbnailTokenSecret  *string            `json:"thumbnail_token_secret"`
+	ID                          uuid.UUID          `json:"id"`
+	ChatID                      uuid.UUID          `json:"chat_id"`
+	SenderID                    uuid.UUID          `json:"sender_id"`
+	RecipientID                 uuid.UUID          `json:"recipient_id"`
+	Content                     string             `json:"content"`
+	MessageType                 string             `json:"message_type"`
+	FileID                      *string            `json:"file_id"`
+	FileName                    *string            `json:"file_name"`
+	FileSize                    *int64             `json:"file_size"`
+	FileMimeType                *string            `json:"file_mime_type"`
+	FileTokenID                 *string            `json:"file_token_id"`
+	FileTokenSecret             *string            `json:"file_token_secret"`
+	FileTokenExpiry             pgtype.Timestamptz `json:"file_token_expiry"`
+	ThumbnailFileID             *string            `json:"thumbnail_file_id"`
+	ThumbnailTokenID            *string            `json:"thumbnail_token_id"`
+	ThumbnailTokenSecret        *string            `json:"thumbnail_token_secret"`
+	DeliveredToRecipient        bool               `json:"delivered_to_recipient"`
+	SyncedToSenderPrimary       bool               `json:"synced_to_sender_primary"`
+	DeliveryAttempts            int32              `json:"delivery_attempts"`
+	ExpiresAt                   pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
+	DeliveredToRecipientPrimary *bool              `json:"delivered_to_recipient_primary"`
 }
 
 type MessageDeliveryLog struct {
@@ -91,6 +94,16 @@ type MessageDeliveryLog struct {
 	AttemptedAt   pgtype.Timestamptz `json:"attempted_at"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MessageSyncAction struct {
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"user_id"`
+	ActionType         string             `json:"action_type"`
+	Payload            []byte             `json:"payload"`
+	DeliveredToPrimary bool               `json:"delivered_to_primary"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Token struct {

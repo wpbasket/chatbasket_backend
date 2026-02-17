@@ -76,6 +76,15 @@ func (q *Queries) CanSendMessage(ctx context.Context, arg CanSendMessageParams) 
 	return eligibility_status, err
 }
 
+const consumeSyncAction = `-- name: ConsumeSyncAction :exec
+DELETE FROM message_sync_actions WHERE id = $1
+`
+
+func (q *Queries) ConsumeSyncAction(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, consumeSyncAction, id)
+	return err
+}
+
 const createChat = `-- name: CreateChat :one
 
 INSERT INTO
@@ -97,7 +106,7 @@ UPDATE
 SET
     updated_at = now()
 RETURNING
-    id, participant_1_id, participant_2_id, created_at, updated_at, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id
+    id, participant_1_id, participant_2_id, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id, created_at, updated_at, last_message_id
 `
 
 type CreateChatParams struct {
@@ -116,8 +125,6 @@ func (q *Queries) CreateChat(ctx context.Context, arg CreateChatParams) (Chat, e
 		&i.ID,
 		&i.Participant1ID,
 		&i.Participant2ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.P1UnreadCount,
 		&i.P2UnreadCount,
 		&i.P1LastReadAt,
@@ -126,6 +133,9 @@ func (q *Queries) CreateChat(ctx context.Context, arg CreateChatParams) (Chat, e
 		&i.LastMessageCreatedAt,
 		&i.LastMessageType,
 		&i.LastMessageSenderID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageID,
 	)
 	return i, err
 }
@@ -175,21 +185,35 @@ INSERT INTO
         recipient_id,
         content,
         message_type,
-        expires_at
+        expires_at,
+        synced_to_sender_primary,
+        delivered_to_recipient_primary
     )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9
+    )
 RETURNING
-    id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+    id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary
 `
 
 type CreateMessageParams struct {
-	ID          uuid.UUID          `json:"id"`
-	ChatID      uuid.UUID          `json:"chat_id"`
-	SenderID    uuid.UUID          `json:"sender_id"`
-	RecipientID uuid.UUID          `json:"recipient_id"`
-	Content     string             `json:"content"`
-	MessageType string             `json:"message_type"`
-	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	ID                          uuid.UUID          `json:"id"`
+	ChatID                      uuid.UUID          `json:"chat_id"`
+	SenderID                    uuid.UUID          `json:"sender_id"`
+	RecipientID                 uuid.UUID          `json:"recipient_id"`
+	Content                     string             `json:"content"`
+	MessageType                 string             `json:"message_type"`
+	ExpiresAt                   pgtype.Timestamptz `json:"expires_at"`
+	SyncedToSenderPrimary       bool               `json:"synced_to_sender_primary"`
+	DeliveredToRecipientPrimary *bool              `json:"delivered_to_recipient_primary"`
 }
 
 // ===========================================
@@ -204,6 +228,8 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		arg.Content,
 		arg.MessageType,
 		arg.ExpiresAt,
+		arg.SyncedToSenderPrimary,
+		arg.DeliveredToRecipientPrimary,
 	)
 	var i Message
 	err := row.Scan(
@@ -213,12 +239,6 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.RecipientID,
 		&i.Content,
 		&i.MessageType,
-		&i.DeliveredToRecipient,
-		&i.SyncedToSenderPrimary,
-		&i.DeliveryAttempts,
-		&i.ExpiresAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.FileID,
 		&i.FileName,
 		&i.FileSize,
@@ -229,6 +249,13 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.ThumbnailFileID,
 		&i.ThumbnailTokenID,
 		&i.ThumbnailTokenSecret,
+		&i.DeliveredToRecipient,
+		&i.SyncedToSenderPrimary,
+		&i.DeliveryAttempts,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeliveredToRecipientPrimary,
 	)
 	return i, err
 }
@@ -250,7 +277,9 @@ INSERT INTO
         file_token_id,
         file_token_secret,
         file_token_expiry,
-        expires_at
+        expires_at,
+        synced_to_sender_primary,
+        delivered_to_recipient_primary
     )
 VALUES (
         $1,
@@ -266,27 +295,31 @@ VALUES (
         $11,
         $12,
         $13,
-        $14
+        $14,
+        $15,
+        $16
     )
 RETURNING
-    id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+    id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary
 `
 
 type CreateMessageWithFileParams struct {
-	ID              uuid.UUID          `json:"id"`
-	ChatID          uuid.UUID          `json:"chat_id"`
-	SenderID        uuid.UUID          `json:"sender_id"`
-	RecipientID     uuid.UUID          `json:"recipient_id"`
-	Content         string             `json:"content"`
-	MessageType     string             `json:"message_type"`
-	FileID          *string            `json:"file_id"`
-	FileName        *string            `json:"file_name"`
-	FileSize        *int64             `json:"file_size"`
-	FileMimeType    *string            `json:"file_mime_type"`
-	FileTokenID     *string            `json:"file_token_id"`
-	FileTokenSecret *string            `json:"file_token_secret"`
-	FileTokenExpiry pgtype.Timestamptz `json:"file_token_expiry"`
-	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	ID                          uuid.UUID          `json:"id"`
+	ChatID                      uuid.UUID          `json:"chat_id"`
+	SenderID                    uuid.UUID          `json:"sender_id"`
+	RecipientID                 uuid.UUID          `json:"recipient_id"`
+	Content                     string             `json:"content"`
+	MessageType                 string             `json:"message_type"`
+	FileID                      *string            `json:"file_id"`
+	FileName                    *string            `json:"file_name"`
+	FileSize                    *int64             `json:"file_size"`
+	FileMimeType                *string            `json:"file_mime_type"`
+	FileTokenID                 *string            `json:"file_token_id"`
+	FileTokenSecret             *string            `json:"file_token_secret"`
+	FileTokenExpiry             pgtype.Timestamptz `json:"file_token_expiry"`
+	ExpiresAt                   pgtype.Timestamptz `json:"expires_at"`
+	SyncedToSenderPrimary       bool               `json:"synced_to_sender_primary"`
+	DeliveredToRecipientPrimary *bool              `json:"delivered_to_recipient_primary"`
 }
 
 // ===========================================
@@ -308,6 +341,8 @@ func (q *Queries) CreateMessageWithFile(ctx context.Context, arg CreateMessageWi
 		arg.FileTokenSecret,
 		arg.FileTokenExpiry,
 		arg.ExpiresAt,
+		arg.SyncedToSenderPrimary,
+		arg.DeliveredToRecipientPrimary,
 	)
 	var i Message
 	err := row.Scan(
@@ -317,12 +352,6 @@ func (q *Queries) CreateMessageWithFile(ctx context.Context, arg CreateMessageWi
 		&i.RecipientID,
 		&i.Content,
 		&i.MessageType,
-		&i.DeliveredToRecipient,
-		&i.SyncedToSenderPrimary,
-		&i.DeliveryAttempts,
-		&i.ExpiresAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.FileID,
 		&i.FileName,
 		&i.FileSize,
@@ -333,6 +362,58 @@ func (q *Queries) CreateMessageWithFile(ctx context.Context, arg CreateMessageWi
 		&i.ThumbnailFileID,
 		&i.ThumbnailTokenID,
 		&i.ThumbnailTokenSecret,
+		&i.DeliveredToRecipient,
+		&i.SyncedToSenderPrimary,
+		&i.DeliveryAttempts,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeliveredToRecipientPrimary,
+	)
+	return i, err
+}
+
+const createSyncAction = `-- name: CreateSyncAction :one
+
+INSERT INTO
+    message_sync_actions (
+        id,
+        user_id,
+        action_type,
+        payload,
+        created_at
+    )
+VALUES ($1, $2, $3, $4, now())
+RETURNING
+    id, user_id, action_type, payload, delivered_to_primary, created_at, updated_at
+`
+
+type CreateSyncActionParams struct {
+	ID         uuid.UUID `json:"id"`
+	UserID     uuid.UUID `json:"user_id"`
+	ActionType string    `json:"action_type"`
+	Payload    []byte    `json:"payload"`
+}
+
+// ===========================================
+// Sync Action Operations
+// ===========================================
+func (q *Queries) CreateSyncAction(ctx context.Context, arg CreateSyncActionParams) (MessageSyncAction, error) {
+	row := q.db.QueryRow(ctx, createSyncAction,
+		arg.ID,
+		arg.UserID,
+		arg.ActionType,
+		arg.Payload,
+	)
+	var i MessageSyncAction
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ActionType,
+		&i.Payload,
+		&i.DeliveredToPrimary,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -340,7 +421,7 @@ func (q *Queries) CreateMessageWithFile(ctx context.Context, arg CreateMessageWi
 const deleteDeliveredMessages = `-- name: DeleteDeliveredMessages :exec
 DELETE FROM messages
 WHERE
-    delivered_to_recipient = TRUE
+    delivered_to_recipient_primary = TRUE
     AND synced_to_sender_primary = TRUE
 `
 
@@ -367,6 +448,17 @@ func (q *Queries) DeleteMessage(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteOldSyncActions = `-- name: DeleteOldSyncActions :exec
+DELETE FROM message_sync_actions
+WHERE
+    created_at < now() - INTERVAL '30 days'
+`
+
+func (q *Queries) DeleteOldSyncActions(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteOldSyncActions)
+	return err
+}
+
 const deletePendingMessagesBetweenUsers = `-- name: DeletePendingMessagesBetweenUsers :exec
 DELETE FROM messages
 WHERE (
@@ -390,7 +482,7 @@ func (q *Queries) DeletePendingMessagesBetweenUsers(ctx context.Context, arg Del
 }
 
 const getChatByID = `-- name: GetChatByID :one
-SELECT id, participant_1_id, participant_2_id, created_at, updated_at, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id FROM chats WHERE id = $1 LIMIT 1
+SELECT id, participant_1_id, participant_2_id, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id, created_at, updated_at, last_message_id FROM chats WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error) {
@@ -400,8 +492,6 @@ func (q *Queries) GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error) {
 		&i.ID,
 		&i.Participant1ID,
 		&i.Participant2ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.P1UnreadCount,
 		&i.P2UnreadCount,
 		&i.P1LastReadAt,
@@ -410,12 +500,15 @@ func (q *Queries) GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error) {
 		&i.LastMessageCreatedAt,
 		&i.LastMessageType,
 		&i.LastMessageSenderID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageID,
 	)
 	return i, err
 }
 
 const getChatByParticipants = `-- name: GetChatByParticipants :one
-SELECT id, participant_1_id, participant_2_id, created_at, updated_at, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id
+SELECT id, participant_1_id, participant_2_id, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, last_message_content, last_message_created_at, last_message_type, last_message_sender_id, created_at, updated_at, last_message_id
 FROM chats
 WHERE
     participant_1_id = LEAST($1::uuid, $2::uuid)
@@ -435,8 +528,6 @@ func (q *Queries) GetChatByParticipants(ctx context.Context, arg GetChatByPartic
 		&i.ID,
 		&i.Participant1ID,
 		&i.Participant2ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.P1UnreadCount,
 		&i.P2UnreadCount,
 		&i.P1LastReadAt,
@@ -445,12 +536,15 @@ func (q *Queries) GetChatByParticipants(ctx context.Context, arg GetChatByPartic
 		&i.LastMessageCreatedAt,
 		&i.LastMessageType,
 		&i.LastMessageSenderID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastMessageID,
 	)
 	return i, err
 }
 
 const getChatMessages = `-- name: GetChatMessages :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary
 FROM messages
 WHERE
     chat_id = $1
@@ -483,12 +577,6 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 			&i.RecipientID,
 			&i.Content,
 			&i.MessageType,
-			&i.DeliveredToRecipient,
-			&i.SyncedToSenderPrimary,
-			&i.DeliveryAttempts,
-			&i.ExpiresAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.FileID,
 			&i.FileName,
 			&i.FileSize,
@@ -499,6 +587,81 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 			&i.ThumbnailFileID,
 			&i.ThumbnailTokenID,
 			&i.ThumbnailTokenSecret,
+			&i.DeliveredToRecipient,
+			&i.SyncedToSenderPrimary,
+			&i.DeliveryAttempts,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeliveredToRecipientPrimary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDeliveredMessagesByChat = `-- name: GetDeliveredMessagesByChat :many
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary
+FROM messages
+WHERE
+    chat_id = $1
+    AND (
+        (
+            recipient_id = $2
+            AND delivered_to_recipient_primary = TRUE
+            AND synced_to_sender_primary = TRUE
+        )
+        OR (
+            sender_id = $2
+            AND delivered_to_recipient_primary = TRUE
+            AND synced_to_sender_primary = TRUE
+        )
+    )
+`
+
+type GetDeliveredMessagesByChatParams struct {
+	ChatID uuid.UUID `json:"chat_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetDeliveredMessagesByChat(ctx context.Context, arg GetDeliveredMessagesByChatParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getDeliveredMessagesByChat, arg.ChatID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChatID,
+			&i.SenderID,
+			&i.RecipientID,
+			&i.Content,
+			&i.MessageType,
+			&i.FileID,
+			&i.FileName,
+			&i.FileSize,
+			&i.FileMimeType,
+			&i.FileTokenID,
+			&i.FileTokenSecret,
+			&i.FileTokenExpiry,
+			&i.ThumbnailFileID,
+			&i.ThumbnailTokenID,
+			&i.ThumbnailTokenSecret,
+			&i.DeliveredToRecipient,
+			&i.SyncedToSenderPrimary,
+			&i.DeliveryAttempts,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeliveredToRecipientPrimary,
 		); err != nil {
 			return nil, err
 		}
@@ -548,7 +711,7 @@ func (q *Queries) GetDeliveryLogsByMessage(ctx context.Context, messageID uuid.U
 }
 
 const getExpiredMessagesWithFiles = `-- name: GetExpiredMessagesWithFiles :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary
 FROM messages
 WHERE
     expires_at < now()
@@ -573,12 +736,6 @@ func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, limit int32) 
 			&i.RecipientID,
 			&i.Content,
 			&i.MessageType,
-			&i.DeliveredToRecipient,
-			&i.SyncedToSenderPrimary,
-			&i.DeliveryAttempts,
-			&i.ExpiresAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.FileID,
 			&i.FileName,
 			&i.FileSize,
@@ -589,6 +746,13 @@ func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, limit int32) 
 			&i.ThumbnailFileID,
 			&i.ThumbnailTokenID,
 			&i.ThumbnailTokenSecret,
+			&i.DeliveredToRecipient,
+			&i.SyncedToSenderPrimary,
+			&i.DeliveryAttempts,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeliveredToRecipientPrimary,
 		); err != nil {
 			return nil, err
 		}
@@ -601,7 +765,7 @@ func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, limit int32) 
 }
 
 const getMessageByID = `-- name: GetMessageByID :one
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret FROM messages WHERE id = $1 LIMIT 1
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary FROM messages WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error) {
@@ -614,12 +778,6 @@ func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, er
 		&i.RecipientID,
 		&i.Content,
 		&i.MessageType,
-		&i.DeliveredToRecipient,
-		&i.SyncedToSenderPrimary,
-		&i.DeliveryAttempts,
-		&i.ExpiresAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.FileID,
 		&i.FileName,
 		&i.FileSize,
@@ -630,12 +788,19 @@ func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, er
 		&i.ThumbnailFileID,
 		&i.ThumbnailTokenID,
 		&i.ThumbnailTokenSecret,
+		&i.DeliveredToRecipient,
+		&i.SyncedToSenderPrimary,
+		&i.DeliveryAttempts,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeliveredToRecipientPrimary,
 	)
 	return i, err
 }
 
 const getMessagesWithExpiredFileTokens = `-- name: GetMessagesWithExpiredFileTokens :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary
 FROM messages
 WHERE
     file_id IS NOT NULL
@@ -662,12 +827,6 @@ func (q *Queries) GetMessagesWithExpiredFileTokens(ctx context.Context, limit in
 			&i.RecipientID,
 			&i.Content,
 			&i.MessageType,
-			&i.DeliveredToRecipient,
-			&i.SyncedToSenderPrimary,
-			&i.DeliveryAttempts,
-			&i.ExpiresAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.FileID,
 			&i.FileName,
 			&i.FileSize,
@@ -678,6 +837,13 @@ func (q *Queries) GetMessagesWithExpiredFileTokens(ctx context.Context, limit in
 			&i.ThumbnailFileID,
 			&i.ThumbnailTokenID,
 			&i.ThumbnailTokenSecret,
+			&i.DeliveredToRecipient,
+			&i.SyncedToSenderPrimary,
+			&i.DeliveryAttempts,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeliveredToRecipientPrimary,
 		); err != nil {
 			return nil, err
 		}
@@ -690,7 +856,7 @@ func (q *Queries) GetMessagesWithExpiredFileTokens(ctx context.Context, limit in
 }
 
 const getPendingMessagesForRecipient = `-- name: GetPendingMessagesForRecipient :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary
 FROM messages
 WHERE
     recipient_id = $1
@@ -721,12 +887,6 @@ func (q *Queries) GetPendingMessagesForRecipient(ctx context.Context, arg GetPen
 			&i.RecipientID,
 			&i.Content,
 			&i.MessageType,
-			&i.DeliveredToRecipient,
-			&i.SyncedToSenderPrimary,
-			&i.DeliveryAttempts,
-			&i.ExpiresAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.FileID,
 			&i.FileName,
 			&i.FileSize,
@@ -737,6 +897,13 @@ func (q *Queries) GetPendingMessagesForRecipient(ctx context.Context, arg GetPen
 			&i.ThumbnailFileID,
 			&i.ThumbnailTokenID,
 			&i.ThumbnailTokenSecret,
+			&i.DeliveredToRecipient,
+			&i.SyncedToSenderPrimary,
+			&i.DeliveryAttempts,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeliveredToRecipientPrimary,
 		); err != nil {
 			return nil, err
 		}
@@ -749,7 +916,7 @@ func (q *Queries) GetPendingMessagesForRecipient(ctx context.Context, arg GetPen
 }
 
 const getPendingSenderSyncMessages = `-- name: GetPendingSenderSyncMessages :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, synced_to_sender_primary, delivery_attempts, expires_at, created_at, updated_at, delivered_to_recipient_primary
 FROM messages
 WHERE
     sender_id = $1
@@ -780,12 +947,6 @@ func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendi
 			&i.RecipientID,
 			&i.Content,
 			&i.MessageType,
-			&i.DeliveredToRecipient,
-			&i.SyncedToSenderPrimary,
-			&i.DeliveryAttempts,
-			&i.ExpiresAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.FileID,
 			&i.FileName,
 			&i.FileSize,
@@ -796,6 +957,56 @@ func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendi
 			&i.ThumbnailFileID,
 			&i.ThumbnailTokenID,
 			&i.ThumbnailTokenSecret,
+			&i.DeliveredToRecipient,
+			&i.SyncedToSenderPrimary,
+			&i.DeliveryAttempts,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeliveredToRecipientPrimary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPendingSyncActions = `-- name: GetPendingSyncActions :many
+SELECT id, user_id, action_type, payload, delivered_to_primary, created_at, updated_at
+FROM message_sync_actions
+WHERE
+    user_id = $1
+    AND delivered_to_primary = FALSE
+ORDER BY created_at ASC
+LIMIT $2
+`
+
+type GetPendingSyncActionsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Limit  int32     `json:"limit"`
+}
+
+func (q *Queries) GetPendingSyncActions(ctx context.Context, arg GetPendingSyncActionsParams) ([]MessageSyncAction, error) {
+	rows, err := q.db.Query(ctx, getPendingSyncActions, arg.UserID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MessageSyncAction
+	for rows.Next() {
+		var i MessageSyncAction
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ActionType,
+			&i.Payload,
+			&i.DeliveredToPrimary,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -809,15 +1020,10 @@ func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendi
 
 const getUserChats = `-- name: GetUserChats :many
 SELECT
-    c.id, c.participant_1_id, c.participant_2_id, c.created_at, c.updated_at, c.p1_unread_count, c.p2_unread_count, c.p1_last_read_at, c.p2_last_read_at, c.last_message_content, c.last_message_created_at, c.last_message_type, c.last_message_sender_id,
+    c.id, c.participant_1_id, c.participant_2_id, c.p1_unread_count, c.p2_unread_count, c.p1_last_read_at, c.p2_last_read_at, c.last_message_content, c.last_message_created_at, c.last_message_type, c.last_message_sender_id, c.created_at, c.updated_at, c.last_message_id,
     u.name AS other_user_name,
     u.b64_cipher_chacha20poly1305_username AS other_user_username,
     u.id AS other_user_id,
-
-c.last_message_content AS last_message_content,
-c.last_message_created_at AS last_message_created_at,
-c.last_message_type AS last_message_type,
-c.last_message_sender_id AS last_message_sender_id,
 
 CASE
     WHEN c.participant_1_id = $1 THEN c.p1_unread_count
@@ -869,8 +1075,6 @@ type GetUserChatsRow struct {
 	ID                     uuid.UUID          `json:"id"`
 	Participant1ID         uuid.UUID          `json:"participant_1_id"`
 	Participant2ID         uuid.UUID          `json:"participant_2_id"`
-	CreatedAt              pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
 	P1UnreadCount          int32              `json:"p1_unread_count"`
 	P2UnreadCount          int32              `json:"p2_unread_count"`
 	P1LastReadAt           pgtype.Timestamptz `json:"p1_last_read_at"`
@@ -879,13 +1083,12 @@ type GetUserChatsRow struct {
 	LastMessageCreatedAt   pgtype.Timestamptz `json:"last_message_created_at"`
 	LastMessageType        *string            `json:"last_message_type"`
 	LastMessageSenderID    pgtype.UUID        `json:"last_message_sender_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	LastMessageID          pgtype.UUID        `json:"last_message_id"`
 	OtherUserName          string             `json:"other_user_name"`
 	OtherUserUsername      string             `json:"other_user_username"`
 	OtherUserID            uuid.UUID          `json:"other_user_id"`
-	LastMessageContent_2   *string            `json:"last_message_content_2"`
-	LastMessageCreatedAt_2 pgtype.Timestamptz `json:"last_message_created_at_2"`
-	LastMessageType_2      *string            `json:"last_message_type_2"`
-	LastMessageSenderID_2  pgtype.UUID        `json:"last_message_sender_id_2"`
 	UnreadCount            int32              `json:"unread_count"`
 	LastMessageStatus      string             `json:"last_message_status"`
 	AvatarFileID           *string            `json:"avatar_file_id"`
@@ -900,7 +1103,6 @@ type GetUserChatsRow struct {
 	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
 }
 
-// Last Message (Direct from Metadata)
 // Unread Count (From Metadata)
 // Last Message Status (Calculated)
 // Raw avatar data
@@ -918,8 +1120,6 @@ func (q *Queries) GetUserChats(ctx context.Context, participant1ID uuid.UUID) ([
 			&i.ID,
 			&i.Participant1ID,
 			&i.Participant2ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.P1UnreadCount,
 			&i.P2UnreadCount,
 			&i.P1LastReadAt,
@@ -928,13 +1128,12 @@ func (q *Queries) GetUserChats(ctx context.Context, participant1ID uuid.UUID) ([
 			&i.LastMessageCreatedAt,
 			&i.LastMessageType,
 			&i.LastMessageSenderID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LastMessageID,
 			&i.OtherUserName,
 			&i.OtherUserUsername,
 			&i.OtherUserID,
-			&i.LastMessageContent_2,
-			&i.LastMessageCreatedAt_2,
-			&i.LastMessageType_2,
-			&i.LastMessageSenderID_2,
 			&i.UnreadCount,
 			&i.LastMessageStatus,
 			&i.AvatarFileID,
@@ -1018,6 +1217,28 @@ func (q *Queries) MarkChatMessagesAsRead(ctx context.Context, arg MarkChatMessag
 	return err
 }
 
+const markChatMessagesAsReadPrimary = `-- name: MarkChatMessagesAsReadPrimary :exec
+UPDATE messages
+SET
+    delivered_to_recipient_primary = TRUE,
+    delivered_to_recipient = TRUE, -- Implicitly true
+    updated_at = now()
+WHERE
+    chat_id = $1
+    AND recipient_id = $2
+    AND delivered_to_recipient_primary = FALSE
+`
+
+type MarkChatMessagesAsReadPrimaryParams struct {
+	ChatID      uuid.UUID `json:"chat_id"`
+	RecipientID uuid.UUID `json:"recipient_id"`
+}
+
+func (q *Queries) MarkChatMessagesAsReadPrimary(ctx context.Context, arg MarkChatMessagesAsReadPrimaryParams) error {
+	_, err := q.db.Exec(ctx, markChatMessagesAsReadPrimary, arg.ChatID, arg.RecipientID)
+	return err
+}
+
 const markMessageDeliveredToRecipient = `-- name: MarkMessageDeliveredToRecipient :exec
 UPDATE messages
 SET
@@ -1050,13 +1271,64 @@ func (q *Queries) MarkMessageDeliveredToRecipient(ctx context.Context, id uuid.U
 	return err
 }
 
+const markMessageDeliveredToRecipientPrimary = `-- name: MarkMessageDeliveredToRecipientPrimary :exec
+UPDATE messages
+SET
+    delivered_to_recipient_primary = TRUE,
+    delivered_to_recipient = TRUE, -- Implicitly true
+    updated_at = now()
+WHERE
+    chat_id = (
+        SELECT m2.chat_id
+        FROM messages m2
+        WHERE
+            m2.id = $1
+    )
+    AND recipient_id = (
+        SELECT m3.recipient_id
+        FROM messages m3
+        WHERE
+            m3.id = $1
+    )
+    AND created_at <= (
+        SELECT m4.created_at
+        FROM messages m4
+        WHERE
+            m4.id = $1
+    )
+    AND delivered_to_recipient_primary = FALSE
+`
+
+func (q *Queries) MarkMessageDeliveredToRecipientPrimary(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markMessageDeliveredToRecipientPrimary, id)
+	return err
+}
+
 const markMessageSyncedToSenderPrimary = `-- name: MarkMessageSyncedToSenderPrimary :exec
 UPDATE messages
 SET
     synced_to_sender_primary = TRUE,
     updated_at = now()
 WHERE
-    id = $1
+    chat_id = (
+        SELECT m2.chat_id
+        FROM messages m2
+        WHERE
+            m2.id = $1
+    )
+    AND sender_id = (
+        SELECT m3.sender_id
+        FROM messages m3
+        WHERE
+            m3.id = $1
+    )
+    AND created_at <= (
+        SELECT m4.created_at
+        FROM messages m4
+        WHERE
+            m4.id = $1
+    )
+    AND synced_to_sender_primary = FALSE
 `
 
 func (q *Queries) MarkMessageSyncedToSenderPrimary(ctx context.Context, id uuid.UUID) error {
@@ -1110,6 +1382,7 @@ SET
     last_message_created_at = $3,
     last_message_type = $4,
     last_message_sender_id = $5,
+    last_message_id = $6,
     p1_unread_count = CASE
         WHEN participant_1_id != $5 THEN p1_unread_count + 1
         ELSE p1_unread_count
@@ -1129,6 +1402,7 @@ type UpdateChatStatusParams struct {
 	LastMessageCreatedAt pgtype.Timestamptz `json:"last_message_created_at"`
 	LastMessageType      *string            `json:"last_message_type"`
 	LastMessageSenderID  pgtype.UUID        `json:"last_message_sender_id"`
+	LastMessageID        pgtype.UUID        `json:"last_message_id"`
 }
 
 // ===========================================
@@ -1141,7 +1415,62 @@ func (q *Queries) UpdateChatStatus(ctx context.Context, arg UpdateChatStatusPara
 		arg.LastMessageCreatedAt,
 		arg.LastMessageType,
 		arg.LastMessageSenderID,
+		arg.LastMessageID,
 	)
+	return err
+}
+
+const updateChatUnsendDecrement = `-- name: UpdateChatUnsendDecrement :exec
+UPDATE chats
+SET
+    p1_unread_count = CASE
+        WHEN participant_1_id = $1 THEN GREATEST(
+            0,
+            p1_unread_count - $2::int
+        )
+        ELSE p1_unread_count
+    END,
+    p2_unread_count = CASE
+        WHEN participant_2_id = $1 THEN GREATEST(
+            0,
+            p2_unread_count - $2::int
+        )
+        ELSE p2_unread_count
+    END,
+    updated_at = now()
+WHERE
+    id = $3
+`
+
+type UpdateChatUnsendDecrementParams struct {
+	RecipientID uuid.UUID `json:"recipient_id"`
+	Amount      int32     `json:"amount"`
+	ID          uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateChatUnsendDecrement(ctx context.Context, arg UpdateChatUnsendDecrementParams) error {
+	_, err := q.db.Exec(ctx, updateChatUnsendDecrement, arg.RecipientID, arg.Amount, arg.ID)
+	return err
+}
+
+const updateChatUnsendPreview = `-- name: UpdateChatUnsendPreview :exec
+UPDATE chats
+SET
+    last_message_content = 'Message unsent',
+    last_message_type = 'unsent',
+    updated_at = now()
+WHERE
+    id = $1
+    AND last_message_id = $2
+`
+
+type UpdateChatUnsendPreviewParams struct {
+	ID            uuid.UUID   `json:"id"`
+	LastMessageID pgtype.UUID `json:"last_message_id"`
+}
+
+func (q *Queries) UpdateChatUnsendPreview(ctx context.Context, arg UpdateChatUnsendPreviewParams) error {
+	_, err := q.db.Exec(ctx, updateChatUnsendPreview, arg.ID, arg.LastMessageID)
 	return err
 }
 
@@ -1170,5 +1499,27 @@ func (q *Queries) UpdateMessageFileToken(ctx context.Context, arg UpdateMessageF
 		arg.FileTokenSecret,
 		arg.FileTokenExpiry,
 	)
+	return err
+}
+
+const updateMessageToUnsent = `-- name: UpdateMessageToUnsent :exec
+UPDATE messages
+SET
+    content = 'Message unsent',
+    message_type = 'unsent',
+    file_id = NULL,
+    file_name = NULL,
+    file_size = NULL,
+    file_mime_type = NULL,
+    file_token_id = NULL,
+    file_token_secret = NULL,
+    file_token_expiry = NULL,
+    updated_at = now()
+WHERE
+    id = $1
+`
+
+func (q *Queries) UpdateMessageToUnsent(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, updateMessageToUnsent, id)
 	return err
 }

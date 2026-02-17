@@ -19,20 +19,22 @@ type ChatResponse struct {
 	LastMessageSenderID  *string    `json:"-"`
 	LastMessageIsFromMe  bool       `json:"last_message_is_from_me"`
 	LastMessageStatus    string     `json:"last_message_status"`
+	LastMessageIsUnsent  bool       `json:"last_message_is_unsent"`
+	LastMessageID        *string    `json:"last_message_id"`
 	UnreadCount          int        `json:"unread_count"`
 }
 
 type MessageResponse struct {
-	MessageID            string    `json:"message_id"`
-	ChatID               string    `json:"chat_id"`
-	SenderID             string    `json:"-"`
-	IsFromMe             bool      `json:"is_from_me"`
-	RecipientID          string    `json:"recipient_id"`
-	Content              string    `json:"content"`
-	MessageType          string    `json:"message_type"`
-	DeliveredToRecipient bool      `json:"delivered_to_recipient"`
-	CreatedAt            time.Time `json:"created_at"`
-	ExpiresAt            time.Time `json:"expires_at"`
+	MessageID             string    `json:"message_id"`
+	ChatID                string    `json:"chat_id"`
+	RecipientID           string    `json:"recipient_id"`
+	Content               string    `json:"content"`
+	MessageType           string    `json:"message_type"`
+	DeliveredToRecipient  bool      `json:"delivered_to_recipient"`
+	SyncedToSenderPrimary bool      `json:"synced_to_sender_primary"`
+	CreatedAt             time.Time `json:"created_at"`
+	ExpiresAt             time.Time `json:"expires_at"`
+	IsFromMe              bool      `json:"is_from_me"`
 }
 
 type MessagingEligibilityResponse struct {
@@ -99,6 +101,41 @@ type MarkChatReadPayload struct {
 
 type GetFileURLPayload struct {
 	MessageID string `json:"message_id" validate:"required,uuid"`
+}
+
+type UnsendMessagePayload struct {
+	ChatID     string   `json:"chat_id" validate:"required,uuid"`
+	MessageIDs []string `json:"message_ids" validate:"required,min=1,dive,uuid"`
+}
+
+type DeleteMessageForMePayload struct {
+	MessageIDs []string `json:"message_ids" validate:"required,min=1,dive,uuid"`
+}
+
+type GetSyncActionsPayload struct {
+	Limit int32 `query:"limit"`
+}
+
+type GetPendingMessagesPayload struct {
+	Limit int32 `query:"limit"`
+}
+
+type AcknowledgeSyncActionPayload struct {
+	ActionID string `json:"action_id" validate:"required,uuid"`
+}
+
+type SyncActionResponse struct {
+	ID                 string      `json:"id"`
+	UserID             string      `json:"user_id"`
+	ActionType         string      `json:"action_type"`
+	Payload            interface{} `json:"payload"`
+	DeliveredToPrimary bool        `json:"delivered_to_primary"`
+	CreatedAt          time.Time   `json:"created_at"`
+}
+
+type GetSyncActionsResponse struct {
+	Actions []SyncActionResponse `json:"actions"`
+	Count   int                  `json:"count"`
 }
 
 // Response structs for wrapper objects

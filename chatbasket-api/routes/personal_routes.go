@@ -58,4 +58,9 @@ func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService,
 	personalChatGroup.POST("/upload", persChatHandler.UploadFileForMessage)
 	personalChatGroup.GET("/file-url", persChatHandler.GetFileURL)
 	personalChatGroup.POST("/mark-read", persChatHandler.MarkChatRead)
+	personalChatGroup.POST("/unsend", persChatHandler.UnsendMessage)
+	personalChatGroup.POST("/delete-for-me", persChatHandler.DeleteMessageForMe)
+	personalChatGroup.GET("/sync-actions", persChatHandler.GetSyncActions)
+	personalChatGroup.POST("/sync-actions/ack", persChatHandler.AcknowledgeSyncAction)
+	personalChatGroup.GET("/pending", persChatHandler.GetPendingMessages)
 }

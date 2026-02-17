@@ -349,14 +349,16 @@ Planned tables:
 ### 8.3 Delivery rules (authoritative)
 #### Send from primary device
 - Backend stores message temporarily
-- Deliver to recipient primary
-- After recipient ACK: delete from backend
+- Deliver to recipient (any device) -> sets `delivered_to_recipient` (UI: Yellow Tick)
+- Deliver to recipient **PRIMARY** -> sets `delivered_to_recipient_primary`
+- After `delivered_to_recipient_primary = TRUE`: delete from backend
 
 #### Send from secondary device (web/other)
 - Backend stores message temporarily
-- **Deliver to recipient primary first**
-- Then sync message to sender primary
-- After both ACKs: delete from backend
+- Deliver to recipient (any device) -> sets `delivered_to_recipient`
+- Deliver to recipient **PRIMARY** -> sets `delivered_to_recipient_primary`
+- Sync to sender **PRIMARY** -> sets `synced_to_sender_primary`
+- After **BOTH** `delivered_to_recipient_primary = TRUE` AND `synced_to_sender_primary = TRUE`: delete from backend
 
 ### 8.4 Finalized edge-case policies (defaults)
 These are the default policies to implement unless product requirements change:
@@ -415,15 +417,21 @@ To support the ephemeral relay without storing permanent history, we use a **Met
 - **Read (Green Tick ✅)**: Recipient has opened the chat.
 
 #### 8.7.2 Logic Implementation
-- **Sent/Delivered**: The backend tracks `delivered_to_recipient` for deletion purposes, but the UI treats "Delivered" as simply "Sent" (Yellow). We do not show a separate "Delivered" icon.
+#### 8.7.2 Logic Implementation
+- **Sent/Delivered**: 
+  - `delivered_to_recipient`: Tracks delivery to **ANY** recipient device. Controls UI status (Yellow Tick).
+  - `delivered_to_recipient_primary`: Tracks delivery to **PRIMARY** recipient device. Controls data cleanup.
 - **Read**:
   - **No per-message flag**: The `messages` table does *not* store a `read_at` timestamp.
   - **Chat Metadata**: The `chats` table stores `p1_last_read_at` and `p2_last_read_at`.
   - **Calculation**: Frontend compares `message.created_at <= chat.other_user_last_read_at` to determine if a message is Read.
+  - **Primary Sync**: When a Primary device reads a chat (`MarkChatRead`), it also sets `delivered_to_recipient_primary = TRUE` for all messages in that chat to ensure cleanup.
 
 #### 8.7.3 Deletion Rules (Ephemeral)
-- Messages are eligible for deletion once `delivered_to_recipient = TRUE` (and `synced_to_sender = TRUE`).
-- Deletion is **independent** of Read status. A message can be deleted from the server even if it hasn't been "Read" (Green Tick), as long as it has been "Delivered" (Yellow Tick) to the device.
+- Messages are eligible for deletion **ONLY** once:
+  1. `delivered_to_recipient_primary = TRUE`
+  2. **AND** `synced_to_sender_primary = TRUE` (for self-messages or secondary sends)
+- Deletion is **independent** of Read status, but requires **Primary Device** acknowledgement. A message delivered only to a secondary web client will **NOT** be deleted.
 
 ### 8.5 P2P WebRTC Sync Architecture (Secondary ↔ Primary)
 

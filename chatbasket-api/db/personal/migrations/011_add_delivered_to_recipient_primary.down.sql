@@ -1,0 +1,1 @@
+ALTER TABLE messages DROP COLUMN delivered_to_recipient_primary;

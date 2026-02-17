@@ -4,6 +4,7 @@ import (
 	"chatbasket-api/model"
 	personalmodel "chatbasket-api/personal/personalmodel"
 	"chatbasket-api/personal/personalservice"
+	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -113,7 +114,7 @@ func (h *ChatHandler) SendMessage(c echo.Context) error {
 		})
 	}
 
-	resp, apiErr := h.service.SendMessageHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	resp, apiErr := h.service.SendMessageHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId}, c.Get("isPrimary").(bool))
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
@@ -181,7 +182,9 @@ func (h *ChatHandler) AcknowledgeDelivery(c echo.Context) error {
 		})
 	}
 
-	resp, apiErr := h.service.AcknowledgeDeliveryHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	sessionId, _ := c.Get("sessionId").(string)
+
+	resp, apiErr := h.service.AcknowledgeDeliveryHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId}, sessionId)
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
@@ -208,6 +211,41 @@ func (h *ChatHandler) GetUserChats(c echo.Context) error {
 
 	resp, apiErr := h.service.GetUserChatsHandler(c.Request().Context(), model.UserId{StringUserId: userId, UuidUserId: uuidUserId})
 	if apiErr != nil {
+		log.Printf("[ChatHandler] GetUserChats failed for user %s: %v", userId, apiErr)
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *ChatHandler) GetPendingMessages(c echo.Context) error {
+	userId, ok := c.Get("userId").(string)
+	if !ok || userId == "" {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+
+	var payload personalmodel.GetPendingMessagesPayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "invalid request payload",
+			Type:    "bad_request",
+		})
+	}
+
+	resp, apiErr := h.service.GetPendingMessagesHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 	return c.JSON(http.StatusOK, resp)
@@ -231,7 +269,7 @@ func (h *ChatHandler) UploadFileForMessage(c echo.Context) error {
 		})
 	}
 
-	resp, apiErr := h.service.UploadFileForMessageHandler(c.Request().Context(), c, model.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	resp, apiErr := h.service.UploadFileForMessageHandler(c.Request().Context(), c, model.UserId{StringUserId: userId, UuidUserId: uuidUserId}, c.Get("isPrimary").(bool))
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
@@ -299,7 +337,148 @@ func (h *ChatHandler) MarkChatRead(c echo.Context) error {
 		})
 	}
 
-	apiErr := h.service.MarkChatReadHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	isPrimary, ok := c.Get("isPrimary").(bool)
+	if !ok {
+		isPrimary = false
+	}
+
+	apiErr := h.service.MarkChatReadHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId}, isPrimary)
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *ChatHandler) UnsendMessage(c echo.Context) error {
+	userId, ok := c.Get("userId").(string)
+	if !ok || userId == "" {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+
+	var payload personalmodel.UnsendMessagePayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "invalid request payload",
+			Type:    "bad_request",
+		})
+	}
+
+	isPrimary, ok := c.Get("isPrimary").(bool)
+	if !ok {
+		// Default to false if missing (safe fallback) or handle error
+		isPrimary = false
+	}
+
+	apiErr := h.service.UnsendMessageHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId}, isPrimary)
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *ChatHandler) DeleteMessageForMe(c echo.Context) error {
+	userId, ok := c.Get("userId").(string)
+	if !ok || userId == "" {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+
+	var payload personalmodel.DeleteMessageForMePayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "invalid request payload",
+			Type:    "bad_request",
+		})
+	}
+
+	isPrimary, ok := c.Get("isPrimary").(bool)
+	if !ok {
+		isPrimary = false
+	}
+
+	apiErr := h.service.DeleteMessageForMeHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId}, isPrimary)
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *ChatHandler) GetSyncActions(c echo.Context) error {
+	userId, ok := c.Get("userId").(string)
+	if !ok || userId == "" {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return c.JSON(http.StatusUnauthorized, &model.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "User id is missing or invalid",
+			Type:    "unauthorized",
+		})
+	}
+
+	var payload personalmodel.GetSyncActionsPayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "invalid request payload",
+			Type:    "bad_request",
+		})
+	}
+
+	resp, apiErr := h.service.GetSyncActionsHandler(c.Request().Context(), &payload, model.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	if apiErr != nil {
+		log.Printf("[ChatHandler] GetSyncActions failed for user %s: %v", userId, apiErr)
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *ChatHandler) AcknowledgeSyncAction(c echo.Context) error {
+	var payload personalmodel.AcknowledgeSyncActionPayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &model.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "invalid request payload",
+			Type:    "bad_request",
+		})
+	}
+
+	isPrimary, ok := c.Get("isPrimary").(bool)
+	if !ok {
+		isPrimary = false
+	}
+
+	apiErr := h.service.AcknowledgeSyncActionHandler(c.Request().Context(), &payload, isPrimary)
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}

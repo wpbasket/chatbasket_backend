@@ -28,6 +28,7 @@ type UploadFileForMessageParams struct {
 	FileHeader  *multipart.FileHeader
 	MessageType string
 	Caption     string
+	IsPrimary   bool
 }
 
 func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileForMessageParams) (*personal.Message, *model.ApiError) {
@@ -100,20 +101,22 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 	mimeType := params.FileHeader.Header.Get("Content-Type")
 
 	message, err := ps.PersonalQueries.CreateMessageWithFile(ctx, personal.CreateMessageWithFileParams{
-		ID:              messageID,
-		ChatID:          chat.ID,
-		SenderID:        params.SenderID,
-		RecipientID:     params.RecipientID,
-		Content:         params.Caption,
-		MessageType:     params.MessageType,
-		FileID:          &fileID,
-		FileName:        &params.FileHeader.Filename,
-		FileSize:        &params.FileHeader.Size,
-		FileMimeType:    &mimeType,
-		FileTokenID:     &uploadResult.TokenIDs[0],
-		FileTokenSecret: &uploadResult.TokenSecrets[0],
-		FileTokenExpiry: pgtype.Timestamptz{Time: tokenExpiry, Valid: true},
-		ExpiresAt:       pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		ID:                          messageID,
+		ChatID:                      chat.ID,
+		SenderID:                    params.SenderID,
+		RecipientID:                 params.RecipientID,
+		Content:                     params.Caption,
+		MessageType:                 params.MessageType,
+		FileID:                      &fileID,
+		FileName:                    &params.FileHeader.Filename,
+		FileSize:                    &params.FileHeader.Size,
+		FileMimeType:                &mimeType,
+		FileTokenID:                 &uploadResult.TokenIDs[0],
+		FileTokenSecret:             &uploadResult.TokenSecrets[0],
+		FileTokenExpiry:             pgtype.Timestamptz{Time: tokenExpiry, Valid: true},
+		ExpiresAt:                   pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		SyncedToSenderPrimary:       params.IsPrimary,
+		DeliveredToRecipientPrimary: new(bool),
 	})
 
 	if err != nil {
@@ -157,6 +160,7 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 		LastMessageCreatedAt: message.CreatedAt,
 		LastMessageType:      &msgType,
 		LastMessageSenderID:  pgtype.UUID{Bytes: senderID, Valid: true},
+		LastMessageID:        pgtype.UUID{Bytes: message.ID, Valid: true},
 	})
 
 	return &message, nil
@@ -337,6 +341,16 @@ func (ps *Service) CleanupMessageFile(ctx context.Context, messageID uuid.UUID) 
 	}
 
 	return nil
+}
+
+func (ps *Service) DeleteChatFile(ctx context.Context, fileID string) {
+	if fileID == "" {
+		return
+	}
+	ps.deleteAllFileTokens(ChatFilesBucketID, fileID)
+	if _, err := ps.Appwrite.Storage.DeleteFile(ChatFilesBucketID, fileID); err != nil {
+		log.Printf("[Appwrite] failed to delete file %s: %v", fileID, err)
+	}
 }
 
 func (ps *Service) deleteAllFileTokens(bucketID, fileID string) {

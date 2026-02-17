@@ -40,12 +40,6 @@ SELECT
     u.b64_cipher_chacha20poly1305_username AS other_user_username,
     u.id AS other_user_id,
 
--- Last Message (Direct from Metadata)
-c.last_message_content AS last_message_content,
-c.last_message_created_at AS last_message_created_at,
-c.last_message_type AS last_message_type,
-c.last_message_sender_id AS last_message_sender_id,
-
 -- Unread Count (From Metadata)
 CASE
     WHEN c.participant_1_id = $1 THEN c.p1_unread_count
@@ -111,9 +105,21 @@ INSERT INTO
         recipient_id,
         content,
         message_type,
-        expires_at
+        expires_at,
+        synced_to_sender_primary,
+        delivered_to_recipient_primary
     )
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9
+    )
 RETURNING
     *;
 
@@ -166,16 +172,77 @@ WHERE
     )
     AND delivered_to_recipient = FALSE;
 
+-- name: MarkMessageDeliveredToRecipientPrimary :exec
+UPDATE messages
+SET
+    delivered_to_recipient_primary = TRUE,
+    delivered_to_recipient = TRUE, -- Implicitly true
+    updated_at = now()
+WHERE
+    chat_id = (
+        SELECT m2.chat_id
+        FROM messages m2
+        WHERE
+            m2.id = $1
+    )
+    AND recipient_id = (
+        SELECT m3.recipient_id
+        FROM messages m3
+        WHERE
+            m3.id = $1
+    )
+    AND created_at <= (
+        SELECT m4.created_at
+        FROM messages m4
+        WHERE
+            m4.id = $1
+    )
+    AND delivered_to_recipient_primary = FALSE;
+
 -- name: MarkMessageSyncedToSenderPrimary :exec
 UPDATE messages
 SET
     synced_to_sender_primary = TRUE,
     updated_at = now()
 WHERE
-    id = $1;
+    chat_id = (
+        SELECT m2.chat_id
+        FROM messages m2
+        WHERE
+            m2.id = $1
+    )
+    AND sender_id = (
+        SELECT m3.sender_id
+        FROM messages m3
+        WHERE
+            m3.id = $1
+    )
+    AND created_at <= (
+        SELECT m4.created_at
+        FROM messages m4
+        WHERE
+            m4.id = $1
+    )
+    AND synced_to_sender_primary = FALSE;
 
 -- name: DeleteMessage :exec
 DELETE FROM messages WHERE id = $1;
+
+-- name: UpdateMessageToUnsent :exec
+UPDATE messages
+SET
+    content = 'Message unsent',
+    message_type = 'unsent',
+    file_id = NULL,
+    file_name = NULL,
+    file_size = NULL,
+    file_mime_type = NULL,
+    file_token_id = NULL,
+    file_token_secret = NULL,
+    file_token_expiry = NULL,
+    updated_at = now()
+WHERE
+    id = $1;
 
 -- name: MarkChatMessagesAsRead :exec
 UPDATE messages
@@ -187,10 +254,21 @@ WHERE
     AND recipient_id = $2
     AND delivered_to_recipient = FALSE;
 
+-- name: MarkChatMessagesAsReadPrimary :exec
+UPDATE messages
+SET
+    delivered_to_recipient_primary = TRUE,
+    delivered_to_recipient = TRUE, -- Implicitly true
+    updated_at = now()
+WHERE
+    chat_id = $1
+    AND recipient_id = $2
+    AND delivered_to_recipient_primary = FALSE;
+
 -- name: DeleteDeliveredMessages :exec
 DELETE FROM messages
 WHERE
-    delivered_to_recipient = TRUE
+    delivered_to_recipient_primary = TRUE
     AND synced_to_sender_primary = TRUE;
 
 -- name: DeleteExpiredMessages :exec
@@ -214,6 +292,24 @@ ORDER BY created_at DESC
 LIMIT $2
 OFFSET
     $3;
+
+-- name: GetDeliveredMessagesByChat :many
+SELECT *
+FROM messages
+WHERE
+    chat_id = sqlc.arg ('chat_id')
+    AND (
+        (
+            recipient_id = sqlc.arg ('user_id')
+            AND delivered_to_recipient_primary = TRUE
+            AND synced_to_sender_primary = TRUE
+        )
+        OR (
+            sender_id = sqlc.arg ('user_id')
+            AND delivered_to_recipient_primary = TRUE
+            AND synced_to_sender_primary = TRUE
+        )
+    );
 
 -- name: DeletePendingMessagesBetweenUsers :exec
 DELETE FROM messages
@@ -331,7 +427,9 @@ INSERT INTO
         file_token_id,
         file_token_secret,
         file_token_expiry,
-        expires_at
+        expires_at,
+        synced_to_sender_primary,
+        delivered_to_recipient_primary
     )
 VALUES (
         $1,
@@ -347,7 +445,9 @@ VALUES (
         $11,
         $12,
         $13,
-        $14
+        $14,
+        $15,
+        $16
     )
 RETURNING
     *;
@@ -384,6 +484,7 @@ SET
     last_message_created_at = $3,
     last_message_type = $4,
     last_message_sender_id = $5,
+    last_message_id = $6,
     p1_unread_count = CASE
         WHEN participant_1_id != $5 THEN p1_unread_count + 1
         ELSE p1_unread_count
@@ -395,6 +496,37 @@ SET
     updated_at = now()
 WHERE
     id = $1;
+
+-- name: UpdateChatUnsendPreview :exec
+UPDATE chats
+SET
+    last_message_content = 'Message unsent',
+    last_message_type = 'unsent',
+    updated_at = now()
+WHERE
+    id = sqlc.arg ('id')
+    AND last_message_id = sqlc.arg ('last_message_id');
+
+-- name: UpdateChatUnsendDecrement :exec
+UPDATE chats
+SET
+    p1_unread_count = CASE
+        WHEN participant_1_id = sqlc.arg ('recipient_id') THEN GREATEST(
+            0,
+            p1_unread_count - sqlc.arg ('amount')::int
+        )
+        ELSE p1_unread_count
+    END,
+    p2_unread_count = CASE
+        WHEN participant_2_id = sqlc.arg ('recipient_id') THEN GREATEST(
+            0,
+            p2_unread_count - sqlc.arg ('amount')::int
+        )
+        ELSE p2_unread_count
+    END,
+    updated_at = now()
+WHERE
+    id = sqlc.arg ('id');
 
 -- name: ResetChatReadStatus :exec
 UPDATE chats
@@ -431,3 +563,37 @@ WHERE
     AND file_id IS NOT NULL
 ORDER BY expires_at ASC
 LIMIT $1;
+
+-- ===========================================
+-- Sync Action Operations
+-- ===========================================
+
+-- name: CreateSyncAction :one
+INSERT INTO
+    message_sync_actions (
+        id,
+        user_id,
+        action_type,
+        payload,
+        created_at
+    )
+VALUES ($1, $2, $3, $4, now())
+RETURNING
+    *;
+
+-- name: GetPendingSyncActions :many
+SELECT *
+FROM message_sync_actions
+WHERE
+    user_id = $1
+    AND delivered_to_primary = FALSE
+ORDER BY created_at ASC
+LIMIT $2;
+
+-- name: ConsumeSyncAction :exec
+DELETE FROM message_sync_actions WHERE id = $1;
+
+-- name: DeleteOldSyncActions :exec
+DELETE FROM message_sync_actions
+WHERE
+    created_at < now() - INTERVAL '30 days';
