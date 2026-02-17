@@ -853,9 +853,27 @@ func (ps *Service) GetMessagesHandler(ctx context.Context, payload *personalmode
 		}
 	}
 
+	// Fetch chat details to get OtherUserLastReadAt
+	chat, err := ps.PersonalQueries.GetChatByID(ctx, chatID)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: utils.GetPostgresError(err).Message,
+			Type:    "fetch_failed",
+		}
+	}
+
+	var otherUserLastReadAt time.Time
+	if chat.Participant1ID == userId.UuidUserId {
+		otherUserLastReadAt = chat.P2LastReadAt.Time
+	} else {
+		otherUserLastReadAt = chat.P1LastReadAt.Time
+	}
+
 	return &personalmodel.GetMessagesResponse{
-		Messages: messageResponses,
-		Count:    len(messageResponses),
+		Messages:            messageResponses,
+		Count:               len(messageResponses),
+		OtherUserLastReadAt: otherUserLastReadAt,
 	}, nil
 }
 
@@ -1099,11 +1117,13 @@ func (ps *Service) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID uu
 	}
 
 	// 1. Mark chat as read (updates chat metadata/unread counters)
+	log.Printf("[MarkChatRead] Resetting read status for chat %s, user %s", chatID, userID)
 	err = ps.PersonalQueries.ResetChatReadStatus(ctx, personal.ResetChatReadStatusParams{
 		ID:             chatID,
 		Participant1ID: userID,
 	})
 	if err != nil {
+		log.Printf("[MarkChatRead] ERROR: Failed to reset read status: %v", err)
 		return &model.ApiError{
 			Code:    http.StatusInternalServerError,
 			Message: "Failed to mark chat as read",

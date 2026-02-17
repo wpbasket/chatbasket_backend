@@ -140,8 +140,9 @@ type GetSyncActionsResponse struct {
 
 // Response structs for wrapper objects
 type GetMessagesResponse struct {
-	Messages []MessageResponse `json:"messages"`
-	Count    int               `json:"count"`
+	Messages            []MessageResponse `json:"messages"`
+	Count               int               `json:"count"`
+	OtherUserLastReadAt time.Time         `json:"other_user_last_read_at"`
 }
 
 type GetUserChatsResponse struct {
