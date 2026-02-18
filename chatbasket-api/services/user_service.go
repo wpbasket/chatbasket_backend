@@ -81,7 +81,7 @@ func (s *AuthService) AccountVerification(ctx context.Context, payload *model.Au
 		if apiErr != nil {
 			return nil, apiErr
 		}
-		return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid OTP", Type: "unauthorized"}
+		return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid OTP", Type: "invalid_otp"}
 	}
 
 	// 3. Mark Email Verified (if not already)
@@ -163,7 +163,7 @@ func (s *AuthService) LoginVerification(ctx context.Context, payload *model.Auth
 		if apiErr != nil {
 			return nil, apiErr
 		}
-		return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid OTP", Type: "unauthorized"}
+		return nil, &model.ApiError{Code: http.StatusUnauthorized, Message: "Invalid OTP", Type: "invalid_otp"}
 	}
 
 	// 3. Create Session via Utils
