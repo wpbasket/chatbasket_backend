@@ -1,6 +1,8 @@
 package appwriteinternal
 
 import (
+	"time"
+
 	"github.com/appwrite/sdk-for-go/appwrite"
 	"github.com/appwrite/sdk-for-go/users"
 )
@@ -15,6 +17,7 @@ func NewAppwriteServiceSession(endpoint, projectID, apiKey string) *AppwriteServ
 		appwrite.WithEndpoint(endpoint),
 		appwrite.WithProject(projectID),
 		appwrite.WithKey(apiKey),
+		appwrite.WithTimeout(30*time.Second),
 	)
 
 	return &AppwriteServiceSession{

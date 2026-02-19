@@ -45,6 +45,12 @@ func RegisterRoutes(
 		cfg.PersonalUsernameKey,
 	)
 
+	ass := appwriteinternal.NewAppwriteStorageService(
+		cfg.Endpoint,
+		cfg.ProjectID,
+		cfg.ApiKey,
+	)
+
 	// Load AUTH_SECRET as bytes (Base64 encoded in Env)
 	authSecret, err := utils.LoadKeyFromEnvInByte("AUTH_SECRET")
 	if err != nil {
@@ -53,7 +59,7 @@ func RegisterRoutes(
 	}
 
 	authService := services.NewAuthService(pool, authSecret)
-	globalService := services.NewGlobalService(as, pool, cosmosClient, authService)
+	globalService := services.NewGlobalService(as, ass, pool, cosmosClient, authService)
 	userHandler := handler.NewUserHandler(authService)
 
 	// Auth Routes (shared across domains)

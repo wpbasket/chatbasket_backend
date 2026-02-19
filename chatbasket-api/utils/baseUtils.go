@@ -56,14 +56,44 @@ func BuildAvatarURI(ad *AppwriteFileData) *string {
 }
 
 // BuildFileDownloadURL constructs a download URL for chat files
-// Uses /download endpoint instead of /view for proper file downloads
-// Pattern: {endpoint}/storage/buckets/{bucketId}/files/{fileId}/download?project={projectId}&token={tokenSecret}
 func BuildFileDownloadURL(endpoint, projectID, bucketID string, ad *AppwriteFileData) *string {
 	if ad == nil || ad.FileId == nil || *ad.FileId == "" || ad.FileSecret == nil || *ad.FileSecret == "" {
 		return nil
 	}
 
+	base := endpoint
+	// Remove trailing slash
+	if len(base) > 0 && base[len(base)-1] == '/' {
+		base = base[:len(base)-1]
+	}
+	// Many users forget to add /v1 to APPWRITE_ENDPOINT
+	// If it doesn't end with /v1, add it for these manually constructed URLs
+	const v1Suffix = "/v1"
+	if len(base) < len(v1Suffix) || base[len(base)-len(v1Suffix):] != v1Suffix {
+		base = base + v1Suffix
+	}
+
 	uri := fmt.Sprintf("%s/storage/buckets/%s/files/%s/download?project=%s&token=%s",
-		endpoint, bucketID, *ad.FileId, projectID, *ad.FileSecret)
+		base, bucketID, *ad.FileId, projectID, *ad.FileSecret)
+	return &uri
+}
+
+// BuildFileViewURL constructs a view URL for chat files (better for inline images)
+func BuildFileViewURL(endpoint, projectID, bucketID string, ad *AppwriteFileData) *string {
+	if ad == nil || ad.FileId == nil || *ad.FileId == "" || ad.FileSecret == nil || *ad.FileSecret == "" {
+		return nil
+	}
+
+	base := endpoint
+	if len(base) > 0 && base[len(base)-1] == '/' {
+		base = base[:len(base)-1]
+	}
+	const v1Suffix = "/v1"
+	if len(base) < len(v1Suffix) || base[len(base)-len(v1Suffix):] != v1Suffix {
+		base = base + v1Suffix
+	}
+
+	uri := fmt.Sprintf("%s/storage/buckets/%s/files/%s/view?project=%s&token=%s",
+		base, bucketID, *ad.FileId, projectID, *ad.FileSecret)
 	return &uri
 }

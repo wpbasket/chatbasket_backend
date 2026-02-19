@@ -35,6 +35,12 @@ type MessageResponse struct {
 	CreatedAt             time.Time `json:"created_at"`
 	ExpiresAt             time.Time `json:"expires_at"`
 	IsFromMe              bool      `json:"is_from_me"`
+	FileID                *string   `json:"file_id"`
+	FileName              *string   `json:"file_name"`
+	FileSize              *int64    `json:"file_size"`
+	FileMimeType          *string   `json:"file_mime_type"`
+	ViewURL               string    `json:"view_url,omitempty"`
+	DownloadURL           string    `json:"download_url,omitempty"`
 }
 
 type MessagingEligibilityResponse struct {
@@ -100,7 +106,7 @@ type MarkChatReadPayload struct {
 }
 
 type GetFileURLPayload struct {
-	MessageID string `json:"message_id" validate:"required,uuid"`
+	MessageID string `json:"message_id" query:"message_id" validate:"required,uuid"`
 }
 
 type UnsendMessagePayload struct {
@@ -155,14 +161,19 @@ type AcknowledgeDeliveryResponse struct {
 }
 
 type GetFileURLResponse struct {
-	FileURL string `json:"file_url"`
+	ViewURL     string `json:"view_url,omitempty"`
+	DownloadURL string `json:"download_url"`
 }
 
 type UploadFileResponse struct {
-	MessageID string    `json:"message_id"`
-	FileURL   string    `json:"file_url"`
-	FileName  *string   `json:"file_name"`
-	FileSize  *int64    `json:"file_size"`
-	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
+	MessageID    string    `json:"message_id"`
+	FileID       string    `json:"file_id"`
+	MessageType  string    `json:"message_type"`
+	FileMimeType *string   `json:"file_mime_type"`
+	ViewURL      string    `json:"view_url,omitempty"`
+	DownloadURL  string    `json:"download_url"`
+	FileName     *string   `json:"file_name"`
+	FileSize     *int64    `json:"file_size"`
+	CreatedAt    time.Time `json:"created_at"`
+	ExpiresAt    time.Time `json:"expires_at"`
 }

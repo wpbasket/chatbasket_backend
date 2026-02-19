@@ -82,7 +82,7 @@ func (gs *GlobalService) UploadFileFromMultipart(
 		}
 	}
 
-	uploadRes, err := gs.Appwrite.Storage.CreateFile(bucketId, fileId, inputFile)
+	uploadRes, err := gs.AppwriteStorage.Storage.CreateFile(bucketId, fileId, inputFile)
 	if err != nil {
 		return nil, &model.ApiError{Code: 500, Message: "Failed to upload file: " + err.Error(), Type: "internal_server_error"}
 	}

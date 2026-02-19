@@ -28,13 +28,23 @@ func main() {
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Secure())
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 5}))
-	e.Use(middleware.BodyLimit("10M"))
+	e.Use(middleware.BodyLimit("200M"))
+
+	// Safeguard: Limit logic execution to 30s for all routes EXCEPT uploads
+	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
+		Timeout: 30 * time.Second,
+		Skipper: func(c echo.Context) bool {
+			// Skip timeout for large file/avatar upload routes
+			p := c.Path()
+			return p == "/personal/chat/upload" || p == "/personal/profile/upload-avatar" || p == "/public/profile/upload-avatar"
+		},
+	}))
 
 	e.Use(middleware.Logger())
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		// AllowOrigins: []string{"http://localhost:8081"},
-		AllowOrigins: []string{"https://chatbasket.live"},
+		AllowOrigins: []string{"http://localhost:8081"},
+		// AllowOrigins: []string{"https://chatbasket.live"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		// AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "x-api-key"},
@@ -105,10 +115,10 @@ func main() {
 		port = "8080" // Fallback
 	}
 	// // HTTP server timeouts for production safety
-	e.Server.ReadHeaderTimeout = 5 * time.Second
-	e.Server.ReadTimeout = 15 * time.Second
-	e.Server.WriteTimeout = 15 * time.Second
-	e.Server.IdleTimeout = 60 * time.Second
+	e.Server.ReadHeaderTimeout = 10 * time.Second
+	e.Server.ReadTimeout = 600 * time.Second
+	e.Server.WriteTimeout = 600 * time.Second
+	e.Server.IdleTimeout = 120 * time.Second
 
 	// Start server in a goroutine
 	go func() {

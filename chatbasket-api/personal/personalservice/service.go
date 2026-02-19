@@ -21,6 +21,7 @@ type Service struct {
 	PersonalQueries *personal.Queries
 	AuthQueries     *auth.Queries
 	Appwrite        *appwriteinternal.AppwriteService
+	AppwriteStorage *appwriteinternal.AppwriteStorageService
 	AuthSecret      []byte
 	*services.GlobalService
 }
@@ -37,6 +38,7 @@ func New(gs *services.GlobalService, authSecret []byte) *Service {
 		PersonalQueries: gs.PersonalQueries,
 		AuthQueries:     gs.AuthQueries,
 		Appwrite:        gs.Appwrite,
+		AppwriteStorage: gs.AppwriteStorage,
 	}
 }
 

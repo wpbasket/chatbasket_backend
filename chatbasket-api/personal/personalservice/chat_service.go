@@ -800,6 +800,10 @@ func (ps *Service) SendMessageHandler(ctx context.Context, payload *personalmode
 		CreatedAt:             message.CreatedAt.Time,
 		ExpiresAt:             message.ExpiresAt.Time,
 		IsFromMe:              true,
+		FileID:                message.FileID,
+		FileName:              message.FileName,
+		FileSize:              message.FileSize,
+		FileMimeType:          message.FileMimeType,
 	}, nil
 }
 
@@ -839,6 +843,15 @@ func (ps *Service) GetMessagesHandler(ctx context.Context, payload *personalmode
 
 	messageResponses := make([]personalmodel.MessageResponse, len(messages))
 	for i, msg := range messages {
+		viewURL, downloadURL := "", ""
+		if msg.FileID != nil && *msg.FileID != "" {
+			var apiErr *model.ApiError
+			viewURL, downloadURL, apiErr = ps.GenerateMessageFileURLs(ctx, msg, userId.UuidUserId)
+			if apiErr != nil {
+				log.Printf("[GetMessages] Failed to generate URLs for message %s: %v", msg.ID, apiErr)
+			}
+		}
+
 		messageResponses[i] = personalmodel.MessageResponse{
 			MessageID:             msg.ID.String(),
 			ChatID:                msg.ChatID.String(),
@@ -850,6 +863,12 @@ func (ps *Service) GetMessagesHandler(ctx context.Context, payload *personalmode
 			SyncedToSenderPrimary: msg.SyncedToSenderPrimary,
 			CreatedAt:             msg.CreatedAt.Time,
 			ExpiresAt:             msg.ExpiresAt.Time,
+			FileID:                msg.FileID,
+			FileName:              msg.FileName,
+			FileSize:              msg.FileSize,
+			FileMimeType:          msg.FileMimeType,
+			ViewURL:               viewURL,
+			DownloadURL:           downloadURL,
 		}
 	}
 
@@ -1006,6 +1025,7 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 
 func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Context, userId model.UserId, isPrimary bool) (*personalmodel.UploadFileResponse, *model.ApiError) {
 	recipientIDStr := c.FormValue("recipient_id")
+	log.Printf("[ChatService] UploadFileForMessageHandler. RecipientID: %s, IsPrimary: %v", recipientIDStr, isPrimary)
 	if recipientIDStr == "" {
 		return nil, &model.ApiError{
 			Code:    http.StatusBadRequest,
@@ -1040,6 +1060,7 @@ func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Conte
 
 	file, err := c.FormFile("file")
 	if err != nil {
+		log.Printf("[ChatService] No file found in request: %v", err)
 		return nil, &model.ApiError{
 			Code:    http.StatusBadRequest,
 			Message: "No file provided",
@@ -1060,18 +1081,22 @@ func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Conte
 		return nil, apiErr
 	}
 
-	fileURL, apiErr := ps.GetMessageFileURL(ctx, message.ID, userId.UuidUserId)
+	viewURL, downloadURL, apiErr := ps.GenerateMessageFileURLs(ctx, *message, userId.UuidUserId)
 	if apiErr != nil {
 		return nil, apiErr
 	}
 
 	return &personalmodel.UploadFileResponse{
-		MessageID: message.ID.String(),
-		FileURL:   fileURL,
-		FileName:  message.FileName,
-		FileSize:  message.FileSize,
-		CreatedAt: message.CreatedAt.Time,
-		ExpiresAt: message.ExpiresAt.Time,
+		MessageID:    message.ID.String(),
+		FileID:       *message.FileID,
+		MessageType:  message.MessageType,
+		FileMimeType: message.FileMimeType,
+		ViewURL:      viewURL,
+		DownloadURL:  downloadURL,
+		FileName:     message.FileName,
+		FileSize:     message.FileSize,
+		CreatedAt:    message.CreatedAt.Time,
+		ExpiresAt:    message.ExpiresAt.Time,
 	}, nil
 }
 
@@ -1085,13 +1110,23 @@ func (ps *Service) GetFileURLHandler(ctx context.Context, payload *personalmodel
 		}
 	}
 
-	fileURL, apiErr := ps.GetMessageFileURL(ctx, messageID, userId.UuidUserId)
+	message, err := ps.PersonalQueries.GetMessageByID(ctx, messageID)
+	if err != nil {
+		return nil, &model.ApiError{
+			Code:    http.StatusNotFound,
+			Message: "Message not found",
+			Type:    "not_found",
+		}
+	}
+
+	viewURL, downloadURL, apiErr := ps.GenerateMessageFileURLs(ctx, message, userId.UuidUserId)
 	if apiErr != nil {
 		return nil, apiErr
 	}
 
 	return &personalmodel.GetFileURLResponse{
-		FileURL: fileURL,
+		ViewURL:     viewURL,
+		DownloadURL: downloadURL,
 	}, nil
 }
 
@@ -1302,6 +1337,15 @@ func (ps *Service) GetPendingMessagesHandler(ctx context.Context, payload *perso
 
 	// Helper to map DB message to Response
 	mapMsg := func(m personal.Message) personalmodel.MessageResponse {
+		viewURL, downloadURL := "", ""
+		if m.FileID != nil && *m.FileID != "" {
+			var apiErr *model.ApiError
+			viewURL, downloadURL, apiErr = ps.GenerateMessageFileURLs(ctx, m, userId.UuidUserId)
+			if apiErr != nil {
+				log.Printf("[GetPendingMessages] Failed to generate URLs for message %s: %v", m.ID, apiErr)
+			}
+		}
+
 		return personalmodel.MessageResponse{
 			MessageID:             m.ID.String(),
 			ChatID:                m.ChatID.String(),
@@ -1313,6 +1357,12 @@ func (ps *Service) GetPendingMessagesHandler(ctx context.Context, payload *perso
 			CreatedAt:             m.CreatedAt.Time,
 			ExpiresAt:             m.ExpiresAt.Time,
 			IsFromMe:              m.SenderID == userId.UuidUserId,
+			FileID:                m.FileID,
+			FileName:              m.FileName,
+			FileSize:              m.FileSize,
+			FileMimeType:          m.FileMimeType,
+			ViewURL:               viewURL,
+			DownloadURL:           downloadURL,
 		}
 	}
 

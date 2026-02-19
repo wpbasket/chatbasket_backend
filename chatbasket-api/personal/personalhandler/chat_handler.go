@@ -253,6 +253,7 @@ func (h *ChatHandler) GetPendingMessages(c echo.Context) error {
 
 func (h *ChatHandler) UploadFileForMessage(c echo.Context) error {
 	userId, ok := c.Get("userId").(string)
+	log.Printf("[ChatHandler] UploadFileForMessage received from user: %s", userId)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
 			Code:    http.StatusUnauthorized,
