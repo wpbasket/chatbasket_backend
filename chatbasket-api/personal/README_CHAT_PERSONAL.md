@@ -21,7 +21,15 @@ Handles business logic:
 *   Validates UUIDs.
 *   Maps Service Models to JSON Responses.
 
-## Architecture Notes
+## 4. Synchronization Strategy
+The system differentiates between **Delivery ACKs** (initiated from Inbox/Home) and **Read ACKs** (initiated from within a Chat).
+
+*   **Outside Chat (Delivery)**: When new messages arrive while the user is on the Home screen, the client calls `AcknowledgeDelivery`. The backend marks the message as delivered to the recipient, which turns the sender's tick Yellow.
+*   **Inside Chat (Read)**: When the user opens a chat, the client calls `MarkChatRead`. 
+    *   **Implicit Delivery**: `MarkChatRead` internally performs a bulk delivery ACK for all messages in the chat. This ensures that even if individual delivery signals were missed, the state remains consistent.
+    *   **Unread Count**: Resets the chat's unread counter to 0.
+
+## 5. Architecture Notes
 *   **Status Truth**: The `messages` table does **not** store "Read" status per message. It only stores "Delivered".
 *   **Read Logic**: "Read" is a computed state based on `chat.p*_last_read_at` vs `message.created_at`.
 *   **Deletion**: Deletion logic (Ephemerality) relies on `delivered_to_recipient=TRUE`.

@@ -413,25 +413,30 @@ To support the ephemeral relay without storing permanent history, we use a **Met
 
 #### 8.7.1 Visual States
 - **Pending (Clock 🕒)**: Message stored on device, not yet acked by API.
-- **Sent (Yellow Tick ✅)**: Message stored in Backend DB (`created_at` confirmed).
+- **Sent (Yellow Tick ✅)**: Message confirmed by server (`created_at` assigned). This also implicitly covers "Delivered" state internally.
 - **Read (Green Tick ✅)**: Recipient has opened the chat.
 
-#### 8.7.2 Logic Implementation
 #### 8.7.2 Logic Implementation
 - **Sent/Delivered**: 
   - `delivered_to_recipient`: Tracks delivery to **ANY** recipient device. Controls UI status (Yellow Tick).
   - `delivered_to_recipient_primary`: Tracks delivery to **PRIMARY** recipient device. Controls data cleanup.
-- **Read**:
+- **Read Status Calculation**:
   - **No per-message flag**: The `messages` table does *not* store a `read_at` timestamp.
-  - **Chat Metadata**: The `chats` table stores `p1_last_read_at` and `p2_last_read_at`.
-  - **Calculation**: Frontend compares `message.created_at <= chat.other_user_last_read_at` to determine if a message is Read.
-  - **Primary Sync**: When a Primary device reads a chat (`MarkChatRead`), it also sets `delivered_to_recipient_primary = TRUE` for all messages in that chat to ensure cleanup.
+  - **Metadata**: The `chats` table stores `p1_last_read_at` and `p2_last_read_at`.
+  - **Calculated**: Frontend compares `message.created_at <= chat.other_user_last_read_at`.
 
-#### 8.7.3 Deletion Rules (Ephemeral)
+#### 8.7.3 Synchronization Strategy (Catch-up Logic)
+The system differentiates between individual and bulk acknowledgments:
+1. **Outside Chat (Delivery ACK)**: When messages arrive while a user is on the Home screen/Inbox, the client automatically calls `/personal/chat/ack` (`acknowledged_by='recipient'`). This provides immediate "Delivered" feedback to the sender.
+2. **Inside Chat (Read ACK)**: When a user opens a chat, the client calls `/personal/chat/mark-read`.
+   - **Bulk Catch-up**: `MarkChatRead` internally performs a bulk delivery ACK for all messages in that chat. This ensures that even if individual delivery signals were missed (due to network drops), the state remains consistent.
+   - **Primary Trigger**: On primary devices, `MarkChatRead` specifically marks messages as `delivered_to_recipient_primary = TRUE`, triggering the backend's ephemeral deletion logic.
+
+#### 8.7.4 Deletion Rules (Ephemeral)
 - Messages are eligible for deletion **ONLY** once:
-  1. `delivered_to_recipient_primary = TRUE`
+  1. `delivered_to_recipient_primary = TRUE` (Recipient Primary confirmed read/open)
   2. **AND** `synced_to_sender_primary = TRUE` (for self-messages or secondary sends)
-- Deletion is **independent** of Read status, but requires **Primary Device** acknowledgement. A message delivered only to a secondary web client will **NOT** be deleted.
+- Deletion is **independent** of visual read status, but requires **Primary Device** acknowledgement. A message delivered only to a secondary web client will **NOT** be deleted.
 
 ### 8.5 P2P WebRTC Sync Architecture (Secondary ↔ Primary)
 
