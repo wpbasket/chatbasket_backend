@@ -11,11 +11,11 @@ import (
 
 // RegisterPublicRoutes registers all public domain routes
 // RegisterPublicRoutes registers all public domain routes
-func RegisterPublicRoutes(e *echo.Echo, globalService *services.GlobalService, authService *services.AuthService, authSecret []byte) {
+func RegisterPublicRoutes(api *echo.Group, globalService *services.GlobalService, authService *services.AuthService, authSecret []byte) {
 	pubSvc := publicservice.New(globalService, authSecret)
 
 	// Public Profile Routes
-	publicProfileGroup := e.Group("/public/profile")
+	publicProfileGroup := api.Group("/public/profile")
 	publicProfileGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	publicProfileHandler := publichandler.NewProfileHandler(pubSvc)
 	publicProfileGroup.POST("/logout", publicProfileHandler.Logout)

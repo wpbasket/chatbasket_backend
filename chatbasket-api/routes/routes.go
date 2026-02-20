@@ -3,7 +3,11 @@ package routes
 import (
 	"chatbasket-api/appwriteinternal"
 	"chatbasket-api/handler"
+	"chatbasket-api/model"
 	"chatbasket-api/services"
+	"context"
+	"net/http"
+	"time"
 
 	"chatbasket-api/utils"
 
@@ -16,6 +20,7 @@ func RegisterRoutes(
 	e *echo.Echo,
 	pool *pgxpool.Pool,
 	cosmosClient *azcosmos.Client, // Added Cosmos Client injection
+	hello echo.HandlerFunc,
 ) {
 
 	cfg, err := loadAppwriteConfig()
@@ -62,8 +67,21 @@ func RegisterRoutes(
 	globalService := services.NewGlobalService(as, ass, pool, cosmosClient, authService)
 	userHandler := handler.NewUserHandler(authService)
 
+	// Global API Group
+	api := e.Group("/api")
+
+	api.GET("/", hello)
+	api.GET("/healthz", func(c echo.Context) error {
+		pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
+		defer cancel()
+		if err := pool.Ping(pingCtx); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, &model.StatusOkay{Status: false, Message: "unhealthy"})
+		}
+		return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "ok"})
+	})
+
 	// Auth Routes (shared across domains)
-	authGroup := e.Group("/auth")
+	authGroup := api.Group("/auth")
 	authGroup.POST("/signup", userHandler.Signup)
 	authGroup.POST("/signup-verification", userHandler.AcountVerification)
 	authGroup.POST("/login", userHandler.Login)
@@ -71,9 +89,9 @@ func RegisterRoutes(
 	authGroup.POST("/resend-otp", userHandler.ResendOTP)
 
 	// Register common routes (shared between public and personal)
-	RegisterCommonRoutes(e, globalService, authService, authSecret)
+	RegisterCommonRoutes(api, globalService, authService, authSecret)
 
 	// Register domain-specific routes
-	RegisterPublicRoutes(e, globalService, authService, authSecret)
-	RegisterPersonalRoutes(e, globalService, authService, authSecret)
+	RegisterPublicRoutes(api, globalService, authService, authSecret)
+	RegisterPersonalRoutes(api, globalService, authService, authSecret)
 }

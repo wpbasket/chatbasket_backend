@@ -36,7 +36,7 @@ func main() {
 		Skipper: func(c echo.Context) bool {
 			// Skip timeout for large file/avatar upload routes
 			p := c.Path()
-			return p == "/personal/chat/upload" || p == "/personal/profile/upload-avatar" || p == "/public/profile/upload-avatar"
+			return p == "/api/personal/chat/upload" || p == "/api/personal/profile/upload-avatar" || p == "/api/public/profile/upload-avatar"
 		},
 	}))
 
@@ -98,18 +98,7 @@ func main() {
 		}
 	}
 
-	e.GET("/healthz", func(c echo.Context) error {
-		pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
-		defer cancel()
-		if err := pool.Ping(pingCtx); err != nil {
-			return c.JSON(http.StatusServiceUnavailable, &model.StatusOkay{Status: false, Message: "unhealthy"})
-		}
-		return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "ok"})
-	})
-
-	routes.RegisterRoutes(e, pool, cosmosClient)
-
-	e.GET("/", hello)
+	routes.RegisterRoutes(e, pool, cosmosClient, hello)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080" // Fallback

@@ -10,11 +10,11 @@ import (
 )
 
 // RegisterPersonalRoutes registers all personal domain routes
-func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService, authService *services.AuthService, authSecret []byte) {
+func RegisterPersonalRoutes(api *echo.Group, globalService *services.GlobalService, authService *services.AuthService, authSecret []byte) {
 	perSvc := personalservice.New(globalService, authSecret)
 
 	// Personal Profile Routes
-	personalProfileGroup := e.Group("/personal/profile")
+	personalProfileGroup := api.Group("/personal/profile")
 	personalProfileGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	personalProfileHandler := personalhandler.NewProfileHandler(perSvc)
 	personalProfileGroup.GET("/get-profile", personalProfileHandler.GetProfile)
@@ -24,7 +24,7 @@ func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService,
 	personalProfileGroup.POST("/update-profile", personalProfileHandler.UpdateProfile)
 
 	// Personal Contacts Routes
-	personalContactsGroup := e.Group("/personal/contacts")
+	personalContactsGroup := api.Group("/personal/contacts")
 	personalContactsGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	persContactsHandler := personalhandler.NewContactHandler(perSvc)
 	personalContactsGroup.GET("/get", persContactsHandler.GetContacts)
@@ -39,14 +39,14 @@ func RegisterPersonalRoutes(e *echo.Echo, globalService *services.GlobalService,
 	personalContactsGroup.POST("/block", persContactsHandler.BlockUser)
 	personalContactsGroup.POST("/remove-nickname", persContactsHandler.RemoveContactNickname)
 	// Personal Settings Routes
-	persSettingGroup := e.Group("/personal/settings")
+	persSettingGroup := api.Group("/personal/settings")
 	persSettingGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	persSettingHandler := personalhandler.NewSettingHandler(perSvc)
 	persSettingGroup.POST("/session/central", persSettingHandler.UpdateSessionCentral)
 	persSettingGroup.POST("/session/notification-token", persSettingHandler.UpdateSessionNotificationToken)
 
 	// Personal Chat Routes
-	personalChatGroup := e.Group("/personal/chat")
+	personalChatGroup := api.Group("/personal/chat")
 	personalChatGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	persChatHandler := personalhandler.NewChatHandler(perSvc)
 	personalChatGroup.POST("/check-eligibility", persChatHandler.CheckEligibility)

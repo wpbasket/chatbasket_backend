@@ -11,11 +11,11 @@ import (
 
 // RegisterCommonRoutes registers all common authenticated routes
 // These routes are shared between public and personal modes
-func RegisterCommonRoutes(e *echo.Echo, globalService *services.GlobalService, authService *services.AuthService, authSecret []byte) {
+func RegisterCommonRoutes(api *echo.Group, globalService *services.GlobalService, authService *services.AuthService, authSecret []byte) {
 	commonSvc := commonservice.New(globalService, authSecret)
 
 	// Common Settings Routes (works for both public and personal modes)
-	commonSettingsGroup := e.Group("/common/settings")
+	commonSettingsGroup := api.Group("/common/settings")
 	commonSettingsGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	commonSettingsHandler := commonhandler.NewSettingHandler(commonSvc)
 	commonSettingsGroup.POST("/update/request", commonSettingsHandler.RequestUpdateOTP)
@@ -24,7 +24,7 @@ func RegisterCommonRoutes(e *echo.Echo, globalService *services.GlobalService, a
 	commonSettingsGroup.POST("/email/confirm", commonSettingsHandler.ConfirmEmailUpdate)
 
 	// Common Auth Routes (logout works for both modes)
-	commonAuthGroup := e.Group("/common")
+	commonAuthGroup := api.Group("/common")
 	commonAuthGroup.Use(middleware.AuthSessionMiddleware(authService, true))
 	commonAuthHandler := commonhandler.NewAuthHandler(commonSvc)
 	commonAuthGroup.POST("/logout", commonAuthHandler.Logout)
