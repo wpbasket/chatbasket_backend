@@ -46,6 +46,16 @@ CASE
     ELSE c.p2_unread_count
 END::INT AS unread_count,
 
+-- Per-Participant Last Message Preview
+CASE
+    WHEN c.participant_1_id = $1 THEN c.p1_last_message_content
+    ELSE c.p2_last_message_content
+END AS last_message_content,
+CASE
+    WHEN c.participant_1_id = $1 THEN c.p1_last_message_type
+    ELSE c.p2_last_message_type
+END AS last_message_type,
+
 -- Last Message Status (Calculated)
 CASE
     WHEN c.last_message_created_at IS NULL THEN NULL
@@ -480,9 +490,11 @@ LIMIT $1;
 -- name: UpdateChatStatus :exec
 UPDATE chats
 SET
-    last_message_content = $2,
+    p1_last_message_content = $2,
+    p2_last_message_content = $2,
     last_message_created_at = $3,
-    last_message_type = $4,
+    p1_last_message_type = $4,
+    p2_last_message_type = $4,
     last_message_sender_id = $5,
     last_message_id = $6,
     p1_unread_count = CASE
@@ -500,8 +512,10 @@ WHERE
 -- name: UpdateChatUnsendPreview :exec
 UPDATE chats
 SET
-    last_message_content = 'Message unsent',
-    last_message_type = 'unsent',
+    p1_last_message_content = 'Message unsent',
+    p2_last_message_content = 'Message unsent',
+    p1_last_message_type = 'unsent',
+    p2_last_message_type = 'unsent',
     updated_at = now()
 WHERE
     id = sqlc.arg ('id')
@@ -597,3 +611,33 @@ DELETE FROM message_sync_actions WHERE id = $1;
 DELETE FROM message_sync_actions
 WHERE
     created_at < now() - INTERVAL '30 days';
+
+-- ===========================================
+-- Per-Participant Preview Operations
+-- ===========================================
+
+-- name: ClearLastMessageForParticipant :exec
+-- Clears the last message preview for a specific participant only (used by Delete for Me).
+-- Only fires if the deleted message is the current preview message.
+UPDATE chats
+SET
+    p1_last_message_content = CASE
+        WHEN participant_1_id = sqlc.arg ('user_id') THEN NULL
+        ELSE p1_last_message_content
+    END,
+    p2_last_message_content = CASE
+        WHEN participant_2_id = sqlc.arg ('user_id') THEN NULL
+        ELSE p2_last_message_content
+    END,
+    p1_last_message_type = CASE
+        WHEN participant_1_id = sqlc.arg ('user_id') THEN NULL
+        ELSE p1_last_message_type
+    END,
+    p2_last_message_type = CASE
+        WHEN participant_2_id = sqlc.arg ('user_id') THEN NULL
+        ELSE p2_last_message_type
+    END,
+    updated_at = now()
+WHERE
+    id = sqlc.arg ('chat_id')
+    AND last_message_id = sqlc.arg ('message_id');

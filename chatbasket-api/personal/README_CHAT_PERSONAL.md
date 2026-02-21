@@ -22,9 +22,9 @@ Handles business logic:
 *   Maps Service Models to JSON Responses.
 
 ## 4. Synchronization Strategy
-The system differentiates between **Delivery ACKs** (initiated from Inbox/Home) and **Read ACKs** (initiated from within a Chat).
+The system differentiates between **Delivery ACKs** (initiated from Inbox/Home or on Startup) and **Read ACKs** (initiated from within a Chat).
 
-*   **Outside Chat (Delivery)**: When new messages arrive while the user is on the Home screen, the client calls `AcknowledgeDelivery`. The backend marks the message as delivered to the recipient, which turns the sender's tick Yellow.
+*   **Outside Chat / Boot-up (Delivery)**: When new messages arrive via WebSocket, or when the app hydrates offline messages on startup, the client automatically triggers a "Single ACK" time-based call to `AcknowledgeDelivery` for the *latest* message. The backend uses the timestamp of this message to horizontally update `delivered_to_recipient = TRUE` for it and *all older pending messages*, ensuring efficient bulk delivery state synchronization.
 *   **Inside Chat (Read)**: When the user opens a chat, the client calls `MarkChatRead`. 
     *   **Implicit Delivery**: `MarkChatRead` internally performs a bulk delivery ACK for all messages in the chat. This ensures that even if individual delivery signals were missed, the state remains consistent.
     *   **Unread Count**: Resets the chat's unread counter to 0.

@@ -5,6 +5,7 @@ go 1.25.5
 require (
 	firebase.google.com/go/v4 v4.18.0
 	github.com/alexedwards/argon2id v1.0.0
+	github.com/coder/websocket v1.8.14
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.4
@@ -79,5 +80,5 @@ require (
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/time v0.14.0
 )

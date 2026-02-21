@@ -63,4 +63,5 @@ func RegisterPersonalRoutes(api *echo.Group, globalService *services.GlobalServi
 	personalChatGroup.GET("/sync-actions", persChatHandler.GetSyncActions)
 	personalChatGroup.POST("/sync-actions/ack", persChatHandler.AcknowledgeSyncAction)
 	personalChatGroup.GET("/pending", persChatHandler.GetPendingMessages)
+	personalChatGroup.GET("/ws", persChatHandler.WebSocketUpgrade)
 }

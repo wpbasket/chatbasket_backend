@@ -149,18 +149,7 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 	// Determine fallback preview if caption is empty
 	previewContent := params.Caption
 	if previewContent == "" {
-		switch params.MessageType {
-		case "image":
-			previewContent = "Sent an image 📷"
-		case "video":
-			previewContent = "Sent a video 🎥"
-		case "audio":
-			previewContent = "Sent an audio 🎤"
-		case "file":
-			previewContent = "Sent a file 📄"
-		default:
-			previewContent = "Sent a file"
-		}
+		previewContent = "📄 " + params.FileHeader.Filename
 	}
 
 	msgType := message.MessageType
@@ -168,9 +157,9 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 
 	_ = ps.PersonalQueries.UpdateChatStatus(ctx, personal.UpdateChatStatusParams{
 		ID:                   chat.ID,
-		LastMessageContent:   &previewContent,
+		P1LastMessageContent: &previewContent,
 		LastMessageCreatedAt: message.CreatedAt,
-		LastMessageType:      &msgType,
+		P1LastMessageType:    &msgType,
 		LastMessageSenderID:  pgtype.UUID{Bytes: senderID, Valid: true},
 		LastMessageID:        pgtype.UUID{Bytes: message.ID, Valid: true},
 	})

@@ -30,6 +30,14 @@ func AuthSessionMiddleware(authService *services.AuthService, requireVerified bo
 				if len(parts) == 2 {
 					sessionId, userId = parts[0], parts[1]
 				}
+			} else if tokenParam := c.QueryParam("token"); tokenParam != "" {
+				// WebSocket auth via query param (?token=sessionId:userId)
+				// Used by mobile WS clients that can't set headers on WebSocket upgrade.
+				platform = "native"
+				parts := strings.SplitN(tokenParam, ":", 2)
+				if len(parts) == 2 {
+					sessionId, userId = parts[0], parts[1]
+				}
 			} else {
 				// Request from web - extract from httpOnly cookies
 				platform = "web"

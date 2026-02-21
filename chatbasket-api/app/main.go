@@ -27,16 +27,25 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Secure())
-	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{Level: 5}))
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Level: 5,
+		Skipper: func(c echo.Context) bool {
+			// Skip Gzip for WebSocket upgrades — compression corrupts WS frames
+			return c.Request().Header.Get("Upgrade") == "websocket"
+		},
+	}))
 	e.Use(middleware.BodyLimit("200M"))
 
 	// Safeguard: Limit logic execution to 30s for all routes EXCEPT uploads
 	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
 		Timeout: 30 * time.Second,
 		Skipper: func(c echo.Context) bool {
-			// Skip timeout for large file/avatar upload routes
 			p := c.Path()
-			return p == "/api/personal/chat/upload" || p == "/api/personal/profile/upload-avatar" || p == "/api/public/profile/upload-avatar"
+			// Skip timeout for uploads and WebSocket (long-lived connections)
+			return p == "/api/personal/chat/upload" ||
+				p == "/api/personal/profile/upload-avatar" ||
+				p == "/api/public/profile/upload-avatar" ||
+				c.Request().Header.Get("Upgrade") == "websocket"
 		},
 	}))
 

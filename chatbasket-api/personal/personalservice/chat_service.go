@@ -201,9 +201,9 @@ func (ps *Service) SendMessage(ctx context.Context, params SendMessageParams) (*
 
 	_ = ps.PersonalQueries.UpdateChatStatus(ctx, personal.UpdateChatStatusParams{
 		ID:                   chat.ID,
-		LastMessageContent:   &content,
+		P1LastMessageContent: &content,
 		LastMessageCreatedAt: message.CreatedAt,
-		LastMessageType:      &msgType,
+		P1LastMessageType:    &msgType,
 		LastMessageSenderID:  pgtype.UUID{Bytes: senderID, Valid: true},
 		LastMessageID:        pgtype.UUID{Bytes: message.ID, Valid: true},
 	})
@@ -508,6 +508,20 @@ func (ps *Service) UnsendMessage(ctx context.Context, chatID uuid.UUID, messageI
 
 func (ps *Service) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.UUID, userID uuid.UUID, isPrimary bool) *model.ApiError {
 	log.Printf("[DeleteMessageForMe] START: Processing %d messages for user %s (isPrimary=%v)", len(messageIDs), userID, isPrimary)
+
+	// Clear the per-participant preview if the deleted message is the current preview.
+	// This works for BOTH primary and secondary devices.
+	for _, msgID := range messageIDs {
+		msg, err := ps.PersonalQueries.GetMessageByID(ctx, msgID)
+		if err == nil {
+			log.Printf("[DeleteMessageForMe] Checking if msg %s is the last preview for chat %s", msgID, msg.ChatID)
+			_ = ps.PersonalQueries.ClearLastMessageForParticipant(ctx, personal.ClearLastMessageForParticipantParams{
+				UserID:    userID,
+				ChatID:    msg.ChatID,
+				MessageID: pgtype.UUID{Bytes: msgID, Valid: true},
+			})
+		}
+	}
 
 	// If initiated by primary, we do nothing on the backend relay (as per requirements)
 	// The primary handles local deletion and other secondaries catch up via p2p later.
@@ -963,15 +977,23 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 		var lastMessageType *string
 		var lastMessageSenderID *string
 
+		// LastMessageContent and LastMessageType are interface{} from SQL CASE expressions.
+		// We need to type-assert them to string.
 		if chat.LastMessageContent != nil {
-			lastMessageContent = chat.LastMessageContent
+			if s, ok := chat.LastMessageContent.(string); ok {
+				lastMessageContent = &s
+			}
 
 			if chat.LastMessageCreatedAt.Valid {
 				t := chat.LastMessageCreatedAt.Time
 				lastMessageCreatedAt = &t
 			}
 
-			lastMessageType = chat.LastMessageType
+			if chat.LastMessageType != nil {
+				if s, ok := chat.LastMessageType.(string); ok {
+					lastMessageType = &s
+				}
+			}
 
 			if chat.LastMessageSenderID.Valid {
 				// Convert [16]byte to slice for FromBytes
@@ -1011,7 +1033,7 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 			LastMessageSenderID:  lastMessageSenderID,
 			LastMessageIsFromMe:  chat.LastMessageSenderID.Valid && uuid.Must(uuid.FromBytes(chat.LastMessageSenderID.Bytes[:])) == userId.UuidUserId,
 			LastMessageStatus:    chat.LastMessageStatus,
-			LastMessageIsUnsent:  chat.LastMessageType != nil && *chat.LastMessageType == "unsent",
+			LastMessageIsUnsent:  lastMessageType != nil && *lastMessageType == "unsent",
 			LastMessageID:        lastMessageID,
 			UnreadCount:          int(chat.UnreadCount),
 		}
@@ -1023,11 +1045,11 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 	}, nil
 }
 
-func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Context, userId model.UserId, isPrimary bool) (*personalmodel.UploadFileResponse, *model.ApiError) {
+func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Context, userId model.UserId, isPrimary bool) (*personalmodel.UploadFileResponse, *personalmodel.MessageResponse, *model.ApiError) {
 	recipientIDStr := c.FormValue("recipient_id")
 	log.Printf("[ChatService] UploadFileForMessageHandler. RecipientID: %s, IsPrimary: %v", recipientIDStr, isPrimary)
 	if recipientIDStr == "" {
-		return nil, &model.ApiError{
+		return nil, nil, &model.ApiError{
 			Code:    http.StatusBadRequest,
 			Message: "recipient_id is required",
 			Type:    "invalid_request",
@@ -1036,7 +1058,7 @@ func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Conte
 
 	recipientID, err := uuid.Parse(recipientIDStr)
 	if err != nil {
-		return nil, &model.ApiError{
+		return nil, nil, &model.ApiError{
 			Code:    http.StatusBadRequest,
 			Message: "Invalid recipient ID",
 			Type:    "invalid_recipient",
@@ -1044,7 +1066,7 @@ func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Conte
 	}
 
 	if userId.UuidUserId == recipientID {
-		return nil, &model.ApiError{
+		return nil, nil, &model.ApiError{
 			Code:    http.StatusBadRequest,
 			Message: "Cannot send file to yourself",
 			Type:    "invalid_recipient",
@@ -1061,7 +1083,7 @@ func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Conte
 	file, err := c.FormFile("file")
 	if err != nil {
 		log.Printf("[ChatService] No file found in request: %v", err)
-		return nil, &model.ApiError{
+		return nil, nil, &model.ApiError{
 			Code:    http.StatusBadRequest,
 			Message: "No file provided",
 			Type:    "invalid_request",
@@ -1078,12 +1100,31 @@ func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Conte
 	})
 
 	if apiErr != nil {
-		return nil, apiErr
+		return nil, nil, apiErr
 	}
 
 	viewURL, downloadURL, apiErr := ps.GenerateMessageFileURLs(ctx, *message, userId.UuidUserId)
 	if apiErr != nil {
-		return nil, apiErr
+		return nil, nil, apiErr
+	}
+
+	messageResponse := &personalmodel.MessageResponse{
+		MessageID:             message.ID.String(),
+		ChatID:                message.ChatID.String(),
+		RecipientID:           message.RecipientID.String(),
+		Content:               message.Content,
+		MessageType:           message.MessageType,
+		DeliveredToRecipient:  false,
+		SyncedToSenderPrimary: message.SyncedToSenderPrimary,
+		CreatedAt:             message.CreatedAt.Time,
+		ExpiresAt:             message.ExpiresAt.Time,
+		IsFromMe:              true,
+		FileID:                message.FileID,
+		FileName:              message.FileName,
+		FileSize:              message.FileSize,
+		FileMimeType:          message.FileMimeType,
+		ViewURL:               viewURL,
+		DownloadURL:           downloadURL,
 	}
 
 	return &personalmodel.UploadFileResponse{
@@ -1097,7 +1138,7 @@ func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Conte
 		FileSize:     message.FileSize,
 		CreatedAt:    message.CreatedAt.Time,
 		ExpiresAt:    message.ExpiresAt.Time,
-	}, nil
+	}, messageResponse, nil
 }
 
 func (ps *Service) GetFileURLHandler(ctx context.Context, payload *personalmodel.GetFileURLPayload, userId model.UserId) (*personalmodel.GetFileURLResponse, *model.ApiError) {

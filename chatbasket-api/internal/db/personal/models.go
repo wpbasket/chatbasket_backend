@@ -35,18 +35,23 @@ type Chat struct {
 	// Unread count for participant_1_id
 	P1UnreadCount int32 `json:"p1_unread_count"`
 	// Unread count for participant_2_id
-	P2UnreadCount int32              `json:"p2_unread_count"`
-	P1LastReadAt  pgtype.Timestamptz `json:"p1_last_read_at"`
-	P2LastReadAt  pgtype.Timestamptz `json:"p2_last_read_at"`
-	// Content of the last message (persisted for preview)
-	LastMessageContent   *string            `json:"last_message_content"`
+	P2UnreadCount        int32              `json:"p2_unread_count"`
+	P1LastReadAt         pgtype.Timestamptz `json:"p1_last_read_at"`
+	P2LastReadAt         pgtype.Timestamptz `json:"p2_last_read_at"`
 	LastMessageCreatedAt pgtype.Timestamptz `json:"last_message_created_at"`
-	LastMessageType      *string            `json:"last_message_type"`
 	LastMessageSenderID  pgtype.UUID        `json:"last_message_sender_id"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	// UUID of the message currently displayed as the preview
 	LastMessageID pgtype.UUID `json:"last_message_id"`
+	// Last message preview content for participant_1
+	P1LastMessageContent *string `json:"p1_last_message_content"`
+	// Last message preview content for participant_2
+	P2LastMessageContent *string `json:"p2_last_message_content"`
+	// Last message type for participant_1 preview
+	P1LastMessageType *string `json:"p1_last_message_type"`
+	// Last message type for participant_2 preview
+	P2LastMessageType *string `json:"p2_last_message_type"`
 }
 
 type ContactRequest struct {

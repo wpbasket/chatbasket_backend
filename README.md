@@ -52,6 +52,10 @@ The Go API acts as a strict **Security Gateway**. It manages proprietary Authent
 - **Strictly Typed Responses**: We avoid `map[string]interface{}`. All responses are defined in `model/` structs, ensuring the frontend has a predictable contract.
 - **Centralized Error Handling**: A unified error model (`model.ApiError`) ensures that every failure returns a consistent JSON structure with actionable codes.
 
+#### 4. Social Systems & Chat Engine
+The application enforces strict unidirectional contacts, block cascading, and a highly optimized "Single ACK" WebSocket delivery system. 
+- **Documentation**: All core architectural decisions regarding profiles, privacy restrictions, and real-time chat sync are meticulously documented in the [SOCIAL_SYSTEMS.md](./docs/SOCIAL_SYSTEMS.md) master file.
+
 ---
 
 ## 🔐 Security Architecture

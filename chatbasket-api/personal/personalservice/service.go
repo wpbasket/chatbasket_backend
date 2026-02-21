@@ -23,6 +23,7 @@ type Service struct {
 	Appwrite        *appwriteinternal.AppwriteService
 	AppwriteStorage *appwriteinternal.AppwriteStorageService
 	AuthSecret      []byte
+	WSHub           *WSHub // WebSocket hub for real-time event broadcasting
 	*services.GlobalService
 }
 
@@ -39,6 +40,7 @@ func New(gs *services.GlobalService, authSecret []byte) *Service {
 		AuthQueries:     gs.AuthQueries,
 		Appwrite:        gs.Appwrite,
 		AppwriteStorage: gs.AppwriteStorage,
+		WSHub:           NewWSHub(),
 	}
 }
 
