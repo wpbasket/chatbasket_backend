@@ -2,7 +2,6 @@ package main
 
 import (
 	"chatbasket-api/db"
-	"chatbasket-api/model"
 	"chatbasket-api/routes"
 	"chatbasket-api/utils"
 	"context"
@@ -107,7 +106,7 @@ func main() {
 		}
 	}
 
-	routes.RegisterRoutes(e, pool, cosmosClient, hello)
+	routes.RegisterRoutes(e, pool, cosmosClient)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080" // Fallback
@@ -165,8 +164,4 @@ func main() {
 	e.Logger.Info("Background emails finished")
 
 	e.Logger.Info("Server exited")
-}
-
-func hello(c echo.Context) error {
-	return c.JSON(http.StatusOK, &model.StatusOkay{Status: true, Message: "Hello "})
 }

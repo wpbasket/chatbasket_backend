@@ -20,7 +20,6 @@ func RegisterRoutes(
 	e *echo.Echo,
 	pool *pgxpool.Pool,
 	cosmosClient *azcosmos.Client, // Added Cosmos Client injection
-	hello echo.HandlerFunc,
 ) {
 
 	cfg, err := loadAppwriteConfig()
@@ -70,7 +69,6 @@ func RegisterRoutes(
 	// Global API Group
 	api := e.Group("/api")
 
-	api.GET("/", hello)
 	api.GET("/healthz", func(c echo.Context) error {
 		pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
 		defer cancel()
