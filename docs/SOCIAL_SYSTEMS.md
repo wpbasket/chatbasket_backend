@@ -448,9 +448,9 @@ To reduce backend bandwidth and latency, secondary devices (web/other native) sy
 - Actual sync data transfers via P2P data channel (bypasses backend)
 - Backend validates session tokens before allowing P2P signaling
 
-**Fallback strategy:**
-- If P2P fails (NAT/firewall issues): fall back to backend relay
-- Backend relay uses same message format as P2P protocol
+**Strict P2P requirement:**
+- If P2P connection fails (NAT/firewall issues), there is **no fallback**.
+- The user must be shown an error: "Connection cannot be established. Please try using the same network on both devices."
 
 #### 8.5.2 WebRTC signaling server (backend)
 
@@ -489,6 +489,9 @@ Backend does **not** see or store sync data (only signaling).
 5. If primary offline:
    - Backend returns "primary-offline" message
    - Web UI shows "Primary device required" state
+6. If P2P connection fails (e.g., ICE failure, strict NAT):
+   - Connection aborts (no backend relay fallback).
+   - Web UI shows error: "Connection cannot be established in this network. Try using the same network in both devices."
 ```
 
 **Primary device responsibilities:**
@@ -557,7 +560,7 @@ Once P2P data channel is established:
 
 **TURN servers (for restrictive NATs/firewalls):**
 - Consider: Cloudflare, Twilio, or self-hosted TURN
-- Only needed when P2P fails (corporate networks, symmetric NAT)
+- Can help if direct P2P fails (corporate networks, symmetric NAT)
 - Cost: ~$0.05/GB for relay bandwidth
 
 **Configuration in code:**
@@ -582,10 +585,6 @@ const peerConnection = new RTCPeerConnection({
 - Backend validates JWT tokens before allowing signaling
 - Primary device verifies session ownership before accepting P2P connections
 - Secondary devices must prove ownership of same user account
-
-**Additional end-to-end encryption:**
-- Message content already encrypted in SQLite (ChaCha20-Poly1305)
-- P2P transfer maintains this encryption (encrypted data → encrypted transport)
 
 #### 8.5.7 Storage on web (secondary devices)
 
@@ -615,7 +614,7 @@ Web clients use **IndexedDB as disposable cache only:**
 }
 ```
 
-#### 8.5.8 Fallback to backend relay
+#### 8.5.8 Connection Failure Handling
 
 If P2P connection fails (NAT/firewall blocking):
 
@@ -623,22 +622,10 @@ If P2P connection fails (NAT/firewall blocking):
 - WebRTC connection timeout (30 seconds)
 - ICE connection state: "failed" or "disconnected"
 
-**Fallback flow:**
-```
-Web → Backend WebSocket → Primary → Backend → Web
-(Same message protocol, relayed through backend)
-```
-
-**Backend relay endpoint:**
-```
-POST /ws/relay (authenticated WebSocket)
-
-Messages:
-- type: "RELAY_SYNC_REQUEST"
-- type: "RELAY_SYNC_RESPONSE"
-```
-
-Backend buffers messages temporarily (max 5MB per user).
+**Failure flow:**
+- Determine that the connection could not be established.
+- Abort sync attempt.
+- Display error to user: **"Connection cannot be established in this network. Try using the same network in both devices."**
 
 #### 8.5.9 Implementation checklist
 
@@ -647,7 +634,6 @@ Backend buffers messages temporarily (max 5MB per user).
 - [ ] Session validation middleware
 - [ ] Primary device tracking (per user)
 - [ ] Signaling message routing logic
-- [ ] Fallback relay endpoint (`/ws/relay`)
 
 **React Native (Primary):**
 - [ ] Install `react-native-webrtc`
@@ -661,14 +647,14 @@ Backend buffers messages temporarily (max 5MB per user).
 - [ ] Data channel message handlers
 - [ ] IndexedDB cache management
 - [ ] Cache invalidation logic
-- [ ] Fallback to backend relay on P2P failure
+- [ ] UI: Show "same network" error on P2P connection failure
 
 #### 8.5.10 Developer invariants
 
-- P2P sync is **bandwidth optimization only**, not a security boundary
+- P2P sync is **strictly required**, there is no backend relay fallback.
 - Primary device SQLite is **always authoritative**
 - Web cache can be cleared without data loss
-- Backend must never store sync data permanently
+- Backend must never store sync data permanently (other than ephemeral relays before primary ack)
 - Signaling server must validate both peers before facilitating P2P
 
 ### 8.6 Media File Handling (ChatbasketDownloads + Web Browser API)
