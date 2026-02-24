@@ -1,6 +1,6 @@
 module chatbasket-api
 
-go 1.25.5
+go 1.26.0
 
 require (
 	firebase.google.com/go/v4 v4.18.0
