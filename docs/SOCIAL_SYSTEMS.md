@@ -68,7 +68,7 @@ Profile type is stored in Postgres in the **personal** user profile table (`user
 
 Practical enforcement:
 - `CreateContact` forbids adding `private` profiles.
-- `CheckContactExistance` intentionally omits `recipient_user_id` when the target is private.
+- `CheckContactExistance` (legacy symbol name in code) intentionally omits `recipient_user_id` when the target is private.
 
 ### 2.2 Username privacy (HMAC + encryption)
 The personal profile system supports lookups without exposing plaintext usernames in the main `users` table:
@@ -948,7 +948,7 @@ Chatbasket handles delivery acknowledgments (getting the "yellow double-tick" to
 If User A sends 50 messages while User B is offline, sending an array of 50 `message_id` strings over the network when User B connects is inefficient.
 
 #### The Solution: Time-Based Batching
-1. **Recipient Trigger**: When User B opens the app or receives a batch of messages, their device finds the **latest** message and sends a single API call to `/api/personal/chat/acknowledge-delivery` containing only that one `message_id`.
+1. **Recipient Trigger**: When User B opens the app or receives a batch of messages, their device finds the **latest** message and sends a single API call to `/personal/chat/ack` containing only that one `message_id`.
 2. **Postgres Batch Update**: The backend database looks up the timestamp (`created_at`) of that target message. It runs a single SQL query to update `delivered_to_recipient = TRUE` for that message **and all older pending messages** in that chat. 
     *(See `MarkMessageDeliveredToRecipient` in `personal_chat.sql`)*
 3. **Sender UI Optimization (`markMessagesDeliveredUpTo`)**: The backend broadcasts a `delivery_ack` WebSocket event back to User A containing **only** that target `message_id`. User A's frontend looks up the timestamp of that message in local state and instantly iterates backwards, marking all older local messages as "delivered" (yellow tick).
@@ -960,7 +960,7 @@ This entirely avoids array-mapping across the network while keeping the UI insta
 The system is designed to trigger Delivery ACKs reliably across complex app states:
 
 #### Fresh Start (Hydration Delay)
-When a device wakes up from being completely closed, it calls `/api/personal/chat/pending`. The frontend fires the Delivery ACKs **immediately** upon receipt. It deliberately bypasses checking local `authState` or user ID hydration to ensure ACKs are not swallowed by the app's boot-up sequence.
+When a device wakes up from being completely closed, it calls `/personal/chat/pending`. The frontend fires the Delivery ACKs **immediately** upon receipt. It deliberately bypasses checking local `authState` or user ID hydration to ensure ACKs are not swallowed by the app's boot-up sequence.
 
 #### Active Session (Home Screen Idle)
 If a user is actively holding their phone but looking at the Home Screen (chat list), the WebSocket connection is alive. When a `new_message` event arrives, the background WebSocket bridge (e.g., `ws.event.bridge.ts`) intercepts it and fires the Delivery ACK to the server, even though the user hasn't tapped into the specific chat. This prevents messages from getting stuck on "Sent" (single gray tick) when the recipient physically has the data.
@@ -984,4 +984,4 @@ The "Primary Device Policy" strictly dictates:
 #### The Sync Actions Fallback
 Because WebSockets are volatile (devices can go offline), the system utilizes a `message_sync_actions` table in Postgres for state changes like *unsends* and *read receipts*.
 - **Online:** The device receives the real-time WebSocket event (`WSEventUnsend`) and updates the UI instantly.
-- **Offline:** The device misses the WebSocket event. When the frontend boots up, its internal `$syncEngine` runs a `catchUp()` routine that queries the `/api/personal/chat/sync_actions` endpoint to fetch, apply, and acknowledge any revocations (`unsend`, `delete_for_me`) it missed while disconnected.
+- **Offline:** The device misses the WebSocket event. When the frontend boots up, its internal `$syncEngine` runs a `catchUp()` routine that queries the `/personal/chat/sync-actions` endpoint to fetch, apply, and acknowledge any revocations (`unsend`, `delete_for_me`) it missed while disconnected.

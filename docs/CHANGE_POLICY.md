@@ -13,6 +13,7 @@ Before changing backend code (API, services, middleware, db/sqlc, routes, handle
 - **Auth/session rules**: Plan web (cookies) vs native (bearer) impacts, middleware changes, and expiry/primary-device behavior.
 - **Schema impacts**: Decide migration steps and sqlc changes before coding.
 - **Architecture compliance**: Ensure handler-service separation, UUID handling, and custom struct responses follow BACKEND_CONSISTENCY.md standards.
+- **Endpoint naming source-of-truth**: Treat registered route paths in `routes/*.go` as canonical. Any docs and frontend references must match these exact paths (e.g., `/personal/chat/ack`, `/personal/chat/sync-actions`).
 
 ## Execute carefully
 - **No ad-hoc SQL**: Edit `db/.../queries` only; regenerate sqlc.
