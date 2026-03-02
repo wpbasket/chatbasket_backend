@@ -24,10 +24,31 @@ const (
 	WSEventSyncAction  = "sync_action"
 )
 
-// WSEvent is the envelope sent over the WebSocket connection.
+// WSEvent is the envelope for server→client push events (broadcasts).
 type WSEvent struct {
-	Type    string      `json:"type"`
-	Payload interface{} `json:"payload"`
+	Type    string `json:"type"`
+	Payload any    `json:"payload"`
+}
+
+// WSClientEvent is the envelope for client→server messages.
+type WSClientEvent struct {
+	Type    string          `json:"type"`
+	Ref     string          `json:"ref"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// WSResponseEvent is the envelope for server→client responses.
+type WSResponseEvent struct {
+	Type    string   `json:"type"`
+	Ref     string   `json:"ref"`
+	Payload any      `json:"payload"`
+	Error   *WSError `json:"error"`
+}
+
+// WSError represents an error in a WS response.
+type WSError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -101,16 +122,46 @@ func (wc *WSConn) WritePump(ctx context.Context) {
 	}
 }
 
-// ReadPump blocks reading from the WS connection. The client is write-only from
-// the server perspective — we only read to detect close/errors. Any data sent
-// by the client is ignored.
-func (wc *WSConn) ReadPump(ctx context.Context) {
-	wc.Conn.SetReadLimit(4096)
+// ReadPump blocks reading from the WS connection and processes client→server messages.
+// It deserializes JSON frames, routes them through the WSRouter, and sends responses.
+func (wc *WSConn) ReadPump(ctx context.Context, router *WSRouter) {
+	wc.Conn.SetReadLimit(65536) // Increased for larger message payloads (up to 5000 chars)
 
 	for {
-		_, _, err := wc.Conn.Read(ctx)
+		_, data, err := wc.Conn.Read(ctx)
 		if err != nil {
 			return
+		}
+
+		// ── 1. Deserialize client event ────────────────────────────────────
+		var event WSClientEvent
+		if err := json.Unmarshal(data, &event); err != nil {
+			// Send error response (no ref available)
+			errResp := WSResponseEvent{
+				Type:  "error",
+				Error: &WSError{Code: 400, Message: "Invalid JSON: " + err.Error()},
+			}
+			if bytes, _ := json.Marshal(errResp); bytes != nil {
+				select {
+				case wc.Send <- bytes:
+				default:
+					log.Printf("[WS] ReadPump: response buffer full, dropping error response")
+				}
+			}
+			continue
+		}
+
+		// Route message and get response
+		response := router.HandleMessage(ctx, wc, event)
+
+		// Send response back to client
+		if respBytes, err := json.Marshal(response); err == nil {
+			select {
+			case wc.Send <- respBytes:
+				log.Printf("[WS] ReadPump: sent response type=%s ref=%s", response.Type, response.Ref)
+			default:
+				log.Printf("[WS] ReadPump: response buffer full, dropping response ref=%s", event.Ref)
+			}
 		}
 	}
 }

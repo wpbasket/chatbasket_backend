@@ -52,6 +52,10 @@ type Chat struct {
 	P1LastMessageType *string `json:"p1_last_message_type"`
 	// Last message type for participant_2 preview
 	P2LastMessageType *string `json:"p2_last_message_type"`
+	// Timestamp of the last message delivered to participant 1
+	P1LastDeliveredAt pgtype.Timestamptz `json:"p1_last_delivered_at"`
+	// Timestamp of the last message delivered to participant 2
+	P2LastDeliveredAt pgtype.Timestamptz `json:"p2_last_delivered_at"`
 }
 
 type ContactRequest struct {

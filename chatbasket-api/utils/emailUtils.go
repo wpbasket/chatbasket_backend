@@ -18,6 +18,12 @@ func WaitEmails() {
 	emailWG.Wait()
 }
 
+type EmailRelayPayload struct {
+	To      []string `json:"to"`
+	Subject string   `json:"subject"`
+	Body    string   `json:"body"`
+}
+
 // SendEmail sends an email using the Heroku Relay in a "fire and forget" background task
 func SendEmail(to []string, subject string, bodyHTML string) *model.AppError {
 	relayURL := os.Getenv("MAIL_RELAY_URL")
@@ -38,10 +44,10 @@ func SendEmail(to []string, subject string, bodyHTML string) *model.AppError {
 			}
 		}()
 
-		reqBody, _ := json.Marshal(map[string]interface{}{
-			"to":      to,
-			"subject": subject,
-			"body":    bodyHTML,
+		reqBody, _ := json.Marshal(EmailRelayPayload{
+			To:      to,
+			Subject: subject,
+			Body:    bodyHTML,
 		})
 
 		// Use a 30s timeout for the background relay call

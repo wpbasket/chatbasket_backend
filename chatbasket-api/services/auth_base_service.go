@@ -5,6 +5,7 @@ import (
 	"chatbasket-api/model"
 	"chatbasket-api/utils"
 	"context"
+	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -37,6 +38,7 @@ func NewAuthService(dbpool *pgxpool.Pool, secretKey []byte) *AuthService {
 func (s *AuthService) IsSessionCentral(ctx context.Context, userID uuid.UUID, sessionToken string) (bool, *model.ApiError) {
 	tokenHash, err := utils.ComputeHMAC(sessionToken, s.AuthSecret)
 	if err != nil {
+		log.Printf("[DEBUG-SESSION] ComputeHMAC ERROR: %v", err)
 		return false, &model.ApiError{Code: http.StatusInternalServerError, Message: "Failed to process token", Type: "internal_error"}
 	}
 
@@ -45,13 +47,14 @@ func (s *AuthService) IsSessionCentral(ctx context.Context, userID uuid.UUID, se
 		AuthUserID: userID,
 	})
 	if err != nil {
-		// Use standard PGX error handling if available in utils, or check error string
+		log.Printf("[DEBUG-SESSION] GetSessionByToken FAILED for user %s: %v", userID, err)
 		if err.Error() == "no rows in result set" {
+			log.Printf("[DEBUG-SESSION] No session found for hash=%s", tokenHash)
 			return false, &model.ApiError{Code: http.StatusUnauthorized, Message: "Session not found", Type: "unauthorized"}
 		}
-		// Try to cast to pgconn.PgError if possible, but for now string check is safest generic fallback
 		return false, &model.ApiError{Code: http.StatusInternalServerError, Message: "Database error: " + err.Error(), Type: "internal_error"}
 	}
 
+	log.Printf("[DEBUG-SESSION] Session found: id=%s, is_central=%v", session.ID, session.IsCentral)
 	return session.IsCentral, nil
 }

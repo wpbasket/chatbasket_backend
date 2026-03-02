@@ -55,7 +55,7 @@ func InitializeFirebase(ctx context.Context) error {
 		}
 
 		// Validate JSON format
-		var jsonCheck map[string]interface{}
+		var jsonCheck struct{}
 		if err := json.Unmarshal(serviceAccountBytes, &jsonCheck); err != nil {
 			initErr = fmt.Errorf("invalid Firebase credentials JSON: %w", err)
 			return

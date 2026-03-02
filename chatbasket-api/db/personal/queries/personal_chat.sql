@@ -65,8 +65,18 @@ CASE
             ELSE c.p1_last_read_at
         END
     ) THEN 'read'
+    WHEN c.last_message_created_at <= (
+        CASE
+            WHEN c.participant_1_id = $1 THEN c.p2_last_delivered_at
+            ELSE c.p1_last_delivered_at
+        END
+    ) THEN 'delivered'
     ELSE 'sent'
 END::text AS last_message_status,
+CASE
+    WHEN c.participant_1_id = $1 THEN c.p2_last_delivered_at
+    ELSE c.p1_last_delivered_at
+END::TIMESTAMPTZ AS other_user_last_delivered_at,
 
 -- Raw avatar data
 a.file_id AS avatar_file_id,
@@ -141,7 +151,7 @@ SELECT *
 FROM messages
 WHERE
     recipient_id = $1
-    AND delivered_to_recipient = FALSE
+    AND delivered_to_recipient_primary = FALSE
     AND expires_at > now()
 ORDER BY created_at ASC
 LIMIT $2;
@@ -162,51 +172,32 @@ SET
     delivered_to_recipient = TRUE,
     updated_at = now()
 WHERE
-    chat_id = (
-        SELECT m2.chat_id
-        FROM messages m2
-        WHERE
-            m2.id = $1
-    )
-    AND recipient_id = (
-        SELECT m3.recipient_id
-        FROM messages m3
-        WHERE
-            m3.id = $1
-    )
-    AND created_at <= (
-        SELECT m4.created_at
-        FROM messages m4
-        WHERE
-            m4.id = $1
-    )
+    id = $1
     AND delivered_to_recipient = FALSE;
 
 -- name: MarkMessageDeliveredToRecipientPrimary :exec
 UPDATE messages
 SET
     delivered_to_recipient_primary = TRUE,
-    delivered_to_recipient = TRUE, -- Implicitly true
+    delivered_to_recipient = TRUE,
     updated_at = now()
 WHERE
-    chat_id = (
-        SELECT m2.chat_id
-        FROM messages m2
-        WHERE
-            m2.id = $1
-    )
-    AND recipient_id = (
-        SELECT m3.recipient_id
-        FROM messages m3
-        WHERE
-            m3.id = $1
-    )
-    AND created_at <= (
-        SELECT m4.created_at
-        FROM messages m4
-        WHERE
-            m4.id = $1
-    )
+    id = $1
+    AND delivered_to_recipient_primary = FALSE;
+
+-- name: MarkOlderMessagesAsDeliveredToRecipientPrimary :exec
+-- Marks all messages in a chat as delivered to primary if they are older than a specific message
+-- and are of type 'text' (plain messages). This prevents relay bloat.
+UPDATE messages
+SET
+    delivered_to_recipient_primary = TRUE,
+    delivered_to_recipient = TRUE,
+    updated_at = now()
+WHERE
+    chat_id = $1
+    AND recipient_id = $2
+    AND created_at <= $3
+    AND message_type = 'text'
     AND delivered_to_recipient_primary = FALSE;
 
 -- name: MarkMessageSyncedToSenderPrimary :exec
@@ -215,24 +206,7 @@ SET
     synced_to_sender_primary = TRUE,
     updated_at = now()
 WHERE
-    chat_id = (
-        SELECT m2.chat_id
-        FROM messages m2
-        WHERE
-            m2.id = $1
-    )
-    AND sender_id = (
-        SELECT m3.sender_id
-        FROM messages m3
-        WHERE
-            m3.id = $1
-    )
-    AND created_at <= (
-        SELECT m4.created_at
-        FROM messages m4
-        WHERE
-            m4.id = $1
-    )
+    id = $1
     AND synced_to_sender_primary = FALSE;
 
 -- name: DeleteMessage :exec
@@ -283,6 +257,17 @@ WHERE
 
 -- name: DeleteExpiredMessages :exec
 DELETE FROM messages WHERE expires_at < now();
+
+-- name: CleanupOlderFullyAcknowledgedMessages :exec
+-- Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
+-- and are older than or equal to a specific timestamp, but ONLY if they are plain text.
+DELETE FROM messages
+WHERE
+    chat_id = $1
+    AND created_at <= $2
+    AND message_type = 'text'
+    AND delivered_to_recipient_primary = TRUE
+    AND synced_to_sender_primary = TRUE;
 
 -- name: IncrementDeliveryAttempts :exec
 UPDATE messages
@@ -641,3 +626,30 @@ SET
 WHERE
     id = sqlc.arg ('chat_id')
     AND last_message_id = sqlc.arg ('message_id');
+
+-- name: UpdateChatLastDeliveredAt :exec
+UPDATE chats
+SET
+    p1_last_delivered_at = CASE
+        WHEN participant_1_id = sqlc.arg ('participant_id') THEN GREATEST(
+            COALESCE(
+                p1_last_delivered_at,
+                '0001-01-01'::TIMESTAMPTZ
+            ),
+            sqlc.arg ('last_delivered_at')::TIMESTAMPTZ
+        )
+        ELSE p1_last_delivered_at
+    END,
+    p2_last_delivered_at = CASE
+        WHEN participant_2_id = sqlc.arg ('participant_id') THEN GREATEST(
+            COALESCE(
+                p2_last_delivered_at,
+                '0001-01-01'::TIMESTAMPTZ
+            ),
+            sqlc.arg ('last_delivered_at')::TIMESTAMPTZ
+        )
+        ELSE p2_last_delivered_at
+    END,
+    updated_at = now()
+WHERE
+    id = sqlc.arg ('chat_id');

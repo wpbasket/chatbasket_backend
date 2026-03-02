@@ -222,6 +222,7 @@ func (h *ChatHandler) AcknowledgeDelivery(c echo.Context) error {
 
 	// ── WS Broadcast: delivery_ack ───────────────────────────────────────
 	// Notify the message SENDER that their message has been delivered.
+	// Use message_ids array for consistency with batch ACK.
 	if hub := h.service.WSHub; hub != nil && resp.Acknowledged && payload.AcknowledgedBy == "recipient" {
 		log.Printf("[WS Broadcast] AckDelivery: msgID=%s acknowledged_by=%s user=%s → looking up sender",
 			payload.MessageID, payload.AcknowledgedBy, uuidUserId)
@@ -233,10 +234,9 @@ func (h *ChatHandler) AcknowledgeDelivery(c echo.Context) error {
 					msg.SenderID, payload.MessageID, msg.ChatID)
 				go hub.BroadcastToUser(msg.SenderID, personalservice.WSEvent{
 					Type: personalservice.WSEventDeliveryAck,
-					Payload: map[string]interface{}{
-						"message_id":      payload.MessageID,
-						"chat_id":         msg.ChatID.String(),
-						"acknowledged_by": payload.AcknowledgedBy,
+					Payload: personalmodel.DeliveryAckEventPayload{
+						MessageIDs: []string{payload.MessageID},
+						ChatID:     msg.ChatID.String(),
 					},
 				})
 			} else {
@@ -459,10 +459,10 @@ func (h *ChatHandler) MarkChatRead(c echo.Context) error {
 				otherUserID, payload.ChatID, readAt)
 			go hub.BroadcastToUser(otherUserID, personalservice.WSEvent{
 				Type: personalservice.WSEventReadReceipt,
-				Payload: map[string]interface{}{
-					"chat_id":   payload.ChatID,
-					"reader_id": uuidUserId.String(),
-					"read_at":   readAt,
+				Payload: personalmodel.ReadReceiptEventPayload{
+					ChatID:   payload.ChatID,
+					ReaderID: uuidUserId.String(),
+					ReadAt:   readAt,
 				},
 			})
 		} else {
@@ -470,7 +470,7 @@ func (h *ChatHandler) MarkChatRead(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]bool{"success": true})
+	return c.JSON(http.StatusOK, model.StatusOkay{Status: true, Message: "success"})
 }
 
 func (h *ChatHandler) UnsendMessage(c echo.Context) error {
@@ -528,9 +528,9 @@ func (h *ChatHandler) UnsendMessage(c echo.Context) error {
 
 			unsendEvent := personalservice.WSEvent{
 				Type: personalservice.WSEventUnsend,
-				Payload: map[string]interface{}{
-					"chat_id":     payload.ChatID,
-					"message_ids": payload.MessageIDs,
+				Payload: personalmodel.UnsendEventPayload{
+					ChatID:     payload.ChatID,
+					MessageIDs: payload.MessageIDs,
 				},
 			}
 
@@ -548,7 +548,7 @@ func (h *ChatHandler) UnsendMessage(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]bool{"success": true})
+	return c.JSON(http.StatusOK, model.StatusOkay{Status: true, Message: "success"})
 }
 
 func (h *ChatHandler) DeleteMessageForMe(c echo.Context) error {
@@ -607,14 +607,14 @@ func (h *ChatHandler) DeleteMessageForMe(c echo.Context) error {
 			uuidUserId, payload.MessageIDs, chatID, sessionId)
 		go hub.BroadcastToUserExcept(uuidUserId, sessionId, personalservice.WSEvent{
 			Type: personalservice.WSEventDeleteForMe,
-			Payload: map[string]interface{}{
-				"message_ids": payload.MessageIDs,
-				"chat_id":     chatID,
+			Payload: personalmodel.DeleteForMeEventPayload{
+				MessageIDs: payload.MessageIDs,
+				ChatID:     chatID,
 			},
 		})
 	}
 
-	return c.JSON(http.StatusOK, map[string]bool{"success": true})
+	return c.JSON(http.StatusOK, model.StatusOkay{Status: true, Message: "success"})
 }
 
 func (h *ChatHandler) GetSyncActions(c echo.Context) error {
@@ -671,5 +671,5 @@ func (h *ChatHandler) AcknowledgeSyncAction(c echo.Context) error {
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
-	return c.JSON(http.StatusOK, map[string]bool{"success": true})
+	return c.JSON(http.StatusOK, model.StatusOkay{Status: true, Message: "success"})
 }

@@ -72,7 +72,10 @@ func (h *ChatHandler) WebSocketUpgrade(c echo.Context) error {
 		return nil
 	}
 
-	// ── 5. Run the connection pumps (blocks until disconnect) ────────────────
+	// ── 5. Create WS router for handling client→server messages ─────────────
+	router := personalservice.NewWSRouter(h.service, hub)
+
+	// ── 6. Run the connection pumps (blocks until disconnect) ────────────────
 	// Use a background context — the Echo request context will be cancelled
 	// when this handler returns, but we want the WS connection to outlive it.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -82,7 +85,7 @@ func (h *ChatHandler) WebSocketUpgrade(c echo.Context) error {
 	go wc.WritePump(ctx)
 
 	// Read pump blocks — when it returns, the connection is done
-	wc.ReadPump(ctx)
+	wc.ReadPump(ctx, router)
 
 	// ── 6. Cleanup ──────────────────────────────────────────────────────────
 	hub.Unregister(wc)

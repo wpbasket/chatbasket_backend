@@ -5,42 +5,44 @@ import (
 )
 
 type ChatResponse struct {
-	ChatID               string     `json:"chat_id"`
-	OtherUserID          string     `json:"other_user_id"`
-	OtherUserName        string     `json:"other_user_name"`
-	OtherUserUsername    string     `json:"other_user_username"`
-	AvatarURL            *string    `json:"avatar_url"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
-	OtherUserLastReadAt  time.Time  `json:"other_user_last_read_at"`
-	LastMessageContent   *string    `json:"last_message_content"`
-	LastMessageCreatedAt *time.Time `json:"last_message_created_at"`
-	LastMessageType      *string    `json:"last_message_type"`
-	LastMessageSenderID  *string    `json:"-"`
-	LastMessageIsFromMe  bool       `json:"last_message_is_from_me"`
-	LastMessageStatus    string     `json:"last_message_status"`
-	LastMessageIsUnsent  bool       `json:"last_message_is_unsent"`
-	LastMessageID        *string    `json:"last_message_id"`
-	UnreadCount          int        `json:"unread_count"`
+	ChatID                   string     `json:"chat_id"`
+	OtherUserID              string     `json:"other_user_id"`
+	OtherUserName            string     `json:"other_user_name"`
+	OtherUserUsername        string     `json:"other_user_username"`
+	AvatarURL                *string    `json:"avatar_url"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
+	OtherUserLastReadAt      time.Time  `json:"other_user_last_read_at"`
+	OtherUserLastDeliveredAt time.Time  `json:"other_user_last_delivered_at"`
+	LastMessageContent       *string    `json:"last_message_content"`
+	LastMessageCreatedAt     *time.Time `json:"last_message_created_at"`
+	LastMessageType          *string    `json:"last_message_type"`
+	LastMessageSenderID      *string    `json:"-"`
+	LastMessageIsFromMe      bool       `json:"last_message_is_from_me"`
+	LastMessageStatus        string     `json:"last_message_status"`
+	LastMessageIsUnsent      bool       `json:"last_message_is_unsent"`
+	LastMessageID            *string    `json:"last_message_id"`
+	UnreadCount              int        `json:"unread_count"`
 }
 
 type MessageResponse struct {
-	MessageID             string    `json:"message_id"`
-	ChatID                string    `json:"chat_id"`
-	RecipientID           string    `json:"recipient_id"`
-	Content               string    `json:"content"`
-	MessageType           string    `json:"message_type"`
-	DeliveredToRecipient  bool      `json:"delivered_to_recipient"`
-	SyncedToSenderPrimary bool      `json:"synced_to_sender_primary"`
-	CreatedAt             time.Time `json:"created_at"`
-	ExpiresAt             time.Time `json:"expires_at"`
-	IsFromMe              bool      `json:"is_from_me"`
-	FileID                *string   `json:"file_id"`
-	FileName              *string   `json:"file_name"`
-	FileSize              *int64    `json:"file_size"`
-	FileMimeType          *string   `json:"file_mime_type"`
-	ViewURL               string    `json:"view_url,omitempty"`
-	DownloadURL           string    `json:"download_url,omitempty"`
+	MessageID                   string    `json:"message_id"`
+	ChatID                      string    `json:"chat_id"`
+	RecipientID                 string    `json:"recipient_id"`
+	Content                     string    `json:"content"`
+	MessageType                 string    `json:"message_type"`
+	DeliveredToRecipient        bool      `json:"delivered_to_recipient"`
+	DeliveredToRecipientPrimary bool      `json:"delivered_to_recipient_primary"`
+	SyncedToSenderPrimary       bool      `json:"synced_to_sender_primary"`
+	CreatedAt                   time.Time `json:"created_at"`
+	ExpiresAt                   time.Time `json:"expires_at"`
+	IsFromMe                    bool      `json:"is_from_me"`
+	FileID                      *string   `json:"file_id"`
+	FileName                    *string   `json:"file_name"`
+	FileSize                    *int64    `json:"file_size"`
+	FileMimeType                *string   `json:"file_mime_type"`
+	ViewURL                     string    `json:"view_url,omitempty"`
+	DownloadURL                 string    `json:"download_url,omitempty"`
 }
 
 type MessagingEligibilityResponse struct {
@@ -130,13 +132,18 @@ type AcknowledgeSyncActionPayload struct {
 	ActionID string `json:"action_id" validate:"required,uuid"`
 }
 
+type AckDeliveryBatchPayload struct {
+	MessageIDs     []string `json:"message_ids" validate:"required,min=1,dive,uuid"`
+	AcknowledgedBy string   `json:"acknowledged_by" validate:"required,oneof=recipient sender"`
+}
+
 type SyncActionResponse struct {
-	ID                 string      `json:"id"`
-	UserID             string      `json:"user_id"`
-	ActionType         string      `json:"action_type"`
-	Payload            interface{} `json:"payload"`
-	DeliveredToPrimary bool        `json:"delivered_to_primary"`
-	CreatedAt          time.Time   `json:"created_at"`
+	ID                 string            `json:"id"`
+	UserID             string            `json:"user_id"`
+	ActionType         string            `json:"action_type"`
+	Payload            SyncActionPayload `json:"payload"`
+	DeliveredToPrimary bool              `json:"delivered_to_primary"`
+	CreatedAt          time.Time         `json:"created_at"`
 }
 
 type GetSyncActionsResponse struct {
@@ -146,9 +153,10 @@ type GetSyncActionsResponse struct {
 
 // Response structs for wrapper objects
 type GetMessagesResponse struct {
-	Messages            []MessageResponse `json:"messages"`
-	Count               int               `json:"count"`
-	OtherUserLastReadAt time.Time         `json:"other_user_last_read_at"`
+	Messages                 []MessageResponse `json:"messages"`
+	Count                    int               `json:"count"`
+	OtherUserLastReadAt      time.Time         `json:"other_user_last_read_at"`
+	OtherUserLastDeliveredAt time.Time         `json:"other_user_last_delivered_at"`
 }
 
 type GetUserChatsResponse struct {
@@ -158,6 +166,10 @@ type GetUserChatsResponse struct {
 
 type AcknowledgeDeliveryResponse struct {
 	Acknowledged bool `json:"acknowledged"`
+}
+
+type AckDeliveryBatchResponse struct {
+	AcknowledgedCount int `json:"acknowledged_count"`
 }
 
 type GetFileURLResponse struct {
@@ -176,4 +188,32 @@ type UploadFileResponse struct {
 	FileSize     *int64    `json:"file_size"`
 	CreatedAt    time.Time `json:"created_at"`
 	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+type DeliveryAckEventPayload struct {
+	ChatID      string    `json:"chat_id"`
+	MessageIDs  []string  `json:"message_ids"`
+	DeliveredAt time.Time `json:"delivered_at"`
+}
+
+type ReadReceiptEventPayload struct {
+	ChatID   string `json:"chat_id"`
+	ReaderID string `json:"reader_id"`
+	ReadAt   string `json:"read_at"`
+}
+
+type UnsendEventPayload struct {
+	ChatID     string   `json:"chat_id"`
+	MessageIDs []string `json:"message_ids"`
+	SenderID   string   `json:"sender_id"`
+}
+
+type DeleteForMeEventPayload struct {
+	ChatID     string   `json:"chat_id"`
+	MessageIDs []string `json:"message_ids"`
+}
+
+type SyncActionPayload struct {
+	MessageIDs []string `json:"message_ids"`
+	ChatID     string   `json:"chat_id,omitempty"`
 }

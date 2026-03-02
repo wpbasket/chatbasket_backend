@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"log"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -224,10 +225,13 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 		}
 	}
 
+	debugLog := log.New(os.Stderr, "[DEBUG-ACK] ", log.LstdFlags)
 	// 🛡️ Partial Security Check: Check if session is Primary (Central)
 	// We need this to determine if we should mark as "primary delivered" or just "delivered"
 	isCentral, apiErr := ps.GlobalService.AuthService.IsSessionCentral(ctx, userID, sessionId)
+	debugLog.Printf("IsSessionCentral result: isCentral=%v, userID=%s, sessionId=%s", isCentral, userID, sessionId)
 	if apiErr != nil {
+		debugLog.Printf("IsSessionCentral ERROR: %v", apiErr)
 		if apiErr.Code == http.StatusUnauthorized {
 			return &model.ApiError{
 				Code:    http.StatusForbidden,
@@ -239,10 +243,12 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 	}
 
 	if acknowledgedBy == "recipient" {
+		debugLog.Printf("Processing recipient ACK for message %s", messageID)
 		// 1. Basic Delivery: ANY device (Primary or Secondary) can ACK that it received the message.
 		// This updates delivered_to_recipient = TRUE (if not already).
 		err = ps.PersonalQueries.MarkMessageDeliveredToRecipient(ctx, messageID)
 		if err != nil {
+			debugLog.Printf("MarkMessageDeliveredToRecipient ERROR: %v", err)
 			return &model.ApiError{
 				Code:    http.StatusInternalServerError,
 				Message: utils.GetPostgresError(err).Message,
@@ -250,16 +256,53 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 			}
 		}
 
+		// ✨ NEW: Update persistent chat delivery timestamp
+		// This is the source of truth for the "Double Grey Tick" (delivered status).
+		// We use the message's creation time as the last delivered marker.
+		debugLog.Printf("Updating persistent chat %s delivery timestamp to %v for participant %s", message.ChatID, message.CreatedAt.Time, userID)
+		err = ps.PersonalQueries.UpdateChatLastDeliveredAt(ctx, personal.UpdateChatLastDeliveredAtParams{
+			ChatID:        message.ChatID,
+			ParticipantID: userID, // The one who received it
+			LastDeliveredAt: pgtype.Timestamptz{
+				Time:  message.CreatedAt.Time,
+				Valid: true,
+			},
+		})
+		if err != nil {
+			debugLog.Printf("UpdateChatLastDeliveredAt ERROR: %v", err)
+		}
+
 		// 2. Primary Delivery: ONLY Primary device updates the strict delivery status.
 		// This triggers the "consumption" logic required for deletion.
 		if isCentral {
+			debugLog.Printf("Session is CENTRAL. Marking message %s as Primary Delivered.", messageID)
 			err = ps.PersonalQueries.MarkMessageDeliveredToRecipientPrimary(ctx, messageID)
+			if err != nil {
+				debugLog.Printf("MarkMessageDeliveredToRecipientPrimary ERROR: %v", err)
+			}
+
+			// ⚡ Sequential ACK: Also mark all OLDER text messages as Primary Delivered.
+			// This prevents relay bloat by ensuring gaps are filled when a newer message is received.
+			// Only applies to 'text' messages as per user request.
+			debugLog.Printf("Executing Sequential ACK for older messages in chat %s up to %v", message.ChatID, message.CreatedAt)
+			err = ps.PersonalQueries.MarkOlderMessagesAsDeliveredToRecipientPrimary(ctx, personal.MarkOlderMessagesAsDeliveredToRecipientPrimaryParams{
+				ChatID:      message.ChatID,
+				RecipientID: userID,
+				CreatedAt:   message.CreatedAt,
+			})
+			if err != nil {
+				debugLog.Printf("MarkOlderMessagesAsDeliveredToRecipientPrimary ERROR: %v", err)
+			}
+		} else {
+			debugLog.Printf("Session is NOT CENTRAL. Skipping Primary Delivery update.")
 		}
 
 	} else {
 		// Sender Sync ACK
+		debugLog.Printf("Processing sender sync ACK for message %s", messageID)
 		// 🛡️ STRICT Security: ONLY Primary device can MARK as synced to sender
 		if !isCentral {
+			debugLog.Printf("REJECTED: Sender sync ACK from non-central device.")
 			return &model.ApiError{
 				Code:    http.StatusForbidden,
 				Message: "Forbidden: Only primary device can ACK sender sync",
@@ -269,6 +312,7 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 
 		// 🛡️ Verify Ownership: Ensure the authenticated user IS the sender
 		if message.SenderID != userID {
+			debugLog.Printf("REJECTED: Ownership mismatch. message.SenderID=%s, userID=%s", message.SenderID, userID)
 			return &model.ApiError{
 				Code:    http.StatusForbidden,
 				Message: "Forbidden: You are not the sender of this message",
@@ -277,6 +321,9 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 		}
 
 		err = ps.PersonalQueries.MarkMessageSyncedToSenderPrimary(ctx, messageID)
+		if err != nil {
+			debugLog.Printf("MarkMessageSyncedToSenderPrimary ERROR: %v", err)
+		}
 	}
 
 	if err != nil {
@@ -287,16 +334,33 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 		}
 	}
 
-	// 2. Systemic Cleanup: Find ALL messages in this chat that are now fully delivered & synced
-	//    This handles the current message AND any older ones that might have been "stuck"
-	eligibleMessages, err := ps.PersonalQueries.GetDeliveredMessagesByChat(ctx, personal.GetDeliveredMessagesByChatParams{
-		ChatID: message.ChatID,
-		UserID: userID,
-	})
+	// 2. Per-Message Relay Cleanup: Check if THIS specific message is now eligible for deletion
+	//    A message is eligible when BOTH flags are TRUE:
+	//    - delivered_to_recipient_primary = TRUE (recipient's primary device confirmed)
+	//    - synced_to_sender_primary = TRUE (sender's primary device confirmed)
 
-	if err == nil && len(eligibleMessages) > 0 {
-		for _, msg := range eligibleMessages {
-			ps.deleteMessageFromRelay(ctx, msg)
+	// Re-fetch the message to get updated flags
+	updatedMessage, err := ps.PersonalQueries.GetMessageByID(ctx, messageID)
+	if err == nil {
+		// Check if both flags are set to TRUE
+		// DeliveredToRecipientPrimary is *bool, SyncedToSenderPrimary is bool
+		recipientPrimaryDelivered := updatedMessage.DeliveredToRecipientPrimary != nil && *updatedMessage.DeliveredToRecipientPrimary
+		senderPrimarySynced := updatedMessage.SyncedToSenderPrimary
+
+		if recipientPrimaryDelivered && senderPrimarySynced {
+			// Both sides have confirmed - safe to delete from relay
+			ps.deleteMessageFromRelay(ctx, updatedMessage)
+		}
+
+		// ⚡ Sequential Cleanup: Also proactively clear any older messages that are now fully confirmed.
+		// This handles cases where older ACKs might have completed the "pair" of flags, but didn't trigger deletion.
+		debugLog.Printf("Executing Sequential Bulk Cleanup for older messages in chat %s up to %v", updatedMessage.ChatID, updatedMessage.CreatedAt)
+		err = ps.PersonalQueries.CleanupOlderFullyAcknowledgedMessages(ctx, personal.CleanupOlderFullyAcknowledgedMessagesParams{
+			ChatID:    updatedMessage.ChatID,
+			CreatedAt: updatedMessage.CreatedAt,
+		})
+		if err != nil {
+			debugLog.Printf("CleanupOlderFullyAcknowledgedMessages ERROR: %v", err)
 		}
 	}
 
@@ -392,7 +456,7 @@ func (ps *Service) UnsendMessage(ctx context.Context, chatID uuid.UUID, messageI
 			// 1. Notify Sender devices (ONLY if action initiated by Secondary)
 			if !isPrimary {
 				log.Printf("[UnsendMessage] [Fallback] Initiated by Secondary. Creating sync action for Sender.")
-				senderPayload, _ := json.Marshal(map[string]interface{}{"message_ids": []uuid.UUID{msgID}, "chat_id": chatID})
+				senderPayload, _ := json.Marshal(personalmodel.SyncActionPayload{MessageIDs: []string{msgID.String()}, ChatID: chatID.String()})
 				_, _ = qtx.CreateSyncAction(ctx, personal.CreateSyncActionParams{
 					ID:         uuid.New(),
 					UserID:     senderID,
@@ -403,78 +467,76 @@ func (ps *Service) UnsendMessage(ctx context.Context, chatID uuid.UUID, messageI
 
 			// 2. Notify all Recipient devices
 			log.Printf("[UnsendMessage] [Fallback] Creating sync action for Recipient %s.", recipientID)
-			recipientPayload, _ := json.Marshal(map[string]interface{}{"message_ids": []uuid.UUID{msgID}, "chat_id": chatID})
+			recipientPayload, _ := json.Marshal(personalmodel.SyncActionPayload{MessageIDs: []string{msgID.String()}, ChatID: chatID.String()})
 			_, _ = qtx.CreateSyncAction(ctx, personal.CreateSyncActionParams{
 				ID:         uuid.New(),
 				UserID:     recipientID,
 				ActionType: "unsend",
 				Payload:    recipientPayload,
 			})
-			continue
-		}
-
-		// Security: Only sender can unsend
-		if msg.SenderID != senderID {
-			log.Printf("[UnsendMessage] ERROR: Unauthorized unsend attempt for msg %s by user %s", msgID, senderID)
-			return &model.ApiError{
-				Code:    http.StatusForbidden,
-				Message: "unauthorized: you can only unsend your own messages",
-				Type:    "forbidden",
+		} else {
+			// Security: Only sender can unsend
+			if msg.SenderID != senderID {
+				log.Printf("[UnsendMessage] ERROR: Unauthorized unsend attempt for msg %s by user %s", msgID, senderID)
+				return &model.ApiError{
+					Code:    http.StatusForbidden,
+					Message: "unauthorized: you can only unsend your own messages",
+					Type:    "forbidden",
+				}
 			}
-		}
 
-		// Prevent duplicate unsend
-		if msg.MessageType == "unsent" {
-			log.Printf("[UnsendMessage] Message %s is already unsent. Skipping.", msgID)
-			continue
-		}
-
-		messagesToUnsend = append(messagesToUnsend, msg)
-
-		// Process revocation for the existing message
-		log.Printf("[UnsendMessage] Processing existing message %s", msg.ID)
-
-		// Update Preview to "Message unsent" if this specific message was the last one
-		_ = qtx.UpdateChatUnsendPreview(ctx, personal.UpdateChatUnsendPreviewParams{
-			ID:            chatID,
-			LastMessageID: pgtype.UUID{Bytes: msg.ID, Valid: true},
-		})
-
-		// Correct unread count for recipient
-		_ = qtx.UpdateChatUnsendDecrement(ctx, personal.UpdateChatUnsendDecrementParams{
-			ID:          chatID,
-			RecipientID: msg.RecipientID,
-			Amount:      1,
-		})
-
-		// Soft delete from relay (Tombstone)
-		if err := qtx.UpdateMessageToUnsent(ctx, msg.ID); err != nil {
-			log.Printf("[UnsendMessage] ERROR: Failed to create tombstone for msg %s: %v", msg.ID, err)
-			return &model.ApiError{
-				Code:    http.StatusInternalServerError,
-				Message: "failed to create message tombstone",
-				Type:    "server_error",
+			// Prevent duplicate unsend
+			if msg.MessageType == "unsent" {
+				log.Printf("[UnsendMessage] Message %s is already unsent. Skipping.", msgID)
+				continue
 			}
-		}
 
-		// Notify Sender devices (Primary)
-		if !isPrimary {
-			senderPayload, _ := json.Marshal(map[string]interface{}{"message_ids": []uuid.UUID{msg.ID}, "chat_id": msg.ChatID})
+			messagesToUnsend = append(messagesToUnsend, msg)
+
+			// Soft delete from relay (Tombstone)
+			if err := qtx.UpdateMessageToUnsent(ctx, msg.ID); err != nil {
+				log.Printf("[UnsendMessage] ERROR: Failed to create tombstone for msg %s: %v", msg.ID, err)
+				return &model.ApiError{
+					Code:    http.StatusInternalServerError,
+					Message: "failed to create message tombstone",
+					Type:    "server_error",
+				}
+			}
+
+			// Notify Sender devices (Primary)
+			if !isPrimary {
+				senderPayload, _ := json.Marshal(personalmodel.SyncActionPayload{MessageIDs: []string{msg.ID.String()}, ChatID: msg.ChatID.String()})
+				_, _ = qtx.CreateSyncAction(ctx, personal.CreateSyncActionParams{
+					ID:         uuid.New(),
+					UserID:     msg.SenderID,
+					ActionType: "unsend",
+					Payload:    senderPayload,
+				})
+			}
+
+			// Notify Recipient devices
+			recipientPayload, _ := json.Marshal(personalmodel.SyncActionPayload{MessageIDs: []string{msg.ID.String()}, ChatID: msg.ChatID.String()})
 			_, _ = qtx.CreateSyncAction(ctx, personal.CreateSyncActionParams{
 				ID:         uuid.New(),
-				UserID:     msg.SenderID,
+				UserID:     msg.RecipientID,
 				ActionType: "unsend",
-				Payload:    senderPayload,
+				Payload:    recipientPayload,
 			})
 		}
 
-		// Notify Recipient devices
-		recipientPayload, _ := json.Marshal(map[string]interface{}{"message_ids": []uuid.UUID{msg.ID}, "chat_id": msg.ChatID})
-		_, _ = qtx.CreateSyncAction(ctx, personal.CreateSyncActionParams{
-			ID:         uuid.New(),
-			UserID:     msg.RecipientID,
-			ActionType: "unsend",
-			Payload:    recipientPayload,
+		// ALWAYS attempt to update Chat Status (Preview/Unread) for EACH msgID being unsent.
+		// The SQL queries 'UpdateChatUnsendPreview' and 'UpdateChatUnsendDecrement'
+		// now both contain 'AND last_message_id = ...', so they will ONLY apply
+		// if this specific message is the one shown in the chat list.
+		_ = qtx.UpdateChatUnsendPreview(ctx, personal.UpdateChatUnsendPreviewParams{
+			ID:            chatID,
+			LastMessageID: pgtype.UUID{Bytes: msgID, Valid: true},
+		})
+
+		_ = qtx.UpdateChatUnsendDecrement(ctx, personal.UpdateChatUnsendDecrementParams{
+			ID:          chatID,
+			RecipientID: recipientID,
+			Amount:      1,
 		})
 	}
 
@@ -536,7 +598,7 @@ func (ps *Service) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.UUI
 		// Note: We send these as individual sync actions, but using the 'message_ids' key (plural array)
 		// to maintain consistency with the Frontend's SyncEngine expectation.
 		// Alternatively, we could send one sync action with all IDs, but the current loop is safer for auditing.
-		payload, _ := json.Marshal(map[string]interface{}{"message_ids": []uuid.UUID{msgID}, "chat_id": ""}) // chat_id optional here, but good for structure
+		payload, _ := json.Marshal(personalmodel.SyncActionPayload{MessageIDs: []string{msgID.String()}})
 		_, err := ps.PersonalQueries.CreateSyncAction(ctx, personal.CreateSyncActionParams{
 			ID:         uuid.New(),
 			UserID:     userID,
@@ -648,7 +710,51 @@ func (ps *Service) IsChatParticipant(ctx context.Context, chatID, userID uuid.UU
 }
 
 func (ps *Service) CleanupExpiredMessages(ctx context.Context) error {
-	return ps.PersonalQueries.DeleteExpiredMessages(ctx)
+	log.Printf("[CleanupJob] Starting cleanup of expired messages and files")
+
+	// 1. Fetch expired messages that have files (batched to avoid memory issues)
+	const batchSize = 100
+	for {
+		expiredMessages, err := ps.PersonalQueries.GetExpiredMessagesWithFiles(ctx, batchSize)
+		if err != nil {
+			log.Printf("[CleanupJob] ERROR: Failed to fetch expired messages with files: %v", err)
+			break
+		}
+
+		if len(expiredMessages) == 0 {
+			break
+		}
+
+		log.Printf("[CleanupJob] Found %d expired messages with files to clean up", len(expiredMessages))
+
+		for _, msg := range expiredMessages {
+			// Delete files from Appwrite
+			if msg.FileID != nil && *msg.FileID != "" {
+				ps.DeleteChatFile(ctx, *msg.FileID)
+			}
+			if msg.ThumbnailFileID != nil && *msg.ThumbnailFileID != "" {
+				ps.DeleteChatFile(ctx, *msg.ThumbnailFileID)
+			}
+
+			// Ideally we would delete individual messages here if we want to be safe,
+			// but bulk delete below is faster. The files are gone now.
+		}
+
+		// If we got exactly batchSize, there might be more
+		if len(expiredMessages) < batchSize {
+			break
+		}
+	}
+
+	// 2. Perform bulk database deletion of ALL expired messages
+	err := ps.PersonalQueries.DeleteExpiredMessages(ctx)
+	if err != nil {
+		log.Printf("[CleanupJob] ERROR: Failed to bulk delete expired messages from DB: %v", err)
+		return err
+	}
+
+	log.Printf("[CleanupJob] Cleanup completed successfully")
+	return nil
 }
 
 func (ps *Service) DropPendingMessagesBetweenUsers(ctx context.Context, user1ID, user2ID uuid.UUID) error {
@@ -764,12 +870,23 @@ func (ps *Service) CreateChatHandler(ctx context.Context, payload *personalmodel
 		return nil, apiErr
 	}
 
+	var otherReadAt, otherDeliveredAt time.Time
+	if chat.Participant1ID == userId.UuidUserId {
+		otherReadAt = chat.P2LastReadAt.Time
+		otherDeliveredAt = chat.P2LastDeliveredAt.Time
+	} else {
+		otherReadAt = chat.P1LastReadAt.Time
+		otherDeliveredAt = chat.P1LastDeliveredAt.Time
+	}
+
 	return &personalmodel.ChatResponse{
-		ChatID:              chat.ID.String(),
-		OtherUserID:         recipientID.String(),
-		CreatedAt:           chat.CreatedAt.Time,
-		UpdatedAt:           chat.UpdatedAt.Time,
-		LastMessageIsFromMe: false, // New chat, no messages yet
+		ChatID:                   chat.ID.String(),
+		OtherUserID:              recipientID.String(),
+		CreatedAt:                chat.CreatedAt.Time,
+		UpdatedAt:                chat.UpdatedAt.Time,
+		OtherUserLastReadAt:      otherReadAt,
+		OtherUserLastDeliveredAt: otherDeliveredAt,
+		LastMessageIsFromMe:      false,
 	}, nil
 }
 
@@ -866,47 +983,51 @@ func (ps *Service) GetMessagesHandler(ctx context.Context, payload *personalmode
 			}
 		}
 
+		deliveredToRecipientPrimary := false
+		if msg.DeliveredToRecipientPrimary != nil {
+			deliveredToRecipientPrimary = *msg.DeliveredToRecipientPrimary
+		}
+
 		messageResponses[i] = personalmodel.MessageResponse{
-			MessageID:             msg.ID.String(),
-			ChatID:                msg.ChatID.String(),
-			IsFromMe:              msg.SenderID == userId.UuidUserId,
-			RecipientID:           msg.RecipientID.String(),
-			Content:               msg.Content,
-			MessageType:           msg.MessageType,
-			DeliveredToRecipient:  msg.DeliveredToRecipient,
-			SyncedToSenderPrimary: msg.SyncedToSenderPrimary,
-			CreatedAt:             msg.CreatedAt.Time,
-			ExpiresAt:             msg.ExpiresAt.Time,
-			FileID:                msg.FileID,
-			FileName:              msg.FileName,
-			FileSize:              msg.FileSize,
-			FileMimeType:          msg.FileMimeType,
-			ViewURL:               viewURL,
-			DownloadURL:           downloadURL,
+			MessageID:                   msg.ID.String(),
+			ChatID:                      msg.ChatID.String(),
+			IsFromMe:                    msg.SenderID == userId.UuidUserId,
+			RecipientID:                 msg.RecipientID.String(),
+			Content:                     msg.Content,
+			MessageType:                 msg.MessageType,
+			DeliveredToRecipient:        msg.DeliveredToRecipient,
+			DeliveredToRecipientPrimary: deliveredToRecipientPrimary,
+			SyncedToSenderPrimary:       msg.SyncedToSenderPrimary,
+			CreatedAt:                   msg.CreatedAt.Time,
+			ExpiresAt:                   msg.ExpiresAt.Time,
+			FileID:                      msg.FileID,
+			FileName:                    msg.FileName,
+			FileSize:                    msg.FileSize,
+			FileMimeType:                msg.FileMimeType,
+			ViewURL:                     viewURL,
+			DownloadURL:                 downloadURL,
 		}
 	}
 
-	// Fetch chat details to get OtherUserLastReadAt
-	chat, err := ps.PersonalQueries.GetChatByID(ctx, chatID)
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    http.StatusInternalServerError,
-			Message: utils.GetPostgresError(err).Message,
-			Type:    "fetch_failed",
+	// Fetch other user's last read/delivered from chat
+	chat, _ := ps.PersonalQueries.GetChatByID(ctx, chatID)
+	otherUserLastReadAt := time.Time{}
+	otherUserLastDeliveredAt := time.Time{}
+	if chat.ID != uuid.Nil {
+		if chat.Participant1ID == userId.UuidUserId {
+			otherUserLastReadAt = chat.P2LastReadAt.Time
+			otherUserLastDeliveredAt = chat.P2LastDeliveredAt.Time
+		} else {
+			otherUserLastReadAt = chat.P1LastReadAt.Time
+			otherUserLastDeliveredAt = chat.P1LastDeliveredAt.Time
 		}
-	}
-
-	var otherUserLastReadAt time.Time
-	if chat.Participant1ID == userId.UuidUserId {
-		otherUserLastReadAt = chat.P2LastReadAt.Time
-	} else {
-		otherUserLastReadAt = chat.P1LastReadAt.Time
 	}
 
 	return &personalmodel.GetMessagesResponse{
-		Messages:            messageResponses,
-		Count:               len(messageResponses),
-		OtherUserLastReadAt: otherUserLastReadAt,
+		Messages:                 messageResponses,
+		Count:                    len(messageResponses),
+		OtherUserLastReadAt:      otherUserLastReadAt,
+		OtherUserLastDeliveredAt: otherUserLastDeliveredAt,
 	}, nil
 }
 
@@ -1006,10 +1127,13 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 		}
 
 		var otherUserLastReadAt time.Time
+		var otherUserLastDeliveredAt time.Time
 		if chat.Participant1ID == userId.UuidUserId {
 			otherUserLastReadAt = chat.P2LastReadAt.Time
+			otherUserLastDeliveredAt = chat.P2LastDeliveredAt.Time
 		} else {
 			otherUserLastReadAt = chat.P1LastReadAt.Time
+			otherUserLastDeliveredAt = chat.P1LastDeliveredAt.Time
 		}
 
 		var lastMessageID *string
@@ -1019,23 +1143,24 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 		}
 
 		chatResponses[i] = personalmodel.ChatResponse{
-			ChatID:               chat.ID.String(),
-			OtherUserID:          chat.OtherUserID.String(),
-			OtherUserName:        chat.OtherUserName,
-			OtherUserUsername:    chat.OtherUserUsername,
-			AvatarURL:            avatarURL,
-			CreatedAt:            chat.CreatedAt.Time,
-			UpdatedAt:            chat.UpdatedAt.Time,
-			OtherUserLastReadAt:  otherUserLastReadAt,
-			LastMessageContent:   lastMessageContent,
-			LastMessageCreatedAt: lastMessageCreatedAt,
-			LastMessageType:      lastMessageType,
-			LastMessageSenderID:  lastMessageSenderID,
-			LastMessageIsFromMe:  chat.LastMessageSenderID.Valid && uuid.Must(uuid.FromBytes(chat.LastMessageSenderID.Bytes[:])) == userId.UuidUserId,
-			LastMessageStatus:    chat.LastMessageStatus,
-			LastMessageIsUnsent:  lastMessageType != nil && *lastMessageType == "unsent",
-			LastMessageID:        lastMessageID,
-			UnreadCount:          int(chat.UnreadCount),
+			ChatID:                   chat.ID.String(),
+			OtherUserID:              chat.OtherUserID.String(),
+			OtherUserName:            chat.OtherUserName,
+			OtherUserUsername:        chat.OtherUserUsername,
+			AvatarURL:                avatarURL,
+			CreatedAt:                chat.CreatedAt.Time,
+			UpdatedAt:                chat.UpdatedAt.Time,
+			OtherUserLastReadAt:      otherUserLastReadAt,
+			OtherUserLastDeliveredAt: otherUserLastDeliveredAt,
+			LastMessageContent:       lastMessageContent,
+			LastMessageCreatedAt:     lastMessageCreatedAt,
+			LastMessageType:          lastMessageType,
+			LastMessageSenderID:      lastMessageSenderID,
+			LastMessageIsFromMe:      chat.LastMessageSenderID.Valid && uuid.Must(uuid.FromBytes(chat.LastMessageSenderID.Bytes[:])) == userId.UuidUserId,
+			LastMessageStatus:        chat.LastMessageStatus,
+			LastMessageIsUnsent:      lastMessageType != nil && *lastMessageType == "unsent",
+			LastMessageID:            lastMessageID,
+			UnreadCount:              int(chat.UnreadCount),
 		}
 	}
 
@@ -1192,7 +1317,8 @@ func (ps *Service) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID uu
 		}
 	}
 
-	// 1. Mark chat as read (updates chat metadata/unread counters)
+	// Mark chat as read (updates chat metadata/unread counters only)
+	// Read status is separate from delivery ACK - opening a chat does NOT mean all messages were received
 	log.Printf("[MarkChatRead] Resetting read status for chat %s, user %s", chatID, userID)
 	err = ps.PersonalQueries.ResetChatReadStatus(ctx, personal.ResetChatReadStatusParams{
 		ID:             chatID,
@@ -1207,36 +1333,27 @@ func (ps *Service) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID uu
 		}
 	}
 
-	// 2. Combined Logic: Bulk ACK Delivery for the recipient too
-	// Since the user opened the chat, all messages are now Delivered as well as Read.
-	err = ps.PersonalQueries.MarkChatMessagesAsRead(ctx, personal.MarkChatMessagesAsReadParams{
-		ChatID:      chatID,
-		RecipientID: userID,
+	// ⚡ Also update persistent delivery timestamp (if it's read, it's delivered)
+	_ = ps.PersonalQueries.UpdateChatLastDeliveredAt(ctx, personal.UpdateChatLastDeliveredAtParams{
+		ChatID:        chatID,
+		ParticipantID: userID,
+		LastDeliveredAt: pgtype.Timestamptz{
+			Time:  time.Now(),
+			Valid: true,
+		},
 	})
-	if err != nil {
-		log.Printf("[MarkChatRead] Warning: Failed to bulk-ack delivery during read: %v", err)
-	}
 
-	// 2b. Primary Delivery: If on Primary, mark as delivered_to_recipient_primary
+	// 🛡️ Proactive Delivery: If this is a PRIMARY session, mark all messages as primary-delivered.
+	// This ensures that simply opening a chat on a primary device counts as "consumption".
 	if isPrimary {
+		log.Printf("[MarkChatRead] Primary session detected. Marking all messages in chat %s as primary-delivered for user %s", chatID, userID)
 		err = ps.PersonalQueries.MarkChatMessagesAsReadPrimary(ctx, personal.MarkChatMessagesAsReadPrimaryParams{
 			ChatID:      chatID,
 			RecipientID: userID,
 		})
 		if err != nil {
-			log.Printf("[MarkChatRead] Warning: Failed to bulk-ack primary delivery: %v", err)
-		}
-	}
-
-	// 3. Perform Relay Cleanup for this chat
-	// Find all messages that are now fully delivered and synced and hard-delete them.
-	eligibleMsgs, err := ps.PersonalQueries.GetDeliveredMessagesByChat(ctx, personal.GetDeliveredMessagesByChatParams{
-		ChatID: chatID,
-		UserID: userID,
-	})
-	if err == nil && len(eligibleMsgs) > 0 {
-		for _, m := range eligibleMsgs {
-			ps.deleteMessageFromRelay(ctx, m)
+			log.Printf("[MarkChatRead] ERROR: Failed to mark messages as read primary: %v", err)
+			// We don't return error here because the main operation (ResetChatReadStatus) succeeded.
 		}
 	}
 
@@ -1313,7 +1430,7 @@ func (ps *Service) GetSyncActionsHandler(ctx context.Context, payload *personalm
 
 	respActions := make([]personalmodel.SyncActionResponse, 0, len(actions))
 	for _, a := range actions {
-		var payloadObj interface{}
+		var payloadObj personalmodel.SyncActionPayload
 		_ = json.Unmarshal(a.Payload, &payloadObj)
 
 		respActions = append(respActions, personalmodel.SyncActionResponse{
@@ -1387,23 +1504,29 @@ func (ps *Service) GetPendingMessagesHandler(ctx context.Context, payload *perso
 			}
 		}
 
+		deliveredToRecipientPrimary := false
+		if m.DeliveredToRecipientPrimary != nil {
+			deliveredToRecipientPrimary = *m.DeliveredToRecipientPrimary
+		}
+
 		return personalmodel.MessageResponse{
-			MessageID:             m.ID.String(),
-			ChatID:                m.ChatID.String(),
-			RecipientID:           m.RecipientID.String(),
-			Content:               m.Content,
-			MessageType:           m.MessageType,
-			DeliveredToRecipient:  m.DeliveredToRecipient,
-			SyncedToSenderPrimary: m.SyncedToSenderPrimary,
-			CreatedAt:             m.CreatedAt.Time,
-			ExpiresAt:             m.ExpiresAt.Time,
-			IsFromMe:              m.SenderID == userId.UuidUserId,
-			FileID:                m.FileID,
-			FileName:              m.FileName,
-			FileSize:              m.FileSize,
-			FileMimeType:          m.FileMimeType,
-			ViewURL:               viewURL,
-			DownloadURL:           downloadURL,
+			MessageID:                   m.ID.String(),
+			ChatID:                      m.ChatID.String(),
+			RecipientID:                 m.RecipientID.String(),
+			Content:                     m.Content,
+			MessageType:                 m.MessageType,
+			DeliveredToRecipient:        m.DeliveredToRecipient,
+			DeliveredToRecipientPrimary: deliveredToRecipientPrimary,
+			SyncedToSenderPrimary:       m.SyncedToSenderPrimary,
+			CreatedAt:                   m.CreatedAt.Time,
+			ExpiresAt:                   m.ExpiresAt.Time,
+			IsFromMe:                    m.SenderID == userId.UuidUserId,
+			FileID:                      m.FileID,
+			FileName:                    m.FileName,
+			FileSize:                    m.FileSize,
+			FileMimeType:                m.FileMimeType,
+			ViewURL:                     viewURL,
+			DownloadURL:                 downloadURL,
 		}
 	}
 

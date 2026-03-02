@@ -4,7 +4,9 @@ import (
 	"chatbasket-api/middleware"
 	"chatbasket-api/personal/personalhandler"
 	"chatbasket-api/personal/personalservice"
+	"chatbasket-api/personal/personalutils"
 	"chatbasket-api/services"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -12,6 +14,8 @@ import (
 // RegisterPersonalRoutes registers all personal domain routes
 func RegisterPersonalRoutes(api *echo.Group, globalService *services.GlobalService, authService *services.AuthService, authSecret []byte) {
 	perSvc := personalservice.New(globalService, authSecret)
+	// Start background cleanup job (every 1 hour)
+	personalutils.StartMessageCleanupJob(perSvc, 1*time.Hour)
 
 	// Personal Profile Routes
 	personalProfileGroup := api.Group("/personal/profile")
