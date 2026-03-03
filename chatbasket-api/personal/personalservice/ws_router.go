@@ -47,6 +47,10 @@ func (r *WSRouter) HandleMessage(ctx context.Context, conn *WSConn, event WSClie
 		payload, err = r.handleDeleteForMe(ctx, conn, event.Payload)
 	case "ack_sync_action":
 		payload, err = r.handleAckSyncAction(ctx, conn, event.Payload)
+	case "ping":
+		// Client keepalive ping — respond with pong to confirm connection is alive.
+		// Required on mobile (Android/iOS) where NAT/firewall can silently drop idle sockets.
+		payload = map[string]string{"type": "pong"}
 	default:
 		err = &WSError{Code: 400, Message: "Unknown message type: " + event.Type}
 	}

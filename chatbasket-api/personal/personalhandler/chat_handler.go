@@ -531,6 +531,7 @@ func (h *ChatHandler) UnsendMessage(c echo.Context) error {
 				Payload: personalmodel.UnsendEventPayload{
 					ChatID:     payload.ChatID,
 					MessageIDs: payload.MessageIDs,
+					SenderID:   userId, // Added: frontend handleUnsend uses sender_id for unread count logic
 				},
 			}
 
