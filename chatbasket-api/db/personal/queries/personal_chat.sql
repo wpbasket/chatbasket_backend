@@ -58,7 +58,7 @@ END AS last_message_type,
 
 -- Last Message Status (Calculated)
 CASE
-    WHEN c.last_message_created_at IS NULL THEN NULL
+    WHEN c.last_message_created_at IS NULL THEN ''
     WHEN c.last_message_created_at <= (
         CASE
             WHEN c.participant_1_id = $1 THEN c.p2_last_read_at
