@@ -112,6 +112,11 @@ ORDER BY c.updated_at DESC;
 -- name: GetChatByID :one
 SELECT * FROM chats WHERE id = $1 LIMIT 1;
 
+-- name: GetChatsByUserID :many
+SELECT * FROM chats
+WHERE participant_1_id = $1 OR participant_2_id = $1
+ORDER BY updated_at DESC;
+
 -- ===========================================
 -- Message Operations
 -- ===========================================
@@ -152,6 +157,7 @@ FROM messages
 WHERE
     recipient_id = $1
     AND delivered_to_recipient_primary = FALSE
+    AND deleted_by_recipient = FALSE
     AND expires_at > now()
 ORDER BY created_at ASC
 LIMIT $2;
@@ -162,6 +168,7 @@ FROM messages
 WHERE
     sender_id = $1
     AND synced_to_sender_primary = FALSE
+    AND deleted_by_sender = FALSE
     AND expires_at > now()
 ORDER BY created_at ASC
 LIMIT $2;
@@ -228,6 +235,26 @@ SET
 WHERE
     id = $1;
 
+-- name: MarkMessageDeletedBySender :exec
+UPDATE messages
+SET
+    deleted_by_sender = TRUE,
+    synced_to_sender_primary = TRUE,
+    updated_at = now()
+WHERE
+    id = $1
+    AND sender_id = $2;
+
+-- name: MarkMessageDeletedByRecipient :exec
+UPDATE messages
+SET
+    deleted_by_recipient = TRUE,
+    delivered_to_recipient_primary = TRUE,
+    updated_at = now()
+WHERE
+    id = $1
+    AND recipient_id = $2;
+
 -- name: MarkChatMessagesAsRead :exec
 UPDATE messages
 SET
@@ -249,14 +276,14 @@ WHERE
     AND recipient_id = $2
     AND delivered_to_recipient_primary = FALSE;
 
--- name: DeleteDeliveredMessages :exec
+-- name: DeleteExpiredMessages :exec
 DELETE FROM messages
 WHERE
-    delivered_to_recipient_primary = TRUE
-    AND synced_to_sender_primary = TRUE;
-
--- name: DeleteExpiredMessages :exec
-DELETE FROM messages WHERE expires_at < now();
+    expires_at < now()
+    OR (
+        delivered_to_recipient_primary = TRUE
+        AND synced_to_sender_primary = TRUE
+    );
 
 -- name: CleanupOlderFullyAcknowledgedMessages :exec
 -- Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
@@ -283,6 +310,16 @@ FROM messages
 WHERE
     chat_id = $1
     AND expires_at > now()
+    AND (
+        (
+            sender_id = $4
+            AND deleted_by_sender = FALSE
+        )
+        OR (
+            recipient_id = $4
+            AND deleted_by_recipient = FALSE
+        )
+    )
 ORDER BY created_at DESC
 LIMIT $2
 OFFSET
@@ -557,10 +594,15 @@ WHERE
 -- name: GetExpiredMessagesWithFiles :many
 SELECT *
 FROM messages
-WHERE
-    expires_at < now()
+WHERE (
+        expires_at < now()
+        OR (
+            delivered_to_recipient_primary = TRUE
+            AND synced_to_sender_primary = TRUE
+        )
+    )
     AND file_id IS NOT NULL
-ORDER BY expires_at ASC
+ORDER BY created_at ASC
 LIMIT $1;
 
 -- ===========================================

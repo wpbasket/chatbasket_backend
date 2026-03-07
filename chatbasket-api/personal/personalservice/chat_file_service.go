@@ -185,6 +185,14 @@ func (ps *Service) GetMessageFileURL(ctx context.Context, messageID uuid.UUID, u
 		}
 	}
 
+	if (message.SenderID == userID && message.DeletedBySender) || (message.RecipientID == userID && message.DeletedByRecipient) {
+		return "", &model.ApiError{
+			Code:    http.StatusNotFound,
+			Message: "message file not found",
+			Type:    "not_found",
+		}
+	}
+
 	if message.FileID == nil || *message.FileID == "" {
 		return "", &model.ApiError{
 			Code:    http.StatusNotFound,
@@ -411,6 +419,10 @@ func (ps *Service) GenerateMessageFileURLs(ctx context.Context, message personal
 			Message: "not authorized to access this file",
 			Type:    "forbidden",
 		}
+	}
+
+	if (message.SenderID == userID && message.DeletedBySender) || (message.RecipientID == userID && message.DeletedByRecipient) {
+		return "", "", nil // Treat as "no file" if the user deleted the message
 	}
 
 	if message.FileID == nil || *message.FileID == "" {

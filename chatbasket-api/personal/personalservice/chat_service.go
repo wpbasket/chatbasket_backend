@@ -569,54 +569,94 @@ func (ps *Service) UnsendMessage(ctx context.Context, chatID uuid.UUID, messageI
 }
 
 func (ps *Service) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.UUID, userID uuid.UUID, isPrimary bool) *model.ApiError {
-	log.Printf("[DeleteMessageForMe] START: Processing %d messages for user %s (isPrimary=%v)", len(messageIDs), userID, isPrimary)
-
 	// Clear the per-participant preview if the deleted message is the current preview.
 	// This works for BOTH primary and secondary devices.
 	for _, msgID := range messageIDs {
 		msg, err := ps.PersonalQueries.GetMessageByID(ctx, msgID)
 		if err == nil {
-			log.Printf("[DeleteMessageForMe] Checking if msg %s is the last preview for chat %s", msgID, msg.ChatID)
 			_ = ps.PersonalQueries.ClearLastMessageForParticipant(ctx, personal.ClearLastMessageForParticipantParams{
 				UserID:    userID,
 				ChatID:    msg.ChatID,
 				MessageID: pgtype.UUID{Bytes: msgID, Valid: true},
 			})
+
+			// Mark the message as deleted in the database based on sender/recipient
+			if msg.SenderID == userID {
+				_ = ps.PersonalQueries.MarkMessageDeletedBySender(ctx, personal.MarkMessageDeletedBySenderParams{
+					ID:       msgID,
+					SenderID: userID,
+				})
+			} else if msg.RecipientID == userID {
+				_ = ps.PersonalQueries.MarkMessageDeletedByRecipient(ctx, personal.MarkMessageDeletedByRecipientParams{
+					ID:          msgID,
+					RecipientID: userID,
+				})
+			}
+		} else {
+			// Message already deleted (e.g., by relay cleanup). Still try to clear the chat preview.
+			chats, chatsErr := ps.PersonalQueries.GetChatsByUserID(ctx, userID)
+			if chatsErr == nil {
+				for _, chat := range chats {
+					if chat.LastMessageID.Bytes == msgID {
+						_ = ps.PersonalQueries.ClearLastMessageForParticipant(ctx, personal.ClearLastMessageForParticipantParams{
+							UserID:    userID,
+							ChatID:    chat.ID,
+							MessageID: pgtype.UUID{Bytes: msgID, Valid: true},
+						})
+						break
+					}
+				}
+			}
 		}
 	}
 
 	// If initiated by primary, we do nothing on the backend relay (as per requirements)
 	// The primary handles local deletion and other secondaries catch up via p2p later.
 	if isPrimary {
-		log.Printf("[DeleteMessageForMe] Request from Primary device. Skipping backend relay logic (handled locally).")
-		return nil
-	}
-
-	// If initiated by secondary, we create a sync action to notify the primary
-	log.Printf("[DeleteMessageForMe] Request from Secondary device. Creating sync actions for Primary.")
-	for _, msgID := range messageIDs {
-		// Note: We send these as individual sync actions, but using the 'message_ids' key (plural array)
-		// to maintain consistency with the Frontend's SyncEngine expectation.
-		// Alternatively, we could send one sync action with all IDs, but the current loop is safer for auditing.
-		payload, _ := json.Marshal(personalmodel.SyncActionPayload{MessageIDs: []string{msgID.String()}})
-		_, err := ps.PersonalQueries.CreateSyncAction(ctx, personal.CreateSyncActionParams{
-			ID:         uuid.New(),
-			UserID:     userID,
-			ActionType: "delete_for_me",
-			Payload:    payload,
-		})
-		if err != nil {
-			log.Printf("[DeleteMessageForMe] ERROR: Failed to create sync action for msg %s: %v", msgID, err)
-			return &model.ApiError{
-				Code:    http.StatusInternalServerError,
-				Message: "failed to create sync action for secondary deletion",
-				Type:    "server_error",
+	} else {
+		// If initiated by secondary, we create a sync action to notify the primary
+		for _, msgID := range messageIDs {
+			payload, _ := json.Marshal(personalmodel.SyncActionPayload{MessageIDs: []string{msgID.String()}})
+			_, err := ps.PersonalQueries.CreateSyncAction(ctx, personal.CreateSyncActionParams{
+				ID:         uuid.New(),
+				UserID:     userID,
+				ActionType: "delete_for_me",
+				Payload:    payload,
+			})
+			if err != nil {
+				return &model.ApiError{
+					Code:    http.StatusInternalServerError,
+					Message: "failed to create sync action for secondary deletion",
+					Type:    "server_error",
+				}
 			}
 		}
-		log.Printf("[DeleteMessageForMe] Created sync action for msg %s", msgID)
 	}
 
-	log.Printf("[DeleteMessageForMe] COMPLETED successfully.")
+	// Instant Cleanup Optimization:
+	// If the message is already fully "safe" for the other party, wipe it from the relay right away.
+	for _, msgID := range messageIDs {
+		msg, err := ps.PersonalQueries.GetMessageByID(ctx, msgID)
+		if err != nil {
+			continue
+		}
+
+		shouldDeleteNow := false
+		if msg.SenderID == userID {
+			if msg.DeliveredToRecipientPrimary != nil && *msg.DeliveredToRecipientPrimary {
+				shouldDeleteNow = true
+			}
+		} else if msg.RecipientID == userID {
+			if msg.SyncedToSenderPrimary {
+				shouldDeleteNow = true
+			}
+		}
+
+		if shouldDeleteNow {
+			ps.deleteMessageFromRelay(ctx, msg)
+		}
+	}
+
 	return nil
 }
 
@@ -674,11 +714,12 @@ func (ps *Service) GetPendingMessages(ctx context.Context, userID uuid.UUID, lim
 	return messages, nil
 }
 
-func (ps *Service) GetChatMessages(ctx context.Context, chatID uuid.UUID, limit, offset int32) ([]personal.Message, *model.ApiError) {
+func (ps *Service) GetChatMessages(ctx context.Context, chatID uuid.UUID, userID uuid.UUID, limit, offset int32) ([]personal.Message, *model.ApiError) {
 	messages, err := ps.PersonalQueries.GetChatMessages(ctx, personal.GetChatMessagesParams{
-		ChatID: chatID,
-		Limit:  limit,
-		Offset: offset,
+		ChatID:   chatID,
+		Limit:    limit,
+		Offset:   offset,
+		SenderID: userID,
 	})
 
 	if err != nil {
@@ -710,7 +751,7 @@ func (ps *Service) IsChatParticipant(ctx context.Context, chatID, userID uuid.UU
 }
 
 func (ps *Service) CleanupExpiredMessages(ctx context.Context) error {
-	log.Printf("[CleanupJob] Starting cleanup of expired messages and files")
+	log.Printf("[CleanupJob] Starting cleanup of expired and orphaned (fully delivered) messages/files")
 
 	// 1. Fetch expired messages that have files (batched to avoid memory issues)
 	const batchSize = 100
@@ -725,7 +766,7 @@ func (ps *Service) CleanupExpiredMessages(ctx context.Context) error {
 			break
 		}
 
-		log.Printf("[CleanupJob] Found %d expired messages with files to clean up", len(expiredMessages))
+		log.Printf("[CleanupJob] Found %d expired/orphaned messages with files to clean up", len(expiredMessages))
 
 		for _, msg := range expiredMessages {
 			// Delete files from Appwrite
@@ -753,7 +794,7 @@ func (ps *Service) CleanupExpiredMessages(ctx context.Context) error {
 		return err
 	}
 
-	log.Printf("[CleanupJob] Cleanup completed successfully")
+	log.Printf("[CleanupJob] Cleanup of expired/orphaned messages completed successfully")
 	return nil
 }
 
@@ -967,7 +1008,7 @@ func (ps *Service) GetMessagesHandler(ctx context.Context, payload *personalmode
 	}
 	offset := payload.Offset
 
-	messages, apiErr := ps.GetChatMessages(ctx, chatID, limit, offset)
+	messages, apiErr := ps.GetChatMessages(ctx, chatID, userId.UuidUserId, limit, offset)
 	if apiErr != nil {
 		return nil, apiErr
 	}

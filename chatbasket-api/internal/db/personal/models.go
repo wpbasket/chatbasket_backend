@@ -91,6 +91,8 @@ type Message struct {
 	ExpiresAt                   pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
+	DeletedBySender             bool               `json:"deleted_by_sender"`
+	DeletedByRecipient          bool               `json:"deleted_by_recipient"`
 	DeliveredToRecipientPrimary *bool              `json:"delivered_to_recipient_primary"`
 }
 

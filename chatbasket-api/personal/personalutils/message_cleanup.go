@@ -12,12 +12,20 @@ type MessageCleanupService interface {
 
 func StartMessageCleanupJob(service MessageCleanupService, interval time.Duration) {
 	ticker := time.NewTicker(interval)
-
-	log.Printf("[Message Cleanup] Starting background job with interval: %v", interval)
+	log.Printf("[Message Cleanup] Starting background job with interval: %v (startup delay: 5m)", interval)
 
 	go func() {
+		// 1. Initial delay of 5 minutes before the first run
+		time.Sleep(5 * time.Minute)
+
+		ctx := context.Background()
+		log.Printf("[Message Cleanup] Executing initial startup cleanup...")
+		if err := service.CleanupExpiredMessages(ctx); err != nil {
+			log.Printf("[Message Cleanup] Initial cleanup failed: %v", err)
+		}
+
+		// 2. Regular interval thereafter
 		for range ticker.C {
-			ctx := context.Background()
 			err := service.CleanupExpiredMessages(ctx)
 			if err != nil {
 				log.Printf("[Message Cleanup] Failed to cleanup expired messages: %v", err)
