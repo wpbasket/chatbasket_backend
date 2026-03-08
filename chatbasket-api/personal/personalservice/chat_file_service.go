@@ -149,7 +149,7 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 	// Determine fallback preview if caption is empty
 	previewContent := params.Caption
 	if previewContent == "" {
-		previewContent = "📄 " + params.FileHeader.Filename
+		previewContent = params.FileHeader.Filename
 	}
 
 	msgType := message.MessageType
@@ -515,3 +515,4 @@ func (ps *Service) GenerateMessageFileURLs(ctx context.Context, message personal
 
 	return viewURL, downloadURL, nil
 }
+
