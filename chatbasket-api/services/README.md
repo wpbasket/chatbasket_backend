@@ -1,16 +1,30 @@
 # services/
 
-Business logic layer. Services orchestrate db queries (sqlc) and utils (OTP, hashing, sessions). Handlers call services; services should not depend on Echo. Return typed `model` structs and `*model.ApiError`.
+Business logic layer for the backend. Services orchestrate sqlc queries and shared utils, while handlers remain thin. Services **must not** depend on Echo.
 
-### Global Service & Appwrite integration
-The `GlobalService` holds references to shared clients. For Appwrite, we maintain two distinct services in the `appwriteinternal` package:
-- `Appwrite`: Standard client with a **30-second** timeout for Auth and Database operations.
-- `AppwriteStorage`: Dedicated client with a **10-minute** timeout, used exclusively for large file uploads (`CreateFile`). 
+## Responsibilities
+- Validate inputs and UUIDs
+- Execute db operations through sqlc packages
+- Map results into typed model structs
+- Return `*model.ApiError` on failures
 
-Other storage operations like `DeleteFile` or `ListFiles` should use the standard `Appwrite` service to ensure fast failures.
-### Chat Synchronization Strategy
-The chat system distinguishes between **Delivery ACKs** (Recipient Confirmed) and **Read ACKs** (User Opened).
-*   **Outside Chat**: Small, frequent delivery signals marked as `acknowledged_by: 'recipient'`.
-*   **Inside Chat**: Bulk read signal via `MarkChatRead`, which implicitly updates all delivery flags for the chat to ensure consistency.
+## Global Service
+`GlobalService` (see `services/base_service.go`) is the shared service container used by handlers and domain services. It holds:
+- `Appwrite` client (standard timeout)
+- `AppwriteStorage` client (long timeout for uploads)
+- `AuthQueries` + `PersonalQueries` (sqlc)
+- `CosmosClient` (Azure Cosmos client)
+- `AuthService` reference for shared auth logic
 
-Other storage operations like `DeleteFile` or `ListFiles` should use the standard `Appwrite` service to ensure fast failures.
+## Appwrite Integration
+Two clients are maintained in `appwriteinternal`:
+- **Appwrite**: standard client for auth/db tasks (short timeout)
+- **AppwriteStorage**: long-timeout client for large file uploads
+
+Use the storage client **only** for large upload operations to avoid slow failures on regular calls.
+
+## Service Rules
+- Keep business logic in services, not handlers.
+- Do not use ad-hoc SQL; use sqlc queries.
+- Return typed response structs (no `map[string]interface{}` except wrapper objects).
+- Always convert UUIDs to strings in API responses.

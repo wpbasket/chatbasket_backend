@@ -1,20 +1,12 @@
 # Public Model
 
-This directory is reserved for public domain-specific model types.
+Public-domain model types used only by public handlers/services.
 
-## Purpose
-
-Place model types here that are:
-- Used **only** by the public domain (public handlers/services)
-- Not shared with other domains (personal, etc.)
-
-## Common Models
-
-For models shared across multiple domains, use the base `model/` directory instead.
+## Usage
+- Put public-only request/response structs here.
+- Shared model types belong in `chatbasket-api/model/`.
 
 ## Examples
-
-Public-specific models might include:
-- Public-only request/response payloads
-- Public domain-specific data structures
-- Types specific to public user flows
+- Public profile response payloads
+- Public feed DTOs
+- Public-specific request structs

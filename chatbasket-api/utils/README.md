@@ -1,7 +1,19 @@
 # utils/
 
-Shared helpers for auth/session flows and other cross-cutting logic.
-- `auth_flow_utils.go`: OTP verify (3m expiry), session creation with HMAC, primary-device auto-promotion.
-- Hashing, HMAC, expiry helpers live here to keep services thin.
+Shared helpers for auth/session flows and other cross-cutting logic. Keep services thin by centralizing reusable logic here.
 
-Add new cross-cutting helpers here; avoid putting business logic in handlers.
+## Key Utilities
+- `auth_flow_utils.go`: OTP verification, session creation, primary-device auto-promotion.
+- `hashingTextUtils.go`: HMAC + encryption helpers.
+- `otpUtils.go`: OTP creation and expiry checks.
+- `passwordUtils.go`: password hashing/validation.
+- `emailUtils.go`: email dispatch helpers.
+
+## Guidelines
+- Use utils for shared business helpers, not for routing or handler logic.
+- Avoid duplicating validation logic in services; centralize where appropriate.
+- Keep functions pure where possible; minimize side effects.
+- Add new cross-cutting helpers here rather than in handlers.
+
+## References
+Services should import these helpers rather than re-implementing authentication or hashing flows.
