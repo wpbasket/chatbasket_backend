@@ -53,8 +53,8 @@ The Go API acts as a strict **Security Gateway**. It manages proprietary Authent
 - **Centralized Error Handling**: A unified error model (`model.ApiError`) ensures that every failure returns a consistent JSON structure with actionable codes.
 
 #### 4. Social Systems & Chat Engine
-The application enforces strict unidirectional contacts, block cascading, and a highly optimized "Single ACK" WebSocket delivery system. 
-- **Documentation**: All core architectural decisions regarding profiles, privacy restrictions, and real-time chat sync are meticulously documented in the [SOCIAL_SYSTEMS.md](./docs/SOCIAL_SYSTEMS.md) master file.
+The application enforces strict unidirectional contacts, block cascading, and a highly optimized "Single ACK" WebSocket delivery system.
+- **Documentation**: All core architectural decisions regarding profiles, privacy restrictions, and real-time chat sync are meticulously documented in the [system-map.md](./docs/system-map.md) master file.
 
 ---
 

@@ -34,4 +34,4 @@ The system differentiates between **Delivery ACKs** (initiated from Inbox/Home o
 *   **Read Logic**: "Read" is a computed state based on `chat.p*_last_read_at` vs `message.created_at`.
 *   **Deletion**: Deletion logic (Ephemerality) relies on `delivered_to_recipient=TRUE`.
 
-For high-level architecture, see `docs/SOCIAL_SYSTEMS.md`.
+For high-level architecture, see `docs/system-map.md`.

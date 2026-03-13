@@ -1,10 +1,3 @@
-# Social Systems Architecture 
-
-This document is the **single source of truth** for the interconnected social features in the Chatbasket:
-
-
-
-
 ## 1) System map (layering + folder layout)
 
 ### Backend layering
@@ -209,7 +202,7 @@ chatbasket_backend/
 │   │   └── public/
 │   ├── BACKEND_CONSISTENCY.md
 │   ├── CHANGE_POLICY.md
-│   └── SOCIAL_SYSTEMS.md
+│   └── system-map.md
 ├── heroku-mail-relay/
 │   ├── app/
 │   │   └── main.go
