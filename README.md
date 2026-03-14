@@ -1,6 +1,6 @@
 # Chatbasket Backend
 
-<img src="https://img.shields.io/badge/Go-1.25.2-00ADD8?style=flat-square&logo=go" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
+<img src="https://img.shields.io/badge/Go-1.26.0-00ADD8?style=flat-square&logo=go" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
 <img src="https://img.shields.io/badge/Architecture-clean-success?style=flat-square" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
 <img src="https://img.shields.io/badge/Security-privacy--first-blueviolet?style=flat-square" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
 
@@ -53,8 +53,8 @@ The Go API acts as a strict **Security Gateway**. It manages proprietary Authent
 - **Centralized Error Handling**: A unified error model (`model.ApiError`) ensures that every failure returns a consistent JSON structure with actionable codes.
 
 #### 4. Social Systems & Chat Engine
-The application enforces strict unidirectional contacts, block cascading, and a highly optimized "Single ACK" WebSocket delivery system.
-- **Documentation**: All core architectural decisions regarding profiles, privacy restrictions, and real-time chat sync are meticulously documented in the [system-map.md](./docs/system-map.md) master file.
+The application implements an **Ephemeral Relay System** and a high-performance **Efficient Chat Engine** designed for privacy-centric, low-latency communication and seamless multi-device synchronization.
+- **Documentation**: All core architectural decisions regarding social mechanics and the real-time sync lifecycle are comprehensively maintained within the [docs/](./docs) folder.
 
 ---
 

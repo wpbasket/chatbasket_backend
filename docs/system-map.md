@@ -62,19 +62,7 @@ chatbasket_backend/
 │   │   │   │   ├── 007_personal_tokens.down.sql
 │   │   │   │   ├── 007_personal_tokens.up.sql
 │   │   │   │   ├── 008_personal_chat_system.down.sql
-│   │   │   │   ├── 008_personal_chat_system.up.sql
-│   │   │   │   ├── 009_personal_chat_sync_and_unsend.down.sql
-│   │   │   │   ├── 009_personal_chat_sync_and_unsend.up.sql
-│   │   │   │   ├── 010_allow_unsent_type.down.sql
-│   │   │   │   ├── 010_allow_unsent_type.up.sql
-│   │   │   │   ├── 010_message_deleted_flags.down.sql
-│   │   │   │   ├── 010_message_deleted_flags.up.sql
-│   │   │   │   ├── 011_add_delivered_to_recipient_primary.down.sql
-│   │   │   │   ├── 011_add_delivered_to_recipient_primary.up.sql
-│   │   │   │   ├── 012_per_participant_last_message.down.sql
-│   │   │   │   ├── 012_per_participant_last_message.up.sql
-│   │   │   │   ├── 013_add_last_delivered_at.down.sql
-│   │   │   │   └── 013_add_last_delivered_at.up.sql
+│   │   │   │   └── 008_personal_chat_system.up.sql
 │   │   │   ├── queries/
 │   │   │   │   ├── personal_chat.sql
 │   │   │   │   ├── personal_contacts.sql

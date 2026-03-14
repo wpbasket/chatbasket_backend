@@ -101,6 +101,8 @@ func (ps *Service) Method(ctx context.Context, payload *personalmodel.Payload, u
 - Sessions table: `token_hash`, `platform`, `device_token`, `device_name`, `is_central` for primary device tracking.
 - Verification codes: keyed by user ID + type with expiry enforcement in utils.
 - Add/modify SQL in `db/.../queries`, then regenerate sqlc; avoid inline SQL elsewhere.
+- **Migration Consolidation Pattern**: If a feature is in development and not yet live, merge all incremental migrations into the feature's base migration file. Avoid deep stacks (008, 009, 010...) for a single feature before it goes to production.
+- **Cleanup**: Always delete unused queries from `.sql` files when schemas change to avoid "dead code" in generated Go files.
 
 ## Utils
 - `utils/auth_flow_utils.go`: OTP verify (3 min expiry), session create, HMAC helpers.
@@ -234,4 +236,5 @@ if err != nil {
 - Keep responses typed in `model/`; avoid `map[string]interface{}` except for wrapper objects.
 - When changing auth/session flows, update handler/service/utils and web vs native cookie/header behavior; preserve primary-device rules.
 - Update docs when flows change.
+- **System Documentation Pattern**: Every major system (Chat, Profile, Authentication) MUST have a corresponding `.md` file in `docs/business-rules/`. This file MUST include a **Database Schema Appendix** detailing tables, columns, constraints, and indexes.
 - **Reference Examples**: See `contact_handler.go` and `chat_handler.go` for correct pattern implementation.

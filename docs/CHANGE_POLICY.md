@@ -11,7 +11,8 @@ Before changing backend code (API, services, middleware, db/sqlc, routes, handle
 ## Plan first
 - **Design contracts**: Define request/response types using custom structs; align SessionResponse, cookies/headers, primary-device metadata.
 - **Auth/session rules**: Plan web (cookies) vs native (bearer) impacts, middleware changes, and expiry/primary-device behavior.
-- **Schema impacts**: Decide migration steps and sqlc changes before coding.
+- **Schema impacts**: Decide migration steps and sqlc changes before coding. During development (before go-live), **consolidate incremental migrations** into the base migration files to maintain a clean schema initialization.
+- **Documentation**: Treat system-level docs (e.g., `personal.chat-system.md`) as the source of truth for business logic. Include a **Database Schema Appendix** in these docs whenever tables are added or modified.
 - **Architecture compliance**: Ensure handler-service separation, UUID handling, and custom struct responses follow BACKEND_CONSISTENCY.md standards.
 - **Endpoint naming source-of-truth**: Treat registered route paths in `routes/*.go` as canonical. Any docs and frontend references must match these exact paths (e.g., `/personal/chat/ack`, `/personal/chat/sync-actions`).
 
@@ -47,4 +48,5 @@ Before changing backend code (API, services, middleware, db/sqlc, routes, handle
   - Custom struct responses: Ensure no `map[string]interface{}` in service responses (except wrapper objects)
   - Type safety: Verify all responses use proper model structs
   - **Runtime safety**: Verify all type assertions use `ok` check, pointer dereferences are nil-safe
+  - **Cleanup**: Remove any dead SQL queries from `db/.../queries` if tables are renamed or dropped.
 - **Reference examples**: Compare with `contact_handler.go` and `chat_handler.go` for correct patterns.
