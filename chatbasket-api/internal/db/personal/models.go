@@ -35,13 +35,15 @@ type Chat struct {
 	// Unread count for participant_1_id
 	P1UnreadCount int32 `json:"p1_unread_count"`
 	// Unread count for participant_2_id
-	P2UnreadCount        int32              `json:"p2_unread_count"`
-	P1LastReadAt         pgtype.Timestamptz `json:"p1_last_read_at"`
-	P2LastReadAt         pgtype.Timestamptz `json:"p2_last_read_at"`
+	P2UnreadCount int32              `json:"p2_unread_count"`
+	P1LastReadAt  pgtype.Timestamptz `json:"p1_last_read_at"`
+	P2LastReadAt  pgtype.Timestamptz `json:"p2_last_read_at"`
+	// Timestamp of the last message delivered to participant 1
+	P1LastDeliveredAt pgtype.Timestamptz `json:"p1_last_delivered_at"`
+	// Timestamp of the last message delivered to participant 2
+	P2LastDeliveredAt    pgtype.Timestamptz `json:"p2_last_delivered_at"`
 	LastMessageCreatedAt pgtype.Timestamptz `json:"last_message_created_at"`
 	LastMessageSenderID  pgtype.UUID        `json:"last_message_sender_id"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	// UUID of the message currently displayed as the preview
 	LastMessageID pgtype.UUID `json:"last_message_id"`
 	// Last message preview content for participant_1
@@ -51,11 +53,9 @@ type Chat struct {
 	// Last message type for participant_1 preview
 	P1LastMessageType *string `json:"p1_last_message_type"`
 	// Last message type for participant_2 preview
-	P2LastMessageType *string `json:"p2_last_message_type"`
-	// Timestamp of the last message delivered to participant 1
-	P1LastDeliveredAt pgtype.Timestamptz `json:"p1_last_delivered_at"`
-	// Timestamp of the last message delivered to participant 2
-	P2LastDeliveredAt pgtype.Timestamptz `json:"p2_last_delivered_at"`
+	P2LastMessageType *string            `json:"p2_last_message_type"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ContactRequest struct {
@@ -86,25 +86,14 @@ type Message struct {
 	ThumbnailTokenID            *string            `json:"thumbnail_token_id"`
 	ThumbnailTokenSecret        *string            `json:"thumbnail_token_secret"`
 	DeliveredToRecipient        bool               `json:"delivered_to_recipient"`
+	DeliveredToRecipientPrimary *bool              `json:"delivered_to_recipient_primary"`
 	SyncedToSenderPrimary       bool               `json:"synced_to_sender_primary"`
+	DeletedBySender             bool               `json:"deleted_by_sender"`
+	DeletedByRecipient          bool               `json:"deleted_by_recipient"`
 	DeliveryAttempts            int32              `json:"delivery_attempts"`
 	ExpiresAt                   pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
-	DeletedBySender             bool               `json:"deleted_by_sender"`
-	DeletedByRecipient          bool               `json:"deleted_by_recipient"`
-	DeliveredToRecipientPrimary *bool              `json:"delivered_to_recipient_primary"`
-}
-
-type MessageDeliveryLog struct {
-	ID            uuid.UUID          `json:"id"`
-	MessageID     uuid.UUID          `json:"message_id"`
-	AttemptNumber int32              `json:"attempt_number"`
-	Status        string             `json:"status"`
-	ErrorReason   *string            `json:"error_reason"`
-	AttemptedAt   pgtype.Timestamptz `json:"attempted_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
 type MessageSyncAction struct {

@@ -418,28 +418,6 @@ SELECT EXISTS (
     );
 
 -- ===========================================
--- Message Delivery Log Operations
--- ===========================================
-
--- name: CreateDeliveryLog :exec
-INSERT INTO
-    message_delivery_log (
-        id,
-        message_id,
-        attempt_number,
-        status,
-        error_reason
-    )
-VALUES ($1, $2, $3, $4, $5);
-
--- name: GetDeliveryLogsByMessage :many
-SELECT *
-FROM message_delivery_log
-WHERE
-    message_id = $1
-ORDER BY attempted_at DESC;
-
--- ===========================================
 -- File Messaging Operations
 -- ===========================================
 

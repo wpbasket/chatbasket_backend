@@ -15,11 +15,18 @@ p2_unread_count INTEGER NOT NULL DEFAULT 0,
 p1_last_read_at TIMESTAMPTZ,
 p2_last_read_at TIMESTAMPTZ,
 
--- Last Message Preview (Persistent even if message is deleted)
-last_message_content                TEXT,
-    last_message_created_at             TIMESTAMPTZ,
-    last_message_type                   TEXT,
+-- Per-Participant Delivery Timestamps (High-Water Mark)
+p1_last_delivered_at TIMESTAMPTZ,
+p2_last_delivered_at TIMESTAMPTZ,
+
+-- Last Message Preview (Per-Participant, persistent even if message is deleted)
+last_message_created_at             TIMESTAMPTZ,
     last_message_sender_id              UUID,
+    last_message_id                     UUID,
+    p1_last_message_content             TEXT,
+    p2_last_message_content             TEXT,
+    p1_last_message_type                TEXT,
+    p2_last_message_type                TEXT,
 
     created_at                          TIMESTAMPTZ,
     updated_at                          TIMESTAMPTZ,
@@ -30,10 +37,14 @@ last_message_content                TEXT,
 
 -- Add comments for developer clarity
 COMMENT ON COLUMN chats.p1_unread_count IS 'Unread count for participant_1_id';
-
 COMMENT ON COLUMN chats.p2_unread_count IS 'Unread count for participant_2_id';
-
-COMMENT ON COLUMN chats.last_message_content IS 'Content of the last message (persisted for preview)';
+COMMENT ON COLUMN chats.p1_last_delivered_at IS 'Timestamp of the last message delivered to participant 1';
+COMMENT ON COLUMN chats.p2_last_delivered_at IS 'Timestamp of the last message delivered to participant 2';
+COMMENT ON COLUMN chats.last_message_id IS 'UUID of the message currently displayed as the preview';
+COMMENT ON COLUMN chats.p1_last_message_content IS 'Last message preview content for participant_1';
+COMMENT ON COLUMN chats.p2_last_message_content IS 'Last message preview content for participant_2';
+COMMENT ON COLUMN chats.p1_last_message_type IS 'Last message type for participant_1 preview';
+COMMENT ON COLUMN chats.p2_last_message_type IS 'Last message type for participant_2 preview';
 
 -- Drop existing trigger if already present
 DROP TRIGGER IF EXISTS chats_timestamps_trigger ON chats;
@@ -76,7 +87,8 @@ message_type TEXT NOT NULL DEFAULT 'text' CHECK (
         'image',
         'video',
         'audio',
-        'file'
+        'file',
+        'unsent'
     )
 ),
 
@@ -94,7 +106,12 @@ thumbnail_token_secret TEXT,
 
 -- Delivery tracking for primary-device-centric relay
 delivered_to_recipient BOOLEAN NOT NULL DEFAULT FALSE,
+delivered_to_recipient_primary BOOLEAN DEFAULT FALSE,
 synced_to_sender_primary BOOLEAN NOT NULL DEFAULT FALSE,
+
+-- Per-user deletion flags
+deleted_by_sender BOOLEAN NOT NULL DEFAULT FALSE,
+deleted_by_recipient BOOLEAN NOT NULL DEFAULT FALSE,
 
 -- Retry and TTL management
 delivery_attempts INTEGER NOT NULL DEFAULT 0,
@@ -108,7 +125,7 @@ CONSTRAINT messages_file_size_limit
         CHECK (file_size IS NULL OR file_size <= 104857600), -- 100MB limit
     CONSTRAINT messages_file_type_validation
         CHECK (
-            (message_type = 'text' AND file_id IS NULL) OR
+            (message_type IN ('text', 'unsent') AND file_id IS NULL) OR
             (message_type IN ('image', 'video', 'audio', 'file') AND file_id IS NOT NULL)
         )
 );
@@ -164,42 +181,43 @@ WHERE
 -- ======================================
 
 -- ======================================
--- Table: message_delivery_log
---        Audit trail for delivery failures and retries
+-- Table: message_sync_actions
+--        Relay for cross-device synchronization (unsend, delete_for_me)
 -- ======================================
-CREATE TABLE IF NOT EXISTS message_delivery_log (
-    id UUID PRIMARY KEY, -- Go-generated UUID
-    message_id UUID NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
-    attempt_number INTEGER NOT NULL,
-    status TEXT NOT NULL CHECK (
-        status IN (
-            'pending',
-            'delivered',
-            'failed',
-            'expired'
-        )
-    ),
-    error_reason TEXT,
-    attempted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+CREATE TABLE IF NOT EXISTS message_sync_actions (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    action_type TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    delivered_to_primary BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
+    updated_at TIMESTAMPTZ,
+    CONSTRAINT fk_sync_actions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT ck_sync_action_type CHECK (
+        action_type IN ('unsend', 'delete_for_me')
+    )
 );
 
 -- Drop existing trigger if already present
-DROP TRIGGER IF EXISTS message_delivery_log_timestamps_trigger ON message_delivery_log;
+DROP TRIGGER IF EXISTS sync_actions_timestamps_trigger ON message_sync_actions;
 
 -- Attach auto timestamp trigger
-CREATE TRIGGER message_delivery_log_timestamps_trigger
-BEFORE INSERT OR UPDATE ON message_delivery_log
+CREATE TRIGGER sync_actions_timestamps_trigger
+BEFORE INSERT OR UPDATE ON message_sync_actions
 FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
 
--- Explicit index for message delivery history
-CREATE INDEX IF NOT EXISTS idx_delivery_log_message ON message_delivery_log (message_id, attempted_at DESC);
+-- Index for fetching pending actions for a specific user
+CREATE INDEX IF NOT EXISTS idx_sync_actions_user_pending ON message_sync_actions (
+    user_id,
+    delivered_to_primary,
+    created_at
+);
+
 -- ======================================
--- End of message_delivery_log table section
+-- End of message_sync_actions table section
 -- ======================================
 
 -- ======================================
--- End of migration: Phase 6 Chat System (Merged)
+-- End of migration: Chat System (Consolidated)
 -- ======================================
