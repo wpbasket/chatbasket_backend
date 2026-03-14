@@ -53,7 +53,7 @@ The Go API acts as a strict **Security Gateway**. It manages proprietary Authent
 - **Centralized Error Handling**: A unified error model (`model.ApiError`) ensures that every failure returns a consistent JSON structure with actionable codes.
 
 #### 4. Social Systems & Chat Engine
-The application implements an **Ephemeral Relay System** and a high-performance **Efficient Chat Engine** designed for privacy-centric, low-latency communication and seamless multi-device synchronization.
+The application implements an **Ephemeral Relay System** and a high-performance **Efficient Chat Engine** designed for privacy-centric, low-latency communication and seamless multi-device synchronization using a **Dual-Transport (WebSocket/REST) fallback** strategy.
 - **Documentation**: All core architectural decisions regarding social mechanics and the real-time sync lifecycle are comprehensively maintained within the [docs/](./docs) folder.
 
 ---
@@ -99,7 +99,7 @@ We choose tools that offer **Control** and **Predictability**.
 
 | Component | Technology | Rationale (Why?) |
 |-----------|------------|------------------|
-| **Core Logic** | ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat-square&logo=go&logoColor=white) | **Concurrency & Safety**: Goroutines handle thousands of concurrent WebSocket connections with minimal footprint. |
+| **Core Logic** | ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat-square&logo=go&logoColor=white) | **The System Backbone**: Powers the **Secure Gateway**, **Clean Architecture**, and the resilient **Dual-Transport** chat engine. It leverages Go's native concurrency and the **coder/websocket** library to provide high-performance real-time synchronization alongside robust REST endpoints for fallbacks. |
 | **API Framework** | ![Echo](https://img.shields.io/badge/Echo_v4-00ADD8?style=flat-square&logoColor=white) | **Performance**: Zero-allocation router that is significantly faster than Gin or Fiber in our benchmarks. |
 | **Database** | ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=flat-square&logo=postgresql&logoColor=white) | **Primary Hub**: Handles all User Data, Custom Auth Sessions, and Relations with ACID compliance. |
 | **Email Gateway** | ![Go](https://img.shields.io/badge/Heroku_Gateway-00ADD8?style=flat-square&logo=go&logoColor=white) | **High Reliability**: A dedicated Go-based **HTTP-to-SMTP Gateway** featuring a **Worker Pool** and **Fire-and-Forget** asynchronous logic to bypass primary infrastructure port restrictions. |
