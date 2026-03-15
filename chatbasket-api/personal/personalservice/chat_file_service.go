@@ -106,7 +106,6 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 
 	messageID := uuid.New()
 	expiresAt := time.Now().Add(DefaultMessageTTL)
-	mimeType := params.FileHeader.Header.Get("Content-Type")
 
 	log.Printf("[ChatFileService] Creating DB record for message...")
 	message, err := ps.PersonalQueries.CreateMessageWithFile(ctx, personal.CreateMessageWithFileParams{
@@ -119,7 +118,7 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 		FileID:                      &fileID,
 		FileName:                    &params.FileHeader.Filename,
 		FileSize:                    &params.FileHeader.Size,
-		FileMimeType:                &mimeType,
+		FileMimeType:                new(params.FileHeader.Header.Get("Content-Type")),
 		FileTokenID:                 &uploadResult.TokenIDs[0],
 		FileTokenSecret:             &uploadResult.TokenSecrets[0],
 		FileTokenExpiry:             pgtype.Timestamptz{Time: tokenExpiry, Valid: true},

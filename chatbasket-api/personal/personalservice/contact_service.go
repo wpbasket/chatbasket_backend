@@ -195,10 +195,9 @@ func (ps *Service) CheckContactExistance(ctx context.Context, payload *personalm
 		ProfileType: user.ProfileType,
 	}
 
-	recipentUserId := user.ID.String()
 	// Only set RecipientUserId if profile is not private
 	if user.ProfileType != "private" {
-		existsResp.RecipientUserId = &recipentUserId
+		existsResp.RecipientUserId = new(user.ID.String())
 	}
 
 	return existsResp, nil
@@ -293,8 +292,7 @@ func (ps *Service) CreateContact(ctx context.Context, payload *personalmodel.Cre
 			if len([]rune(trimmed)) > 40 {
 				return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid_nickname_length", Type: "bad_request"}
 			}
-			v := trimmed
-			nickname = &v
+			nickname = new(trimmed)
 		}
 	}
 
