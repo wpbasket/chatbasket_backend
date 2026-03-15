@@ -214,8 +214,8 @@ func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.F
 			UserID:      userId.UuidUserId,
 			FileID:      result.FileId,
 			AvatarType:  "profile",
-			TokenID:     &result.TokenIDs[0],
-			TokenSecret: &result.TokenSecrets[0],
+			TokenID:     new(result.TokenIDs[0]),
+			TokenSecret: new(result.TokenSecrets[0]),
 			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: expireTime},
 		})
 		if err != nil {
@@ -226,8 +226,8 @@ func (ps *Service) UploadUserProfilePicture(ctx context.Context, fh *multipart.F
 	if resUser {
 		_, err := ps.PersonalQueries.UpdateAvatarTokens(ctx, personal.UpdateAvatarTokensParams{
 			UserID:      userId.UuidUserId,
-			TokenID:     &result.TokenIDs[0],
-			TokenSecret: &result.TokenSecrets[0],
+			TokenID:     new(result.TokenIDs[0]),
+			TokenSecret: new(result.TokenSecrets[0]),
 			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: expireTime},
 		})
 		if err != nil {

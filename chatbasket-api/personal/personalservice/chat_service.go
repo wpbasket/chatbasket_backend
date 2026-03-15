@@ -196,16 +196,12 @@ func (ps *Service) SendMessage(ctx context.Context, params SendMessageParams) (*
 	// Update chat status (Last Message + Unread Count)
 	// We ignore error here to not fail the request if the message was sent successfully
 	// but we should log it.
-	content := message.Content
-	msgType := message.MessageType
-	senderID := message.SenderID
-
 	_ = ps.PersonalQueries.UpdateChatStatus(ctx, personal.UpdateChatStatusParams{
 		ID:                   chat.ID,
-		P1LastMessageContent: &content,
+		P1LastMessageContent: new(message.Content),
 		LastMessageCreatedAt: message.CreatedAt,
-		P1LastMessageType:    &msgType,
-		LastMessageSenderID:  pgtype.UUID{Bytes: senderID, Valid: true},
+		P1LastMessageType:    new(message.MessageType),
+		LastMessageSenderID:  pgtype.UUID{Bytes: message.SenderID, Valid: true},
 		LastMessageID:        pgtype.UUID{Bytes: message.ID, Valid: true},
 	})
 
@@ -1147,8 +1143,7 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 			}
 
 			if chat.LastMessageCreatedAt.Valid {
-				t := chat.LastMessageCreatedAt.Time
-				lastMessageCreatedAt = &t
+				lastMessageCreatedAt = new(chat.LastMessageCreatedAt.Time)
 			}
 
 			if chat.LastMessageType != nil {
@@ -1161,8 +1156,7 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 				// Convert [16]byte to slice for FromBytes
 				uid, err := uuid.FromBytes(chat.LastMessageSenderID.Bytes[:])
 				if err == nil {
-					s := uid.String()
-					lastMessageSenderID = &s
+					lastMessageSenderID = new(uid.String())
 				}
 			}
 		}
@@ -1179,8 +1173,7 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 
 		var lastMessageID *string
 		if chat.LastMessageID.Valid {
-			id := uuid.Must(uuid.FromBytes(chat.LastMessageID.Bytes[:])).String()
-			lastMessageID = &id
+			lastMessageID = new(uuid.Must(uuid.FromBytes(chat.LastMessageID.Bytes[:])).String())
 		}
 
 		chatResponses[i] = personalmodel.ChatResponse{

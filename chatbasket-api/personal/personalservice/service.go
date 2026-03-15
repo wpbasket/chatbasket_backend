@@ -90,8 +90,8 @@ func (ps *Service) buildAvatarURL(
 
 		_, err = ps.PersonalQueries.UpdateAvatarTokens(ctx, personal.UpdateAvatarTokensParams{
 			UserID:      ownerID,
-			TokenID:     &tok.Id,
-			TokenSecret: &tok.Secret,
+			TokenID:     new(tok.Id),
+			TokenSecret: new(tok.Secret),
 			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: tokTime},
 		})
 		if err != nil {
@@ -104,8 +104,8 @@ func (ps *Service) buildAvatarURL(
 
 		finalAvatar = utils.BuildAvatarURI(&utils.AppwriteFileData{
 			FileId:     fileID,
-			FileToken:  &tok.Id,
-			FileSecret: &tok.Secret,
+			FileToken:  new(tok.Id),
+			FileSecret: new(tok.Secret),
 		})
 	}
 

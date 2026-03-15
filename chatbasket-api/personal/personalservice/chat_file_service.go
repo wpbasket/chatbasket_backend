@@ -151,15 +151,14 @@ func (ps *Service) UploadFileForMessage(ctx context.Context, params UploadFileFo
 		previewContent = params.FileHeader.Filename
 	}
 
-	msgType := message.MessageType
-	senderID := message.SenderID
-
+	// We ignore error here to not fail the request if the message was sent successfully
+	// but we should log it.
 	_ = ps.PersonalQueries.UpdateChatStatus(ctx, personal.UpdateChatStatusParams{
 		ID:                   chat.ID,
-		P1LastMessageContent: &previewContent,
+		P1LastMessageContent: new(previewContent),
 		LastMessageCreatedAt: message.CreatedAt,
-		P1LastMessageType:    &msgType,
-		LastMessageSenderID:  pgtype.UUID{Bytes: senderID, Valid: true},
+		P1LastMessageType:    new(message.MessageType),
+		LastMessageSenderID:  pgtype.UUID{Bytes: message.SenderID, Valid: true},
 		LastMessageID:        pgtype.UUID{Bytes: message.ID, Valid: true},
 	})
 
@@ -246,8 +245,8 @@ func (ps *Service) GetMessageFileURL(ctx context.Context, messageID uuid.UUID, u
 		tokenExpiry, _ := time.Parse(time.RFC3339, newToken.Expire)
 		err = ps.PersonalQueries.UpdateMessageFileToken(ctx, personal.UpdateMessageFileTokenParams{
 			ID:              messageID,
-			FileTokenID:     &tokenID,
-			FileTokenSecret: &tokenSecret,
+			FileTokenID:     new(tokenID),
+			FileTokenSecret: new(tokenSecret),
 			FileTokenExpiry: pgtype.Timestamptz{Time: tokenExpiry, Valid: true},
 		})
 		if err != nil {
@@ -293,8 +292,8 @@ func (ps *Service) GetMessageFileURL(ctx context.Context, messageID uuid.UUID, u
 			tokenExpiry, _ := time.Parse(time.RFC3339, newToken.Expire)
 			err = ps.PersonalQueries.UpdateMessageFileToken(ctx, personal.UpdateMessageFileTokenParams{
 				ID:              messageID,
-				FileTokenID:     &tokenID,
-				FileTokenSecret: &tokenSecret,
+				FileTokenID:     new(tokenID),
+				FileTokenSecret: new(tokenSecret),
 				FileTokenExpiry: pgtype.Timestamptz{Time: tokenExpiry, Valid: true},
 			})
 			if err != nil {
@@ -312,8 +311,8 @@ func (ps *Service) GetMessageFileURL(ctx context.Context, messageID uuid.UUID, u
 		ChatFilesBucketID,
 		&utils.AppwriteFileData{
 			FileId:     message.FileID,
-			FileToken:  &tokenID,
-			FileSecret: &tokenSecret,
+			FileToken:  new(tokenID),
+			FileSecret: new(tokenSecret),
 		},
 	)
 
@@ -475,8 +474,8 @@ func (ps *Service) GenerateMessageFileURLs(ctx context.Context, message personal
 		tokenExpiry, _ := time.Parse(time.RFC3339, newToken.Expire)
 		_ = ps.PersonalQueries.UpdateMessageFileToken(ctx, personal.UpdateMessageFileTokenParams{
 			ID:              message.ID,
-			FileTokenID:     &tokenID,
-			FileTokenSecret: &tokenSecret,
+			FileTokenID:     new(tokenID),
+			FileTokenSecret: new(tokenSecret),
 			FileTokenExpiry: pgtype.Timestamptz{Time: tokenExpiry, Valid: true},
 		})
 	} else {
@@ -486,8 +485,8 @@ func (ps *Service) GenerateMessageFileURLs(ctx context.Context, message personal
 
 	ad := &utils.AppwriteFileData{
 		FileId:     message.FileID,
-		FileToken:  &tokenID,
-		FileSecret: &tokenSecret,
+		FileToken:  new(tokenID),
+		FileSecret: new(tokenSecret),
 	}
 
 	var viewURL, downloadURL string

@@ -77,8 +77,8 @@ func (s *Service) UpdateSessionNotificationToken(ctx context.Context, userID uui
 	err = s.AuthQueries.UpdateSessionDeviceToken(ctx, auth.UpdateSessionDeviceTokenParams{
 		AuthUserID:  userID,
 		TokenHash:   tokenHash,
-		DeviceToken: &payload.Token,
-		Platform:    &platform,
+		DeviceToken: new(payload.Token),
+		Platform:    new(platform),
 		DeviceName:  payload.DeviceName,
 	})
 	if err != nil {

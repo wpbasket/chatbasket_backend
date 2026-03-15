@@ -137,7 +137,7 @@ func CreateSessionFlow(ctx context.Context, q *auth.Queries, userID uuid.UUID, p
 		TokenHash:   tokenHash,
 		ExpiresAt:   pgtype.Timestamptz{Valid: true, Time: expiresAt},
 		Platform:    &platform,
-		DeviceToken: &deviceToken,
+		DeviceToken: new(deviceToken),
 		DeviceName:  nil, // To be set later via settings
 		IsCentral:   isPrimary,
 	})

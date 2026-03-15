@@ -721,8 +721,7 @@ func (ps *Service) UpdateContactNickname(ctx context.Context, payload *personalm
 			if len([]rune(trimmed)) > 40 {
 				return nil, &model.ApiError{Code: http.StatusBadRequest, Message: "invalid_nickname_length", Type: "bad_request"}
 			}
-			v := trimmed
-			nickname = &v
+			nickname = new(trimmed)
 		}
 	}
 
