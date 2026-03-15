@@ -1,15 +1,4 @@
-## 1) System map (layering + folder layout)
-
-### Backend layering
-Request flow is:
-
-`echo pre-middleware -> global echo middleware -> routes -> route-group auth middleware -> handler -> service -> db/sqlc` (+ `utils` for shared helpers)
-
-### Backend folder tree (current)
-**Folder tree rules:**
-- Always use standard `tree` style (`├──`, `└──`, `│   `) with no blank lines.
-- Show full structure unless explicitly told to truncate.
-- Exclude big/generated folders (e.g., `node_modules`, `dist`, `build`, `.gocache`, `.wrangler`, `.expo`, `.next`, `.turbo`, `.cache`).
+# Backend Folder Structure
 
 ```
 chatbasket_backend/
@@ -19,8 +8,8 @@ chatbasket_backend/
 │       └── deploy_web.yml
 ├── chatbasket-api/
 │   ├── app/
-│   │   ├── main.go
-│   │   └── README.md
+│   │   ├── README.md
+│   │   └── main.go
 │   ├── appwriteinternal/
 │   │   ├── APPWRITE_FILE_SYSTEM_REFERENCE.md
 │   │   ├── README.md
@@ -75,11 +64,11 @@ chatbasket_backend/
 │   │   │   ├── queries/
 │   │   │   │   └── .gitkeep
 │   │   │   └── sqlc.yaml
+│   │   ├── README.md
 │   │   ├── config.go
 │   │   ├── cosmos_client.go
 │   │   ├── cosmos_config.go
-│   │   ├── pool.go
-│   │   └── README.md
+│   │   └── pool.go
 │   ├── handler/
 │   │   ├── README.md
 │   │   └── user_handler.go
@@ -134,10 +123,9 @@ chatbasket_backend/
 │   │   │   ├── setting_service.go
 │   │   │   ├── ws_hub.go
 │   │   │   └── ws_router.go
-│   │   ├── personalutils/
-│   │   │   ├── message_cleanup.go
-│   │   │   └── usernamePersUtils.go
-│   │   └── README_CHAT_PERSONAL.md
+│   │   └── personalutils/
+│   │       ├── message_cleanup.go
+│   │       └── usernamePersUtils.go
 │   ├── public/
 │   │   ├── publichandler/
 │   │   │   ├── profile_handler.go
@@ -157,13 +145,14 @@ chatbasket_backend/
 │   │   ├── public_routes.go
 │   │   └── routes.go
 │   ├── services/
+│   │   ├── README.md
 │   │   ├── auth_base_service.go
 │   │   ├── base_service.go
 │   │   ├── fcm_service.go
-│   │   ├── README.md
 │   │   ├── upload.go
 │   │   └── user_service.go
 │   ├── utils/
+│   │   ├── README.md
 │   │   ├── auth_flow_utils.go
 │   │   ├── baseUtils.go
 │   │   ├── emailUtils.go
@@ -172,7 +161,6 @@ chatbasket_backend/
 │   │   ├── hashingTextUtils.go
 │   │   ├── otpUtils.go
 │   │   ├── passwordUtils.go
-│   │   ├── README.md
 │   │   └── toInputFileUtils.go
 │   ├── .dockerignore
 │   ├── .env
@@ -187,10 +175,11 @@ chatbasket_backend/
 │   ├── business-rules/
 │   │   ├── common/
 │   │   ├── personal/
+│   │   │   ├── personal.chat-system.md
+│   │   │   └── personal.profile-system.md
 │   │   └── public/
 │   ├── BACKEND_CONSISTENCY.md
-│   ├── CHANGE_POLICY.md
-│   └── system-map.md
+│   └── CHANGE_POLICY.md
 ├── heroku-mail-relay/
 │   ├── app/
 │   │   └── main.go
@@ -199,16 +188,7 @@ chatbasket_backend/
 └── README.md
 ```
 
-### Frontend layering (request flow)
-Request flow is:
-
-`ui/screens -> state/domain logic -> network (ws/rest) -> api client -> backend`
-
-### Frontend folder tree (current)
-**Folder tree rules:**
-- Always use standard `tree` style (`├──`, `└──`, `│   `) with no blank lines.
-- Show full structure unless explicitly told to truncate.
-- Exclude big/generated folders (e.g., `node_modules`, `dist`, `build`, `.gocache`, `.wrangler`, `.expo`, `.next`, `.turbo`, `.cache`).
+# Frontend Folder Structure
 
 ```
 chatbasket/
@@ -314,10 +294,10 @@ chatbasket/
 │   │   │   │   │   │   ├── BulkActionBar.tsx
 │   │   │   │   │   │   ├── ChatInputBar.tsx
 │   │   │   │   │   │   └── MessageBubble.tsx
+│   │   │   │   │   ├── README_CHAT.md
 │   │   │   │   │   ├── [chat_id].tsx
 │   │   │   │   │   ├── _layout.tsx
-│   │   │   │   │   ├── index.tsx
-│   │   │   │   │   └── README_CHAT.md
+│   │   │   │   │   └── index.tsx
 │   │   │   │   ├── _layout.tsx
 │   │   │   │   └── index.tsx
 │   │   │   ├── profile/
@@ -377,9 +357,9 @@ chatbasket/
 │   │   │   └── index.tsx
 │   │   ├── +native-intent.tsx
 │   │   ├── +not-found.tsx
+│   │   ├── README_ROOT_ARCHITECTURE.md
 │   │   ├── _layout.tsx
-│   │   ├── index.tsx
-│   │   └── README_ROOT_ARCHITECTURE.md
+│   │   └── index.tsx
 │   ├── components/
 │   │   ├── header/
 │   │   │   └── Header.tsx
@@ -417,7 +397,6 @@ chatbasket/
 │   │   │   │   ├── Collapsible.tsx
 │   │   │   │   ├── DropDown.tsx
 │   │   │   │   ├── EmptyState.tsx
-│   │   │   │   ├── external-link.tsx
 │   │   │   │   ├── HapticTab.tsx
 │   │   │   │   ├── HelloWave.tsx
 │   │   │   │   ├── LoadingScreen.tsx
@@ -429,14 +408,15 @@ chatbasket/
 │   │   │   │   ├── ThemedText.tsx
 │   │   │   │   ├── ThemedView.tsx
 │   │   │   │   ├── ThemedViewWithSidebar.tsx
-│   │   │   │   └── UsernameDisplay.tsx
+│   │   │   │   ├── UsernameDisplay.tsx
+│   │   │   │   └── external-link.tsx
 │   │   │   ├── fonts/
+│   │   │   │   ├── IconSymbol.tsx
 │   │   │   │   ├── entypoIcons.tsx
 │   │   │   │   ├── fontAwesome5.tsx
-│   │   │   │   ├── IconSymbol.tsx
 │   │   │   │   └── materialCommunityIcons.tsx
-│   │   │   ├── basic.tsx
-│   │   │   └── README_UI_SYSTEM.md
+│   │   │   ├── README_UI_SYSTEM.md
+│   │   │   └── basic.tsx
 │   │   ├── personal.app.tabs.tsx
 │   │   ├── personal.app.tabs.web.tsx
 │   │   ├── public.app.tabs.tsx
@@ -589,9 +569,9 @@ chatbasket/
 │   │   │   └── util.upload.ts
 │   │   ├── personalUtils/
 │   │   │   ├── logger/
+│   │   │   │   ├── README.md
 │   │   │   │   ├── logger.config.ts
-│   │   │   │   ├── logger.ts
-│   │   │   │   └── README.md
+│   │   │   │   └── logger.ts
 │   │   │   ├── personal.util.contacts.ts
 │   │   │   ├── personal.util.device.ts
 │   │   │   ├── personal.util.profile.ts
@@ -605,6 +585,7 @@ chatbasket/
 ├── .env
 ├── .gitignore
 ├── .npmrc
+├── README.md
 ├── app.json
 ├── babel.config.js
 ├── eas.json
@@ -616,50 +597,7 @@ chatbasket/
 ├── legend-babel.d.ts
 ├── package-lock.json
 ├── package.json
-├── README.md
 ├── tsconfig.json
 ├── unistyles.ts
 └── wrangler.toml
 ```
-
----
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## 2) Developer checklist (do not break these invariants)
-
-- Contacts are **one-way** by schema and triggers.
-- Blocking must remain a hard boundary:
-  - Contact creation must always check blocks
-  - Block trigger must remove both-direction contacts
-- Private profiles must remain non-contactable and non-messageable.
-- Restrictions/exemptions must remain “visibility only”, messaging is separate.
-- Primary device must remain unique (`sessions.is_central` invariant).
-
-

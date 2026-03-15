@@ -14,7 +14,7 @@ func GenerateOTP() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		otp[i] = digits[otp[i]%10]
 	}
 	return string(otp), nil

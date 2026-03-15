@@ -21,7 +21,7 @@ func GenerateRandomUsername() (string, error) {
 	username := make([]byte, 10)
 
 	// first 4 letters
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		if err != nil {
 			return "", err

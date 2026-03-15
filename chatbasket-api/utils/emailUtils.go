@@ -35,9 +35,7 @@ func SendEmail(to []string, subject string, bodyHTML string) *model.AppError {
 	}
 
 	// Fire and forget in a goroutine
-	emailWG.Add(1)
-	go func() {
-		defer emailWG.Done()
+	emailWG.Go(func() {
 		defer func() {
 			if r := recover(); r != nil {
 				fmt.Printf("Relay Critical: Recovered from panic in email goroutine: %v\n", r)
@@ -73,7 +71,7 @@ func SendEmail(to []string, subject string, bodyHTML string) *model.AppError {
 		} else {
 			fmt.Printf("Relay Success (Accepted): Email queued for %v\n", to)
 		}
-	}()
+	})
 
 	return nil
 }

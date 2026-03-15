@@ -125,19 +125,26 @@ func main() {
 	}()
 
 	// Wait for interrupt signal to gracefully shutdown the server
-	quit := make(chan os.Signal, 1)
-	// Kill signal with grace period of 30 seconds
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
-	e.Logger.Info("Received shutdown signal - starting graceful shutdown...")
+	// Go 1.26: Using signal.NotifyContext for better context-based shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	<-ctx.Done()
+
+	// Log the signal that caused shutdown
+	if cause := context.Cause(ctx); cause != nil {
+		e.Logger.Infof("Received shutdown signal: %v - starting graceful shutdown...", cause)
+	} else {
+		e.Logger.Info("Received shutdown signal - starting graceful shutdown...")
+	}
 
 	// Heroku allows 30 seconds total for graceful shutdown
 	// Allocate 15s for server shutdown, 5s for DB cleanup, 10s buffer
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	// Shutdown Echo server
-	if err := e.Shutdown(ctx); err != nil {
+	if err := e.Shutdown(shutdownCtx); err != nil {
 		e.Logger.Error("Server forced to shutdown: ", err)
 	}
 

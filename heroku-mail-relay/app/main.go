@@ -69,17 +69,24 @@ func main() {
 	}
 
 	// 4. Graceful Shutdown Handling
+	// Go 1.26: Using signal.NotifyContext for better context-based shutdown
 	go func() {
-		stop := make(chan os.Signal, 1)
-		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-		<-stop
+		shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
 
-		log.Println("Shutting down relay...")
+		<-shutdownCtx.Done()
+
+		// Log the signal that caused shutdown
+		if cause := context.Cause(shutdownCtx); cause != nil {
+			log.Printf("Shutting down relay due to: %v", cause)
+		} else {
+			log.Println("Shutting down relay...")
+		}
 
 		// Stop accepting new HTTP requests
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		httpShutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
-		server.Shutdown(shutdownCtx)
+		server.Shutdown(httpShutdownCtx)
 
 		// Stop workers and wait for pending jobs
 		cancel()

@@ -10,8 +10,8 @@ import (
 
 // GetStatusCodeFromError extracts the HTTP status code from an error.
 func GetStatusCodeFromError(err error) int {
-	var he *echo.HTTPError
-	if errors.As(err, &he) {
+	// Go 1.26: Using errors.AsType[T] for type-safe error handling
+	if he, ok := errors.AsType[*echo.HTTPError](err); ok {
 		return he.Code
 	}
 	return http.StatusInternalServerError // fallback for non-HTTP errors
@@ -27,8 +27,8 @@ func GetPostgresError(err error) *PostgresError {
 		return nil
 	}
 
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
+	// Go 1.26: Using errors.AsType[T] for type-safe error handling
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		return &PostgresError{Message: pgErr.Message, PgError: pgErr}
 	}
 	return &PostgresError{Message: err.Error(), PgError: nil}
