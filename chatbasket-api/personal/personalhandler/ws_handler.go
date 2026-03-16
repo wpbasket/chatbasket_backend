@@ -9,7 +9,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // WebSocketUpgrade handles the HTTP → WebSocket upgrade for real-time chat events.
@@ -19,7 +19,7 @@ import (
 //
 // The client connects and receives server-pushed events (new_message, read_receipt, etc.).
 // The client does NOT send data over this connection — all mutations go through REST.
-func (h *ChatHandler) WebSocketUpgrade(c echo.Context) error {
+func (h *ChatHandler) WebSocketUpgrade(c *echo.Context) error {
 	// ── 1. Extract auth context (set by AuthSessionMiddleware) ──────────────
 	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
 	if !ok {
@@ -55,7 +55,7 @@ func (h *ChatHandler) WebSocketUpgrade(c echo.Context) error {
 	// AcceptOptions:
 	//   - InsecureSkipVerify: true for now — the auth middleware already validates sessions.
 	//     In production, set OriginPatterns to your frontend domain(s).
-	wsConn, err := websocket.Accept(c.Response().Writer, c.Request(), &websocket.AcceptOptions{
+	wsConn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {

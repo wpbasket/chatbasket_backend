@@ -13,42 +13,45 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/joho/godotenv"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"github.com/labstack/gommon/log"
+	"log/slog"
 )
 
 func main() {
 	e := echo.New()
-	e.Logger.SetLevel(log.ERROR)
-	e.HideBanner = true
+
+	// Configure structured logging with slog (Source of Truth)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	e.Logger = logger
+
 	e.Pre(middleware.RemoveTrailingSlash())
+	e.Use(middleware.RequestLogger()) // Most efficient v5 way: uses e.Logger + slog.LogAttrs
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Secure())
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		Level: 5,
-		Skipper: func(c echo.Context) bool {
-			// Skip Gzip for WebSocket upgrades — compression corrupts WS frames
+		Skipper: func(c *echo.Context) bool {
+			// Skip Gzip for WebSocket upgrades
 			return c.Request().Header.Get("Upgrade") == "websocket"
 		},
 	}))
-	e.Use(middleware.BodyLimit("200M"))
+	e.Use(middleware.BodyLimit(209715200)) // 200MB as int64
 
-	// Safeguard: Limit logic execution to 30s for all routes EXCEPT uploads
+	// Safeguard: Limit logic execution to 30s as per best practices
 	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
 		Timeout: 30 * time.Second,
-		Skipper: func(c echo.Context) bool {
+		Skipper: func(c *echo.Context) bool {
 			p := c.Path()
-			// Skip timeout for uploads and WebSocket (long-lived connections)
+			// Skip timeout for long-lived connections
 			return p == "/api/personal/chat/upload" ||
 				p == "/api/personal/profile/upload-avatar" ||
 				p == "/api/public/profile/upload-avatar" ||
 				c.Request().Header.Get("Upgrade") == "websocket"
 		},
 	}))
-
-	e.Use(middleware.Logger())
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		// AllowOrigins: []string{"http://localhost:8081"},
@@ -80,14 +83,16 @@ func main() {
 
 	cfg, err := db.LoadPostgresConfig()
 	if err != nil {
-		e.Logger.Fatal("failed to load postgres config: " + err.Error())
+		e.Logger.Error("failed to load postgres config", "error", err)
+		os.Exit(1)
 	}
 	// Create pool with startup timeout context
 	startupCtx, startupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	pool, err := db.NewPool(startupCtx, cfg)
 	startupCancel()
 	if err != nil {
-		e.Logger.Fatal("failed to connect to postgres: " + err.Error())
+		e.Logger.Error("failed to connect to postgres", "error", err)
+		os.Exit(1)
 	}
 
 	// Initialize Azure Cosmos DB (NoSQL API)
@@ -109,44 +114,39 @@ func main() {
 	routes.RegisterRoutes(e, pool, cosmosClient)
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080" // Fallback
+		port = "8080"
 	}
-	// // HTTP server timeouts for production safety
-	e.Server.ReadHeaderTimeout = 10 * time.Second
-	e.Server.ReadTimeout = 600 * time.Second
-	e.Server.WriteTimeout = 600 * time.Second
-	e.Server.IdleTimeout = 120 * time.Second
 
-	// Start server in a goroutine
-	go func() {
-		if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
-			e.Logger.Fatal("shutting down the server", err)
-		}
-	}()
+	// Prepare Echo v5 StartConfig
+	sc := echo.StartConfig{
+		Address:         ":" + port,
+		HideBanner:      true,
+		GracefulTimeout: 15 * time.Second,
+		BeforeServeFunc: func(s *http.Server) error {
+			s.ReadHeaderTimeout = 10 * time.Second
+			s.ReadTimeout = 600 * time.Second
+			s.WriteTimeout = 600 * time.Second
+			s.IdleTimeout = 120 * time.Second
+			return nil
+		},
+		OnShutdownError: func(err error) {
+			e.Logger.Error("Server forced to shutdown", "error", err)
+		},
+	}
 
 	// Wait for interrupt signal to gracefully shutdown the server
-	// Go 1.26: Using signal.NotifyContext for better context-based shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	<-ctx.Done()
-
-	// Log the signal that caused shutdown
-	if cause := context.Cause(ctx); cause != nil {
-		e.Logger.Infof("Received shutdown signal: %v - starting graceful shutdown...", cause)
-	} else {
-		e.Logger.Info("Received shutdown signal - starting graceful shutdown...")
+	// Start server with config and context (v5 handles graceful shutdown)
+	e.Logger.Info("Starting server", "port", port)
+	if err := sc.Start(ctx, e); err != nil {
+		e.Logger.Error("Server error", "error", err)
+		os.Exit(1)
 	}
 
-	// Heroku allows 30 seconds total for graceful shutdown
-	// Allocate 15s for server shutdown, 5s for DB cleanup, 10s buffer
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	// Shutdown Echo server
-	if err := e.Shutdown(shutdownCtx); err != nil {
-		e.Logger.Error("Server forced to shutdown: ", err)
-	}
+	// After Start returns, the server has shut down gracefully according to StartConfig
+	e.Logger.Info("Server stopped - starting final cleanup...")
 
 	// Close PostgreSQL connection pool with timeout
 	poolCloseCtx, poolCancel := context.WithTimeout(context.Background(), 5*time.Second)

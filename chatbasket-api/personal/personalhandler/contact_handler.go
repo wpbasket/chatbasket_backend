@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type ContactHandler struct {
@@ -18,7 +18,7 @@ func NewContactHandler(service *personalservice.Service) *ContactHandler {
 	return &ContactHandler{Service: service}
 }
 
-func (h *ContactHandler) GetContacts(c echo.Context) error {
+func (h *ContactHandler) GetContacts(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -42,7 +42,7 @@ func (h *ContactHandler) GetContacts(c echo.Context) error {
 	return c.JSON(http.StatusOK, contacts)
 }
 
-func (h *ContactHandler) CreateContact(c echo.Context) error {
+func (h *ContactHandler) CreateContact(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -76,7 +76,7 @@ func (h *ContactHandler) CreateContact(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ContactHandler) RemoveContactNickname(c echo.Context) error {
+func (h *ContactHandler) RemoveContactNickname(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
@@ -98,7 +98,7 @@ func (h *ContactHandler) RemoveContactNickname(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ContactHandler) CheckContactExistance(c echo.Context) error {
+func (h *ContactHandler) CheckContactExistance(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -146,7 +146,7 @@ func (h *ContactHandler) CheckContactExistance(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ContactHandler) AcceptContactRequest(c echo.Context) error {
+func (h *ContactHandler) AcceptContactRequest(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
@@ -168,7 +168,7 @@ func (h *ContactHandler) AcceptContactRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ContactHandler) RejectContactRequest(c echo.Context) error {
+func (h *ContactHandler) RejectContactRequest(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
@@ -190,7 +190,7 @@ func (h *ContactHandler) RejectContactRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ContactHandler) DeleteContact(c echo.Context) error {
+func (h *ContactHandler) DeleteContact(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
@@ -216,7 +216,7 @@ func (h *ContactHandler) DeleteContact(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ContactHandler) UndoContactRequest(c echo.Context) error {
+func (h *ContactHandler) UndoContactRequest(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
@@ -238,7 +238,7 @@ func (h *ContactHandler) UndoContactRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ContactHandler) GetContactRequests(c echo.Context) error {
+func (h *ContactHandler) GetContactRequests(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
@@ -255,7 +255,7 @@ func (h *ContactHandler) GetContactRequests(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ContactHandler) UpdateContactNickname(c echo.Context) error {
+func (h *ContactHandler) UpdateContactNickname(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})
@@ -277,7 +277,7 @@ func (h *ContactHandler) UpdateContactNickname(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ContactHandler) BlockUser(c echo.Context) error {
+func (h *ContactHandler) BlockUser(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{Code: http.StatusUnauthorized, Message: "User id is missing or invalid", Type: "unauthorized"})

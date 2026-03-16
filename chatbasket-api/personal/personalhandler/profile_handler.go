@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // ProfileHandler handles personal-mode profile endpoints
@@ -22,7 +22,7 @@ func NewProfileHandler(service *personalservice.Service) *ProfileHandler {
 	return &ProfileHandler{Service: service}
 }
 
-func (h *ProfileHandler) Logout(c echo.Context) error {
+func (h *ProfileHandler) Logout(c *echo.Context) error {
 	var payload personalmodel.LogoutPayload
 	if err := c.Bind(&payload); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid logout payload")
@@ -56,7 +56,7 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
+func (h *ProfileHandler) CreateUserProfile(c *echo.Context) error {
 	var payload personalmodel.CreateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid create user profile payload")
@@ -93,7 +93,7 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ProfileHandler) GetProfile(c echo.Context) error {
+func (h *ProfileHandler) GetProfile(c *echo.Context) error {
 	stringUserId, ok := c.Get("userId").(string)
 	if !ok || stringUserId == "" {
 		return c.JSON(http.StatusInternalServerError, &model.ApiError{
@@ -125,7 +125,7 @@ func (h *ProfileHandler) GetProfile(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
+func (h *ProfileHandler) UploadProfilePicture(c *echo.Context) error {
 	err := c.Request().ParseMultipartForm(5 << 20) // 5MB
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
@@ -197,7 +197,7 @@ func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *ProfileHandler) RemoveProfilePicture(c echo.Context) error {
+func (h *ProfileHandler) RemoveProfilePicture(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
 	if !ok {
@@ -223,7 +223,7 @@ func (h *ProfileHandler) RemoveProfilePicture(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
+func (h *ProfileHandler) UpdateProfile(c *echo.Context) error {
 	var payload personalmodel.UpdateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{

@@ -8,7 +8,7 @@ import (
 	"chatbasket-api/services"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // RegisterPersonalRoutes registers all personal domain routes

@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const (
@@ -1204,7 +1204,7 @@ func (ps *Service) GetUserChatsHandler(ctx context.Context, userId model.UserId)
 	}, nil
 }
 
-func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c echo.Context, userId model.UserId, isPrimary bool) (*personalmodel.UploadFileResponse, *personalmodel.MessageResponse, *model.ApiError) {
+func (ps *Service) UploadFileForMessageHandler(ctx context.Context, c *echo.Context, userId model.UserId, isPrimary bool) (*personalmodel.UploadFileResponse, *personalmodel.MessageResponse, *model.ApiError) {
 	recipientIDStr := c.FormValue("recipient_id")
 	log.Printf("[ChatService] UploadFileForMessageHandler. RecipientID: %s, IsPrimary: %v", recipientIDStr, isPrimary)
 	if recipientIDStr == "" {

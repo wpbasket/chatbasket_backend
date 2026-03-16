@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // SettingHandler handles personal-mode settings endpoints
@@ -21,7 +21,7 @@ func NewSettingHandler(service *personalservice.Service) *SettingHandler {
 	return &SettingHandler{Service: service}
 }
 
-func (h *SettingHandler) UpdateSessionCentral(c echo.Context) error {
+func (h *SettingHandler) UpdateSessionCentral(c *echo.Context) error {
 	// Get UserID from Context (set by auth middleware)
 	userIdStr, ok := c.Get("userId").(string)
 	if !ok {
@@ -48,7 +48,7 @@ func (h *SettingHandler) UpdateSessionCentral(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-func (h *SettingHandler) UpdateSessionNotificationToken(c echo.Context) error {
+func (h *SettingHandler) UpdateSessionNotificationToken(c *echo.Context) error {
 	var payload personalmodel.RegisterOrUpdateFcmOrApnTokenPayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Invalid payload: " + err.Error(), Type: "bad_request"})

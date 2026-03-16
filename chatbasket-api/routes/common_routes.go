@@ -6,7 +6,7 @@ import (
 	"chatbasket-api/middleware"
 	"chatbasket-api/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // RegisterCommonRoutes registers all common authenticated routes

@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type SettingHandler struct {
@@ -19,7 +19,7 @@ func NewSettingHandler(service *commonservice.Service) *SettingHandler {
 }
 
 // RequestUpdateOTP handles OTP request for update operations
-func (h *SettingHandler) RequestUpdateOTP(c echo.Context) error {
+func (h *SettingHandler) RequestUpdateOTP(c *echo.Context) error {
 	var payload commonmodel.RequestUpdateOTPPayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
@@ -61,7 +61,7 @@ func (h *SettingHandler) RequestUpdateOTP(c echo.Context) error {
 }
 
 // ConfirmPasswordUpdate handles password update confirmation with OTP
-func (h *SettingHandler) ConfirmPasswordUpdate(c echo.Context) error {
+func (h *SettingHandler) ConfirmPasswordUpdate(c *echo.Context) error {
 	var payload commonmodel.ConfirmPasswordUpdatePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
@@ -103,7 +103,7 @@ func (h *SettingHandler) ConfirmPasswordUpdate(c echo.Context) error {
 }
 
 // RequestEmailUpdate handles email update request
-func (h *SettingHandler) RequestEmailUpdate(c echo.Context) error {
+func (h *SettingHandler) RequestEmailUpdate(c *echo.Context) error {
 	var payload commonmodel.RequestEmailUpdatePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
@@ -145,7 +145,7 @@ func (h *SettingHandler) RequestEmailUpdate(c echo.Context) error {
 }
 
 // ConfirmEmailUpdate handles email update confirmation with OTP
-func (h *SettingHandler) ConfirmEmailUpdate(c echo.Context) error {
+func (h *SettingHandler) ConfirmEmailUpdate(c *echo.Context) error {
 	var payload commonmodel.ConfirmEmailUpdatePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{

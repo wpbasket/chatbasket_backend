@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type AuthHandler struct {
@@ -19,7 +19,7 @@ func NewAuthHandler(service *commonservice.Service) *AuthHandler {
 }
 
 // Logout handles logout from single or all sessions
-func (h *AuthHandler) Logout(c echo.Context) error {
+func (h *AuthHandler) Logout(c *echo.Context) error {
 	var payload commonmodel.LogoutPayload
 	if err := c.Bind(&payload); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid logout payload")
@@ -54,7 +54,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 }
 
 // GetUser returns the current user and session details
-func (h *AuthHandler) GetUser(c echo.Context) error {
+func (h *AuthHandler) GetUser(c *echo.Context) error {
 	// Extract user ID from context
 	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
 	if !okUUID {

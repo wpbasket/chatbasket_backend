@@ -9,14 +9,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 type ChatHandler struct {
 	service *personalservice.Service
 }
 
-func (h *ChatHandler) CheckEligibility(c echo.Context) error {
+func (h *ChatHandler) CheckEligibility(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -54,7 +54,7 @@ func NewChatHandler(service *personalservice.Service) *ChatHandler {
 	return &ChatHandler{service: service}
 }
 
-func (h *ChatHandler) CreateChat(c echo.Context) error {
+func (h *ChatHandler) CreateChat(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -88,7 +88,7 @@ func (h *ChatHandler) CreateChat(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) SendMessage(c echo.Context) error {
+func (h *ChatHandler) SendMessage(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -152,7 +152,7 @@ func (h *ChatHandler) SendMessage(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) GetMessages(c echo.Context) error {
+func (h *ChatHandler) GetMessages(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -186,7 +186,7 @@ func (h *ChatHandler) GetMessages(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) AcknowledgeDelivery(c echo.Context) error {
+func (h *ChatHandler) AcknowledgeDelivery(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -253,7 +253,7 @@ func (h *ChatHandler) AcknowledgeDelivery(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) GetUserChats(c echo.Context) error {
+func (h *ChatHandler) GetUserChats(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -279,7 +279,7 @@ func (h *ChatHandler) GetUserChats(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) GetPendingMessages(c echo.Context) error {
+func (h *ChatHandler) GetPendingMessages(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -313,7 +313,7 @@ func (h *ChatHandler) GetPendingMessages(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) UploadFileForMessage(c echo.Context) error {
+func (h *ChatHandler) UploadFileForMessage(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	log.Printf("[ChatHandler] UploadFileForMessage received from user: %s", userId)
 	if !ok || userId == "" {
@@ -367,7 +367,7 @@ func (h *ChatHandler) UploadFileForMessage(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) GetFileURL(c echo.Context) error {
+func (h *ChatHandler) GetFileURL(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -401,7 +401,7 @@ func (h *ChatHandler) GetFileURL(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) MarkChatRead(c echo.Context) error {
+func (h *ChatHandler) MarkChatRead(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -473,7 +473,7 @@ func (h *ChatHandler) MarkChatRead(c echo.Context) error {
 	return c.JSON(http.StatusOK, model.StatusOkay{Status: true, Message: "success"})
 }
 
-func (h *ChatHandler) UnsendMessage(c echo.Context) error {
+func (h *ChatHandler) UnsendMessage(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -552,7 +552,7 @@ func (h *ChatHandler) UnsendMessage(c echo.Context) error {
 	return c.JSON(http.StatusOK, model.StatusOkay{Status: true, Message: "success"})
 }
 
-func (h *ChatHandler) DeleteMessageForMe(c echo.Context) error {
+func (h *ChatHandler) DeleteMessageForMe(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -618,7 +618,7 @@ func (h *ChatHandler) DeleteMessageForMe(c echo.Context) error {
 	return c.JSON(http.StatusOK, model.StatusOkay{Status: true, Message: "success"})
 }
 
-func (h *ChatHandler) GetSyncActions(c echo.Context) error {
+func (h *ChatHandler) GetSyncActions(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -653,7 +653,7 @@ func (h *ChatHandler) GetSyncActions(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-func (h *ChatHandler) AcknowledgeSyncAction(c echo.Context) error {
+func (h *ChatHandler) AcknowledgeSyncAction(c *echo.Context) error {
 	var payload personalmodel.AcknowledgeSyncActionPayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{

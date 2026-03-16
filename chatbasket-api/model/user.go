@@ -3,7 +3,7 @@ package model
 import (
 	"net/http"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // AppwriteUserPayload is the structure for creating/updating user documents in Appwrite.

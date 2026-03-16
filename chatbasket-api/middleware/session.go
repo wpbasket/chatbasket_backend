@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func AuthSessionMiddleware(authService *services.AuthService, requireVerified bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			var sessionId, userId string
 			var platform string
 

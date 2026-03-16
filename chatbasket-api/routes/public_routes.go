@@ -6,7 +6,7 @@ import (
 	"chatbasket-api/public/publicservice"
 	"chatbasket-api/services"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // RegisterPublicRoutes registers all public domain routes

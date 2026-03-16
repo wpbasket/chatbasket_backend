@@ -7,13 +7,14 @@ import (
 	"chatbasket-api/services"
 	"context"
 	"net/http"
+	"os"
 	"time"
 
 	"chatbasket-api/utils"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func RegisterRoutes(
@@ -24,7 +25,8 @@ func RegisterRoutes(
 
 	cfg, err := loadAppwriteConfig()
 	if err != nil {
-		e.Logger.Fatal("failed to load appwrite config: " + err.Error())
+		e.Logger.Error("failed to load appwrite config", "error", err)
+		os.Exit(1)
 	}
 
 	as := appwriteinternal.NewAppwriteService(
@@ -69,7 +71,7 @@ func RegisterRoutes(
 	// Global API Group
 	api := e.Group("/api")
 
-	api.GET("/healthz", func(c echo.Context) error {
+	api.GET("/healthz", func(c *echo.Context) error {
 		pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
 		defer cancel()
 		if err := pool.Ping(pingCtx); err != nil {

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	// "github.com/go-playground/validator/v10"
 )
 
@@ -20,7 +20,7 @@ func NewProfileHandler(service *publicservice.Service) *ProfileHandler {
 	return &ProfileHandler{Service: service}
 }
 
-func (h *ProfileHandler) Logout(c echo.Context) error {
+func (h *ProfileHandler) Logout(c *echo.Context) error {
 	var payload model.LogoutPayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
@@ -92,7 +92,7 @@ func (h *ProfileHandler) Logout(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *ProfileHandler) CheckIfUserNameAvailable(c echo.Context) error {
+func (h *ProfileHandler) CheckIfUserNameAvailable(c *echo.Context) error {
 	var payload model.CheckIfUserNameAvailablePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
@@ -109,7 +109,7 @@ func (h *ProfileHandler) CheckIfUserNameAvailable(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
+func (h *ProfileHandler) CreateUserProfile(c *echo.Context) error {
 	var payload model.CreateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
@@ -141,7 +141,7 @@ func (h *ProfileHandler) CreateUserProfile(c echo.Context) error {
 
 }
 
-func (h *ProfileHandler) GetProfile(c echo.Context) error {
+func (h *ProfileHandler) GetProfile(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok || userId == "" {
 		return c.JSON(http.StatusUnauthorized, &model.ApiError{
@@ -159,7 +159,7 @@ func (h *ProfileHandler) GetProfile(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
+func (h *ProfileHandler) UploadProfilePicture(c *echo.Context) error {
 	err := c.Request().ParseMultipartForm(5 << 20) // 5MB
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{
@@ -223,7 +223,7 @@ func (h *ProfileHandler) UploadProfilePicture(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *ProfileHandler) RemoveProfilePicture(c echo.Context) error {
+func (h *ProfileHandler) RemoveProfilePicture(c *echo.Context) error {
 	userId, ok := c.Get("userId").(string)
 	if !ok {
 		return c.JSON(http.StatusInternalServerError, &model.ApiError{
@@ -241,7 +241,7 @@ func (h *ProfileHandler) RemoveProfilePicture(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *ProfileHandler) UpdateProfile(c echo.Context) error {
+func (h *ProfileHandler) UpdateProfile(c *echo.Context) error {
 	var payload model.UpdateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, &model.ApiError{

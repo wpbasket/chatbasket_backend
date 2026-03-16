@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // GetStatusCodeFromError extracts the HTTP status code from an error.

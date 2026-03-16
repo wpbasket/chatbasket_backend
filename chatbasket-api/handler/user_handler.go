@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"chatbasket-api/model"
 	"chatbasket-api/services"
@@ -18,7 +18,7 @@ func NewUserHandler(service *services.AuthService) *UserHandler {
 	return &UserHandler{AuthService: service}
 }
 
-func (h *UserHandler) Signup(c echo.Context) error {
+func (h *UserHandler) Signup(c *echo.Context) error {
 	var payload model.SignupPayload
 
 	// Parse and bind request body
@@ -50,7 +50,7 @@ func (h *UserHandler) Signup(c echo.Context) error {
 	return c.JSON(http.StatusCreated, user)
 }
 
-func (h *UserHandler) AcountVerification(c echo.Context) error {
+func (h *UserHandler) AcountVerification(c *echo.Context) error {
 	var payload model.AuthVerificationPayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Invalid OTP payload: " + err.Error(), Type: "bad_request"})
@@ -115,7 +115,7 @@ func (h *UserHandler) AcountVerification(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, user)
 }
-func (h *UserHandler) Login(c echo.Context) error {
+func (h *UserHandler) Login(c *echo.Context) error {
 	var payload model.LoginPayload
 
 	// Parse and bind request body
@@ -139,7 +139,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *UserHandler) LoginVerification(c echo.Context) error {
+func (h *UserHandler) LoginVerification(c *echo.Context) error {
 	var payload model.AuthVerificationPayload
 	if err := c.Bind(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, model.ApiError{Code: http.StatusBadRequest, Message: "Invalid OTP payload: " + err.Error(), Type: "bad_request"})
@@ -205,7 +205,7 @@ func (h *UserHandler) LoginVerification(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func (h *UserHandler) ResendOTP(c echo.Context) error {
+func (h *UserHandler) ResendOTP(c *echo.Context) error {
 	var payload model.ResendOTPPayload
 
 	// Parse and bind request body
