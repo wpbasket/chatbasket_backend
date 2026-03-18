@@ -1,0 +1,22 @@
+version: "2"
+sql:
+  - schema: 
+      - "db/common/migrations/"
+      - "db/personal/migrations/"
+      # - "db/public/migrations/"
+    queries: 
+      - "db/common/queries/"
+      - "db/personal/queries/"
+      # - "db/public/queries/"
+    engine: "postgresql"
+    gen:
+      go:
+        package: "postgresgen"
+        out: "internal/store/postgresgen"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
