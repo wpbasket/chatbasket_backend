@@ -128,14 +128,12 @@ chatbasket_backend/
 │   │       └── usernamePersUtils.go
 │   ├── public/
 │   │   ├── publichandler/
-│   │   │   ├── profile_handler.go
-│   │   │   └── setting_handler.go
+│   │   │   └── profile_handler.go
 │   │   ├── publicmodel/
 │   │   │   └── README.md
 │   │   ├── publicservice/
 │   │   │   ├── profile_service.go
-│   │   │   ├── service.go
-│   │   │   └── setting_service.go
+│   │   │   └── service.go
 │   │   └── publicutils/
 │   │       └── README.md
 │   ├── routes/
@@ -168,6 +166,89 @@ chatbasket_backend/
 │   ├── Dockerfile
 │   ├── go.mod
 │   └── go.sum
+├── chatbasket-apinext/
+│   ├── app/
+│   │   └── main.go
+│   ├── db/
+│   │   ├── common/
+│   │   │   ├── migrations/
+│   │   │   │   ├── 001_auth_init.down.sql
+│   │   │   │   └── 001_auth_init.up.sql
+│   │   │   └── queries/
+│   │   │       └── auth.sql
+│   │   ├── personal/
+│   │   │   ├── migrations/
+│   │   │   └── queries/
+│   │   │       └── placeholder.sql
+│   │   └── public/
+│   │       ├── migrations/
+│   │       └── queries/
+│   │           └── placeholder.sql
+│   ├── internal/
+│   │   ├── events/
+│   │   ├── modules/
+│   │   │   ├── core/
+│   │   │   │   └── auth/
+│   │   │   │       ├── authapi/
+│   │   │   │       │   ├── auth_common_http_handler_api.go
+│   │   │   │       │   ├── auth_http_handler_api.go
+│   │   │   │       │   └── auth_routes_api.go
+│   │   │   │       ├── authkit/
+│   │   │   │       │   ├── auth_otp_kit.go
+│   │   │   │       │   └── auth_password_kit.go
+│   │   │   │       ├── authmodels/
+│   │   │   │       │   ├── auth_common_mdl.go
+│   │   │   │       │   ├── auth_helpers_mdl.go
+│   │   │   │       │   └── auth_mdl.go
+│   │   │   │       └── authservice/
+│   │   │   │           ├── auth_common_svc.go
+│   │   │   │           ├── auth_flows_svc.go
+│   │   │   │           ├── auth_helpers_svc.go
+│   │   │   │           └── auth_svc.go
+│   │   │   ├── personal/
+│   │   │   └── public/
+│   │   ├── platform/
+│   │   │   ├── clients/
+│   │   │   │   ├── appwrite.go
+│   │   │   │   ├── cosmos.go
+│   │   │   │   ├── email.go
+│   │   │   │   ├── firebase.go
+│   │   │   │   ├── postgres.go
+│   │   │   │   └── secrets.go
+│   │   │   ├── config/
+│   │   │   │   └── config.go
+│   │   │   ├── kit/
+│   │   │   │   ├── crypto.go
+│   │   │   │   ├── errors.go
+│   │   │   │   ├── models.go
+│   │   │   │   └── utils.go
+│   │   │   ├── logger/
+│   │   │   │   └── logger.go
+│   │   │   ├── middleware/
+│   │   │   │   ├── auth_session_middleware.go
+│   │   │   │   └── middleware.go
+│   │   │   ├── router/
+│   │   │   │   └── routes.go
+│   │   │   ├── services/
+│   │   │   │   └── services.go
+│   │   │   └── websocket/
+│   │   │       └── websocket.go
+│   │   └── store/
+│   │       └── postgresgen/
+│   │           ├── auth.sql.go
+│   │           ├── db.go
+│   │           ├── models.go
+│   │           ├── personal_chat.sql.go
+│   │           ├── personal_contacts.sql.go
+│   │           ├── personal_tokens.sql.go
+│   │           ├── personal_user.sql.go
+│   │           ├── placeholder.sql.go
+│   │           └── querier.go
+│   ├── .env
+│   ├── .gitignore
+│   ├── go.mod
+│   ├── go.sum
+│   └── sqlc.yaml
 ├── deployment/
 │   ├── docker-compose.yml
 │   └── nginx.conf
@@ -185,6 +266,7 @@ chatbasket_backend/
 │   │   └── main.go
 │   ├── Dockerfile
 │   └── go.mod
+├── .gitignore
 └── README.md
 ```
 

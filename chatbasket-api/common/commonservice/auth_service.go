@@ -26,15 +26,6 @@ func (s *Service) Logout(ctx context.Context, payload *commonmodel.LogoutPayload
 				Type:    "internal_server_error",
 			}
 		}
-
-		// Delete all FCM/APN tokens for this user (only exists in personal mode)
-		if s.PersonalQueries != nil {
-			err = s.PersonalQueries.DeleteUserTokens(ctx, userId.UuidUserId)
-			if err != nil {
-				// Log error but don't fail the logout
-				// Tokens will be cleaned up by periodic cleanup job
-			}
-		}
 	} else {
 		// Logout from single session - delete from PostgreSQL using token hash
 		tokenHash, err := utils.ComputeHMAC(sessionId, s.AuthSecret)
@@ -57,8 +48,6 @@ func (s *Service) Logout(ctx context.Context, payload *commonmodel.LogoutPayload
 				Type:    "internal_server_error",
 			}
 		}
-
-		// Token cleanup will happen via periodic cleanup job
 	}
 
 	return &model.StatusOkay{Status: true, Message: "Logged out successfully"}, nil

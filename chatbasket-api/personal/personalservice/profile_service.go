@@ -32,13 +32,6 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 				Type:    "internal_server_error",
 			}
 		}
-
-		// Delete all tokens for this user
-		err = ps.PersonalQueries.DeleteUserTokens(ctx, userId.UuidUserId)
-		if err != nil {
-			// Log error but don't fail the logout
-			// Tokens will be cleaned up by periodic cleanup job
-		}
 	} else {
 		// Logout from single session - delete from PostgreSQL using token hash
 		tokenHash, err := utils.ComputeHMAC(sessionId, ps.AuthSecret)
@@ -61,8 +54,6 @@ func (ps *Service) Logout(ctx context.Context, payload *personalmodel.LogoutPayl
 				Type:    "internal_server_error",
 			}
 		}
-
-		// Token cleanup will happen via periodic cleanup job
 	}
 
 	return &model.StatusOkay{Status: true, Message: "Logged out successfully"}, nil
@@ -334,9 +325,12 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *personalmodel
 	return &model.StatusOkay{Status: true, Message: "Profile updated successfully"}, nil
 }
 
+// RegisterOrUpdateFcmOrApnToken updates the FCM/APN device token for the current session.
+// Device tokens are stored in the sessions table (device_token, platform, device_name columns).
+// This allows push notifications to be sent to the user's device and automatically cleaned up when the session is deleted.
 func (ps *Service) RegisterOrUpdateFcmOrApnToken(ctx context.Context, payload *personalmodel.RegisterOrUpdateFcmOrApnTokenPayload, userId model.UserId, sessionId string) (*model.StatusOkay, *model.ApiError) {
-	// Hash the session ID (HMAC-SHA256 hex, 64 characters)
-	hashedSessionId, err := utils.ComputeHMAC(sessionId, ps.Appwrite.PersonalUsernameKey)
+	// 1. Compute session token hash
+	tokenHash, err := utils.ComputeHMAC(sessionId, ps.AuthSecret)
 	if err != nil {
 		return nil, &model.ApiError{
 			Code:    http.StatusInternalServerError,
@@ -345,24 +339,19 @@ func (ps *Service) RegisterOrUpdateFcmOrApnToken(ctx context.Context, payload *p
 		}
 	}
 
-	// Generate UUID for the token record
-	tokenId, err := uuid.NewV7()
-	if err != nil {
-		return nil, &model.ApiError{
-			Code:    http.StatusInternalServerError,
-			Message: "Failed to generate token ID",
-			Type:    "internal_server_error",
-		}
+	// 2. Map token type to platform (fcm -> android, apn -> ios)
+	platform := "android"
+	if payload.Type == "apn" {
+		platform = "ios"
 	}
 
-	// Upsert the token in the database
-	// If a token already exists for this (session_id, user_id, type), it will be updated
-	_, err = ps.PersonalQueries.UpsertToken(ctx, personal.UpsertTokenParams{
-		ID:                 tokenId,
-		UserID:             userId.UuidUserId,
-		Sha256HexSessionID: hashedSessionId,
-		Token:              payload.Token,
-		Type:               payload.Type,
+	// 3. Update the session record with device token, platform, and device name
+	err = ps.AuthQueries.UpdateSessionDeviceToken(ctx, auth.UpdateSessionDeviceTokenParams{
+		AuthUserID:  userId.UuidUserId,
+		TokenHash:   tokenHash,
+		DeviceToken: &payload.Token,
+		Platform:    &platform,
+		DeviceName:  payload.DeviceName,
 	})
 	if err != nil {
 		return nil, &model.ApiError{
