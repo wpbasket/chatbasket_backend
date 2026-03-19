@@ -1,6 +1,8 @@
 package services
 
-import "chatbasket-apinext/internal/store/postgresgen"
+import (
+	"chatbasket-apinext/internal/store/postgresgen"
+)
 
 // GlobalService holds all global service dependencies that modules need.
 type GlobalService struct {

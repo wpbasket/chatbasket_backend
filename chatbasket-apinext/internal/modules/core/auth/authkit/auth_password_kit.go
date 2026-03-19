@@ -31,7 +31,7 @@ func HashPassword(password string, pepper []byte, userID string) (string, error)
 	// Generate HMAC as the peppered input with userID binding
 	h := hmac.New(sha256.New, pepper)
 	h.Write([]byte(password))
-	h.Write([]byte(userID))
+	h.Write([]byte("|" + userID))
 	pepperedInput := hex.EncodeToString(h.Sum(nil))
 
 	// OWASP Recommended: 19 MiB memory, 2 iterations, 1 parallelism.
@@ -59,7 +59,7 @@ func VerifyPassword(plainPassword, hashedPassword string, pepper []byte, userID 
 
 	h := hmac.New(sha256.New, pepper)
 	h.Write([]byte(plainPassword))
-	h.Write([]byte(userID))
+	h.Write([]byte("|" + userID))
 	pepperedInput := hex.EncodeToString(h.Sum(nil))
 
 	match, err := argon2id.ComparePasswordAndHash(pepperedInput, hashedPassword)

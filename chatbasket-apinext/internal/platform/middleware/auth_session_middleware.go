@@ -1,20 +1,29 @@
 package middleware
 
 import (
-	"chatbasket-apinext/internal/modules/core/auth/authservice"
 	"chatbasket-apinext/internal/platform/kit"
 	"chatbasket-apinext/internal/store/postgresgen"
+	"context"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v5"
 )
 
+// AuthSessionProvider defines the methods required by the middleware to verify sessions.
+// This interface allows the platform middleware to be decoupled from the auth module.
+type AuthSessionProvider interface {
+	GetSessionByToken(ctx context.Context, params postgresgen.GetSessionByTokenParams) (postgresgen.Session, error)
+	GetAuthUserByID(ctx context.Context, userID uuid.UUID) (postgresgen.AuthUser, error)
+	GetAuthSecret() []byte
+}
+
 // AuthSessionMiddleware verifies the session token and populates the context.
 // Ported from legacy middleware/session.go with modular adjustments.
-func AuthSessionMiddleware(authService *authservice.AuthService, requireVerified bool) echo.MiddlewareFunc {
+func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			var sessionId, userId string
@@ -73,7 +82,7 @@ func AuthSessionMiddleware(authService *authservice.AuthService, requireVerified
 			}
 
 			// 3. Compute HMAC and Verify Session via Store
-			tokenHash, err := kit.ComputeHMAC(sessionId, authService.AuthSecret)
+			tokenHash, err := kit.ComputeHMAC(sessionId, authProvider.GetAuthSecret(), true, new(uuidVal.String()))
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, kit.ApiError{
 					Code:    http.StatusInternalServerError,
@@ -83,7 +92,7 @@ func AuthSessionMiddleware(authService *authservice.AuthService, requireVerified
 			}
 
 			ctx := c.Request().Context()
-			session, err := authService.PostgresQuerier.GetSessionByToken(ctx, postgresgen.GetSessionByTokenParams{
+			session, err := authProvider.GetSessionByToken(ctx, postgresgen.GetSessionByTokenParams{
 				TokenHash:  tokenHash,
 				AuthUserID: uuidVal,
 			})
@@ -98,7 +107,7 @@ func AuthSessionMiddleware(authService *authservice.AuthService, requireVerified
 			}
 
 			// 4. Get User details
-			authUser, err := authService.PostgresQuerier.GetAuthUserByID(ctx, uuidVal)
+			authUser, err := authProvider.GetAuthUserByID(ctx, uuidVal)
 			if err != nil {
 				if err == pgx.ErrNoRows {
 					return c.JSON(http.StatusUnauthorized, kit.ApiError{
@@ -115,13 +124,13 @@ func AuthSessionMiddleware(authService *authservice.AuthService, requireVerified
 			}
 
 			// 5. Check Verification (if required)
-			// if requireVerified && !authUser.IsEmailVerified {
-			// 	return c.JSON(http.StatusForbidden, kit.ApiError{
-			// 		Code:    http.StatusForbidden,
-			// 		Type:    "unverified_email",
-			// 		Message: "Email must be verified to perform this action",
-			// 	})
-			// }
+			if requireVerified && !authUser.IsEmailVerified {
+				return c.JSON(http.StatusForbidden, kit.ApiError{
+					Code:    http.StatusForbidden,
+					Type:    "unverified_email",
+					Message: "Email must be verified to perform this action",
+				})
+			}
 
 			// ✅ Set context for handler access
 			c.Set("uuidUserId", authUser.ID)

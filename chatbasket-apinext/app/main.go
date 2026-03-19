@@ -79,7 +79,7 @@ func main() {
 	slog.Info("Postgres client initialized successfully")
 
 	// --- Route Registration ---
-	router.Register(e, pool, cfg)
+	router.Register(e, pool, cfg, appwriteStorageService)
 
 	// Graceful shutdown context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

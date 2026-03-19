@@ -30,7 +30,7 @@ func (s *AuthService) Logout(ctx context.Context, payload *authmodels.LogoutPayl
 		}
 	} else {
 		// Logout from single session - delete from PostgreSQL using token hash
-		tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret)
+		tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret, true, new(userID.String()))
 		if err != nil {
 			return nil, &kit.ApiError{
 				Code:    http.StatusInternalServerError,
@@ -58,7 +58,7 @@ func (s *AuthService) Logout(ctx context.Context, payload *authmodels.LogoutPayl
 // GetUserWithSession retrieves user and session details (similar to login response)
 func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, sessionToken string) (*authmodels.SessionResponse, *kit.ApiError) {
 	// 1. Compute HMAC
-	tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret)
+	tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret, true, new(userID.String()))
 	if err != nil {
 		return nil, &kit.ApiError{Code: http.StatusInternalServerError, Message: "Failed to process token", Type: "internal_error"}
 	}
@@ -143,7 +143,14 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *authmodels.
 	}
 
 	// Generate update_id
-	updateID := uuid.New()
+	updateID, err := uuid.NewV7()
+	if err != nil {
+		return nil, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Failed to generate update ID",
+			Type:    "internal_server_error",
+		}
+	}
 
 	// Store verification code with update_id
 	_, err = s.PostgresQuerier.CreateVerificationCodeWithUpdateID(ctx, postgresgen.CreateVerificationCodeWithUpdateIDParams{
@@ -341,7 +348,14 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *authmodel
 	}
 
 	// Generate update_id
-	updateID := uuid.New()
+	updateID, err := uuid.NewV7()
+	if err != nil {
+		return nil, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Failed to generate update ID",
+			Type:    "internal_server_error",
+		}
+	}
 
 	// Store verification code with update_id and new email
 	_, err = s.PostgresQuerier.CreateVerificationCodeWithUpdateID(ctx, postgresgen.CreateVerificationCodeWithUpdateIDParams{

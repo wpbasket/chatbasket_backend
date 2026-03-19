@@ -14,7 +14,7 @@ import (
 
 // IsSessionCentral checks if a session is the primary (central) device
 func (s *AuthService) IsSessionCentral(ctx context.Context, userID uuid.UUID, sessionToken string) (bool, *kit.ApiError) {
-	tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret)
+	tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret, true, new(userID.String()))
 	if err != nil {
 		log.Printf("[DEBUG-SESSION] ComputeHMAC ERROR: %v", err)
 		return false, &kit.ApiError{Code: http.StatusInternalServerError, Message: "Failed to process token", Type: "internal_error"}
@@ -54,7 +54,7 @@ func (s *AuthService) GetUserPrimarySession(ctx context.Context, userID uuid.UUI
 // It first demotes all other sessions for this user to ensure uniqueness.
 func (s *AuthService) SetCentralDevice(ctx context.Context, userID uuid.UUID, token string) (*kit.StatusOkay, *kit.ApiError) {
 	// 1. Compute Token Hash
-	tokenHash, err := kit.ComputeHMAC(token, s.AuthSecret)
+	tokenHash, err := kit.ComputeHMAC(token, s.AuthSecret, true, new(userID.String()))
 	if err != nil {
 		return nil, &kit.ApiError{Code: http.StatusInternalServerError, Message: "Failed to process session token", Type: "internal_server_error"}
 	}
@@ -102,7 +102,7 @@ func (s *AuthService) SetCentralDevice(ctx context.Context, userID uuid.UUID, to
 // This allows push notifications to be sent to the user's device and automatically cleaned up when the session is deleted.
 func (s *AuthService) RegisterOrUpdateFcmOrApnToken(ctx context.Context, payload *authmodels.RegisterOrUpdateFcmOrApnTokenPayload, userID uuid.UUID, sessionToken string) (*kit.StatusOkay, *kit.ApiError) {
 	// 1. Compute session token hash
-	tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret)
+	tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret, true, new(userID.String()))
 	if err != nil {
 		return nil, &kit.ApiError{
 			Code:    http.StatusInternalServerError,

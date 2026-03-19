@@ -1,0 +1,224 @@
+package profileapi
+
+import (
+	"net/http"
+	"strings"
+
+	"chatbasket-apinext/internal/modules/personal/profile/profilemodels"
+	"chatbasket-apinext/internal/modules/personal/profile/profileservice"
+	"chatbasket-apinext/internal/platform/kit"
+
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v5"
+)
+
+type ProfileHandler struct {
+	Service *profileservice.ProfileService
+}
+
+func NewProfileHandler(service *profileservice.ProfileService) *ProfileHandler {
+	return &ProfileHandler{Service: service}
+}
+
+func (h *ProfileHandler) CreateUserProfile(c *echo.Context) error {
+	var payload profilemodels.CreateUserProfilePayload
+	if err := c.Bind(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid create user profile payload")
+	}
+	stringUserId, ok := c.Get("userId").(string)
+	if !ok || stringUserId == "" {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	email, ok := c.Get("email").(string)
+	if !ok || email == "" {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid email context",
+			Type:    "internal_server_error",
+		})
+	}
+	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+
+	res, apiErr := h.Service.CreateUserProfile(c.Request().Context(), &payload, &kit.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId}, email)
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
+func (h *ProfileHandler) GetProfile(c *echo.Context) error {
+	stringUserId, ok := c.Get("userId").(string)
+	if !ok || stringUserId == "" {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	email, ok := c.Get("email").(string)
+	if !ok || email == "" {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid email context",
+			Type:    "internal_server_error",
+		})
+	}
+	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	userID := kit.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId}
+	res, apiErr := h.Service.GetProfile(c.Request().Context(), &userID, email)
+	if apiErr != nil {
+		return c.JSON(apiErr.Code, apiErr)
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
+func (h *ProfileHandler) UploadProfilePicture(c *echo.Context) error {
+	err := c.Request().ParseMultipartForm(5 << 20) // 5MB
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, &kit.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Failed to parse multipart form: " + err.Error(),
+			Type:    "bad_request",
+		})
+	}
+
+	if c.Request().MultipartForm == nil {
+		return c.JSON(http.StatusBadRequest, &kit.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Multipart form is missing",
+			Type:    "bad_request",
+		})
+	}
+
+	fh, err := c.FormFile("avatar")
+	if err != nil {
+		availableFields := []string{}
+		if c.Request().MultipartForm != nil && c.Request().MultipartForm.File != nil {
+			for field := range c.Request().MultipartForm.File {
+				availableFields = append(availableFields, field)
+			}
+		}
+
+		message := "Avatar file not found in request: " + err.Error()
+		if len(availableFields) > 0 {
+			message += ". Available file fields: " + strings.Join(availableFields, ", ")
+		}
+
+		return c.JSON(http.StatusBadRequest, &kit.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: message,
+			Type:    "bad_request",
+		})
+	}
+
+	if fh.Size > 5<<20 {
+		return c.JSON(http.StatusBadRequest, &kit.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "File size exceeds the 5MB limit",
+			Type:    "bad_request",
+		})
+	}
+
+	userId, ok := c.Get("userId").(string)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	if !okUUID {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	user, serviceErr := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, kit.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+
+	if serviceErr != nil {
+		return c.JSON(serviceErr.Code, serviceErr)
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+
+func (h *ProfileHandler) RemoveProfilePicture(c *echo.Context) error {
+	userId, ok := c.Get("userId").(string)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	if !okUUID {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+
+	user, err := h.Service.RemoveUserProfilePicture(c.Request().Context(), kit.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	if err != nil {
+		return c.JSON(err.Code, err)
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+
+func (h *ProfileHandler) UpdateProfile(c *echo.Context) error {
+	var payload profilemodels.UpdateUserProfilePayload
+	if err := c.Bind(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, &kit.ApiError{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid update profile payload: " + err.Error(),
+			Type:    "bad_request",
+		})
+	}
+	userId, ok := c.Get("userId").(string)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+	if !okUUID {
+		return c.JSON(http.StatusInternalServerError, &kit.ApiError{
+			Code:    http.StatusInternalServerError,
+			Message: "Invalid user context",
+			Type:    "internal_server_error",
+		})
+	}
+
+	user, err := h.Service.UpdateUserProfile(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	if err != nil {
+		return c.JSON(err.Code, err)
+	}
+
+	return c.JSON(http.StatusOK, user)
+
+}

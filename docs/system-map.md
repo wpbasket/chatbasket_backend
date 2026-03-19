@@ -55,7 +55,6 @@ chatbasket_backend/
 │   │   │   ├── queries/
 │   │   │   │   ├── personal_chat.sql
 │   │   │   │   ├── personal_contacts.sql
-│   │   │   │   ├── personal_tokens.sql
 │   │   │   │   └── personal_user.sql
 │   │   │   └── sqlc.yaml
 │   │   ├── public/
@@ -83,7 +82,6 @@ chatbasket_backend/
 │   │       │   ├── models.go
 │   │       │   ├── personal_chat.sql.go
 │   │       │   ├── personal_contacts.sql.go
-│   │       │   ├── personal_tokens.sql.go
 │   │       │   └── personal_user.sql.go
 │   │       └── public/
 │   ├── middleware/
@@ -178,8 +176,26 @@ chatbasket_backend/
 │   │   │       └── auth.sql
 │   │   ├── personal/
 │   │   │   ├── migrations/
+│   │   │   │   ├── 001_personal_init.down.sql
+│   │   │   │   ├── 001_personal_init.up.sql
+│   │   │   │   ├── 002_personal_user_contacts.down.sql
+│   │   │   │   ├── 002_personal_user_contacts.up.sql
+│   │   │   │   ├── 003_personal_user_restrictions.down.sql
+│   │   │   │   ├── 003_personal_user_restrictions.up.sql
+│   │   │   │   ├── 004_personal_user_blocks.down.sql
+│   │   │   │   ├── 004_personal_user_blocks.up.sql
+│   │   │   │   ├── 005_personal_global_restrictions.down.sql
+│   │   │   │   ├── 005_personal_global_restrictions.up.sql
+│   │   │   │   ├── 006_personal_contact_requests.down.sql
+│   │   │   │   ├── 006_personal_contact_requests.up.sql
+│   │   │   │   ├── 007_personal_tokens.down.sql
+│   │   │   │   ├── 007_personal_tokens.up.sql
+│   │   │   │   ├── 008_personal_chat_system.down.sql
+│   │   │   │   └── 008_personal_chat_system.up.sql
 │   │   │   └── queries/
-│   │   │       └── placeholder.sql
+│   │   │       ├── personal_chat.sql
+│   │   │       ├── personal_contacts.sql
+│   │   │       └── personal_user.sql
 │   │   └── public/
 │   │       ├── migrations/
 │   │       └── queries/
@@ -204,8 +220,19 @@ chatbasket_backend/
 │   │   │   │           ├── auth_common_svc.go
 │   │   │   │           ├── auth_flows_svc.go
 │   │   │   │           ├── auth_helpers_svc.go
+│   │   │   │           ├── auth_middleware_svc.go
 │   │   │   │           └── auth_svc.go
 │   │   │   ├── personal/
+│   │   │   │   └── profile/
+│   │   │   │       ├── profileapi/
+│   │   │   │       │   ├── profile_http_handler_api.go
+│   │   │   │       │   └── profile_routes_api.go
+│   │   │   │       ├── profilekit/
+│   │   │   │       │   └── profile_username_kit.go
+│   │   │   │       ├── profilemodels/
+│   │   │   │       │   └── profile_mdl.go
+│   │   │   │       └── profileservice/
+│   │   │   │           └── profile_svc.go
 │   │   │   └── public/
 │   │   ├── platform/
 │   │   │   ├── clients/
@@ -230,7 +257,8 @@ chatbasket_backend/
 │   │   │   ├── router/
 │   │   │   │   └── routes.go
 │   │   │   ├── services/
-│   │   │   │   └── services.go
+│   │   │   │   ├── services.go
+│   │   │   │   └── storage_svc.go
 │   │   │   └── websocket/
 │   │   │       └── websocket.go
 │   │   └── store/
@@ -240,9 +268,7 @@ chatbasket_backend/
 │   │           ├── models.go
 │   │           ├── personal_chat.sql.go
 │   │           ├── personal_contacts.sql.go
-│   │           ├── personal_tokens.sql.go
 │   │           ├── personal_user.sql.go
-│   │           ├── placeholder.sql.go
 │   │           └── querier.go
 │   ├── .env
 │   ├── .gitignore

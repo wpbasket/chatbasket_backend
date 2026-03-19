@@ -107,7 +107,7 @@ type SessionResult struct {
 // CreateSessionFlow generates token, hashes, stores session, returns token + expiry string.
 func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, platform, deviceToken string) (*SessionResult, *kit.ApiError) {
 	tokenEnv := uuid.New().String()
-	tokenHash, err := kit.ComputeHMAC(tokenEnv, s.AuthSecret)
+	tokenHash, err := kit.ComputeHMAC(tokenEnv, s.AuthSecret, true, new(userID.String()))
 	if err != nil {
 		return nil, &kit.ApiError{Code: http.StatusInternalServerError, Message: "Hash error", Type: "internal_server_error"}
 	}

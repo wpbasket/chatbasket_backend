@@ -1,5 +1,14 @@
 package kit
 
+import (
+	"github.com/google/uuid"
+)
+
+type UserId struct {
+	StringUserId string    `json:"userId"`
+	UuidUserId   uuid.UUID `json:"uuidUserId"`
+}
+
 // ported from chatbasket-api/model/error.go
 type ApiError struct {
 	Code    int    `json:"code"`

@@ -50,6 +50,18 @@ type AppwriteFileData struct {
 	FileSecret *string `json:"fileSecret"`
 }
 
+// BuildAvatarURI constructs the avatar URL from AppwriteFileData
+// Returns empty string if data is invalid or insufficient tokens
+func BuildAvatarURI(ad *AppwriteFileData) *string {
+	if ad == nil || ad.FileId == nil || *ad.FileId == "" || ad.FileToken == nil || *ad.FileToken == "" || ad.FileSecret == nil || *ad.FileSecret == "" {
+		return nil
+	}
+
+	uri := fmt.Sprintf("https://fra.cloud.appwrite.io/v1/storage/buckets/68f1170100025d36bf45/files/%s/view?project=6858ed4d0005c859ea03&token=%s",
+		*ad.FileId, *ad.FileSecret)
+	return &uri
+}
+
 // BuildFileDownloadURL constructs a download URL for chat files, ported from utils/baseUtils.go
 func BuildFileDownloadURL(endpoint, projectID, bucketID string, ad *AppwriteFileData) *string {
 	if ad == nil || ad.FileId == nil || *ad.FileId == "" || ad.FileSecret == nil || *ad.FileSecret == "" {

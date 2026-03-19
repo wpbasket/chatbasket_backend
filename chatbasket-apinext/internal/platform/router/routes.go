@@ -3,6 +3,9 @@ package router
 import (
 	"chatbasket-apinext/internal/modules/core/auth/authapi"
 	"chatbasket-apinext/internal/modules/core/auth/authservice"
+	"chatbasket-apinext/internal/modules/personal/profile/profileapi"
+	"chatbasket-apinext/internal/modules/personal/profile/profileservice"
+	"chatbasket-apinext/internal/platform/clients"
 	"chatbasket-apinext/internal/platform/config"
 	"chatbasket-apinext/internal/platform/kit"
 	"chatbasket-apinext/internal/platform/services"
@@ -20,21 +23,23 @@ type Router struct {
 	App    *echo.Echo
 	Pool   *pgxpool.Pool
 	Config *config.Config
+	AppwriteStorage *clients.AppwriteStorageService
 }
 
 // Register is the single entry point to set up all platform and module routes.
-func Register(e *echo.Echo, pool *pgxpool.Pool, cfg *config.Config) {
-	r := New(e, pool, cfg)
+func Register(e *echo.Echo, pool *pgxpool.Pool, cfg *config.Config, appwriteStorage *clients.AppwriteStorageService) {
+	r := New(e, pool, cfg, appwriteStorage)
 	apiGroup := r.RegisterGlobalRoutes()
 	r.RegisterModuleRoutes(apiGroup)
 }
 
 // New creates a new Router instance.
-func New(e *echo.Echo, pool *pgxpool.Pool, cfg *config.Config) *Router {
+func New(e *echo.Echo, pool *pgxpool.Pool, cfg *config.Config, appwriteStorage *clients.AppwriteStorageService) *Router {
 	return &Router{
 		App:    e,
 		Pool:   pool,
 		Config: cfg,
+		AppwriteStorage: appwriteStorage,
 	}
 }
 
@@ -65,4 +70,9 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	// 1. Auth Module
 	authService := authservice.NewAuthService(globalService, r.Config.Security.AuthSecret)
 	authapi.Register(apiGroup, authService)
+
+	// 2. Personal Category (Group of modules)
+	personalGroup := apiGroup.Group("/personal")
+	profileService := profileservice.NewProfileService(globalService, r.Config.Security.PersonalUsernameKey, r.AppwriteStorage, r.Config.Appwrite.PersonalProfilePicBucketID)
+	profileapi.Register(personalGroup, profileService, authService)
 }
