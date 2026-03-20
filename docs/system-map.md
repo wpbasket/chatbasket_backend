@@ -195,6 +195,7 @@ chatbasket_backend/
 │   │   │   └── queries/
 │   │   │       ├── personal_chat.sql
 │   │   │       ├── personal_contacts.sql
+│   │   │       ├── personal_profile.sql
 │   │   │       └── personal_user.sql
 │   │   └── public/
 │   │       ├── migrations/
@@ -204,35 +205,47 @@ chatbasket_backend/
 │   │   ├── events/
 │   │   ├── modules/
 │   │   │   ├── core/
-│   │   │   │   └── auth/
-│   │   │   │       ├── authapi/
-│   │   │   │       │   ├── auth_common_http_handler_api.go
-│   │   │   │       │   ├── auth_http_handler_api.go
-│   │   │   │       │   └── auth_routes_api.go
-│   │   │   │       ├── authkit/
-│   │   │   │       │   ├── auth_otp_kit.go
-│   │   │   │       │   └── auth_password_kit.go
-│   │   │   │       ├── authmodels/
-│   │   │   │       │   ├── auth_common_mdl.go
-│   │   │   │       │   ├── auth_helpers_mdl.go
-│   │   │   │       │   └── auth_mdl.go
-│   │   │   │       └── authservice/
-│   │   │   │           ├── auth_common_svc.go
-│   │   │   │           ├── auth_flows_svc.go
-│   │   │   │           ├── auth_helpers_svc.go
-│   │   │   │           ├── auth_middleware_svc.go
-│   │   │   │           └── auth_svc.go
+│   │   │   │   └── core_auth/
+│   │   │   │       ├── internal/
+│   │   │   │       │   └── core_auth_store/
+│   │   │   │       │       ├── auth.sql.go
+│   │   │   │       │       ├── db.go
+│   │   │   │       │       ├── models.go
+│   │   │   │       │       └── querier.go
+│   │   │   │       ├── core_auth_01_api_routes.go
+│   │   │   │       ├── core_auth_02_api_common_http_handler.go
+│   │   │   │       ├── core_auth_03_api_http_handler.go
+│   │   │   │       ├── core_auth_04_svc.go
+│   │   │   │       ├── core_auth_05_svc_common.go
+│   │   │   │       ├── core_auth_06_svc_flows.go
+│   │   │   │       ├── core_auth_07_svc_helpers.go
+│   │   │   │       ├── core_auth_08_svc_middleware.go
+│   │   │   │       ├── core_auth_09_mdl.go
+│   │   │   │       ├── core_auth_10_mdl_common.go
+│   │   │   │       ├── core_auth_11_mdl_helpers.go
+│   │   │   │       ├── core_auth_12_kit_otp.go
+│   │   │   │       ├── core_auth_13_kit_password.go
+│   │   │   │       └── core_auth_14_errors.go
 │   │   │   ├── personal/
-│   │   │   │   └── profile/
-│   │   │   │       ├── profileapi/
-│   │   │   │       │   ├── profile_http_handler_api.go
-│   │   │   │       │   └── profile_routes_api.go
-│   │   │   │       ├── profilekit/
-│   │   │   │       │   └── profile_username_kit.go
-│   │   │   │       ├── profilemodels/
-│   │   │   │       │   └── profile_mdl.go
-│   │   │   │       └── profileservice/
-│   │   │   │           └── profile_svc.go
+│   │   │   │   ├── personal_profile/
+│   │   │   │   │   ├── internal/
+│   │   │   │   │   │   └── personal_profile_store/
+│   │   │   │   │   │       ├── db.go
+│   │   │   │   │   │       ├── models.go
+│   │   │   │   │   │       ├── personal_profile.sql.go
+│   │   │   │   │   │       └── querier.go
+│   │   │   │   │   ├── personal_profile_01_api_routes.go
+│   │   │   │   │   ├── personal_profile_02_api_http_handler.go
+│   │   │   │   │   ├── personal_profile_03_svc.go
+│   │   │   │   │   ├── personal_profile_04_mdl.go
+│   │   │   │   │   ├── personal_profile_05_kit_username.go
+│   │   │   │   │   └── personal_profile_06_errors.go
+│   │   │   │   └── personal_setting/
+│   │   │   │       ├── personal_setting_01_api_routes.go
+│   │   │   │       ├── personal_setting_02_api_http_handler.go
+│   │   │   │       ├── personal_setting_03_svc.go
+│   │   │   │       ├── personal_setting_04_mdl.go
+│   │   │   │       └── personal_setting_05_errors.go
 │   │   │   └── public/
 │   │   ├── platform/
 │   │   │   ├── clients/
@@ -262,14 +275,6 @@ chatbasket_backend/
 │   │   │   └── websocket/
 │   │   │       └── websocket.go
 │   │   └── store/
-│   │       └── postgresgen/
-│   │           ├── auth.sql.go
-│   │           ├── db.go
-│   │           ├── models.go
-│   │           ├── personal_chat.sql.go
-│   │           ├── personal_contacts.sql.go
-│   │           ├── personal_user.sql.go
-│   │           └── querier.go
 │   ├── .env
 │   ├── .gitignore
 │   ├── go.mod
