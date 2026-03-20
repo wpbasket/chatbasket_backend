@@ -3,6 +3,7 @@ package main
 import (
 	"chatbasket-apinext/internal/platform/clients"
 	"chatbasket-apinext/internal/platform/config"
+	"chatbasket-apinext/internal/platform/kit"
 	"chatbasket-apinext/internal/platform/logger"
 	"chatbasket-apinext/internal/platform/middleware"
 	"chatbasket-apinext/internal/platform/router"
@@ -24,6 +25,9 @@ func main() {
 	// Configure structured logging with slog (Source of Truth)
 	slog.SetDefault(logger.New())
 	e.Logger = slog.Default()
+
+	// Register Global Error Handler for clean domain error mapping
+	e.HTTPErrorHandler = kit.GlobalErrorHandler
 
 	// Load application configuration
 	cfg, err := config.Load()

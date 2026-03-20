@@ -107,15 +107,11 @@ func BuildFileViewURL(endpoint, projectID, bucketID string, ad *AppwriteFileData
 }
 
 // Convert multipart.FileHeader (from Echo) to InputFile, ported from utils/toInputFileUtils.go
-func ConvertToInputFile(fh *multipart.FileHeader) (file.InputFile, *ApiError) {
+func ConvertToInputFile(fh *multipart.FileHeader) (file.InputFile, error) {
 	// Open the multipart file
 	opened, err := fh.Open()
 	if err != nil {
-		return file.InputFile{}, &ApiError{
-			Code:    500,
-			Message: "Failed to open multipart file: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+		return file.InputFile{}, fmt.Errorf("failed to open multipart file: %v", err)
 	}
 	defer opened.Close()
 
@@ -123,11 +119,7 @@ func ConvertToInputFile(fh *multipart.FileHeader) (file.InputFile, *ApiError) {
 	fileExt := filepath.Ext(fh.Filename)
 	tempFile, err := os.CreateTemp("", "appwrite_upload_*"+fileExt)
 	if err != nil {
-		return file.InputFile{}, &ApiError{
-			Code:    500,
-			Message: "Failed to create temporary file: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+		return file.InputFile{}, fmt.Errorf("failed to create temporary file: %v", err)
 	}
 	defer tempFile.Close()
 
@@ -139,11 +131,7 @@ func ConvertToInputFile(fh *multipart.FileHeader) (file.InputFile, *ApiError) {
 			// Log the cleanup error but return the original error
 			// In production, you might want to use a proper logger here
 		}
-		return file.InputFile{}, &ApiError{
-			Code:    500,
-			Message: "Failed to copy file content: " + err.Error(),
-			Type:    "internal_server_error",
-		}
+		return file.InputFile{}, fmt.Errorf("failed to copy file content: %v", err)
 	}
 
 	// Create InputFile with path

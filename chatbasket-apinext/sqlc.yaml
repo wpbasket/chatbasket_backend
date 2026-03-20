@@ -1,18 +1,31 @@
 version: "2"
 sql:
-  - schema: 
-      - "db/common/migrations/"
-      - "db/personal/migrations/"
-      # - "db/public/migrations/"
-    queries: 
-      - "db/common/queries/"
-      - "db/personal/queries/"
-      # - "db/public/queries/"
+  # --- AUTH MODULE ---
+  - schema: "db/common/migrations/"
+    queries: "db/common/queries/"
     engine: "postgresql"
     gen:
       go:
-        package: "postgresgen"
-        out: "internal/store/postgresgen"
+        package: "core_auth_store"
+        out: "internal/modules/core/core_auth/internal/core_auth_store"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+
+  # --- PROFILE MODULE ---
+  - schema:
+      - "db/common/migrations/"
+      - "db/personal/migrations/"
+    queries: "db/personal/queries/personal_profile.sql"
+    engine: "postgresql"
+    gen:
+      go:
+        package: "personal_profile_store"
+        out: "internal/modules/personal/personal_profile/internal/personal_profile_store"
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_pointers_for_null_types: true

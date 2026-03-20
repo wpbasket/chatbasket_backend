@@ -2,7 +2,6 @@ package clients
 
 import (
 	"bytes"
-	"chatbasket-apinext/internal/platform/kit"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -26,7 +25,7 @@ func WaitEmails() {
 }
 
 // SendEmail sends an email using the Heroku Relay in a "fire and forget" background task, ported from utils/emailUtils.go
-func SendEmail(to []string, subject string, bodyHTML string) *kit.AppError {
+func SendEmail(to []string, subject string, bodyHTML string) error {
 	relayURL := os.Getenv("MAIL_RELAY_URL")
 	relaySecret := os.Getenv("MAIL_RELAY_SECRET")
 

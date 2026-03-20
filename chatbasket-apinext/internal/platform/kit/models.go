@@ -9,18 +9,7 @@ type UserId struct {
 	UuidUserId   uuid.UUID `json:"uuidUserId"`
 }
 
-// ported from chatbasket-api/model/error.go
-type ApiError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Type    string `json:"type"`
-}
 
-// AppError is for internal/non-API errors, ported from chatbasket-api/model/error.go
-type AppError struct {
-	Type    string
-	Message string
-}
 
 // ported from chatbasket-api/model/user.go
 type StatusOkay struct {

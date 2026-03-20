@@ -1,15 +1,13 @@
 package router
 
 import (
-	"chatbasket-apinext/internal/modules/core/auth/authapi"
-	"chatbasket-apinext/internal/modules/core/auth/authservice"
-	"chatbasket-apinext/internal/modules/personal/profile/profileapi"
-	"chatbasket-apinext/internal/modules/personal/profile/profileservice"
+	"chatbasket-apinext/internal/modules/core/core_auth"
+	"chatbasket-apinext/internal/modules/personal/personal_profile"
+	"chatbasket-apinext/internal/modules/personal/personal_setting"
 	"chatbasket-apinext/internal/platform/clients"
 	"chatbasket-apinext/internal/platform/config"
 	"chatbasket-apinext/internal/platform/kit"
 	"chatbasket-apinext/internal/platform/services"
-	"chatbasket-apinext/internal/store/postgresgen"
 	"context"
 	"net/http"
 	"time"
@@ -61,18 +59,19 @@ func (r *Router) RegisterGlobalRoutes() *echo.Group {
 
 // RegisterModuleRoutes orchestrates the registration of all domain modules.
 func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
-	// Create postgres store once at router level
-	postgresStore := postgresgen.New(r.Pool)
-
 	// Initialize global services
-	globalService := services.NewGlobalService(postgresStore)
+	globalService := services.NewGlobalService()
 
 	// 1. Auth Module
-	authService := authservice.NewAuthService(globalService, r.Config.Security.AuthSecret)
-	authapi.Register(apiGroup, authService)
+	authService := core_auth.NewAuthService(globalService, r.Pool, r.Config.Security.AuthSecret)
+	core_auth.Register(apiGroup, authService)
 
 	// 2. Personal Category (Group of modules)
 	personalGroup := apiGroup.Group("/personal")
-	profileService := profileservice.NewProfileService(globalService, r.Config.Security.PersonalUsernameKey, r.AppwriteStorage, r.Config.Appwrite.PersonalProfilePicBucketID)
-	profileapi.Register(personalGroup, profileService, authService)
+	profileService := personal_profile.NewProfileService(globalService, r.Pool, r.Config.Security.PersonalUsernameKey, r.AppwriteStorage, r.Config.Appwrite.PersonalProfilePicBucketID)
+	personal_profile.Register(personalGroup, profileService, authService)
+
+	// 3. Settings Module
+	settingService := personal_setting.NewSettingService(authService)
+	personal_setting.Register(personalGroup, settingService)
 }

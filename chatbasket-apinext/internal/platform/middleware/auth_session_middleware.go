@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"chatbasket-apinext/internal/platform/kit"
-	"chatbasket-apinext/internal/store/postgresgen"
 	"context"
 	"net/http"
 	"strings"
@@ -13,11 +12,25 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
+// SessionInfo represents generic session data for the middleware.
+type SessionInfo struct {
+	ID        uuid.UUID
+	ExpiresAt time.Time
+	IsCentral bool
+}
+
+// UserInfo represents generic user data for the middleware.
+type UserInfo struct {
+	ID              uuid.UUID
+	Email           string
+	IsEmailVerified bool
+}
+
 // AuthSessionProvider defines the methods required by the middleware to verify sessions.
 // This interface allows the platform middleware to be decoupled from the auth module.
 type AuthSessionProvider interface {
-	GetSessionByToken(ctx context.Context, params postgresgen.GetSessionByTokenParams) (postgresgen.Session, error)
-	GetAuthUserByID(ctx context.Context, userID uuid.UUID) (postgresgen.AuthUser, error)
+	GetSessionByToken(ctx context.Context, tokenHash string, userID uuid.UUID) (*SessionInfo, error)
+	GetAuthUserByID(ctx context.Context, userID uuid.UUID) (*UserInfo, error)
 	GetAuthSecret() []byte
 }
 
@@ -64,72 +77,41 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 
 			// 1. Check missing auth
 			if sessionId == "" || userId == "" {
-				return c.JSON(http.StatusUnauthorized, kit.ApiError{
-					Code:    http.StatusUnauthorized,
-					Type:    "missing_auth",
-					Message: "Missing session ID or User ID",
-				})
+				return kit.NewError(http.StatusUnauthorized, "missing_auth", "Missing session ID or User ID")
 			}
 
 			// 2. Parse User ID to UUID
 			uuidVal, err := kit.StringToUUID(userId)
 			if err != nil {
-				return c.JSON(http.StatusUnauthorized, kit.ApiError{
-					Code:    http.StatusUnauthorized,
-					Type:    "invalid_user_id",
-					Message: "Invalid user format",
-				})
+				return kit.NewError(http.StatusUnauthorized, "invalid_user_id", "Invalid user format")
 			}
 
 			// 3. Compute HMAC and Verify Session via Store
 			tokenHash, err := kit.ComputeHMAC(sessionId, authProvider.GetAuthSecret(), true, new(uuidVal.String()))
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, kit.ApiError{
-					Code:    http.StatusInternalServerError,
-					Type:    "internal_error",
-					Message: "Failed to process session token",
-				})
+				return kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to process session token")
 			}
 
 			ctx := c.Request().Context()
-			session, err := authProvider.GetSessionByToken(ctx, postgresgen.GetSessionByTokenParams{
-				TokenHash:  tokenHash,
-				AuthUserID: uuidVal,
-			})
+			session, err := authProvider.GetSessionByToken(ctx, tokenHash, uuidVal)
 
 			// Check if session found and not expired
-			if err != nil || session.ExpiresAt.Time.Before(time.Now()) {
-				return c.JSON(http.StatusUnauthorized, kit.ApiError{
-					Code:    http.StatusUnauthorized,
-					Type:    "session_invalid",
-					Message: "Invalid or expired session",
-				})
+			if err != nil || session.ExpiresAt.Before(time.Now()) {
+				return kit.NewError(http.StatusUnauthorized, "session_invalid", "Invalid or expired session")
 			}
 
 			// 4. Get User details
 			authUser, err := authProvider.GetAuthUserByID(ctx, uuidVal)
 			if err != nil {
 				if err == pgx.ErrNoRows {
-					return c.JSON(http.StatusUnauthorized, kit.ApiError{
-						Code:    http.StatusUnauthorized,
-						Type:    "user_not_found",
-						Message: "User not found",
-					})
+					return kit.NewError(http.StatusUnauthorized, "user_not_found", "User not found")
 				}
-				return c.JSON(http.StatusInternalServerError, kit.ApiError{
-					Code:    http.StatusInternalServerError,
-					Type:    "internal_server_error",
-					Message: "Failed to fetch user: " + kit.GetPostgresError(err).Message,
-				})
+				return kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user: "+kit.GetPostgresError(err).Message)
 			}
 
 			// 5. Check Verification (if required)
 			if requireVerified && !authUser.IsEmailVerified {
-				return c.JSON(http.StatusForbidden, kit.ApiError{
-					Code:    http.StatusForbidden,
-					Type:    "unverified_email",
-					Message: "Email must be verified to perform this action",
-				})
+				return kit.NewError(http.StatusForbidden, "unverified_email", "Email must be verified to perform this action")
 			}
 
 			// ✅ Set context for handler access

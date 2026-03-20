@@ -4,6 +4,7 @@ import (
 	"chatbasket-apinext/internal/platform/clients"
 	"chatbasket-apinext/internal/platform/kit"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"time"
 
@@ -36,10 +37,10 @@ func UploadFileFromMultipart(
 	fileId string,
 	fh *multipart.FileHeader,
 	opts UploadOptions,
-) (*UploadResult, *kit.ApiError) {
-	inputFile, apiErr := kit.ConvertToInputFile(fh)
-	if apiErr != nil {
-		return nil, apiErr
+) (*UploadResult, error) {
+	inputFile, err := kit.ConvertToInputFile(fh)
+	if err != nil {
+		return nil, err
 	}
 
 	// Clean up temp file after upload
@@ -55,13 +56,13 @@ func UploadFileFromMultipart(
 		// delete file tokens
 		tok, err := appwriteStorage.Tokens.List(bucketId, fileId)
 		if err != nil {
-			return nil, &kit.ApiError{Code: 500, Message: "Failed to list tokens: " + err.Error(), Type: "internal_server_error"}
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to list tokens: "+err.Error())
 		}
 		if tok.Total > 0 {
 			for _, tokens := range tok.Tokens {
 				_, err := appwriteStorage.Tokens.Delete(tokens.Id)
 				if err != nil {
-					return nil, &kit.ApiError{Code: 500, Message: "Failed to delete token: " + err.Error(), Type: "internal_server_error"}
+					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete token: "+err.Error())
 				}
 			}
 		}
@@ -74,18 +75,18 @@ func UploadFileFromMultipart(
 			}),
 		)
 		if err != nil {
-			return nil, &kit.ApiError{Code: 500, Message: "Failed to list existing file: " + err.Error(), Type: "internal_server_error"}
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to list existing file: "+err.Error())
 		}
 		if listFilesRes.Total == 1 {
 			if _, err := appwriteStorage.Storage.DeleteFile(bucketId, fileId); err != nil {
-				return nil, &kit.ApiError{Code: 500, Message: "Failed to delete existing file: " + err.Error(), Type: "internal_server_error"}
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete existing file: "+err.Error())
 			}
 		}
 	}
 
 	uploadRes, err := appwriteStorage.Storage.CreateFile(bucketId, fileId, inputFile)
 	if err != nil {
-		return nil, &kit.ApiError{Code: 500, Message: "Failed to upload file: " + err.Error(), Type: "internal_server_error"}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to upload file: "+err.Error())
 	}
 
 	result := &UploadResult{
@@ -97,7 +98,7 @@ func UploadFileFromMultipart(
 		exp := time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
 		personalToken, err := appwriteStorage.Tokens.CreateFileToken(bucketId, fileId, appwriteStorage.Tokens.WithCreateFileTokenExpire(exp))
 		if err != nil {
-			return nil, &kit.ApiError{Code: 500, Message: "Failed to create personal token: " + err.Error(), Type: "internal_server_error"}
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create personal token: "+err.Error())
 		}
 		result.TokenIDs = []string{personalToken.Id}
 		result.TokenSecrets = []string{personalToken.Secret}
