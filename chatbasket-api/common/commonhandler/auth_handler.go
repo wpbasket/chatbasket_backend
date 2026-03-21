@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
+	"strings"
 )
 
 type AuthHandler struct {
@@ -50,6 +51,36 @@ func (h *AuthHandler) Logout(c *echo.Context) error {
 	if apiErr != nil {
 		return c.JSON(apiErr.Code, apiErr)
 	}
+
+	// Clear cookies for web platform
+	origin := c.Request().Header.Get("Origin")
+	isLocal := strings.Contains(origin, "localhost:8081")
+	cookieDomain := "chatbasket.live"
+	cookieSecure := true
+	if isLocal {
+		cookieDomain = ""
+		cookieSecure = false
+	}
+
+	c.SetCookie(&http.Cookie{
+		Name:     "sessionId",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   cookieSecure,
+		Domain:   cookieDomain,
+		MaxAge:   -1,
+	})
+	c.SetCookie(&http.Cookie{
+		Name:     "userId",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   cookieSecure,
+		Domain:   cookieDomain,
+		MaxAge:   -1,
+	})
+
 	return c.JSON(http.StatusOK, res)
 }
 
