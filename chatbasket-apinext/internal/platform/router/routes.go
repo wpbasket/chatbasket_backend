@@ -2,6 +2,7 @@ package router
 
 import (
 	"chatbasket-apinext/internal/modules/core/core_auth"
+	"chatbasket-apinext/internal/modules/personal/personal_contact"
 	"chatbasket-apinext/internal/modules/personal/personal_profile"
 	"chatbasket-apinext/internal/modules/personal/personal_setting"
 	"chatbasket-apinext/internal/platform/clients"
@@ -70,6 +71,9 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	personalGroup := apiGroup.Group("/personal")
 	profileService := personal_profile.NewProfileService(globalService, r.Pool, r.Config.Security.PersonalUsernameKey, r.AppwriteStorage, r.Config.Appwrite.PersonalProfilePicBucketID)
 	personal_profile.Register(personalGroup, profileService, authService)
+
+	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey)
+	personal_contact.Register(personalGroup, contactService, authService)
 
 	// 3. Settings Module
 	settingService := personal_setting.NewSettingService(authService)

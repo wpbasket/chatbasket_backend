@@ -3,7 +3,15 @@ package personal_profile
 import (
 	"chatbasket-apinext/internal/modules/personal/personal_profile/internal/personal_profile_store"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type UserCoreProfile struct {
+	ID             uuid.UUID `json:"id"`
+	IsAdminBlocked bool      `json:"is_admin_blocked"`
+	ProfileType    string    `json:"profile_type"`
+}
 
 type createUserProfilePayload struct {
 	Name        string `json:"name" validate:"required,min=1,max=40"`

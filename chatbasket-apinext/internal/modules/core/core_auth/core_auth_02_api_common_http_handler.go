@@ -2,10 +2,10 @@ package core_auth
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
-
 )
 
 // Logout handles logout from single or all sessions
@@ -34,8 +34,34 @@ func (h *authHandler) Logout(c *echo.Context) error {
 
 	// For web, clear cookies
 	if c.Get("platform").(string) == "web" {
-		c.SetCookie(&http.Cookie{Name: "sessionId", Value: "", Path: "/", MaxAge: -1})
-		c.SetCookie(&http.Cookie{Name: "userId", Value: "", Path: "/", MaxAge: -1})
+		// Determine cookie security based on host (targeting local frontend at 8081)
+		origin := c.Request().Header.Get("Origin")
+		isLocal := strings.Contains(origin, "localhost:8081")
+		cookieDomain := "chatbasket.live"
+		cookieSecure := true
+		if isLocal {
+			cookieDomain = ""
+			cookieSecure = false
+		}
+
+		c.SetCookie(&http.Cookie{
+			Name:     "sessionId",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   cookieSecure,
+			Domain:   cookieDomain,
+			MaxAge:   -1,
+		})
+		c.SetCookie(&http.Cookie{
+			Name:     "userId",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   cookieSecure,
+			Domain:   cookieDomain,
+			MaxAge:   -1,
+		})
 	}
 
 	return c.JSON(http.StatusOK, res)

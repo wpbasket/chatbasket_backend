@@ -1,6 +1,10 @@
 version: "2"
 sql:
+  # ==========================================
+  # --- CORE ---
+  # ==========================================
   # --- AUTH MODULE ---
+
   - schema: "db/common/migrations/"
     queries: "db/common/queries/"
     engine: "postgresql"
@@ -16,7 +20,12 @@ sql:
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
 
+  # ==========================================
+  # --- PERSONAL ---
+  # ==========================================
+
   # --- PROFILE MODULE ---
+
   - schema:
       - "db/common/migrations/"
       - "db/personal/migrations/"
@@ -33,3 +42,22 @@ sql:
         overrides:
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
+
+  # --- CONTACT MODULE ---
+  - schema:
+      - "db/common/migrations/"
+      - "db/personal/migrations/"
+    queries: "db/personal/queries/personal_contacts.sql"
+    engine: "postgresql"
+    gen:
+      go:
+        package: "personal_contact_store"
+        out: "internal/modules/personal/personal_contact/internal/personal_contact_store"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+

@@ -7,9 +7,12 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/appwrite/sdk-for-go/file"
+	"github.com/appwrite/sdk-for-go/tokens"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ported from utils/baseUtils.go
@@ -53,13 +56,70 @@ type AppwriteFileData struct {
 // BuildAvatarURI constructs the avatar URL from AppwriteFileData
 // Returns empty string if data is invalid or insufficient tokens
 func BuildAvatarURI(ad *AppwriteFileData) *string {
-	if ad == nil || ad.FileId == nil || *ad.FileId == "" || ad.FileToken == nil || *ad.FileToken == "" || ad.FileSecret == nil || *ad.FileSecret == "" {
+	if ad == nil || ad.FileId == nil || *ad.FileId == "" || ad.FileSecret == nil || *ad.FileSecret == "" {
 		return nil
 	}
 
 	uri := fmt.Sprintf("https://fra.cloud.appwrite.io/v1/storage/buckets/68f1170100025d36bf45/files/%s/view?project=6858ed4d0005c859ea03&token=%s",
 		*ad.FileId, *ad.FileSecret)
 	return &uri
+}
+
+// RefreshFileData represents updated token metadata
+type RefreshFileData struct {
+	TokenID     string
+	TokenSecret string
+	TokenExpiry time.Time
+}
+
+// EnsureFreshAvatarTokens checks if avatar tokens are expired and refreshes them via Appwrite if needed.
+// Returns (refreshedData, needsUpdate, error).
+func EnsureFreshAvatarTokens(
+	fileID *string,
+	tokenID *string,
+	tokenSecret *string,
+	tokenExpiry pgtype.Timestamptz,
+	appwriteTokens *tokens.Tokens,
+	bucketID string,
+) (*RefreshFileData, bool, error) {
+	if fileID == nil || *fileID == "" {
+		return nil, false, nil
+	}
+
+	now := time.Now().UTC()
+	needsRefresh := false
+	if tokenExpiry.Valid {
+		needsRefresh = !tokenExpiry.Time.UTC().After(now)
+	} else if tokenID != nil && *tokenID != "" && tokenSecret != nil && *tokenSecret != "" {
+		needsRefresh = true
+	}
+
+	if !needsRefresh {
+		return nil, false, nil
+	}
+
+	// Create new token
+	exp := now.AddDate(1, 0, 0).Format("2006-01-02 15:04:05")
+	tok, err := appwriteTokens.CreateFileToken(
+		bucketID,
+		*fileID,
+		appwriteTokens.WithCreateFileTokenExpire(exp),
+	)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to create Appwrite file token: %w", err)
+	}
+
+	tokTime, err := time.Parse(time.RFC3339, tok.Expire)
+	if err != nil {
+		// Fallback for non-RFC3339 formats if any, but Appwrite usually uses RFC3339
+		return nil, false, fmt.Errorf("failed to parse Appwrite expire time: %w", err)
+	}
+
+	return &RefreshFileData{
+		TokenID:     tok.Id,
+		TokenSecret: tok.Secret,
+		TokenExpiry: tokTime,
+	}, true, nil
 }
 
 // BuildFileDownloadURL constructs a download URL for chat files, ported from utils/baseUtils.go

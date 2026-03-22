@@ -66,7 +66,7 @@ func (ps *profileService) CreateUserProfile(ctx context.Context, payload *create
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Username hashing failed")
 	}
 	// encrypt username
-	b64CipherChacha20Poly1305Username, err := encryptUsername(generatedUsername, ps.PersonalUsernameKey, userId.StringUserId)
+	b64CipherChacha20Poly1305Username, err := EncryptUsername(generatedUsername, ps.PersonalUsernameKey, userId.StringUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Username encryption failed")
 	}
@@ -112,18 +112,14 @@ func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, em
 	}
 
 	// decrypt username
-	decodeUsername, err := decryptUsername(profile.B64CipherChacha20poly1305Username, ps.PersonalUsernameKey)
+	decodeUsername, err := DecryptUsername(profile.B64CipherChacha20poly1305Username, ps.PersonalUsernameKey)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "personal GetProfile failed")
 	}
 
-	var finalAvatarUrl *string
-	if profile.FileID != nil && *profile.FileID != "" {
-		finalAvatarUrl = kit.BuildAvatarURI(&kit.AppwriteFileData{
-			FileId:     profile.FileID,
-			FileToken:  profile.TokenID,
-			FileSecret: profile.TokenSecret,
-		})
+	finalAvatarUrl, err := ps.GetRefreshedAvatarURL(ctx, userId.UuidUserId, profile.FileID, profile.TokenID, profile.TokenSecret, profile.TokenExpiry)
+	if err != nil {
+		return nil, err
 	}
 
 	return toPrivateUserWithAvatar(&profile, decodeUsername, email, finalAvatarUrl), nil
@@ -284,4 +280,57 @@ func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId k
 	}
 
 	return &kit.StatusOkay{Status: true, Message: "Profile picture removed successfully"}, nil
+}
+
+func (ps *profileService) IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error) {
+	return ps.PostgresQueries.IsUserAdminBlocked(ctx, userID)
+}
+
+func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*UserCoreProfile, error) {
+	u, err := ps.PostgresQueries.GetUserCoreProfile(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &UserCoreProfile{
+		ID:             u.ID,
+		IsAdminBlocked: u.IsAdminBlocked,
+		ProfileType:    u.ProfileType,
+	}, nil
+}
+func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid.UUID, fileID, tokenID, tokenSecret *string, tokenExpiry pgtype.Timestamptz) (*string, error) {
+	refreshed, needsUpdate, err := kit.EnsureFreshAvatarTokens(
+		fileID,
+		tokenID,
+		tokenSecret,
+		tokenExpiry,
+		ps.AppwriteStorage.Tokens,
+		ps.PersonalProfilePicBucketID,
+	)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to refresh avatar tokens: "+err.Error())
+	}
+
+	if needsUpdate && refreshed != nil {
+		_, err := ps.PostgresQueries.UpdateAvatarTokens(ctx, personal_profile_store.UpdateAvatarTokensParams{
+			UserID:      userID,
+			TokenID:     &refreshed.TokenID,
+			TokenSecret: &refreshed.TokenSecret,
+			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: refreshed.TokenExpiry},
+		})
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to update refreshed tokens in DB: "+kit.GetPostgresError(err).Message)
+		}
+
+		return kit.BuildAvatarURI(&kit.AppwriteFileData{
+			FileId:     fileID,
+			FileToken:  &refreshed.TokenID,
+			FileSecret: &refreshed.TokenSecret,
+		}), nil
+	}
+
+	return kit.BuildAvatarURI(&kit.AppwriteFileData{
+		FileId:     fileID,
+		FileToken:  tokenID,
+		FileSecret: tokenSecret,
+	}), nil
 }

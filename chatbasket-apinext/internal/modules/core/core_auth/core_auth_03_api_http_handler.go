@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
-
+	"strings"
 )
 
 type authHandler struct {
@@ -64,16 +64,25 @@ func (h *authHandler) AccountVerification(c *echo.Context) error {
 			return ErrInvalidExpiryFormat
 		}
 
+		// Determine cookie security based on host (targeting local frontend at 8081)
+		origin := c.Request().Header.Get("Origin")
+		isLocal := strings.Contains(origin, "localhost:8081")
+		cookieDomain := "chatbasket.live"
+		cookieSecure := true
+		if isLocal {
+			cookieDomain = "" // Browser defaults to current host (localhost)
+			cookieSecure = false
+		}
+
 		// Set cookies with actual values (before they get emptied in response)
 		sessionCookie := &http.Cookie{
 			Name:     "sessionId",
 			Value:    user.SessionID,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   true,
-			// Domain:   "localhost:8081",
-			Domain:   "chatbasket.live",
-			SameSite: http.SameSiteNoneMode,
+			Secure:   cookieSecure,
+			Domain:   cookieDomain,
+			SameSite: http.SameSiteLaxMode,
 			Expires:  expiry,
 		}
 
@@ -82,11 +91,10 @@ func (h *authHandler) AccountVerification(c *echo.Context) error {
 			Value:    user.UserId,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-			// Domain:   "localhost:8081",
-			Domain:  "chatbasket.live",
-			Expires: expiry,
+			Secure:   cookieSecure,
+			SameSite: http.SameSiteLaxMode,
+			Domain:   cookieDomain,
+			Expires:  expiry,
 		}
 
 		c.SetCookie(sessionCookie)
@@ -153,17 +161,26 @@ func (h *authHandler) LoginVerification(c *echo.Context) error {
 			return ErrInvalidExpiryFormat
 		}
 
+		// Determine cookie security based on host (targeting local frontend at 8081)
+		origin := c.Request().Header.Get("Origin")
+		isLocal := strings.Contains(origin, "localhost:8081")
+		cookieDomain := "chatbasket.live"
+		cookieSecure := true
+		if isLocal {
+			cookieDomain = "" // Browser defaults to current host (localhost)
+			cookieSecure = false
+		}
+
 		// Set cookies with actual values (before they get emptied in response)
 		sessionCookie := &http.Cookie{
 			Name:     "sessionId",
 			Value:    user.SessionID,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-			// Domain:   "localhost:8081",
-			Domain:  "chatbasket.live",
-			Expires: expiry,
+			Secure:   cookieSecure,
+			SameSite: http.SameSiteLaxMode,
+			Domain:   cookieDomain,
+			Expires:  expiry,
 		}
 
 		userCookie := &http.Cookie{
@@ -171,11 +188,10 @@ func (h *authHandler) LoginVerification(c *echo.Context) error {
 			Value:    user.UserId,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-			// Domain:   "localhost:8081",
-			Domain:  "chatbasket.live",
-			Expires: expiry,
+			Secure:   cookieSecure,
+			SameSite: http.SameSiteLaxMode,
+			Domain:   cookieDomain,
+			Expires:  expiry,
 		}
 
 		c.SetCookie(sessionCookie)

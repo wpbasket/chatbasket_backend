@@ -40,7 +40,7 @@ func generateRandomUsername() (string, error) {
 	return string(username), nil
 }
 
-func encryptUsername(username string, encryptionKey []byte, userIDStr string) (string, error) {
+func EncryptUsername(username string, encryptionKey []byte, userIDStr string) (string, error) {
 	u, err := uuid.Parse(userIDStr)
 	if err != nil {
 		return "", fmt.Errorf("invalid UUID string: %w", err)
@@ -62,7 +62,7 @@ func encryptUsername(username string, encryptionKey []byte, userIDStr string) (s
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-func decryptUsername(encryptedB64 string, encryptionKey []byte) (string, error) {
+func DecryptUsername(encryptedB64 string, encryptionKey []byte) (string, error) {
 	raw, err := base64.StdEncoding.DecodeString(encryptedB64)
 	if err != nil {
 		return "", fmt.Errorf("base64 decode failed: %w", err)
@@ -90,4 +90,22 @@ func decryptUsername(encryptedB64 string, encryptionKey []byte) (string, error) 
 		return "", fmt.Errorf("decryption failed: %w", err)
 	}
 	return string(plaintext), nil
+}
+
+// ShouldExposeAvatar determines if a user's avatar should be visible based on global and user-level privacy restrictions.
+// Ported from contact_service.go for full fidelity and centralized privacy logic.
+func ShouldExposeAvatar(globalRestrictProfile, exceptionGlobalProfile, globalRestrictAvatar, exceptionGlobalAvatar, userRestrictProfile, userRestrictAvatar bool) bool {
+	if globalRestrictProfile {
+		return exceptionGlobalProfile
+	}
+	if globalRestrictAvatar {
+		return exceptionGlobalAvatar
+	}
+	if userRestrictProfile {
+		return false
+	}
+	if userRestrictAvatar {
+		return false
+	}
+	return true
 }
