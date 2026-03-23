@@ -117,7 +117,7 @@ func (s *AuthService) AccountVerification(ctx context.Context, payload *AuthVeri
 	}
 
 	// 4. Create Session via Utils
-	sessionRes, err := s.CreateSessionFlow(ctx, user.ID, payload.Platform, "")
+	sessionRes, err := s.CreateSessionFlow(ctx, user.ID, new(payload.Platform), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ func (s *AuthService) LoginVerification(ctx context.Context, payload *AuthVerifi
 	}
 
 	// 3. Create Session via Utils
-	sessionRes, err := s.CreateSessionFlow(ctx, user.ID, payload.Platform, "")
+	sessionRes, err := s.CreateSessionFlow(ctx, user.ID, new(payload.Platform), nil)
 	if err != nil {
 		return nil, err
 	}

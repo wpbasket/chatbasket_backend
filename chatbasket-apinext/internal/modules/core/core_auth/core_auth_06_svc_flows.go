@@ -105,7 +105,7 @@ type SessionResult struct {
 }
 
 // CreateSessionFlow generates token, hashes, stores session, returns token + expiry string.
-func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, platform, deviceToken string) (*SessionResult, error) {
+func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, platform, deviceToken *string) (*SessionResult, error) {
 	tokenEnv := uuid.New().String()
 	tokenHash, err := kit.ComputeHMAC(tokenEnv, s.AuthSecret, true, new(userID.String()))
 	if err != nil {
@@ -137,8 +137,8 @@ func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, p
 		AuthUserID:  userID,
 		TokenHash:   tokenHash,
 		ExpiresAt:   pgtype.Timestamptz{Valid: true, Time: expiresAt},
-		Platform:    new(platform),
-		DeviceToken: new(deviceToken),
+		Platform:    platform,
+		DeviceToken: deviceToken,
 		DeviceName:  nil, // To be set later via settings
 		IsCentral:   isPrimary,
 	})

@@ -72,7 +72,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	profileService := personal_profile.NewProfileService(globalService, r.Pool, r.Config.Security.PersonalUsernameKey, r.AppwriteStorage, r.Config.Appwrite.PersonalProfilePicBucketID)
 	personal_profile.Register(personalGroup, profileService, authService)
 
-	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey)
+	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey, r.Config.Security.PersonalContactKey)
 	personal_contact.Register(personalGroup, contactService, authService)
 
 	// 3. Settings Module

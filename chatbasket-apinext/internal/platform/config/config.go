@@ -37,6 +37,7 @@ type Config struct {
 type SecurityConfig struct {
 	AuthSecret          []byte
 	PersonalUsernameKey []byte
+	PersonalContactKey  []byte
 }
 
 // AppwriteConfig holds Appwrite specific configuration, ported from routes/config.go and appwriteinternal/service.go
@@ -178,6 +179,9 @@ func Load() (*Config, error) {
 	// Load Security config
 	secCfg := &SecurityConfig{}
 	if secCfg.PersonalUsernameKey, awErr = kit.LoadKeyFromEnvInByte("PERSONAL_USERNAME_KEY"); awErr != nil {
+		return nil, awErr
+	}
+	if secCfg.PersonalContactKey, awErr = kit.LoadKeyFromEnvInByte("PERSONAL_CONTACT_KEY"); awErr != nil {
 		return nil, awErr
 	}
 	if secret := os.Getenv("AUTH_SECRET"); secret != "" {

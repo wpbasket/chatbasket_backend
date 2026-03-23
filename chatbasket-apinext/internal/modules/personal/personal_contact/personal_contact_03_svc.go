@@ -29,9 +29,10 @@ type contactService struct {
 	PostgresQueries                *personal_contact_store.Queries
 	personalProfilePersonalContactProvider personalProfilePersonalContactProvider
 	PersonalUsernameKey            []byte
+	PersonalContactKey             []byte
 }
 
-func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool, personalProfilePersonalContactProvider personalProfilePersonalContactProvider, personalUsernameKey []byte) *contactService {
+func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool, personalProfilePersonalContactProvider personalProfilePersonalContactProvider, personalUsernameKey []byte, personalContactKey []byte) *contactService {
 	store := personal_contact_store.New(pool)
 	return &contactService{
 		GlobalService:                  globalService,
@@ -39,6 +40,7 @@ func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool
 		PostgresQueries:                store,
 		personalProfilePersonalContactProvider: personalProfilePersonalContactProvider,
 		PersonalUsernameKey:            personalUsernameKey,
+		PersonalContactKey:             personalContactKey,
 	}
 }
 
@@ -107,12 +109,21 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 
 		_, isMutual := addedMeMap[c.ID.String()]
 
+		var nickname *string
+		if c.Nickname != nil {
+			decrypted, err := ps.DecryptNickname(c.Nickname, userId.UuidUserId, c.ID)
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt contact nickname")
+			}
+			nickname = decrypted
+		}
+
 		contacts = append(contacts, Contact{
 			ID:        c.ID.String(),
 			Name:      c.Name,
 			Username:  username,
 			Bio:       c.Bio,
-			Nickname:  c.Nickname,
+			Nickname:  nickname,
 			CreatedAt: createdAt,
 			UpdatedAt: updatedAt,
 			AvatarURL: avatarURL,
@@ -153,7 +164,11 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 		_, isMutual := myContactsMap[p.ID.String()]
 		var myNickname *string
 		if n, ok := myNicknameByID[p.ID.String()]; ok {
-			myNickname = n
+			decrypted, err := ps.DecryptNickname(n, userId.UuidUserId, p.ID)
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt contact nickname")
+			}
+			myNickname = decrypted
 		}
 
 		peopleWhoAddedYou = append(peopleWhoAddedYou, Contact{
@@ -295,11 +310,21 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 	case "private":
 		return nil, kit.NewError(http.StatusForbidden, "forbidden", "user_private_profile")
 	case "public":
+		// Encrypt nickname if provided
+		var encryptedNickname *string
+		if nickname != nil {
+			encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
+			}
+			encryptedNickname = &encrypted
+		}
+
 		// DB call to add contact
 		err = ps.PostgresQueries.InsertUserContact(ctx, personal_contact_store.InsertUserContactParams{
 			OwnerUserID:   userId.UuidUserId,
 			ContactUserID: targetUUID,
-			Nickname:      nickname,
+			Nickname:      encryptedNickname,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -314,10 +339,20 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 		}
 		if targetAlreadyHasMe {
+			// Encrypt nickname if provided
+			var encryptedNickname *string
+			if nickname != nil {
+				encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
+				if err != nil {
+					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
+				}
+				encryptedNickname = &encrypted
+			}
+
 			err = ps.PostgresQueries.InsertUserContact(ctx, personal_contact_store.InsertUserContactParams{
 				OwnerUserID:   userId.UuidUserId,
 				ContactUserID: targetUUID,
-				Nickname:      nickname,
+				Nickname:      encryptedNickname,
 			})
 			if err != nil {
 				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -346,26 +381,46 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 				return &kit.StatusOkay{Status: true, Message: "pending_request_exists"}, nil
 			}
 
-			// If accepted or declined, delete old request and insert new one
-			err = ps.PostgresQueries.DeleteAndInsertContactRequest(ctx, personal_contact_store.DeleteAndInsertContactRequestParams{
-				ID:              reqID,
-				RequesterUserID: userId.UuidUserId,
-				ReceiverUserID:  targetUUID,
-				Nickname:        nickname,
-			})
+				// Encrypt nickname if provided
+				var encryptedNickname *string
+				if nickname != nil {
+					encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
+					if err != nil {
+						return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
+					}
+					encryptedNickname = &encrypted
+				}
+
+				// If accepted or declined, delete old request and insert new one
+				err = ps.PostgresQueries.DeleteAndInsertContactRequest(ctx, personal_contact_store.DeleteAndInsertContactRequestParams{
+					ID:              reqID,
+					RequesterUserID: userId.UuidUserId,
+					ReceiverUserID:  targetUUID,
+					Nickname:        encryptedNickname,
+				})
 			if err != nil {
 				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 			}
 			return &kit.StatusOkay{Status: true, Message: "contact_request_sent"}, nil
 		}
 
-		// No existing request, insert new one
-		err = ps.PostgresQueries.InsertContactRequest(ctx, personal_contact_store.InsertContactRequestParams{
-			ID:              reqID,
-			RequesterUserID: userId.UuidUserId,
-			ReceiverUserID:  targetUUID,
-			Nickname:        nickname,
-		})
+			// Encrypt nickname if provided
+			var encryptedNickname *string
+			if nickname != nil {
+				encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
+				if err != nil {
+					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
+				}
+				encryptedNickname = &encrypted
+			}
+
+			// No existing request, insert new one
+			err = ps.PostgresQueries.InsertContactRequest(ctx, personal_contact_store.InsertContactRequestParams{
+				ID:              reqID,
+				RequesterUserID: userId.UuidUserId,
+				ReceiverUserID:  targetUUID,
+				Nickname:        encryptedNickname,
+			})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 		}
@@ -573,17 +628,12 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 				avatarURL = url
 			}
 
-			var myNickname *string
-			if n, ok := myNicknameByID[r.ID.String()]; ok {
-				myNickname = n
-			}
-
 			requests = append(requests, PendingContactRequest{
 				ID:          r.ID.String(),
 				Name:        r.Name,
 				Username:    username,
 				Bio:         r.Bio,
-				Nickname:    myNickname,
+				Nickname:    nil, // Privacy: Receiver should not see the nickname given by requester
 				RequestedAt: requestedAt,
 				UpdatedAt:   updatedAt,
 				Status:      r.Status,
@@ -629,12 +679,21 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 				Name:        r.Name,
 				Username:    username,
 				Bio:         r.Bio,
-				Nickname:    r.Nickname,
+				Nickname:    nil, // Will decrypt below
 				RequestedAt: requestedAt,
 				UpdatedAt:   updatedAt,
 				Status:      r.Status,
 				AvatarURL:   avatarURL,
 			})
+
+			// Decrypt nickname for the requester (this is their own private data)
+			if r.Nickname != nil {
+				decrypted, err := ps.DecryptNickname(r.Nickname, userId.UuidUserId, r.ID)
+				if err != nil {
+					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt sent request nickname")
+				}
+				records[len(records)-1].Nickname = decrypted
+			}
 		}
 		return records, nil
 	}
@@ -690,10 +749,20 @@ func (ps *contactService) UpdateContactNickname(ctx context.Context, payload *Up
 		}
 	}
 
+	// Encrypt nickname if provided
+	var encryptedNickname *string
+	if nickname != nil {
+		encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, contactUUID)
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
+		}
+		encryptedNickname = &encrypted
+	}
+
 	_, err = ps.PostgresQueries.UpdateContactNickname(ctx, personal_contact_store.UpdateContactNicknameParams{
 		OwnerUserID:   userId.UuidUserId,
 		ContactUserID: contactUUID,
-		Nickname:      nickname,
+		Nickname:      encryptedNickname,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
