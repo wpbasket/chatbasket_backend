@@ -44,10 +44,17 @@ LEFT JOIN user_global_restrictions ugr
 LEFT JOIN user_global_restriction_exemptions ugre 
     ON cu.id = ugre.user_id 
     AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur 
-    ON cu.id = ur.user_id 
+LEFT JOIN user_restrictions ur
+    ON cu.id = ur.user_id
     AND ur.restricted_user_id = $1
+-- Block filtering: exclude contacts if either user has blocked the other
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cu.id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = cu.id AND ub2.blocked_user_id = $1
 WHERE uc.owner_user_id = $1
+  AND ub1.id IS NULL  -- Not blocked by me
+  AND ub2.id IS NULL  -- Not blocked by them
 ORDER BY uc.created_at DESC;
 
 
@@ -97,10 +104,17 @@ LEFT JOIN user_global_restrictions ugr
 LEFT JOIN user_global_restriction_exemptions ugre 
     ON cu.id = ugre.user_id 
     AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur 
-    ON cu.id = ur.user_id 
+LEFT JOIN user_restrictions ur
+    ON cu.id = ur.user_id
     AND ur.restricted_user_id = $1
+-- Block filtering: exclude users if either has blocked the other
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cu.id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = cu.id AND ub2.blocked_user_id = $1
 WHERE uc.contact_user_id = $1
+  AND ub1.id IS NULL  -- Not blocked by me
+  AND ub2.id IS NULL  -- Not blocked by them
 ORDER BY uc.created_at DESC;
 
 
@@ -293,8 +307,15 @@ LEFT JOIN user_global_restriction_exemptions AS ugre
 LEFT JOIN user_restrictions AS ur
     ON ru.id = ur.user_id
     AND ur.restricted_user_id = $1
+-- Block filtering: exclude requests if either user has blocked the other
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = ru.id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = ru.id AND ub2.blocked_user_id = $1
 WHERE cr.receiver_user_id = $1
   AND cr.status = 'pending'
+  AND ub1.id IS NULL  -- Not blocked by me
+  AND ub2.id IS NULL  -- Not blocked by them
 ORDER BY cr.created_at DESC;
 
 -- name: GetSentContactRequests :many
@@ -333,8 +354,15 @@ LEFT JOIN user_global_restriction_exemptions AS ugre
 LEFT JOIN user_restrictions AS ur
     ON ru.id = ur.user_id
     AND ur.restricted_user_id = $1
+-- Block filtering: exclude requests if either user has blocked the other
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = ru.id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = ru.id AND ub2.blocked_user_id = $1
 WHERE cr.requester_user_id = $1
   AND cr.status IN ('pending', 'declined')
+  AND ub1.id IS NULL  -- Not blocked by me
+  AND ub2.id IS NULL  -- Not blocked by them
 ORDER BY cr.created_at DESC;
 
 -- name: UndoContactRequest :one
@@ -361,3 +389,73 @@ SELECT *
 FROM users
 WHERE hmac_sha256_hex_username = $1
   AND is_admin_blocked IS NOT TRUE;
+
+
+-- ===========================================
+-- Cleanup queries for orphaned data
+-- ===========================================
+
+-- name: CleanupOrphanedContactsFromBlocks :exec
+-- Removes contact relationships that should have been deleted by block trigger
+DELETE FROM user_contacts uc
+WHERE EXISTS (
+    SELECT 1 FROM user_blocks ub
+    WHERE (
+        -- Either direction of block should remove the contact
+        (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
+        OR
+        (ub.blocker_user_id = uc.contact_user_id AND ub.blocked_user_id = uc.owner_user_id)
+    )
+);
+
+-- name: CleanupOrphanedContactRequestsFromBlocks :exec
+-- Removes contact requests that should have been deleted when block was created
+DELETE FROM contact_requests cr
+WHERE EXISTS (
+    SELECT 1 FROM user_blocks ub
+    WHERE (
+        -- Either direction of block should remove the request
+        (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
+        OR
+        (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
+    )
+);
+
+-- name: DetectOrphanedContactsFromBlocks :many
+-- Finds contacts that exist despite blocks (trigger failure detection)
+SELECT
+    uc.owner_user_id,
+    uc.contact_user_id,
+    uc.created_at as contact_created_at,
+    ub.created_at as block_created_at,
+    CASE
+        WHEN ub.blocker_user_id = uc.owner_user_id THEN 'owner_blocked_contact'
+        ELSE 'contact_blocked_owner'
+    END as block_direction
+FROM user_contacts uc
+INNER JOIN user_blocks ub ON (
+    (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
+    OR
+    (ub.blocker_user_id = uc.contact_user_id AND ub.blocked_user_id = uc.owner_user_id)
+)
+ORDER BY uc.created_at DESC;
+
+-- name: DetectOrphanedContactRequestsFromBlocks :many
+-- Finds contact requests that exist despite blocks (trigger failure detection)
+SELECT
+    cr.requester_user_id,
+    cr.receiver_user_id,
+    cr.status::text,
+    cr.created_at as request_created_at,
+    ub.created_at as block_created_at,
+    CASE
+        WHEN ub.blocker_user_id = cr.requester_user_id THEN 'requester_blocked_receiver'
+        ELSE 'receiver_blocked_requester'
+    END as block_direction
+FROM contact_requests cr
+INNER JOIN user_blocks ub ON (
+    (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
+    OR
+    (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
+)
+ORDER BY cr.created_at DESC;

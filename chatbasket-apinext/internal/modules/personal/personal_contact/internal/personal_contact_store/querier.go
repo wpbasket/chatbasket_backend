@@ -12,11 +12,24 @@ import (
 
 type Querier interface {
 	AcceptContactRequest(ctx context.Context, arg AcceptContactRequestParams) (string, error)
+	// Removes contact requests that should have been deleted when block was created
+	CleanupOrphanedContactRequestsFromBlocks(ctx context.Context) error
+	// ===========================================
+	// Cleanup queries for orphaned data
+	// ===========================================
+	// Removes contact relationships that should have been deleted by block trigger
+	CleanupOrphanedContactsFromBlocks(ctx context.Context) error
 	CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error
 	DeleteAndInsertContactRequest(ctx context.Context, arg DeleteAndInsertContactRequestParams) error
 	DeleteContact(ctx context.Context, arg DeleteContactParams) (int64, error)
+	// Finds contact requests that exist despite blocks (trigger failure detection)
+	DetectOrphanedContactRequestsFromBlocks(ctx context.Context) ([]DetectOrphanedContactRequestsFromBlocksRow, error)
+	// Finds contacts that exist despite blocks (trigger failure detection)
+	DetectOrphanedContactsFromBlocks(ctx context.Context) ([]DetectOrphanedContactsFromBlocksRow, error)
 	GetContactRequestStatus(ctx context.Context, arg GetContactRequestStatusParams) (string, error)
+	// Block filtering: exclude requests if either user has blocked the other
 	GetPendingContactRequests(ctx context.Context, exemptedUserID uuid.UUID) ([]GetPendingContactRequestsRow, error)
+	// Block filtering: exclude requests if either user has blocked the other
 	GetSentContactRequests(ctx context.Context, exemptedUserID uuid.UUID) ([]GetSentContactRequestsRow, error)
 	// ===========================================
 	// Contact existence helpers
@@ -26,11 +39,13 @@ type Querier interface {
 	// Contacts Queries for sqlc
 	// ===========================================
 	// Retrieves user contacts (people YOU added) with raw restriction data for Go processing
+	// Block filtering: exclude contacts if either user has blocked the other
 	GetUserContacts(ctx context.Context, exemptedUserID uuid.UUID) ([]GetUserContactsRow, error)
 	// ===========================================
 	// People Who Added You Query
 	// ===========================================
 	// Retrieves users who have added YOU as a contact with raw restriction data for Go processing
+	// Block filtering: exclude users if either has blocked the other
 	GetUsersWhoAddedYou(ctx context.Context, exemptedUserID uuid.UUID) ([]GetUsersWhoAddedYouRow, error)
 	HasPendingRequest(ctx context.Context, arg HasPendingRequestParams) (bool, error)
 	InsertContactRequest(ctx context.Context, arg InsertContactRequestParams) error

@@ -47,6 +47,48 @@ func (q *Queries) AcceptContactRequest(ctx context.Context, arg AcceptContactReq
 	return outcome, err
 }
 
+const cleanupOrphanedContactRequestsFromBlocks = `-- name: CleanupOrphanedContactRequestsFromBlocks :exec
+DELETE FROM contact_requests cr
+WHERE EXISTS (
+    SELECT 1 FROM user_blocks ub
+    WHERE (
+        -- Either direction of block should remove the request
+        (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
+        OR
+        (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
+    )
+)
+`
+
+// Removes contact requests that should have been deleted when block was created
+func (q *Queries) CleanupOrphanedContactRequestsFromBlocks(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, cleanupOrphanedContactRequestsFromBlocks)
+	return err
+}
+
+const cleanupOrphanedContactsFromBlocks = `-- name: CleanupOrphanedContactsFromBlocks :exec
+
+DELETE FROM user_contacts uc
+WHERE EXISTS (
+    SELECT 1 FROM user_blocks ub
+    WHERE (
+        -- Either direction of block should remove the contact
+        (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
+        OR
+        (ub.blocker_user_id = uc.contact_user_id AND ub.blocked_user_id = uc.owner_user_id)
+    )
+)
+`
+
+// ===========================================
+// Cleanup queries for orphaned data
+// ===========================================
+// Removes contact relationships that should have been deleted by block trigger
+func (q *Queries) CleanupOrphanedContactsFromBlocks(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, cleanupOrphanedContactsFromBlocks)
+	return err
+}
+
 const createUserBlock = `-- name: CreateUserBlock :exec
 INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
 VALUES ($1, $2, $3)
@@ -118,6 +160,117 @@ func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (i
 	return removed, err
 }
 
+const detectOrphanedContactRequestsFromBlocks = `-- name: DetectOrphanedContactRequestsFromBlocks :many
+SELECT
+    cr.requester_user_id,
+    cr.receiver_user_id,
+    cr.status::text,
+    cr.created_at as request_created_at,
+    ub.created_at as block_created_at,
+    CASE
+        WHEN ub.blocker_user_id = cr.requester_user_id THEN 'requester_blocked_receiver'
+        ELSE 'receiver_blocked_requester'
+    END as block_direction
+FROM contact_requests cr
+INNER JOIN user_blocks ub ON (
+    (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
+    OR
+    (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
+)
+ORDER BY cr.created_at DESC
+`
+
+type DetectOrphanedContactRequestsFromBlocksRow struct {
+	RequesterUserID  uuid.UUID          `json:"requester_user_id"`
+	ReceiverUserID   uuid.UUID          `json:"receiver_user_id"`
+	CrStatus         string             `json:"cr_status"`
+	RequestCreatedAt pgtype.Timestamptz `json:"request_created_at"`
+	BlockCreatedAt   pgtype.Timestamptz `json:"block_created_at"`
+	BlockDirection   string             `json:"block_direction"`
+}
+
+// Finds contact requests that exist despite blocks (trigger failure detection)
+func (q *Queries) DetectOrphanedContactRequestsFromBlocks(ctx context.Context) ([]DetectOrphanedContactRequestsFromBlocksRow, error) {
+	rows, err := q.db.Query(ctx, detectOrphanedContactRequestsFromBlocks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DetectOrphanedContactRequestsFromBlocksRow
+	for rows.Next() {
+		var i DetectOrphanedContactRequestsFromBlocksRow
+		if err := rows.Scan(
+			&i.RequesterUserID,
+			&i.ReceiverUserID,
+			&i.CrStatus,
+			&i.RequestCreatedAt,
+			&i.BlockCreatedAt,
+			&i.BlockDirection,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const detectOrphanedContactsFromBlocks = `-- name: DetectOrphanedContactsFromBlocks :many
+SELECT
+    uc.owner_user_id,
+    uc.contact_user_id,
+    uc.created_at as contact_created_at,
+    ub.created_at as block_created_at,
+    CASE
+        WHEN ub.blocker_user_id = uc.owner_user_id THEN 'owner_blocked_contact'
+        ELSE 'contact_blocked_owner'
+    END as block_direction
+FROM user_contacts uc
+INNER JOIN user_blocks ub ON (
+    (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
+    OR
+    (ub.blocker_user_id = uc.contact_user_id AND ub.blocked_user_id = uc.owner_user_id)
+)
+ORDER BY uc.created_at DESC
+`
+
+type DetectOrphanedContactsFromBlocksRow struct {
+	OwnerUserID      uuid.UUID          `json:"owner_user_id"`
+	ContactUserID    uuid.UUID          `json:"contact_user_id"`
+	ContactCreatedAt pgtype.Timestamptz `json:"contact_created_at"`
+	BlockCreatedAt   pgtype.Timestamptz `json:"block_created_at"`
+	BlockDirection   string             `json:"block_direction"`
+}
+
+// Finds contacts that exist despite blocks (trigger failure detection)
+func (q *Queries) DetectOrphanedContactsFromBlocks(ctx context.Context) ([]DetectOrphanedContactsFromBlocksRow, error) {
+	rows, err := q.db.Query(ctx, detectOrphanedContactsFromBlocks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DetectOrphanedContactsFromBlocksRow
+	for rows.Next() {
+		var i DetectOrphanedContactsFromBlocksRow
+		if err := rows.Scan(
+			&i.OwnerUserID,
+			&i.ContactUserID,
+			&i.ContactCreatedAt,
+			&i.BlockCreatedAt,
+			&i.BlockDirection,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getContactRequestStatus = `-- name: GetContactRequestStatus :one
 SELECT status::text FROM contact_requests
 WHERE requester_user_id = $1 AND receiver_user_id = $2
@@ -172,8 +325,14 @@ LEFT JOIN user_global_restriction_exemptions AS ugre
 LEFT JOIN user_restrictions AS ur
     ON ru.id = ur.user_id
     AND ur.restricted_user_id = $1
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = ru.id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = ru.id AND ub2.blocked_user_id = $1
 WHERE cr.receiver_user_id = $1
   AND cr.status = 'pending'
+  AND ub1.id IS NULL  -- Not blocked by me
+  AND ub2.id IS NULL  -- Not blocked by them
 ORDER BY cr.created_at DESC
 `
 
@@ -198,6 +357,7 @@ type GetPendingContactRequestsRow struct {
 	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
 }
 
+// Block filtering: exclude requests if either user has blocked the other
 func (q *Queries) GetPendingContactRequests(ctx context.Context, exemptedUserID uuid.UUID) ([]GetPendingContactRequestsRow, error) {
 	rows, err := q.db.Query(ctx, getPendingContactRequests, exemptedUserID)
 	if err != nil {
@@ -273,8 +433,14 @@ LEFT JOIN user_global_restriction_exemptions AS ugre
 LEFT JOIN user_restrictions AS ur
     ON ru.id = ur.user_id
     AND ur.restricted_user_id = $1
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = ru.id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = ru.id AND ub2.blocked_user_id = $1
 WHERE cr.requester_user_id = $1
   AND cr.status IN ('pending', 'declined')
+  AND ub1.id IS NULL  -- Not blocked by me
+  AND ub2.id IS NULL  -- Not blocked by them
 ORDER BY cr.created_at DESC
 `
 
@@ -299,6 +465,7 @@ type GetSentContactRequestsRow struct {
 	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
 }
 
+// Block filtering: exclude requests if either user has blocked the other
 func (q *Queries) GetSentContactRequests(ctx context.Context, exemptedUserID uuid.UUID) ([]GetSentContactRequestsRow, error) {
 	rows, err := q.db.Query(ctx, getSentContactRequests, exemptedUserID)
 	if err != nil {
@@ -409,10 +576,16 @@ LEFT JOIN user_global_restrictions ugr
 LEFT JOIN user_global_restriction_exemptions ugre 
     ON cu.id = ugre.user_id 
     AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur 
-    ON cu.id = ur.user_id 
+LEFT JOIN user_restrictions ur
+    ON cu.id = ur.user_id
     AND ur.restricted_user_id = $1
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cu.id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = cu.id AND ub2.blocked_user_id = $1
 WHERE uc.owner_user_id = $1
+  AND ub1.id IS NULL  -- Not blocked by me
+  AND ub2.id IS NULL  -- Not blocked by them
 ORDER BY uc.created_at DESC
 `
 
@@ -440,6 +613,7 @@ type GetUserContactsRow struct {
 // Contacts Queries for sqlc
 // ===========================================
 // Retrieves user contacts (people YOU added) with raw restriction data for Go processing
+// Block filtering: exclude contacts if either user has blocked the other
 func (q *Queries) GetUserContacts(ctx context.Context, exemptedUserID uuid.UUID) ([]GetUserContactsRow, error) {
 	rows, err := q.db.Query(ctx, getUserContacts, exemptedUserID)
 	if err != nil {
@@ -520,10 +694,16 @@ LEFT JOIN user_global_restrictions ugr
 LEFT JOIN user_global_restriction_exemptions ugre 
     ON cu.id = ugre.user_id 
     AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur 
-    ON cu.id = ur.user_id 
+LEFT JOIN user_restrictions ur
+    ON cu.id = ur.user_id
     AND ur.restricted_user_id = $1
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cu.id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = cu.id AND ub2.blocked_user_id = $1
 WHERE uc.contact_user_id = $1
+  AND ub1.id IS NULL  -- Not blocked by me
+  AND ub2.id IS NULL  -- Not blocked by them
 ORDER BY uc.created_at DESC
 `
 
@@ -551,6 +731,7 @@ type GetUsersWhoAddedYouRow struct {
 // People Who Added You Query
 // ===========================================
 // Retrieves users who have added YOU as a contact with raw restriction data for Go processing
+// Block filtering: exclude users if either has blocked the other
 func (q *Queries) GetUsersWhoAddedYou(ctx context.Context, exemptedUserID uuid.UUID) ([]GetUsersWhoAddedYouRow, error) {
 	rows, err := q.db.Query(ctx, getUsersWhoAddedYou, exemptedUserID)
 	if err != nil {
