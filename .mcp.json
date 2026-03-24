@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "code-review-graph": {
+      "command": "C:\\Users\\hello\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\uv.exe",
+      "args": ["tool", "run", "code-review-graph", "serve"]
+    }
+  }
+}
