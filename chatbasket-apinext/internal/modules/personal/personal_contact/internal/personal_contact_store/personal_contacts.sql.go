@@ -68,6 +68,8 @@ func (q *Queries) CleanupOrphanedContactRequestsFromBlocks(ctx context.Context) 
 
 const cleanupOrphanedContactsFromBlocks = `-- name: CleanupOrphanedContactsFromBlocks :exec
 
+
+
 DELETE FROM user_contacts uc
 WHERE EXISTS (
     SELECT 1 FROM user_blocks ub
@@ -80,6 +82,9 @@ WHERE EXISTS (
 )
 `
 
+// ===========================================
+// Contact existence helpers
+// ===========================================
 // ===========================================
 // Cleanup queries for orphaned data
 // ===========================================
@@ -289,103 +294,48 @@ func (q *Queries) GetContactRequestStatus(ctx context.Context, arg GetContactReq
 	return status, err
 }
 
-const getPendingContactRequests = `-- name: GetPendingContactRequests :many
+const getPendingContactRequestsLite = `-- name: GetPendingContactRequestsLite :many
 SELECT
-    ru.id,
-    ru.name,
-    ru.b64_cipher_chacha20poly1305_username AS username,
-    ru.bio,
+    cr.requester_user_id AS id,
     cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
-    cr.status::text AS status,
-    a.file_id AS avatar_file_id,
-    a.token_id AS avatar_token_id,
-    a.token_secret AS avatar_token_secret,
-    a.token_expiry AS avatar_token_expiry,
-    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
-    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
-    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
-    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
-    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
-    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-FROM contact_requests AS cr
-INNER JOIN users AS ru
-    ON cr.requester_user_id = ru.id
-    AND ru.is_admin_blocked IS FALSE
-    AND ru.profile_type IN ('public', 'personal')
-LEFT JOIN avatars AS a
-    ON ru.id = a.user_id
-    AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions AS ugr
-    ON ru.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions AS ugre
-    ON ru.id = ugre.user_id
-    AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions AS ur
-    ON ru.id = ur.user_id
-    AND ur.restricted_user_id = $1
+    cr.status::text AS status
+FROM contact_requests cr
 LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = ru.id
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cr.requester_user_id
 LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = ru.id AND ub2.blocked_user_id = $1
+    ON ub2.blocker_user_id = cr.requester_user_id AND ub2.blocked_user_id = $1
 WHERE cr.receiver_user_id = $1
   AND cr.status = 'pending'
-  AND ub1.id IS NULL  -- Not blocked by me
-  AND ub2.id IS NULL  -- Not blocked by them
+  AND ub1.id IS NULL
+  AND ub2.id IS NULL
 ORDER BY cr.created_at DESC
 `
 
-type GetPendingContactRequestsRow struct {
-	ID                     uuid.UUID          `json:"id"`
-	Name                   string             `json:"name"`
-	Username               string             `json:"username"`
-	Bio                    *string            `json:"bio"`
-	Nickname               *string            `json:"nickname"`
-	RequestCreatedAt       pgtype.Timestamptz `json:"request_created_at"`
-	RequestUpdatedAt       pgtype.Timestamptz `json:"request_updated_at"`
-	Status                 string             `json:"status"`
-	AvatarFileID           *string            `json:"avatar_file_id"`
-	AvatarTokenID          *string            `json:"avatar_token_id"`
-	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
-	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
-	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
-	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
-	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
-	ExceptionGlobalAvatar  bool               `json:"exception_global_avatar"`
-	UserRestrictProfile    bool               `json:"user_restrict_profile"`
-	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
+type GetPendingContactRequestsLiteRow struct {
+	ID               uuid.UUID          `json:"id"`
+	Nickname         *string            `json:"nickname"`
+	RequestCreatedAt pgtype.Timestamptz `json:"request_created_at"`
+	RequestUpdatedAt pgtype.Timestamptz `json:"request_updated_at"`
+	Status           string             `json:"status"`
 }
 
-// Block filtering: exclude requests if either user has blocked the other
-func (q *Queries) GetPendingContactRequests(ctx context.Context, exemptedUserID uuid.UUID) ([]GetPendingContactRequestsRow, error) {
-	rows, err := q.db.Query(ctx, getPendingContactRequests, exemptedUserID)
+func (q *Queries) GetPendingContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetPendingContactRequestsLiteRow, error) {
+	rows, err := q.db.Query(ctx, getPendingContactRequestsLite, blockerUserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetPendingContactRequestsRow
+	var items []GetPendingContactRequestsLiteRow
 	for rows.Next() {
-		var i GetPendingContactRequestsRow
+		var i GetPendingContactRequestsLiteRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Name,
-			&i.Username,
-			&i.Bio,
 			&i.Nickname,
 			&i.RequestCreatedAt,
 			&i.RequestUpdatedAt,
 			&i.Status,
-			&i.AvatarFileID,
-			&i.AvatarTokenID,
-			&i.AvatarTokenSecret,
-			&i.AvatarTokenExpiry,
-			&i.GlobalRestrictProfile,
-			&i.GlobalRestrictAvatar,
-			&i.ExceptionGlobalProfile,
-			&i.ExceptionGlobalAvatar,
-			&i.UserRestrictProfile,
-			&i.UserRestrictAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -397,103 +347,48 @@ func (q *Queries) GetPendingContactRequests(ctx context.Context, exemptedUserID 
 	return items, nil
 }
 
-const getSentContactRequests = `-- name: GetSentContactRequests :many
+const getSentContactRequestsLite = `-- name: GetSentContactRequestsLite :many
 SELECT
-    ru.id,
-    ru.name,
-    ru.b64_cipher_chacha20poly1305_username AS username,
-    ru.bio,
+    cr.receiver_user_id AS id,
     cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
-    cr.status::text AS status,
-    a.file_id AS avatar_file_id,
-    a.token_id AS avatar_token_id,
-    a.token_secret AS avatar_token_secret,
-    a.token_expiry AS avatar_token_expiry,
-    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
-    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
-    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
-    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
-    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
-    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-FROM contact_requests AS cr
-INNER JOIN users AS ru
-    ON cr.receiver_user_id = ru.id
-    AND ru.is_admin_blocked IS FALSE
-    AND ru.profile_type IN ('public', 'personal')
-LEFT JOIN avatars AS a
-    ON ru.id = a.user_id
-    AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions AS ugr
-    ON ru.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions AS ugre
-    ON ru.id = ugre.user_id
-    AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions AS ur
-    ON ru.id = ur.user_id
-    AND ur.restricted_user_id = $1
+    cr.status::text AS status
+FROM contact_requests cr
 LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = ru.id
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cr.receiver_user_id
 LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = ru.id AND ub2.blocked_user_id = $1
+    ON ub2.blocker_user_id = cr.receiver_user_id AND ub2.blocked_user_id = $1
 WHERE cr.requester_user_id = $1
   AND cr.status IN ('pending', 'declined')
-  AND ub1.id IS NULL  -- Not blocked by me
-  AND ub2.id IS NULL  -- Not blocked by them
+  AND ub1.id IS NULL
+  AND ub2.id IS NULL
 ORDER BY cr.created_at DESC
 `
 
-type GetSentContactRequestsRow struct {
-	ID                     uuid.UUID          `json:"id"`
-	Name                   string             `json:"name"`
-	Username               string             `json:"username"`
-	Bio                    *string            `json:"bio"`
-	Nickname               *string            `json:"nickname"`
-	RequestCreatedAt       pgtype.Timestamptz `json:"request_created_at"`
-	RequestUpdatedAt       pgtype.Timestamptz `json:"request_updated_at"`
-	Status                 string             `json:"status"`
-	AvatarFileID           *string            `json:"avatar_file_id"`
-	AvatarTokenID          *string            `json:"avatar_token_id"`
-	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
-	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
-	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
-	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
-	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
-	ExceptionGlobalAvatar  bool               `json:"exception_global_avatar"`
-	UserRestrictProfile    bool               `json:"user_restrict_profile"`
-	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
+type GetSentContactRequestsLiteRow struct {
+	ID               uuid.UUID          `json:"id"`
+	Nickname         *string            `json:"nickname"`
+	RequestCreatedAt pgtype.Timestamptz `json:"request_created_at"`
+	RequestUpdatedAt pgtype.Timestamptz `json:"request_updated_at"`
+	Status           string             `json:"status"`
 }
 
-// Block filtering: exclude requests if either user has blocked the other
-func (q *Queries) GetSentContactRequests(ctx context.Context, exemptedUserID uuid.UUID) ([]GetSentContactRequestsRow, error) {
-	rows, err := q.db.Query(ctx, getSentContactRequests, exemptedUserID)
+func (q *Queries) GetSentContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetSentContactRequestsLiteRow, error) {
+	rows, err := q.db.Query(ctx, getSentContactRequestsLite, blockerUserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetSentContactRequestsRow
+	var items []GetSentContactRequestsLiteRow
 	for rows.Next() {
-		var i GetSentContactRequestsRow
+		var i GetSentContactRequestsLiteRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Name,
-			&i.Username,
-			&i.Bio,
 			&i.Nickname,
 			&i.RequestCreatedAt,
 			&i.RequestUpdatedAt,
 			&i.Status,
-			&i.AvatarFileID,
-			&i.AvatarTokenID,
-			&i.AvatarTokenSecret,
-			&i.AvatarTokenExpiry,
-			&i.GlobalRestrictProfile,
-			&i.GlobalRestrictAvatar,
-			&i.ExceptionGlobalProfile,
-			&i.ExceptionGlobalAvatar,
-			&i.UserRestrictProfile,
-			&i.UserRestrictAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -505,142 +400,44 @@ func (q *Queries) GetSentContactRequests(ctx context.Context, exemptedUserID uui
 	return items, nil
 }
 
-const getUserByHashedUsername = `-- name: GetUserByHashedUsername :one
-
-SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
-FROM users
-WHERE hmac_sha256_hex_username = $1
-  AND is_admin_blocked IS NOT TRUE
-`
-
-// ===========================================
-// Contact existence helpers
-// ===========================================
-func (q *Queries) GetUserByHashedUsername(ctx context.Context, hmacSha256HexUsername string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByHashedUsername, hmacSha256HexUsername)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Bio,
-		&i.ProfileType,
-		&i.IsAdminBlocked,
-		&i.AdminBlockReason,
-		&i.HmacSha256HexUsername,
-		&i.B64CipherChacha20poly1305Username,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getUserContacts = `-- name: GetUserContacts :many
-
+const getUserContactsLite = `-- name: GetUserContactsLite :many
 SELECT
-    cu.id,
-    cu.name,
-    cu.b64_cipher_chacha20poly1305_username AS username,
-    cu.bio,
+    uc.contact_user_id AS id,
     uc.nickname,
     uc.created_at AS contact_created_at,
-    uc.updated_at AS contact_updated_at,
-    
-    -- Raw avatar data (Go applies visibility logic)
-    a.file_id AS avatar_file_id,
-    a.token_id AS avatar_token_id,
-    a.token_secret AS avatar_token_secret,
-    a.token_expiry AS avatar_token_expiry,
-    
-    -- Global restriction flags (Priority 1 & 2)
-    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
-    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
-    
-    -- Global exemption flags (Priority 1 & 2 override)
-    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
-    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
-    
-    -- User-level restriction flags (Priority 3 & 4)
-    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
-    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-
+    uc.updated_at AS contact_updated_at
 FROM user_contacts uc
-INNER JOIN users cu 
-    ON uc.contact_user_id = cu.id 
-    AND cu.is_admin_blocked IS FALSE
-    AND cu.profile_type IN ('public', 'personal')
-LEFT JOIN avatars a 
-    ON cu.id = a.user_id 
-    AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions ugr 
-    ON cu.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions ugre 
-    ON cu.id = ugre.user_id 
-    AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur
-    ON cu.id = ur.user_id
-    AND ur.restricted_user_id = $1
 LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cu.id
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = uc.contact_user_id
 LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = cu.id AND ub2.blocked_user_id = $1
+    ON ub2.blocker_user_id = uc.contact_user_id AND ub2.blocked_user_id = $1
 WHERE uc.owner_user_id = $1
-  AND ub1.id IS NULL  -- Not blocked by me
-  AND ub2.id IS NULL  -- Not blocked by them
+  AND ub1.id IS NULL
+  AND ub2.id IS NULL
 ORDER BY uc.created_at DESC
 `
 
-type GetUserContactsRow struct {
-	ID                     uuid.UUID          `json:"id"`
-	Name                   string             `json:"name"`
-	Username               string             `json:"username"`
-	Bio                    *string            `json:"bio"`
-	Nickname               *string            `json:"nickname"`
-	ContactCreatedAt       pgtype.Timestamptz `json:"contact_created_at"`
-	ContactUpdatedAt       pgtype.Timestamptz `json:"contact_updated_at"`
-	AvatarFileID           *string            `json:"avatar_file_id"`
-	AvatarTokenID          *string            `json:"avatar_token_id"`
-	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
-	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
-	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
-	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
-	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
-	ExceptionGlobalAvatar  bool               `json:"exception_global_avatar"`
-	UserRestrictProfile    bool               `json:"user_restrict_profile"`
-	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
+type GetUserContactsLiteRow struct {
+	ID               uuid.UUID          `json:"id"`
+	Nickname         *string            `json:"nickname"`
+	ContactCreatedAt pgtype.Timestamptz `json:"contact_created_at"`
+	ContactUpdatedAt pgtype.Timestamptz `json:"contact_updated_at"`
 }
 
-// ===========================================
-// Contacts Queries for sqlc
-// ===========================================
-// Retrieves user contacts (people YOU added) with raw restriction data for Go processing
-// Block filtering: exclude contacts if either user has blocked the other
-func (q *Queries) GetUserContacts(ctx context.Context, exemptedUserID uuid.UUID) ([]GetUserContactsRow, error) {
-	rows, err := q.db.Query(ctx, getUserContacts, exemptedUserID)
+func (q *Queries) GetUserContactsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetUserContactsLiteRow, error) {
+	rows, err := q.db.Query(ctx, getUserContactsLite, blockerUserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetUserContactsRow
+	var items []GetUserContactsLiteRow
 	for rows.Next() {
-		var i GetUserContactsRow
+		var i GetUserContactsLiteRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Name,
-			&i.Username,
-			&i.Bio,
 			&i.Nickname,
 			&i.ContactCreatedAt,
 			&i.ContactUpdatedAt,
-			&i.AvatarFileID,
-			&i.AvatarTokenID,
-			&i.AvatarTokenSecret,
-			&i.AvatarTokenExpiry,
-			&i.GlobalRestrictProfile,
-			&i.GlobalRestrictAvatar,
-			&i.ExceptionGlobalProfile,
-			&i.ExceptionGlobalAvatar,
-			&i.UserRestrictProfile,
-			&i.UserRestrictAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -652,113 +449,47 @@ func (q *Queries) GetUserContacts(ctx context.Context, exemptedUserID uuid.UUID)
 	return items, nil
 }
 
-const getUsersWhoAddedYou = `-- name: GetUsersWhoAddedYou :many
-
+const getUsersWhoAddedYouLite = `-- name: GetUsersWhoAddedYouLite :many
 SELECT
-    cu.id,
-    cu.name,
-    cu.b64_cipher_chacha20poly1305_username AS username,
-    cu.bio,
-    uc.nickname,
+    uc.owner_user_id AS id,
+    my_uc.nickname,
     uc.created_at AS contact_created_at,
-    uc.updated_at AS contact_updated_at,
-    
-    -- Raw avatar data (Go applies visibility logic)
-    a.file_id AS avatar_file_id,
-    a.token_id AS avatar_token_id,
-    a.token_secret AS avatar_token_secret,
-    a.token_expiry AS avatar_token_expiry,
-    
-    -- Global restriction flags (Priority 1 & 2)
-    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
-    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
-    
-    -- Global exemption flags (Priority 1 & 2 override)
-    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
-    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
-    
-    -- User-level restriction flags (Priority 3 & 4)
-    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
-    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-
+    uc.updated_at AS contact_updated_at
 FROM user_contacts uc
-INNER JOIN users cu 
-    ON uc.owner_user_id = cu.id 
-    AND cu.is_admin_blocked IS FALSE
-    AND cu.profile_type IN ('public', 'personal')
-LEFT JOIN avatars a 
-    ON cu.id = a.user_id 
-    AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions ugr 
-    ON cu.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions ugre 
-    ON cu.id = ugre.user_id 
-    AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur
-    ON cu.id = ur.user_id
-    AND ur.restricted_user_id = $1
+LEFT JOIN user_contacts my_uc
+    ON my_uc.owner_user_id = $1
+   AND my_uc.contact_user_id = uc.owner_user_id
 LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cu.id
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = uc.owner_user_id
 LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = cu.id AND ub2.blocked_user_id = $1
+    ON ub2.blocker_user_id = uc.owner_user_id AND ub2.blocked_user_id = $1
 WHERE uc.contact_user_id = $1
-  AND ub1.id IS NULL  -- Not blocked by me
-  AND ub2.id IS NULL  -- Not blocked by them
+  AND ub1.id IS NULL
+  AND ub2.id IS NULL
 ORDER BY uc.created_at DESC
 `
 
-type GetUsersWhoAddedYouRow struct {
-	ID                     uuid.UUID          `json:"id"`
-	Name                   string             `json:"name"`
-	Username               string             `json:"username"`
-	Bio                    *string            `json:"bio"`
-	Nickname               *string            `json:"nickname"`
-	ContactCreatedAt       pgtype.Timestamptz `json:"contact_created_at"`
-	ContactUpdatedAt       pgtype.Timestamptz `json:"contact_updated_at"`
-	AvatarFileID           *string            `json:"avatar_file_id"`
-	AvatarTokenID          *string            `json:"avatar_token_id"`
-	AvatarTokenSecret      *string            `json:"avatar_token_secret"`
-	AvatarTokenExpiry      pgtype.Timestamptz `json:"avatar_token_expiry"`
-	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
-	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
-	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
-	ExceptionGlobalAvatar  bool               `json:"exception_global_avatar"`
-	UserRestrictProfile    bool               `json:"user_restrict_profile"`
-	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
+type GetUsersWhoAddedYouLiteRow struct {
+	ID               uuid.UUID          `json:"id"`
+	Nickname         *string            `json:"nickname"`
+	ContactCreatedAt pgtype.Timestamptz `json:"contact_created_at"`
+	ContactUpdatedAt pgtype.Timestamptz `json:"contact_updated_at"`
 }
 
-// ===========================================
-// People Who Added You Query
-// ===========================================
-// Retrieves users who have added YOU as a contact with raw restriction data for Go processing
-// Block filtering: exclude users if either has blocked the other
-func (q *Queries) GetUsersWhoAddedYou(ctx context.Context, exemptedUserID uuid.UUID) ([]GetUsersWhoAddedYouRow, error) {
-	rows, err := q.db.Query(ctx, getUsersWhoAddedYou, exemptedUserID)
+func (q *Queries) GetUsersWhoAddedYouLite(ctx context.Context, ownerUserID uuid.UUID) ([]GetUsersWhoAddedYouLiteRow, error) {
+	rows, err := q.db.Query(ctx, getUsersWhoAddedYouLite, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetUsersWhoAddedYouRow
+	var items []GetUsersWhoAddedYouLiteRow
 	for rows.Next() {
-		var i GetUsersWhoAddedYouRow
+		var i GetUsersWhoAddedYouLiteRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Name,
-			&i.Username,
-			&i.Bio,
 			&i.Nickname,
 			&i.ContactCreatedAt,
 			&i.ContactUpdatedAt,
-			&i.AvatarFileID,
-			&i.AvatarTokenID,
-			&i.AvatarTokenSecret,
-			&i.AvatarTokenExpiry,
-			&i.GlobalRestrictProfile,
-			&i.GlobalRestrictAvatar,
-			&i.ExceptionGlobalProfile,
-			&i.ExceptionGlobalAvatar,
-			&i.UserRestrictProfile,
-			&i.UserRestrictAvatar,
 		); err != nil {
 			return nil, err
 		}
@@ -854,6 +585,8 @@ const isEitherBlocked = `-- name: IsEitherBlocked :one
 
 
 
+
+
 SELECT CASE
     WHEN EXISTS(SELECT 1 FROM user_blocks ub1 WHERE ub1.blocker_user_id = $1 AND ub1.blocked_user_id = $2) THEN 1
     WHEN EXISTS(SELECT 1 FROM user_blocks ub2 WHERE ub2.blocker_user_id = $2 AND ub2.blocked_user_id = $1) THEN 2
@@ -866,6 +599,12 @@ type IsEitherBlockedParams struct {
 	BlockedUserID uuid.UUID `json:"blocked_user_id"`
 }
 
+// ===========================================
+// Contacts Queries for sqlc
+// ===========================================
+// ===========================================
+// People Who Added You Query
+// ===========================================
 // ===========================================
 // Avatar Privacy Circuit Breaker Logic
 // ===========================================

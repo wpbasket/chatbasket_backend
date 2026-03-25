@@ -2,121 +2,9 @@
 -- Contacts Queries for sqlc
 -- ===========================================
 
--- name: GetUserContacts :many
--- Retrieves user contacts (people YOU added) with raw restriction data for Go processing
-SELECT
-    cu.id,
-    cu.name,
-    cu.b64_cipher_chacha20poly1305_username AS username,
-    cu.bio,
-    uc.nickname,
-    uc.created_at AS contact_created_at,
-    uc.updated_at AS contact_updated_at,
-    
-    -- Raw avatar data (Go applies visibility logic)
-    a.file_id AS avatar_file_id,
-    a.token_id AS avatar_token_id,
-    a.token_secret AS avatar_token_secret,
-    a.token_expiry AS avatar_token_expiry,
-    
-    -- Global restriction flags (Priority 1 & 2)
-    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
-    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
-    
-    -- Global exemption flags (Priority 1 & 2 override)
-    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
-    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
-    
-    -- User-level restriction flags (Priority 3 & 4)
-    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
-    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-
-FROM user_contacts uc
-INNER JOIN users cu 
-    ON uc.contact_user_id = cu.id 
-    AND cu.is_admin_blocked IS FALSE
-    AND cu.profile_type IN ('public', 'personal')
-LEFT JOIN avatars a 
-    ON cu.id = a.user_id 
-    AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions ugr 
-    ON cu.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions ugre 
-    ON cu.id = ugre.user_id 
-    AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur
-    ON cu.id = ur.user_id
-    AND ur.restricted_user_id = $1
--- Block filtering: exclude contacts if either user has blocked the other
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cu.id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = cu.id AND ub2.blocked_user_id = $1
-WHERE uc.owner_user_id = $1
-  AND ub1.id IS NULL  -- Not blocked by me
-  AND ub2.id IS NULL  -- Not blocked by them
-ORDER BY uc.created_at DESC;
-
-
 -- ===========================================
 -- People Who Added You Query
 -- ===========================================
-
--- name: GetUsersWhoAddedYou :many
--- Retrieves users who have added YOU as a contact with raw restriction data for Go processing
-SELECT
-    cu.id,
-    cu.name,
-    cu.b64_cipher_chacha20poly1305_username AS username,
-    cu.bio,
-    uc.nickname,
-    uc.created_at AS contact_created_at,
-    uc.updated_at AS contact_updated_at,
-    
-    -- Raw avatar data (Go applies visibility logic)
-    a.file_id AS avatar_file_id,
-    a.token_id AS avatar_token_id,
-    a.token_secret AS avatar_token_secret,
-    a.token_expiry AS avatar_token_expiry,
-    
-    -- Global restriction flags (Priority 1 & 2)
-    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
-    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
-    
-    -- Global exemption flags (Priority 1 & 2 override)
-    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
-    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
-    
-    -- User-level restriction flags (Priority 3 & 4)
-    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
-    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-
-FROM user_contacts uc
-INNER JOIN users cu 
-    ON uc.owner_user_id = cu.id 
-    AND cu.is_admin_blocked IS FALSE
-    AND cu.profile_type IN ('public', 'personal')
-LEFT JOIN avatars a 
-    ON cu.id = a.user_id 
-    AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions ugr 
-    ON cu.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions ugre 
-    ON cu.id = ugre.user_id 
-    AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur
-    ON cu.id = ur.user_id
-    AND ur.restricted_user_id = $1
--- Block filtering: exclude users if either has blocked the other
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cu.id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = cu.id AND ub2.blocked_user_id = $1
-WHERE uc.contact_user_id = $1
-  AND ub1.id IS NULL  -- Not blocked by me
-  AND ub2.id IS NULL  -- Not blocked by them
-ORDER BY uc.created_at DESC;
-
 
 -- ===========================================
 -- Avatar Privacy Circuit Breaker Logic
@@ -271,100 +159,6 @@ INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
 VALUES ($1, $2, $3)
 ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING;
 
--- name: GetPendingContactRequests :many
-SELECT
-    ru.id,
-    ru.name,
-    ru.b64_cipher_chacha20poly1305_username AS username,
-    ru.bio,
-    cr.nickname,
-    cr.created_at AS request_created_at,
-    cr.updated_at AS request_updated_at,
-    cr.status::text AS status,
-    a.file_id AS avatar_file_id,
-    a.token_id AS avatar_token_id,
-    a.token_secret AS avatar_token_secret,
-    a.token_expiry AS avatar_token_expiry,
-    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
-    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
-    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
-    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
-    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
-    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-FROM contact_requests AS cr
-INNER JOIN users AS ru
-    ON cr.requester_user_id = ru.id
-    AND ru.is_admin_blocked IS FALSE
-    AND ru.profile_type IN ('public', 'personal')
-LEFT JOIN avatars AS a
-    ON ru.id = a.user_id
-    AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions AS ugr
-    ON ru.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions AS ugre
-    ON ru.id = ugre.user_id
-    AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions AS ur
-    ON ru.id = ur.user_id
-    AND ur.restricted_user_id = $1
--- Block filtering: exclude requests if either user has blocked the other
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = ru.id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = ru.id AND ub2.blocked_user_id = $1
-WHERE cr.receiver_user_id = $1
-  AND cr.status = 'pending'
-  AND ub1.id IS NULL  -- Not blocked by me
-  AND ub2.id IS NULL  -- Not blocked by them
-ORDER BY cr.created_at DESC;
-
--- name: GetSentContactRequests :many
-SELECT
-    ru.id,
-    ru.name,
-    ru.b64_cipher_chacha20poly1305_username AS username,
-    ru.bio,
-    cr.nickname,
-    cr.created_at AS request_created_at,
-    cr.updated_at AS request_updated_at,
-    cr.status::text AS status,
-    a.file_id AS avatar_file_id,
-    a.token_id AS avatar_token_id,
-    a.token_secret AS avatar_token_secret,
-    a.token_expiry AS avatar_token_expiry,
-    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
-    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
-    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
-    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
-    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
-    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-FROM contact_requests AS cr
-INNER JOIN users AS ru
-    ON cr.receiver_user_id = ru.id
-    AND ru.is_admin_blocked IS FALSE
-    AND ru.profile_type IN ('public', 'personal')
-LEFT JOIN avatars AS a
-    ON ru.id = a.user_id
-    AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions AS ugr
-    ON ru.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions AS ugre
-    ON ru.id = ugre.user_id
-    AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions AS ur
-    ON ru.id = ur.user_id
-    AND ur.restricted_user_id = $1
--- Block filtering: exclude requests if either user has blocked the other
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = ru.id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = ru.id AND ub2.blocked_user_id = $1
-WHERE cr.requester_user_id = $1
-  AND cr.status IN ('pending', 'declined')
-  AND ub1.id IS NULL  -- Not blocked by me
-  AND ub2.id IS NULL  -- Not blocked by them
-ORDER BY cr.created_at DESC;
-
 -- name: UndoContactRequest :one
 WITH deleted AS (
     DELETE FROM contact_requests AS cr
@@ -383,12 +177,6 @@ SELECT
 -- ===========================================
 -- Contact existence helpers
 -- ===========================================
-
--- name: GetUserByHashedUsername :one
-SELECT *
-FROM users
-WHERE hmac_sha256_hex_username = $1
-  AND is_admin_blocked IS NOT TRUE;
 
 
 -- ===========================================
@@ -458,4 +246,75 @@ INNER JOIN user_blocks ub ON (
     OR
     (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
 )
+ORDER BY cr.created_at DESC;
+
+-- name: GetUserContactsLite :many
+SELECT
+    uc.contact_user_id AS id,
+    uc.nickname,
+    uc.created_at AS contact_created_at,
+    uc.updated_at AS contact_updated_at
+FROM user_contacts uc
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = uc.contact_user_id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = uc.contact_user_id AND ub2.blocked_user_id = $1
+WHERE uc.owner_user_id = $1
+  AND ub1.id IS NULL
+  AND ub2.id IS NULL
+ORDER BY uc.created_at DESC;
+
+-- name: GetUsersWhoAddedYouLite :many
+SELECT
+    uc.owner_user_id AS id,
+    my_uc.nickname,
+    uc.created_at AS contact_created_at,
+    uc.updated_at AS contact_updated_at
+FROM user_contacts uc
+LEFT JOIN user_contacts my_uc
+    ON my_uc.owner_user_id = $1
+   AND my_uc.contact_user_id = uc.owner_user_id
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = uc.owner_user_id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = uc.owner_user_id AND ub2.blocked_user_id = $1
+WHERE uc.contact_user_id = $1
+  AND ub1.id IS NULL
+  AND ub2.id IS NULL
+ORDER BY uc.created_at DESC;
+
+-- name: GetPendingContactRequestsLite :many
+SELECT
+    cr.requester_user_id AS id,
+    cr.nickname,
+    cr.created_at AS request_created_at,
+    cr.updated_at AS request_updated_at,
+    cr.status::text AS status
+FROM contact_requests cr
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cr.requester_user_id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = cr.requester_user_id AND ub2.blocked_user_id = $1
+WHERE cr.receiver_user_id = $1
+  AND cr.status = 'pending'
+  AND ub1.id IS NULL
+  AND ub2.id IS NULL
+ORDER BY cr.created_at DESC;
+
+-- name: GetSentContactRequestsLite :many
+SELECT
+    cr.receiver_user_id AS id,
+    cr.nickname,
+    cr.created_at AS request_created_at,
+    cr.updated_at AS request_updated_at,
+    cr.status::text AS status
+FROM contact_requests cr
+LEFT JOIN user_blocks ub1
+    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cr.receiver_user_id
+LEFT JOIN user_blocks ub2
+    ON ub2.blocker_user_id = cr.receiver_user_id AND ub2.blocked_user_id = $1
+WHERE cr.requester_user_id = $1
+  AND cr.status IN ('pending', 'declined')
+  AND ub1.id IS NULL
+  AND ub2.id IS NULL
 ORDER BY cr.created_at DESC;

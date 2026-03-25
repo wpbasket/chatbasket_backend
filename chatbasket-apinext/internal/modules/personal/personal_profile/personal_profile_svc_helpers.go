@@ -1,12 +1,18 @@
 package personal_profile
 
 import (
+	"chatbasket-apinext/internal/modules/personal/personal_profile/internal/personal_profile_store"
+	"chatbasket-apinext/internal/platform/kit"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"math/big"
+	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -108,4 +114,150 @@ func ShouldExposeAvatar(globalRestrictProfile, exceptionGlobalProfile, globalRes
 		return false
 	}
 	return true
+}
+
+// GetRefreshedAvatarURL refreshes avatar tokens if needed and returns the avatar URL
+func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid.UUID, fileID, tokenID, tokenSecret *string, tokenExpiry pgtype.Timestamptz) (*string, error) {
+	refreshed, needsUpdate, err := kit.EnsureFreshAvatarTokens(
+		fileID,
+		tokenID,
+		tokenSecret,
+		tokenExpiry,
+		ps.AppwriteStorage.Tokens,
+		ps.PersonalProfilePicBucketID,
+	)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to refresh avatar tokens: "+err.Error())
+	}
+
+	if needsUpdate && refreshed != nil {
+		_, err := ps.PostgresQueries.UpdateAvatarTokens(ctx, personal_profile_store.UpdateAvatarTokensParams{
+			UserID:      userID,
+			TokenID:     &refreshed.TokenID,
+			TokenSecret: &refreshed.TokenSecret,
+			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: refreshed.TokenExpiry},
+		})
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to update refreshed tokens in DB: "+kit.GetPostgresError(err).Message)
+		}
+
+		return kit.BuildAvatarURI(&kit.AppwriteFileData{
+			FileId:     fileID,
+			FileToken:  &refreshed.TokenID,
+			FileSecret: &refreshed.TokenSecret,
+		}), nil
+	}
+
+	return kit.BuildAvatarURI(&kit.AppwriteFileData{
+		FileId:     fileID,
+		FileToken:  tokenID,
+		FileSecret: tokenSecret,
+	}), nil
+}
+
+// GetVisibleProfilesForContactViewer fetches profiles for contact enrichment with privacy filtering
+func (ps *profileService) GetVisibleProfilesForContactViewer(
+	ctx context.Context,
+	viewerID uuid.UUID,
+	targetIDs []uuid.UUID,
+) (map[uuid.UUID]*ContactProfileView, error) {
+	if len(targetIDs) == 0 {
+		return map[uuid.UUID]*ContactProfileView{}, nil
+	}
+
+	rows, err := ps.PostgresQueries.GetProfilesForContactViewer(ctx, personal_profile_store.GetProfilesForContactViewerParams{
+		ViewerUserID:  viewerID,
+		TargetUserIds: targetIDs,
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to fetch profiles: "+kit.GetPostgresError(err).Message)
+	}
+
+	result := make(map[uuid.UUID]*ContactProfileView, len(rows))
+	for _, row := range rows {
+		// Decrypt username
+		username, err := DecryptUsername(row.Username, ps.PersonalUsernameKey)
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt username")
+		}
+
+		// Check avatar visibility
+		var avatarURL *string
+		if ShouldExposeAvatar(
+			row.GlobalRestrictProfile,
+			row.ExceptionGlobalProfile,
+			row.GlobalRestrictAvatar,
+			row.ExceptionGlobalAvatar,
+			row.UserRestrictProfile,
+			row.UserRestrictAvatar,
+		) {
+			url, err := ps.GetRefreshedAvatarURL(ctx, row.ID, row.FileID, row.TokenID, row.TokenSecret, row.TokenExpiry)
+			if err != nil {
+				return nil, err
+			}
+			avatarURL = url
+		}
+
+		result[row.ID] = &ContactProfileView{
+			ID:        row.ID,
+			Name:      row.Name,
+			Username:  username,
+			Bio:       row.Bio,
+			AvatarURL: avatarURL,
+		}
+	}
+
+	return result, nil
+}
+
+// FindContactableUserByUsername looks up a user by username for contact operations
+func (ps *profileService) FindContactableUserByUsername(
+	ctx context.Context,
+	viewerID uuid.UUID,
+	username string,
+) (*ContactLookupResult, error) {
+	// Hash username
+	hashedUsername, err := kit.ComputeHMAC(username, ps.PersonalUsernameKey, false, nil)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to hash username")
+	}
+
+	// Query user
+	user, err := ps.PostgresQueries.GetUserByHashedUsernameForContact(ctx, hashedUsername)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return &ContactLookupResult{Exists: false}, nil
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+
+	// Exclude self
+	if user.ID == viewerID {
+		return &ContactLookupResult{Exists: false}, nil
+	}
+
+	return &ContactLookupResult{
+		ID:          user.ID,
+		Name:        user.Name,
+		ProfileType: user.ProfileType,
+		Exists:      true,
+	}, nil
+}
+
+// IsUserAdminBlocked checks if a user is admin blocked
+func (ps *profileService) IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error) {
+	return ps.PostgresQueries.IsUserAdminBlocked(ctx, userID)
+}
+
+// GetUserCoreProfile fetches core profile information
+func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*UserCoreProfile, error) {
+	u, err := ps.PostgresQueries.GetUserCoreProfile(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &UserCoreProfile{
+		ID:             u.ID,
+		IsAdminBlocked: u.IsAdminBlocked,
+		ProfileType:    u.ProfileType,
+	}, nil
 }

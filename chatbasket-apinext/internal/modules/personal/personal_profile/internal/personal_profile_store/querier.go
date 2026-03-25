@@ -21,6 +21,8 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// Deletes the main profile avatar for a user
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
+	GetProfilesForContactViewer(ctx context.Context, arg GetProfilesForContactViewerParams) ([]GetProfilesForContactViewerRow, error)
+	GetUserByHashedUsernameForContact(ctx context.Context, hmacSha256HexUsername string) (User, error)
 	// Minimal user profile without avatar join
 	GetUserCoreProfile(ctx context.Context, id uuid.UUID) (User, error)
 	// Returns full user record along with its profile avatar tokens and file_id

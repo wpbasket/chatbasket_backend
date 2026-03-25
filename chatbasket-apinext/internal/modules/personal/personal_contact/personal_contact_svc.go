@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,7 +19,8 @@ import (
 type personalProfilePersonalContactProvider interface {
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
-	GetRefreshedAvatarURL(ctx context.Context, userID uuid.UUID, fileID, tokenID, tokenSecret *string, tokenExpiry pgtype.Timestamptz) (*string, error)
+	GetVisibleProfilesForContactViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
+	FindContactableUserByUsername(ctx context.Context, viewerID uuid.UUID, username string) (*personal_profile.ContactLookupResult, error)
 }
 
 type contactService struct {
@@ -45,14 +45,13 @@ func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool
 }
 
 func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*GetContactsResponse, error) {
-	// DB call to get user's contacts
-	myContacts, err := ps.PostgresQueries.GetUserContacts(ctx, userId.UuidUserId)
+	// Fetch slim contact data
+	myContacts, err := ps.PostgresQueries.GetUserContactsLite(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 
-	// DB call to get users who added you
-	addedMe, err := ps.PostgresQueries.GetUsersWhoAddedYou(ctx, userId.UuidUserId)
+	addedMe, err := ps.PostgresQueries.GetUsersWhoAddedYouLite(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
@@ -64,6 +63,34 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 		}, nil
 	}
 
+	// Collect unique target IDs
+	targetIDs := make([]uuid.UUID, 0, len(myContacts)+len(addedMe))
+	seen := make(map[uuid.UUID]struct{})
+
+	for _, c := range myContacts {
+		if _, exists := seen[c.ID]; !exists {
+			targetIDs = append(targetIDs, c.ID)
+			seen[c.ID] = struct{}{}
+		}
+	}
+	for _, p := range addedMe {
+		if _, exists := seen[p.ID]; !exists {
+			targetIDs = append(targetIDs, p.ID)
+			seen[p.ID] = struct{}{}
+		}
+	}
+
+	// Batch fetch enriched profiles
+	profilesByID, err := ps.personalProfilePersonalContactProvider.GetVisibleProfilesForContactViewer(
+		ctx,
+		userId.UuidUserId,
+		targetIDs,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build mutual lookup
 	addedMeMap := make(map[string]struct{}, len(addedMe))
 	for _, u := range addedMe {
 		addedMeMap[u.ID.String()] = struct{}{}
@@ -77,15 +104,12 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 		myNicknameByID[id] = c.Nickname
 	}
 
+	// Build contacts list
 	contacts := make([]Contact, 0, len(myContacts))
 	for _, c := range myContacts {
-		username := ""
-		if c.Username != "" {
-			var err error
-			username, err = personal_profile.DecryptUsername(c.Username, ps.PersonalUsernameKey)
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt contact username")
-			}
+		profile, ok := profilesByID[c.ID]
+		if !ok {
+			continue // Skip if profile not found
 		}
 
 		createdAt := time.Time{}
@@ -96,15 +120,6 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 		updatedAt := time.Time{}
 		if c.ContactUpdatedAt.Valid {
 			updatedAt = c.ContactUpdatedAt.Time
-		}
-
-		var avatarURL *string
-		if personal_profile.ShouldExposeAvatar(c.GlobalRestrictProfile, c.ExceptionGlobalProfile, c.GlobalRestrictAvatar, c.ExceptionGlobalAvatar, c.UserRestrictProfile, c.UserRestrictAvatar) {
-			url, err := ps.personalProfilePersonalContactProvider.GetRefreshedAvatarURL(ctx, c.ID, c.AvatarFileID, c.AvatarTokenID, c.AvatarTokenSecret, c.AvatarTokenExpiry)
-			if err != nil {
-				return nil, err
-			}
-			avatarURL = url
 		}
 
 		_, isMutual := addedMeMap[c.ID.String()]
@@ -120,26 +135,23 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 
 		contacts = append(contacts, Contact{
 			ID:        c.ID.String(),
-			Name:      c.Name,
-			Username:  username,
-			Bio:       c.Bio,
+			Name:      profile.Name,
+			Username:  profile.Username,
+			Bio:       profile.Bio,
 			Nickname:  nickname,
 			CreatedAt: createdAt,
 			UpdatedAt: updatedAt,
-			AvatarURL: avatarURL,
+			AvatarURL: profile.AvatarURL,
 			IsMutual:  isMutual,
 		})
 	}
 
+	// Build people who added you list
 	peopleWhoAddedYou := make([]Contact, 0, len(addedMe))
 	for _, p := range addedMe {
-		username := ""
-		if p.Username != "" {
-			var err error
-			username, err = personal_profile.DecryptUsername(p.Username, ps.PersonalUsernameKey)
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt contact username")
-			}
+		profile, ok := profilesByID[p.ID]
+		if !ok {
+			continue // Skip if profile not found
 		}
 
 		createdAt := time.Time{}
@@ -152,18 +164,10 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			updatedAt = p.ContactUpdatedAt.Time
 		}
 
-		var avatarURL *string
-		if personal_profile.ShouldExposeAvatar(p.GlobalRestrictProfile, p.ExceptionGlobalProfile, p.GlobalRestrictAvatar, p.ExceptionGlobalAvatar, p.UserRestrictProfile, p.UserRestrictAvatar) {
-			url, err := ps.personalProfilePersonalContactProvider.GetRefreshedAvatarURL(ctx, p.ID, p.AvatarFileID, p.AvatarTokenID, p.AvatarTokenSecret, p.AvatarTokenExpiry)
-			if err != nil {
-				return nil, err
-			}
-			avatarURL = url
-		}
-
 		_, isMutual := myContactsMap[p.ID.String()]
+
 		var myNickname *string
-		if n, ok := myNicknameByID[p.ID.String()]; ok {
+		if n, ok := myNicknameByID[p.ID.String()]; ok && n != nil {
 			decrypted, err := ps.DecryptNickname(n, userId.UuidUserId, p.ID)
 			if err != nil {
 				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt contact nickname")
@@ -173,13 +177,13 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 
 		peopleWhoAddedYou = append(peopleWhoAddedYou, Contact{
 			ID:        p.ID.String(),
-			Name:      p.Name,
-			Username:  username,
-			Bio:       p.Bio,
+			Name:      profile.Name,
+			Username:  profile.Username,
+			Bio:       profile.Bio,
 			Nickname:  myNickname,
 			CreatedAt: createdAt,
 			UpdatedAt: updatedAt,
-			AvatarURL: avatarURL,
+			AvatarURL: profile.AvatarURL,
 			IsMutual:  isMutual,
 		})
 	}
@@ -191,22 +195,17 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 }
 
 func (ps *contactService) CheckContactExistance(ctx context.Context, payload *CheckContactExistancePayload, userId kit.UserId) (*CheckContactExistanceResponse, error) {
-
-	hashContactUsername, err := kit.ComputeHMAC(payload.ContactUsername, ps.PersonalUsernameKey, false, nil)
+	// Use profile module for username lookup
+	user, err := ps.personalProfilePersonalContactProvider.FindContactableUserByUsername(
+		ctx,
+		userId.UuidUserId,
+		payload.ContactUsername,
+	)
 	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to hash contact username")
+		return nil, err
 	}
 
-	// DB call to get user by hashed username
-	user, err := ps.PostgresQueries.GetUserByHashedUsername(ctx, hashContactUsername)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return &CheckContactExistanceResponse{Exists: false}, nil
-		}
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
-	}
-
-	if user.ID == userId.UuidUserId {
+	if !user.Exists {
 		return &CheckContactExistanceResponse{Exists: false}, nil
 	}
 
@@ -218,7 +217,8 @@ func (ps *contactService) CheckContactExistance(ctx context.Context, payload *Ch
 
 	// Only set RecipientUserId if profile is not private
 	if user.ProfileType != "private" {
-		existsResp.RecipientUserId = new(user.ID.String())
+		recipientId := user.ID.String()
+		existsResp.RecipientUserId = &recipientId
 	}
 
 	return existsResp, nil
@@ -587,135 +587,118 @@ func (ps *contactService) UndoContactRequest(ctx context.Context, payload *UndoC
 }
 
 func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.UserId) (*GetContactRequestsResponse, error) {
-	// Fetch viewer's contacts so we can reuse their own nicknames for pending requests
-	myContacts, err := ps.PostgresQueries.GetUserContacts(ctx, userId.UuidUserId)
+	// Fetch slim request data
+	pendingRows, err := ps.PostgresQueries.GetPendingContactRequestsLite(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
-	myNicknameByID := make(map[string]*string, len(myContacts))
-	for _, c := range myContacts {
-		myNicknameByID[c.ID.String()] = c.Nickname
+
+	sentRows, err := ps.PostgresQueries.GetSentContactRequestsLite(ctx, userId.UuidUserId)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 
-	transformPending := func(rows []personal_contact_store.GetPendingContactRequestsRow) ([]PendingContactRequest, error) {
-		requests := make([]PendingContactRequest, 0, len(rows))
-		for _, r := range rows {
-			username := ""
-			if r.Username != "" {
-				decoded, err := personal_profile.DecryptUsername(r.Username, ps.PersonalUsernameKey)
-				if err != nil {
-					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt username")
-				}
-				username = decoded
-			}
+	// Collect unique target IDs
+	targetIDs := make([]uuid.UUID, 0, len(pendingRows)+len(sentRows))
+	seen := make(map[uuid.UUID]struct{})
 
-			requestedAt := time.Time{}
-			if r.RequestCreatedAt.Valid {
-				requestedAt = r.RequestCreatedAt.Time
-			}
-
-			updatedAt := time.Time{}
-			if r.RequestUpdatedAt.Valid {
-				updatedAt = r.RequestUpdatedAt.Time
-			}
-
-			var avatarURL *string
-			if personal_profile.ShouldExposeAvatar(r.GlobalRestrictProfile, r.ExceptionGlobalProfile, r.GlobalRestrictAvatar, r.ExceptionGlobalAvatar, r.UserRestrictProfile, r.UserRestrictAvatar) {
-				url, err := ps.personalProfilePersonalContactProvider.GetRefreshedAvatarURL(ctx, r.ID, r.AvatarFileID, r.AvatarTokenID, r.AvatarTokenSecret, r.AvatarTokenExpiry)
-				if err != nil {
-					return nil, err
-				}
-				avatarURL = url
-			}
-
-			requests = append(requests, PendingContactRequest{
-				ID:          r.ID.String(),
-				Name:        r.Name,
-				Username:    username,
-				Bio:         r.Bio,
-				Nickname:    nil, // Privacy: Receiver should not see the nickname given by requester
-				RequestedAt: requestedAt,
-				UpdatedAt:   updatedAt,
-				Status:      r.Status,
-				AvatarURL:   avatarURL,
-			})
+	for _, r := range pendingRows {
+		if _, exists := seen[r.ID]; !exists {
+			targetIDs = append(targetIDs, r.ID)
+			seen[r.ID] = struct{}{}
 		}
-		return requests, nil
 	}
-
-	transformSent := func(rows []personal_contact_store.GetSentContactRequestsRow) ([]SentContactRequest, error) {
-		records := make([]SentContactRequest, 0, len(rows))
-		for _, r := range rows {
-			username := ""
-			if r.Username != "" {
-				decoded, err := personal_profile.DecryptUsername(r.Username, ps.PersonalUsernameKey)
-				if err != nil {
-					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt username")
-				}
-				username = decoded
-			}
-
-			requestedAt := time.Time{}
-			if r.RequestCreatedAt.Valid {
-				requestedAt = r.RequestCreatedAt.Time
-			}
-
-			updatedAt := time.Time{}
-			if r.RequestUpdatedAt.Valid {
-				updatedAt = r.RequestUpdatedAt.Time
-			}
-
-			var avatarURL *string
-			if personal_profile.ShouldExposeAvatar(r.GlobalRestrictProfile, r.ExceptionGlobalProfile, r.GlobalRestrictAvatar, r.ExceptionGlobalAvatar, r.UserRestrictProfile, r.UserRestrictAvatar) {
-				url, err := ps.personalProfilePersonalContactProvider.GetRefreshedAvatarURL(ctx, r.ID, r.AvatarFileID, r.AvatarTokenID, r.AvatarTokenSecret, r.AvatarTokenExpiry)
-				if err != nil {
-					return nil, err
-				}
-				avatarURL = url
-			}
-
-			records = append(records, SentContactRequest{
-				ID:          r.ID.String(),
-				Name:        r.Name,
-				Username:    username,
-				Bio:         r.Bio,
-				Nickname:    nil, // Will decrypt below
-				RequestedAt: requestedAt,
-				UpdatedAt:   updatedAt,
-				Status:      r.Status,
-				AvatarURL:   avatarURL,
-			})
-
-			// Decrypt nickname for the requester (this is their own private data)
-			if r.Nickname != nil {
-				decrypted, err := ps.DecryptNickname(r.Nickname, userId.UuidUserId, r.ID)
-				if err != nil {
-					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt sent request nickname")
-				}
-				records[len(records)-1].Nickname = decrypted
-			}
+	for _, r := range sentRows {
+		if _, exists := seen[r.ID]; !exists {
+			targetIDs = append(targetIDs, r.ID)
+			seen[r.ID] = struct{}{}
 		}
-		return records, nil
 	}
 
-	pendingRows, err := ps.PostgresQueries.GetPendingContactRequests(ctx, userId.UuidUserId)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	// Batch fetch enriched profiles
+	var profilesByID map[uuid.UUID]*personal_profile.ContactProfileView
+	if len(targetIDs) > 0 {
+		profilesByID, err = ps.personalProfilePersonalContactProvider.GetVisibleProfilesForContactViewer(
+			ctx,
+			userId.UuidUserId,
+			targetIDs,
+		)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		profilesByID = map[uuid.UUID]*personal_profile.ContactProfileView{}
 	}
 
-	sentRows, err := ps.PostgresQueries.GetSentContactRequests(ctx, userId.UuidUserId)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	// Build pending list
+	pending := make([]PendingContactRequest, 0, len(pendingRows))
+	for _, r := range pendingRows {
+		profile, ok := profilesByID[r.ID]
+		if !ok {
+			continue
+		}
+
+		requestedAt := time.Time{}
+		if r.RequestCreatedAt.Valid {
+			requestedAt = r.RequestCreatedAt.Time
+		}
+
+		updatedAt := time.Time{}
+		if r.RequestUpdatedAt.Valid {
+			updatedAt = r.RequestUpdatedAt.Time
+		}
+
+		pending = append(pending, PendingContactRequest{
+			ID:          r.ID.String(),
+			Name:        profile.Name,
+			Username:    profile.Username,
+			Bio:         profile.Bio,
+			Nickname:    nil, // Privacy: Receiver should not see the nickname given by requester
+			RequestedAt: requestedAt,
+			UpdatedAt:   updatedAt,
+			Status:      r.Status,
+			AvatarURL:   profile.AvatarURL,
+		})
 	}
 
-	pending, err := transformPending(pendingRows)
-	if err != nil {
-		return nil, err
-	}
+	// Build sent list
+	sent := make([]SentContactRequest, 0, len(sentRows))
+	for _, r := range sentRows {
+		profile, ok := profilesByID[r.ID]
+		if !ok {
+			continue
+		}
 
-	sent, err := transformSent(sentRows)
-	if err != nil {
-		return nil, err
+		requestedAt := time.Time{}
+		if r.RequestCreatedAt.Valid {
+			requestedAt = r.RequestCreatedAt.Time
+		}
+
+		updatedAt := time.Time{}
+		if r.RequestUpdatedAt.Valid {
+			updatedAt = r.RequestUpdatedAt.Time
+		}
+
+		var nickname *string
+		if r.Nickname != nil {
+			decrypted, err := ps.DecryptNickname(r.Nickname, userId.UuidUserId, r.ID)
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt sent request nickname")
+			}
+			nickname = decrypted
+		}
+
+		sent = append(sent, SentContactRequest{
+			ID:          r.ID.String(),
+			Name:        profile.Name,
+			Username:    profile.Username,
+			Bio:         profile.Bio,
+			Nickname:    nickname,
+			RequestedAt: requestedAt,
+			UpdatedAt:   updatedAt,
+			Status:      r.Status,
+			AvatarURL:   profile.AvatarURL,
+		})
 	}
 
 	return &GetContactRequestsResponse{

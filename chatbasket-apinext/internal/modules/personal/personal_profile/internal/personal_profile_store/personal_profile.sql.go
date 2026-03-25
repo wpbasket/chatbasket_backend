@@ -150,6 +150,121 @@ func (q *Queries) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
 	return err
 }
 
+const getProfilesForContactViewer = `-- name: GetProfilesForContactViewer :many
+SELECT
+    u.id,
+    u.name,
+    u.b64_cipher_chacha20poly1305_username AS username,
+    u.bio,
+    a.file_id,
+    a.token_id,
+    a.token_secret,
+    a.token_expiry,
+    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
+    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
+    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
+    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
+    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
+    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
+FROM users u
+LEFT JOIN avatars a
+    ON u.id = a.user_id
+   AND a.avatar_type = 'profile'
+LEFT JOIN user_global_restrictions ugr
+    ON u.id = ugr.user_id
+LEFT JOIN user_global_restriction_exemptions ugre
+    ON u.id = ugre.user_id
+   AND ugre.exempted_user_id = $1
+LEFT JOIN user_restrictions ur
+    ON u.id = ur.user_id
+   AND ur.restricted_user_id = $1
+WHERE u.id = ANY($2::uuid[])
+  AND u.is_admin_blocked IS FALSE
+ORDER BY u.id
+`
+
+type GetProfilesForContactViewerParams struct {
+	ViewerUserID  uuid.UUID   `json:"viewer_user_id"`
+	TargetUserIds []uuid.UUID `json:"target_user_ids"`
+}
+
+type GetProfilesForContactViewerRow struct {
+	ID                     uuid.UUID          `json:"id"`
+	Name                   string             `json:"name"`
+	Username               string             `json:"username"`
+	Bio                    *string            `json:"bio"`
+	FileID                 *string            `json:"file_id"`
+	TokenID                *string            `json:"token_id"`
+	TokenSecret            *string            `json:"token_secret"`
+	TokenExpiry            pgtype.Timestamptz `json:"token_expiry"`
+	GlobalRestrictProfile  bool               `json:"global_restrict_profile"`
+	GlobalRestrictAvatar   bool               `json:"global_restrict_avatar"`
+	ExceptionGlobalProfile bool               `json:"exception_global_profile"`
+	ExceptionGlobalAvatar  bool               `json:"exception_global_avatar"`
+	UserRestrictProfile    bool               `json:"user_restrict_profile"`
+	UserRestrictAvatar     bool               `json:"user_restrict_avatar"`
+}
+
+func (q *Queries) GetProfilesForContactViewer(ctx context.Context, arg GetProfilesForContactViewerParams) ([]GetProfilesForContactViewerRow, error) {
+	rows, err := q.db.Query(ctx, getProfilesForContactViewer, arg.ViewerUserID, arg.TargetUserIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetProfilesForContactViewerRow
+	for rows.Next() {
+		var i GetProfilesForContactViewerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Username,
+			&i.Bio,
+			&i.FileID,
+			&i.TokenID,
+			&i.TokenSecret,
+			&i.TokenExpiry,
+			&i.GlobalRestrictProfile,
+			&i.GlobalRestrictAvatar,
+			&i.ExceptionGlobalProfile,
+			&i.ExceptionGlobalAvatar,
+			&i.UserRestrictProfile,
+			&i.UserRestrictAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserByHashedUsernameForContact = `-- name: GetUserByHashedUsernameForContact :one
+SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
+FROM users
+WHERE hmac_sha256_hex_username = $1
+  AND is_admin_blocked IS NOT TRUE
+`
+
+func (q *Queries) GetUserByHashedUsernameForContact(ctx context.Context, hmacSha256HexUsername string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByHashedUsernameForContact, hmacSha256HexUsername)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Bio,
+		&i.ProfileType,
+		&i.IsAdminBlocked,
+		&i.AdminBlockReason,
+		&i.HmacSha256HexUsername,
+		&i.B64CipherChacha20poly1305Username,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserCoreProfile = `-- name: GetUserCoreProfile :one
 SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at FROM users WHERE id = $1
 `

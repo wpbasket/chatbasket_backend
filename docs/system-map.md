@@ -2,6 +2,13 @@
 
 ```
 chatbasket_backend/
+├── .claude/
+│   ├── agents/
+│   │   └── build-and-embed-graph.md
+│   └── settings.local.json
+├── .code-review-graph/
+│   ├── .gitignore
+│   └── graph.db
 ├── .github/
 │   └── workflows/
 │       ├── deploy_relay.yml
@@ -191,7 +198,11 @@ chatbasket_backend/
 │   │   │   │   ├── 007_personal_tokens.down.sql
 │   │   │   │   ├── 007_personal_tokens.up.sql
 │   │   │   │   ├── 008_personal_chat_system.down.sql
-│   │   │   │   └── 008_personal_chat_system.up.sql
+│   │   │   │   ├── 008_personal_chat_system.up.sql
+│   │   │   │   ├── 009_personal_secure_nicknames.down.sql
+│   │   │   │   ├── 009_personal_secure_nicknames.up.sql
+│   │   │   │   ├── 010_personal_block_contact_requests.down.sql
+│   │   │   │   └── 010_personal_block_contact_requests.up.sql
 │   │   │   └── queries/
 │   │   │       ├── personal_chat.sql
 │   │   │       ├── personal_contacts.sql
@@ -212,21 +223,34 @@ chatbasket_backend/
 │   │   │   │       │       ├── db.go
 │   │   │   │       │       ├── models.go
 │   │   │   │       │       └── querier.go
-│   │   │   │       ├── core_auth_01_api_routes.go
-│   │   │   │       ├── core_auth_02_api_common_http_handler.go
-│   │   │   │       ├── core_auth_03_api_http_handler.go
-│   │   │   │       ├── core_auth_04_svc.go
-│   │   │   │       ├── core_auth_05_svc_common.go
-│   │   │   │       ├── core_auth_06_svc_flows.go
-│   │   │   │       ├── core_auth_07_svc_helpers.go
-│   │   │   │       ├── core_auth_08_svc_middleware.go
-│   │   │   │       ├── core_auth_09_mdl.go
-│   │   │   │       ├── core_auth_10_mdl_common.go
-│   │   │   │       ├── core_auth_11_mdl_helpers.go
-│   │   │   │       ├── core_auth_12_kit_otp.go
-│   │   │   │       ├── core_auth_13_kit_password.go
-│   │   │   │       └── core_auth_14_errors.go
+│   │   │   │       ├── core_auth_api_common_http_handler.go
+│   │   │   │       ├── core_auth_api_http_handler.go
+│   │   │   │       ├── core_auth_api_routes.go
+│   │   │   │       ├── core_auth_errors.go
+│   │   │   │       ├── core_auth_kit_otp.go
+│   │   │   │       ├── core_auth_kit_password.go
+│   │   │   │       ├── core_auth_mdl.go
+│   │   │   │       ├── core_auth_mdl_common.go
+│   │   │   │       ├── core_auth_mdl_helpers.go
+│   │   │   │       ├── core_auth_svc.go
+│   │   │   │       ├── core_auth_svc_common.go
+│   │   │   │       ├── core_auth_svc_flows.go
+│   │   │   │       ├── core_auth_svc_helpers.go
+│   │   │   │       └── core_auth_svc_middleware.go
 │   │   │   ├── personal/
+│   │   │   │   ├── personal_contact/
+│   │   │   │   │   ├── internal/
+│   │   │   │   │   │   └── personal_contact_store/
+│   │   │   │   │   │       ├── db.go
+│   │   │   │   │   │       ├── models.go
+│   │   │   │   │   │       ├── personal_contacts.sql.go
+│   │   │   │   │   │       └── querier.go
+│   │   │   │   │   ├── personal_contact_api_http_handler.go
+│   │   │   │   │   ├── personal_contact_api_routes.go
+│   │   │   │   │   ├── personal_contact_errors.go
+│   │   │   │   │   ├── personal_contact_mdl.go
+│   │   │   │   │   ├── personal_contact_svc.go
+│   │   │   │   │   └── personal_contact_svc_helpers.go
 │   │   │   │   ├── personal_profile/
 │   │   │   │   │   ├── internal/
 │   │   │   │   │   │   └── personal_profile_store/
@@ -234,18 +258,18 @@ chatbasket_backend/
 │   │   │   │   │   │       ├── models.go
 │   │   │   │   │   │       ├── personal_profile.sql.go
 │   │   │   │   │   │       └── querier.go
-│   │   │   │   │   ├── personal_profile_01_api_routes.go
-│   │   │   │   │   ├── personal_profile_02_api_http_handler.go
-│   │   │   │   │   ├── personal_profile_03_svc.go
-│   │   │   │   │   ├── personal_profile_04_mdl.go
-│   │   │   │   │   ├── personal_profile_05_kit_username.go
-│   │   │   │   │   └── personal_profile_06_errors.go
+│   │   │   │   │   ├── personal_profile_api_http_handler.go
+│   │   │   │   │   ├── personal_profile_api_routes.go
+│   │   │   │   │   ├── personal_profile_errors.go
+│   │   │   │   │   ├── personal_profile_mdl.go
+│   │   │   │   │   ├── personal_profile_svc.go
+│   │   │   │   │   └── personal_profile_svc_helpers.go
 │   │   │   │   └── personal_setting/
-│   │   │   │       ├── personal_setting_01_api_routes.go
-│   │   │   │       ├── personal_setting_02_api_http_handler.go
-│   │   │   │       ├── personal_setting_03_svc.go
-│   │   │   │       ├── personal_setting_04_mdl.go
-│   │   │   │       └── personal_setting_05_errors.go
+│   │   │   │       ├── personal_setting_api_http_handler.go
+│   │   │   │       ├── personal_setting_api_routes.go
+│   │   │   │       ├── personal_setting_errors.go
+│   │   │   │       ├── personal_setting_mdl.go
+│   │   │   │       └── personal_setting_svc.go
 │   │   │   └── public/
 │   │   ├── platform/
 │   │   │   ├── clients/
@@ -298,6 +322,7 @@ chatbasket_backend/
 │   ├── Dockerfile
 │   └── go.mod
 ├── .gitignore
+├── .mcp.json
 └── README.md
 ```
 
@@ -305,6 +330,13 @@ chatbasket_backend/
 
 ```
 chatbasket/
+├── .claude/
+│   ├── agents/
+│   │   └── build-and-embed-graph.md
+│   └── settings.local.json
+├── .code-review-graph/
+│   ├── .gitignore
+│   └── graph.db
 ├── .vscode/
 │   ├── extensions.json
 │   └── settings.json
@@ -697,6 +729,7 @@ chatbasket/
 │   └── global.css
 ├── .env
 ├── .gitignore
+├── .mcp.json
 ├── .npmrc
 ├── README.md
 ├── app.json

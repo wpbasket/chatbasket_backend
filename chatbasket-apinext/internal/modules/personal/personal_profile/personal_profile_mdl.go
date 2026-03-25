@@ -13,6 +13,21 @@ type UserCoreProfile struct {
 	ProfileType    string    `json:"profile_type"`
 }
 
+type ContactProfileView struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Username  string    `json:"username"`
+	Bio       *string   `json:"bio"`
+	AvatarURL *string   `json:"avatar_url"`
+}
+
+type ContactLookupResult struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	ProfileType string    `json:"profile_type"`
+	Exists      bool      `json:"exists"`
+}
+
 type createUserProfilePayload struct {
 	Name        string `json:"name" validate:"required,min=1,max=40"`
 	ProfileType string `json:"profile_type" validate:"required,oneof=public private personal"`
