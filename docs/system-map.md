@@ -3,16 +3,27 @@
 ```
 chatbasket_backend/
 ├── .claude/
-│   ├── agents/
-│   │   └── build-and-embed-graph.md
-│   └── settings.local.json
-├── .code-review-graph/
-│   ├── .gitignore
-│   └── graph.db
+│   └── skills/
+│       └── gitnexus/
+│           ├── gitnexus-cli/
+│           │   └── SKILL.md
+│           ├── gitnexus-debugging/
+│           │   └── SKILL.md
+│           ├── gitnexus-exploring/
+│           │   └── SKILL.md
+│           ├── gitnexus-guide/
+│           │   └── SKILL.md
+│           ├── gitnexus-impact-analysis/
+│           │   └── SKILL.md
+│           └── gitnexus-refactoring/
+│               └── SKILL.md
 ├── .github/
 │   └── workflows/
 │       ├── deploy_relay.yml
 │       └── deploy_web.yml
+├── .gitnexus/
+│   ├── lbug
+│   └── meta.json
 ├── chatbasket-api/
 │   ├── app/
 │   │   ├── README.md
@@ -238,6 +249,7 @@ chatbasket_backend/
 │   │   │   │       ├── core_auth_svc_helpers.go
 │   │   │   │       └── core_auth_svc_middleware.go
 │   │   │   ├── personal/
+│   │   │   │   ├── personal_chat/
 │   │   │   │   ├── personal_contact/
 │   │   │   │   │   ├── internal/
 │   │   │   │   │   │   └── personal_contact_store/
@@ -271,34 +283,33 @@ chatbasket_backend/
 │   │   │   │       ├── personal_setting_mdl.go
 │   │   │   │       └── personal_setting_svc.go
 │   │   │   └── public/
-│   │   ├── platform/
-│   │   │   ├── clients/
-│   │   │   │   ├── appwrite.go
-│   │   │   │   ├── cosmos.go
-│   │   │   │   ├── email.go
-│   │   │   │   ├── firebase.go
-│   │   │   │   ├── postgres.go
-│   │   │   │   └── secrets.go
-│   │   │   ├── config/
-│   │   │   │   └── config.go
-│   │   │   ├── kit/
-│   │   │   │   ├── crypto.go
-│   │   │   │   ├── errors.go
-│   │   │   │   ├── models.go
-│   │   │   │   └── utils.go
-│   │   │   ├── logger/
-│   │   │   │   └── logger.go
-│   │   │   ├── middleware/
-│   │   │   │   ├── auth_session_middleware.go
-│   │   │   │   └── middleware.go
-│   │   │   ├── router/
-│   │   │   │   └── routes.go
-│   │   │   ├── services/
-│   │   │   │   ├── services.go
-│   │   │   │   └── storage_svc.go
-│   │   │   └── websocket/
-│   │   │       └── websocket.go
-│   │   └── store/
+│   │   └── platform/
+│   │       ├── clients/
+│   │       │   ├── appwrite.go
+│   │       │   ├── cosmos.go
+│   │       │   ├── email.go
+│   │       │   ├── firebase.go
+│   │       │   ├── postgres.go
+│   │       │   └── secrets.go
+│   │       ├── config/
+│   │       │   └── config.go
+│   │       ├── kit/
+│   │       │   ├── crypto.go
+│   │       │   ├── errors.go
+│   │       │   ├── models.go
+│   │       │   └── utils.go
+│   │       ├── logger/
+│   │       │   └── logger.go
+│   │       ├── middleware/
+│   │       │   ├── auth_session_middleware.go
+│   │       │   └── middleware.go
+│   │       ├── router/
+│   │       │   └── routes.go
+│   │       ├── services/
+│   │       │   ├── services.go
+│   │       │   └── storage_svc.go
+│   │       └── websocket/
+│   │           └── websocket.go
 │   ├── .env
 │   ├── .gitignore
 │   ├── go.mod
@@ -322,7 +333,8 @@ chatbasket_backend/
 │   ├── Dockerfile
 │   └── go.mod
 ├── .gitignore
-├── .mcp.json
+├── AGENTS.md
+├── CLAUDE.md
 └── README.md
 ```
 
@@ -331,12 +343,23 @@ chatbasket_backend/
 ```
 chatbasket/
 ├── .claude/
-│   ├── agents/
-│   │   └── build-and-embed-graph.md
-│   └── settings.local.json
-├── .code-review-graph/
-│   ├── .gitignore
-│   └── graph.db
+│   └── skills/
+│       └── gitnexus/
+│           ├── gitnexus-cli/
+│           │   └── SKILL.md
+│           ├── gitnexus-debugging/
+│           │   └── SKILL.md
+│           ├── gitnexus-exploring/
+│           │   └── SKILL.md
+│           ├── gitnexus-guide/
+│           │   └── SKILL.md
+│           ├── gitnexus-impact-analysis/
+│           │   └── SKILL.md
+│           └── gitnexus-refactoring/
+│               └── SKILL.md
+├── .gitnexus/
+│   ├── lbug
+│   └── meta.json
 ├── .vscode/
 │   ├── extensions.json
 │   └── settings.json
@@ -729,8 +752,9 @@ chatbasket/
 │   └── global.css
 ├── .env
 ├── .gitignore
-├── .mcp.json
 ├── .npmrc
+├── AGENTS.md
+├── CLAUDE.md
 ├── README.md
 ├── app.json
 ├── babel.config.js
