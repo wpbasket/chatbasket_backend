@@ -7,9 +7,9 @@ package core_auth_store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const checkEmailExists = `-- name: CheckEmailExists :one
@@ -143,16 +143,16 @@ RETURNING
 `
 
 type CreateSessionParams struct {
-	ID          uuid.UUID          `json:"id"`
-	AuthUserID  uuid.UUID          `json:"auth_user_id"`
-	TokenHash   string             `json:"token_hash"`
-	UserAgent   *string            `json:"user_agent"`
-	IpAddress   *string            `json:"ip_address"`
-	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
-	DeviceToken *string            `json:"device_token"`
-	Platform    *string            `json:"platform"`
-	DeviceName  *string            `json:"device_name"`
-	IsCentral   bool               `json:"is_central"`
+	ID          uuid.UUID `json:"id"`
+	AuthUserID  uuid.UUID `json:"auth_user_id"`
+	TokenHash   string    `json:"token_hash"`
+	UserAgent   *string   `json:"user_agent"`
+	IpAddress   *string   `json:"ip_address"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	DeviceToken *string   `json:"device_token"`
+	Platform    *string   `json:"platform"`
+	DeviceName  *string   `json:"device_name"`
+	IsCentral   bool      `json:"is_central"`
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
@@ -251,11 +251,11 @@ RETURNING
 `
 
 type CreateVerificationCodeWithUpdateIDParams struct {
-	ID       uuid.UUID   `json:"id"`
-	UpdateID pgtype.UUID `json:"update_id"`
-	Email    string      `json:"email"`
-	CodeHash string      `json:"code_hash"`
-	Type     string      `json:"type"`
+	ID       uuid.UUID `json:"id"`
+	UpdateID uuid.UUID `json:"update_id"`
+	Email    string    `json:"email"`
+	CodeHash string    `json:"code_hash"`
+	Type     string    `json:"type"`
 }
 
 func (q *Queries) CreateVerificationCodeWithUpdateID(ctx context.Context, arg CreateVerificationCodeWithUpdateIDParams) (VerificationCode, error) {

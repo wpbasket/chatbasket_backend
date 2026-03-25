@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
@@ -117,7 +117,7 @@ func ShouldExposeAvatar(globalRestrictProfile, exceptionGlobalProfile, globalRes
 }
 
 // GetRefreshedAvatarURL refreshes avatar tokens if needed and returns the avatar URL
-func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid.UUID, fileID, tokenID, tokenSecret *string, tokenExpiry pgtype.Timestamptz) (*string, error) {
+func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid.UUID, fileID, tokenID, tokenSecret *string, tokenExpiry time.Time) (*string, error) {
 	refreshed, needsUpdate, err := kit.EnsureFreshAvatarTokens(
 		fileID,
 		tokenID,
@@ -135,7 +135,7 @@ func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid
 			UserID:      userID,
 			TokenID:     &refreshed.TokenID,
 			TokenSecret: &refreshed.TokenSecret,
-			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: refreshed.TokenExpiry},
+			TokenExpiry: refreshed.TokenExpiry,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to update refreshed tokens in DB: "+kit.GetPostgresError(err).Message)

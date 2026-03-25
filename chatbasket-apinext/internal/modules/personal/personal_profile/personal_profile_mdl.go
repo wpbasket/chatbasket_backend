@@ -60,8 +60,8 @@ func toPrivateUserWithAvatar(user *personal_profile_store.GetUserProfileRow, use
 		AvatarUrl:   avatarUrl,
 		Bio:         user.Bio,
 		ProfileType: user.ProfileType,
-		CreatedAt:   user.CreatedAt.Time,
-		UpdatedAt:   user.UpdatedAt.Time,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
 	}
 }
 
@@ -74,7 +74,7 @@ func toPrivateUser(user *personal_profile_store.User, username string, email str
 		Bio:         user.Bio,
 		AvatarUrl:   nil,
 		ProfileType: user.ProfileType,
-		CreatedAt:   user.CreatedAt.Time,
-		UpdatedAt:   user.UpdatedAt.Time,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
 	}
 }

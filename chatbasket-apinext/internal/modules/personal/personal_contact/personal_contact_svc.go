@@ -8,7 +8,6 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -112,15 +111,9 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			continue // Skip if profile not found
 		}
 
-		createdAt := time.Time{}
-		if c.ContactCreatedAt.Valid {
-			createdAt = c.ContactCreatedAt.Time
-		}
+		createdAt := c.ContactCreatedAt
 
-		updatedAt := time.Time{}
-		if c.ContactUpdatedAt.Valid {
-			updatedAt = c.ContactUpdatedAt.Time
-		}
+		updatedAt := c.ContactUpdatedAt
 
 		_, isMutual := addedMeMap[c.ID.String()]
 
@@ -154,15 +147,9 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			continue // Skip if profile not found
 		}
 
-		createdAt := time.Time{}
-		if p.ContactCreatedAt.Valid {
-			createdAt = p.ContactCreatedAt.Time
-		}
+		createdAt := p.ContactCreatedAt
 
-		updatedAt := time.Time{}
-		if p.ContactUpdatedAt.Valid {
-			updatedAt = p.ContactUpdatedAt.Time
-		}
+		updatedAt := p.ContactUpdatedAt
 
 		_, isMutual := myContactsMap[p.ID.String()]
 
@@ -638,15 +625,8 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 			continue
 		}
 
-		requestedAt := time.Time{}
-		if r.RequestCreatedAt.Valid {
-			requestedAt = r.RequestCreatedAt.Time
-		}
-
-		updatedAt := time.Time{}
-		if r.RequestUpdatedAt.Valid {
-			updatedAt = r.RequestUpdatedAt.Time
-		}
+		requestedAt := r.RequestCreatedAt
+		updatedAt := r.RequestUpdatedAt
 
 		pending = append(pending, PendingContactRequest{
 			ID:          r.ID.String(),
@@ -669,15 +649,8 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 			continue
 		}
 
-		requestedAt := time.Time{}
-		if r.RequestCreatedAt.Valid {
-			requestedAt = r.RequestCreatedAt.Time
-		}
-
-		updatedAt := time.Time{}
-		if r.RequestUpdatedAt.Valid {
-			updatedAt = r.RequestUpdatedAt.Time
-		}
+		requestedAt := r.RequestCreatedAt
+		updatedAt := r.RequestUpdatedAt
 
 		var nickname *string
 		if r.Nickname != nil {

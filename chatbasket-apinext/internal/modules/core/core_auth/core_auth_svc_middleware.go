@@ -19,7 +19,7 @@ func (s *AuthService) GetSessionByToken(ctx context.Context, tokenHash string, u
 	}
 	return &middleware.SessionInfo{
 		ID:        row.ID,
-		ExpiresAt: row.ExpiresAt.Time,
+		ExpiresAt: row.ExpiresAt,
 		IsCentral: row.IsCentral,
 	}, nil
 }

@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // SendVerificationOTPFlow generates OTP, hashes it, stores in DB, and sends email.
@@ -78,7 +77,7 @@ func (s *AuthService) VerifyOTPFlow(ctx context.Context, userID uuid.UUID, secre
 
 	// Check Expiry (Created At + 3 Minutes)
 	// Passing 3 as validity duration in minutes
-	if IsExpiredOTP(record.CreatedAt.Time, 3) {
+	if IsExpiredOTP(record.CreatedAt, 3) {
 		return false, kit.NewError(http.StatusUnauthorized, "unauthorized", "OTP has expired")
 	}
 
@@ -136,7 +135,7 @@ func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, p
 		ID:          sid,
 		AuthUserID:  userID,
 		TokenHash:   tokenHash,
-		ExpiresAt:   pgtype.Timestamptz{Valid: true, Time: expiresAt},
+		ExpiresAt:   expiresAt,
 		Platform:    platform,
 		DeviceToken: deviceToken,
 		DeviceName:  nil, // To be set later via settings

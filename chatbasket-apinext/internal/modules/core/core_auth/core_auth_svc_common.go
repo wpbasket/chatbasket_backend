@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Logout handles logout from single or all sessions
@@ -89,7 +88,7 @@ func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, 
 		Name:              user.Name,
 		Email:             user.Email,
 		SessionID:         session.ID.String(),
-		SessionExpiry:     session.ExpiresAt.Time.Format(time.RFC3339),
+		SessionExpiry:     session.ExpiresAt.Format(time.RFC3339),
 		IsPrimary:         session.IsCentral,
 		PrimaryDeviceName: centralDeviceName,
 	}, nil
@@ -125,7 +124,7 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpda
 	// Store verification code with update_id
 	_, err = s.PostgresQuerier.CreateVerificationCodeWithUpdateID(ctx, core_auth_store.CreateVerificationCodeWithUpdateIDParams{
 		ID:       userID,
-		UpdateID: pgtype.UUID{Bytes: updateID, Valid: true},
+		UpdateID: updateID,
 		Email:    user.Email,
 		CodeHash: hashedOTP,
 		Type:     payload.UpdateType, // "password_update" or "email_update"
@@ -166,12 +165,12 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 	}
 
 	// Verify update_id matches
-	if !record.UpdateID.Valid || record.UpdateID.Bytes != updateID {
+	if record.UpdateID != updateID {
 		return nil, kit.NewError(http.StatusUnauthorized, "flow_error", "Request session invalid")
 	}
 
 	// Check expiry (3 minutes)
-	if IsExpiredOTP(record.CreatedAt.Time, 3) {
+	if IsExpiredOTP(record.CreatedAt, 3) {
 		// Delete expired code
 		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
 		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")
@@ -258,7 +257,7 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEm
 	// Store verification code with update_id and new email
 	_, err = s.PostgresQuerier.CreateVerificationCodeWithUpdateID(ctx, core_auth_store.CreateVerificationCodeWithUpdateIDParams{
 		ID:       userID,
-		UpdateID: pgtype.UUID{Bytes: updateID, Valid: true},
+		UpdateID: updateID,
 		Email:    payload.NewEmail, // Store new email in verification code
 		CodeHash: hashedOTP,
 		Type:     "email_update",
@@ -299,12 +298,12 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 	}
 
 	// Verify update_id matches
-	if !record.UpdateID.Valid || record.UpdateID.Bytes != updateID {
+	if record.UpdateID != updateID {
 		return nil, kit.NewError(http.StatusUnauthorized, "flow_error", "Request session invalid")
 	}
 
 	// Check expiry (3 minutes)
-	if IsExpiredOTP(record.CreatedAt.Time, 3) {
+	if IsExpiredOTP(record.CreatedAt, 3) {
 		// Delete expired code
 		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
 		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")

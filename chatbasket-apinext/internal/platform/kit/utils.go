@@ -12,7 +12,6 @@ import (
 	"github.com/appwrite/sdk-for-go/file"
 	"github.com/appwrite/sdk-for-go/tokens"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ported from utils/baseUtils.go
@@ -78,7 +77,7 @@ func EnsureFreshAvatarTokens(
 	fileID *string,
 	tokenID *string,
 	tokenSecret *string,
-	tokenExpiry pgtype.Timestamptz,
+	tokenExpiry time.Time,
 	appwriteTokens *tokens.Tokens,
 	bucketID string,
 ) (*RefreshFileData, bool, error) {
@@ -88,8 +87,8 @@ func EnsureFreshAvatarTokens(
 
 	now := time.Now().UTC()
 	needsRefresh := false
-	if tokenExpiry.Valid {
-		needsRefresh = !tokenExpiry.Time.UTC().After(now)
+	if !tokenExpiry.IsZero() {
+		needsRefresh = !tokenExpiry.UTC().After(now)
 	} else if tokenID != nil && *tokenID != "" && tokenSecret != nil && *tokenSecret != "" {
 		needsRefresh = true
 	}

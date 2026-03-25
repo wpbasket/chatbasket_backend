@@ -13,7 +13,6 @@ import (
 	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -198,7 +197,7 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 			AvatarType:  "profile",
 			TokenID:     new(result.TokenIDs[0]),
 			TokenSecret: new(result.TokenSecrets[0]),
-			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: expireTime},
+			TokenExpiry: expireTime,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create avatar: "+kit.GetPostgresError(err).Message)
@@ -210,7 +209,7 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 			UserID:      userId.UuidUserId,
 			TokenID:     new(result.TokenIDs[0]),
 			TokenSecret: new(result.TokenSecrets[0]),
-			TokenExpiry: pgtype.Timestamptz{Valid: true, Time: expireTime},
+			TokenExpiry: expireTime,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update avatar tokens: "+kit.GetPostgresError(err).Message)
