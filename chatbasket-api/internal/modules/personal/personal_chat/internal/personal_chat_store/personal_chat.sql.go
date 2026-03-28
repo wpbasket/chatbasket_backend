@@ -646,8 +646,11 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 }
 
 const getChatsByUserID = `-- name: GetChatsByUserID :many
-SELECT id, participant_1_id, participant_2_id, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, p1_last_delivered_at, p2_last_delivered_at, last_message_created_at, last_message_sender_id, last_message_id, p1_last_message_content, p2_last_message_content, p1_last_message_type, p2_last_message_type, created_at, updated_at FROM chats
-WHERE participant_1_id = $1 OR participant_2_id = $1
+SELECT id, participant_1_id, participant_2_id, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, p1_last_delivered_at, p2_last_delivered_at, last_message_created_at, last_message_sender_id, last_message_id, p1_last_message_content, p2_last_message_content, p1_last_message_type, p2_last_message_type, created_at, updated_at
+FROM chats
+WHERE
+    participant_1_id = $1
+    OR participant_2_id = $1
 ORDER BY updated_at DESC
 `
 
@@ -1088,26 +1091,26 @@ func (q *Queries) GetPendingSyncActions(ctx context.Context, arg GetPendingSyncA
 const getUserChatsLite = `-- name: GetUserChatsLite :many
 SELECT
     c.id, c.participant_1_id, c.participant_2_id, c.p1_unread_count, c.p2_unread_count, c.p1_last_read_at, c.p2_last_read_at, c.p1_last_delivered_at, c.p2_last_delivered_at, c.last_message_created_at, c.last_message_sender_id, c.last_message_id, c.p1_last_message_content, c.p2_last_message_content, c.p1_last_message_type, c.p2_last_message_type, c.created_at, c.updated_at,
-    CASE
+    (CASE
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
-    END AS other_user_id,
+    END)::UUID AS other_user_id,
 
-CASE
+(CASE
     WHEN c.participant_1_id = $1 THEN c.p1_unread_count
     ELSE c.p2_unread_count
-END::INT AS unread_count,
+END)::INT AS unread_count,
 
-CASE
+(CASE
     WHEN c.participant_1_id = $1 THEN c.p1_last_message_content
     ELSE c.p2_last_message_content
-END AS last_message_content,
-CASE
+END)::TEXT AS last_message_content,
+(CASE
     WHEN c.participant_1_id = $1 THEN c.p1_last_message_type
     ELSE c.p2_last_message_type
-END AS last_message_type,
+END)::TEXT AS last_message_type,
 
-CASE
+(CASE
     WHEN c.last_message_created_at IS NULL THEN ''
     WHEN c.last_message_created_at <= (
         CASE
@@ -1122,11 +1125,11 @@ CASE
         END
     ) THEN 'delivered'
     ELSE 'sent'
-END::text AS last_message_status,
-CASE
-    WHEN c.participant_1_id = $1 THEN c.p2_last_delivered_at
-    ELSE c.p1_last_delivered_at
-END::TIMESTAMPTZ AS other_user_last_delivered_at
+END)::TEXT AS last_message_status,
+(CASE
+    WHEN c.participant_1_id = $1 THEN COALESCE(c.p2_last_delivered_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
+    ELSE COALESCE(c.p1_last_delivered_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
+END)::TIMESTAMPTZ AS other_user_last_delivered_at
 FROM chats c
 WHERE
     c.participant_1_id = $1
@@ -1135,30 +1138,30 @@ ORDER BY c.updated_at DESC
 `
 
 type GetUserChatsLiteRow struct {
-	ID                       uuid.UUID   `json:"id"`
-	Participant1ID           uuid.UUID   `json:"participant_1_id"`
-	Participant2ID           uuid.UUID   `json:"participant_2_id"`
-	P1UnreadCount            int32       `json:"p1_unread_count"`
-	P2UnreadCount            int32       `json:"p2_unread_count"`
-	P1LastReadAt             *time.Time  `json:"p1_last_read_at"`
-	P2LastReadAt             *time.Time  `json:"p2_last_read_at"`
-	P1LastDeliveredAt        *time.Time  `json:"p1_last_delivered_at"`
-	P2LastDeliveredAt        *time.Time  `json:"p2_last_delivered_at"`
-	LastMessageCreatedAt     *time.Time  `json:"last_message_created_at"`
-	LastMessageSenderID      uuid.UUID   `json:"last_message_sender_id"`
-	LastMessageID            uuid.UUID   `json:"last_message_id"`
-	P1LastMessageContent     *string     `json:"p1_last_message_content"`
-	P2LastMessageContent     *string     `json:"p2_last_message_content"`
-	P1LastMessageType        *string     `json:"p1_last_message_type"`
-	P2LastMessageType        *string     `json:"p2_last_message_type"`
-	CreatedAt                *time.Time  `json:"created_at"`
-	UpdatedAt                *time.Time  `json:"updated_at"`
-	OtherUserID              interface{} `json:"other_user_id"`
-	UnreadCount              int32       `json:"unread_count"`
-	LastMessageContent       interface{} `json:"last_message_content"`
-	LastMessageType          interface{} `json:"last_message_type"`
-	LastMessageStatus        string      `json:"last_message_status"`
-	OtherUserLastDeliveredAt time.Time   `json:"other_user_last_delivered_at"`
+	ID                       uuid.UUID  `json:"id"`
+	Participant1ID           uuid.UUID  `json:"participant_1_id"`
+	Participant2ID           uuid.UUID  `json:"participant_2_id"`
+	P1UnreadCount            int32      `json:"p1_unread_count"`
+	P2UnreadCount            int32      `json:"p2_unread_count"`
+	P1LastReadAt             *time.Time `json:"p1_last_read_at"`
+	P2LastReadAt             *time.Time `json:"p2_last_read_at"`
+	P1LastDeliveredAt        *time.Time `json:"p1_last_delivered_at"`
+	P2LastDeliveredAt        *time.Time `json:"p2_last_delivered_at"`
+	LastMessageCreatedAt     *time.Time `json:"last_message_created_at"`
+	LastMessageSenderID      uuid.UUID  `json:"last_message_sender_id"`
+	LastMessageID            uuid.UUID  `json:"last_message_id"`
+	P1LastMessageContent     *string    `json:"p1_last_message_content"`
+	P2LastMessageContent     *string    `json:"p2_last_message_content"`
+	P1LastMessageType        *string    `json:"p1_last_message_type"`
+	P2LastMessageType        *string    `json:"p2_last_message_type"`
+	CreatedAt                *time.Time `json:"created_at"`
+	UpdatedAt                *time.Time `json:"updated_at"`
+	OtherUserID              uuid.UUID  `json:"other_user_id"`
+	UnreadCount              int32      `json:"unread_count"`
+	LastMessageContent       string     `json:"last_message_content"`
+	LastMessageType          string     `json:"last_message_type"`
+	LastMessageStatus        string     `json:"last_message_status"`
+	OtherUserLastDeliveredAt time.Time  `json:"other_user_last_delivered_at"`
 }
 
 // Lite version: reads ONLY from chats table.

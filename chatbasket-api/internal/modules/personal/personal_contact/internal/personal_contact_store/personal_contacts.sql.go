@@ -28,11 +28,11 @@ WITH updated AS (
     LIMIT 1
 )
 SELECT
-    CASE
+    (CASE
         WHEN EXISTS (SELECT 1 FROM updated) THEN 'accepted'
         WHEN (SELECT status FROM existing) IS NULL THEN 'not_found'
         ELSE 'processed'
-    END AS outcome
+    END)::TEXT AS outcome
 `
 
 type AcceptContactRequestParams struct {
@@ -172,10 +172,10 @@ SELECT
     cr.status::text,
     cr.created_at as request_created_at,
     ub.created_at as block_created_at,
-    CASE
+    (CASE
         WHEN ub.blocker_user_id = cr.requester_user_id THEN 'requester_blocked_receiver'
         ELSE 'receiver_blocked_requester'
-    END as block_direction
+    END)::TEXT AS block_direction
 FROM contact_requests cr
 INNER JOIN user_blocks ub ON (
     (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
@@ -228,10 +228,10 @@ SELECT
     uc.contact_user_id,
     uc.created_at as contact_created_at,
     ub.created_at as block_created_at,
-    CASE
+    (CASE
         WHEN ub.blocker_user_id = uc.owner_user_id THEN 'owner_blocked_contact'
         ELSE 'contact_blocked_owner'
-    END as block_direction
+    END)::TEXT AS block_direction
 FROM user_contacts uc
 INNER JOIN user_blocks ub ON (
     (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
@@ -587,11 +587,11 @@ const isEitherBlocked = `-- name: IsEitherBlocked :one
 
 
 
-SELECT CASE
+SELECT (CASE
     WHEN EXISTS(SELECT 1 FROM user_blocks ub1 WHERE ub1.blocker_user_id = $1 AND ub1.blocked_user_id = $2) THEN 1
     WHEN EXISTS(SELECT 1 FROM user_blocks ub2 WHERE ub2.blocker_user_id = $2 AND ub2.blocked_user_id = $1) THEN 2
     ELSE 0
-END
+END)::INT
 `
 
 type IsEitherBlockedParams struct {
@@ -667,11 +667,11 @@ WITH updated AS (
     LIMIT 1
 )
 SELECT
-    CASE
+    (CASE
         WHEN EXISTS (SELECT 1 FROM updated) THEN 'declined'
         WHEN (SELECT status FROM existing) IS NULL THEN 'not_found'
         ELSE 'processed'
-    END AS outcome
+    END)::TEXT AS outcome
 `
 
 type RejectContactRequestParams struct {
@@ -695,10 +695,10 @@ WITH deleted AS (
     RETURNING cr.id
 )
 SELECT
-    CASE
+    (CASE
         WHEN EXISTS (SELECT 1 FROM deleted) THEN 'undone'
         ELSE 'not_found'
-    END AS outcome
+    END)::TEXT AS outcome
 `
 
 type UndoContactRequestParams struct {

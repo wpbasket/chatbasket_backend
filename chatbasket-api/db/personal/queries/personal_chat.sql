@@ -38,29 +38,29 @@ LIMIT 1;
 -- to the personalProfilePersonalChatProvider at the service layer.
 SELECT
     c.*,
-    CASE
+    (CASE
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
-    END AS other_user_id,
+    END)::UUID AS other_user_id,
 
 -- Unread Count (From Metadata)
-CASE
+(CASE
     WHEN c.participant_1_id = $1 THEN c.p1_unread_count
     ELSE c.p2_unread_count
-END::INT AS unread_count,
+END)::INT AS unread_count,
 
 -- Per-Participant Last Message Preview
-CASE
+(CASE
     WHEN c.participant_1_id = $1 THEN c.p1_last_message_content
     ELSE c.p2_last_message_content
-END AS last_message_content,
-CASE
+END)::TEXT AS last_message_content,
+(CASE
     WHEN c.participant_1_id = $1 THEN c.p1_last_message_type
     ELSE c.p2_last_message_type
-END AS last_message_type,
+END)::TEXT AS last_message_type,
 
 -- Last Message Status (Calculated from chat metadata only)
-CASE
+(CASE
     WHEN c.last_message_created_at IS NULL THEN ''
     WHEN c.last_message_created_at <= (
         CASE
@@ -75,11 +75,11 @@ CASE
         END
     ) THEN 'delivered'
     ELSE 'sent'
-END::text AS last_message_status,
-CASE
-    WHEN c.participant_1_id = $1 THEN c.p2_last_delivered_at
-    ELSE c.p1_last_delivered_at
-END::TIMESTAMPTZ AS other_user_last_delivered_at
+END)::TEXT AS last_message_status,
+(CASE
+    WHEN c.participant_1_id = $1 THEN COALESCE(c.p2_last_delivered_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
+    ELSE COALESCE(c.p1_last_delivered_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
+END)::TIMESTAMPTZ AS other_user_last_delivered_at
 FROM chats c
 WHERE
     c.participant_1_id = $1
@@ -90,8 +90,11 @@ ORDER BY c.updated_at DESC;
 SELECT * FROM chats WHERE id = $1 LIMIT 1;
 
 -- name: GetChatsByUserID :many
-SELECT * FROM chats
-WHERE participant_1_id = $1 OR participant_2_id = $1
+SELECT *
+FROM chats
+WHERE
+    participant_1_id = $1
+    OR participant_2_id = $1
 ORDER BY updated_at DESC;
 
 -- ===========================================

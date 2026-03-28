@@ -1,4 +1,4 @@
-﻿package personal_chat
+package personal_chat
 
 import (
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
@@ -170,7 +170,7 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	}
 
 	messageID := uuid.New()
-	fileID := "msg_" + messageID.String()
+	fileID := messageID.String()
 	expiresAt := time.Now().Add(DefaultMessageTTL)
 
 	// Upload file to Appwrite Storage

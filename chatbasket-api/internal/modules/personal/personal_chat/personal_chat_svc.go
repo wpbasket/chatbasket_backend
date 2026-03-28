@@ -1,4 +1,4 @@
-﻿package personal_chat
+package personal_chat
 
 import (
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
@@ -645,14 +645,10 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID uuid.UUID)
 	}
 
 	// Step 2: Collect unique other_user_id values
-	// OtherUserID is interface{} from sqlc (CASE expression) â€” assert to uuid.UUID
 	seen := make(map[uuid.UUID]struct{}, len(chats))
 	targetIDs := make([]uuid.UUID, 0, len(chats))
 	for _, chat := range chats {
-		otherID, ok := chat.OtherUserID.(uuid.UUID)
-		if !ok {
-			continue
-		}
+		otherID := chat.OtherUserID
 		if _, exists := seen[otherID]; !exists {
 			seen[otherID] = struct{}{}
 			targetIDs = append(targetIDs, otherID)
@@ -668,11 +664,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID uuid.UUID)
 	// Step 4: Map enriched profiles onto ChatResponse
 	chatResponses := make([]ChatResponse, 0, len(chats))
 	for _, chat := range chats {
-		otherID, ok := chat.OtherUserID.(uuid.UUID)
-		if !ok {
-			log.Printf("[PersonalChat] GetUserChatsHandler: could not parse OtherUserID for chat %s, skipping", chat.ID)
-			continue
-		}
+		otherID := chat.OtherUserID
 
 		profile := profilesByID[otherID]
 
@@ -690,19 +682,18 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID uuid.UUID)
 		var lastMessageType *string
 		var lastMessageSenderID *string
 
-		if chat.LastMessageContent != nil {
-			if stringVal, ok := chat.LastMessageContent.(string); ok {
-				lastMessageContent = &stringVal
+		// Check if a last message exists using LastMessageID
+		if chat.LastMessageID != uuid.Nil {
+			if chat.LastMessageContent != "" {
+				val := chat.LastMessageContent
+				lastMessageContent = &val
 			}
 
-			if chat.LastMessageCreatedAt != nil {
-				lastMessageCreatedAt = chat.LastMessageCreatedAt
-			}
+			lastMessageCreatedAt = chat.LastMessageCreatedAt
 
-			if chat.LastMessageType != nil {
-				if stringVal, ok := chat.LastMessageType.(string); ok {
-					lastMessageType = &stringVal
-				}
+			if chat.LastMessageType != "" {
+				val := chat.LastMessageType
+				lastMessageType = &val
 			}
 
 			if chat.LastMessageSenderID != uuid.Nil {
