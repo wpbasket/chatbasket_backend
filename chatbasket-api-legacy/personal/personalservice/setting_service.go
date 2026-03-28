@@ -1,10 +1,10 @@
-package personalservice
+﻿package personalservice
 
 import (
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/model"
-	"chatbasket-api/personal/personalmodel"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/personal/personalmodel"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"net/http"
 
@@ -87,3 +87,4 @@ func (s *Service) UpdateSessionNotificationToken(ctx context.Context, userID uui
 
 	return &model.StatusOkay{Status: true, Message: "Notification token updated"}, nil
 }
+

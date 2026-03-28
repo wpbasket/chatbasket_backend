@@ -1,9 +1,9 @@
-package personalhandler
+﻿package personalhandler
 
 import (
-	"chatbasket-api/model"
-	personalmodel "chatbasket-api/personal/personalmodel"
-	"chatbasket-api/personal/personalservice"
+	"chatbasket-api-legacy/model"
+	personalmodel "chatbasket-api-legacy/personal/personalmodel"
+	"chatbasket-api-legacy/personal/personalservice"
 	"log"
 	"net/http"
 	"time"
@@ -120,7 +120,7 @@ func (h *ChatHandler) SendMessage(c *echo.Context) error {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 
-	// ── WS Broadcast: new_message ────────────────────────────────────────
+	// â”€â”€ WS Broadcast: new_message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	if hub := h.service.WSHub; hub != nil {
 		sessionId, _ := c.Get("sessionId").(string)
 		recipientUUID, _ := uuid.Parse(resp.RecipientID)
@@ -128,7 +128,7 @@ func (h *ChatHandler) SendMessage(c *echo.Context) error {
 		log.Printf("[WS Broadcast] SendMessage: msgID=%s chatID=%s sender=%s recipient=%s sessionId=%s",
 			resp.MessageID, resp.ChatID, uuidUserId, resp.RecipientID, sessionId)
 
-		// Build the event payload — reuse the same MessageResponse the REST client gets.
+		// Build the event payload â€” reuse the same MessageResponse the REST client gets.
 		// For recipient: is_from_me = false
 		recipientPayload := *resp
 		recipientPayload.IsFromMe = false
@@ -220,11 +220,11 @@ func (h *ChatHandler) AcknowledgeDelivery(c *echo.Context) error {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 
-	// ── WS Broadcast: delivery_ack ───────────────────────────────────────
+	// â”€â”€ WS Broadcast: delivery_ack â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	// Notify the message SENDER that their message has been delivered.
 	// Use message_ids array for consistency with batch ACK.
 	if hub := h.service.WSHub; hub != nil && resp.Acknowledged && payload.AcknowledgedBy == "recipient" {
-		log.Printf("[WS Broadcast] AckDelivery: msgID=%s acknowledged_by=%s user=%s → looking up sender",
+		log.Printf("[WS Broadcast] AckDelivery: msgID=%s acknowledged_by=%s user=%s â†’ looking up sender",
 			payload.MessageID, payload.AcknowledgedBy, uuidUserId)
 		msgUUID, parseErr := uuid.Parse(payload.MessageID)
 		if parseErr == nil {
@@ -243,7 +243,7 @@ func (h *ChatHandler) AcknowledgeDelivery(c *echo.Context) error {
 				log.Printf("[WS Broadcast] AckDelivery: GetMessageByID FAILED for msgID=%s: %v", payload.MessageID, lookupErr)
 			}
 		} else {
-			log.Printf("[WS Broadcast] AckDelivery: parse msgID FAILED: %s → %v", payload.MessageID, parseErr)
+			log.Printf("[WS Broadcast] AckDelivery: parse msgID FAILED: %s â†’ %v", payload.MessageID, parseErr)
 		}
 	} else if hub := h.service.WSHub; hub != nil {
 		log.Printf("[WS Broadcast] AckDelivery: SKIPPED (acknowledged=%v, acknowledged_by=%s)",
@@ -337,7 +337,7 @@ func (h *ChatHandler) UploadFileForMessage(c *echo.Context) error {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 
-	// ── WS Broadcast: new_message (File Upload) ────────────────────────
+	// â”€â”€ WS Broadcast: new_message (File Upload) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	if hub := h.service.WSHub; hub != nil && msgInfo != nil {
 		sessionId, _ := c.Get("sessionId").(string)
 		recipientUUID, _ := uuid.Parse(msgInfo.RecipientID)
@@ -438,11 +438,11 @@ func (h *ChatHandler) MarkChatRead(c *echo.Context) error {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 
-	// ── WS Broadcast: read_receipt ───────────────────────────────────────
+	// â”€â”€ WS Broadcast: read_receipt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	// Notify the OTHER participant that this user has read the chat.
-	// The sender's client uses other_user_last_read_at to flip Yellow → Green tick.
+	// The sender's client uses other_user_last_read_at to flip Yellow â†’ Green tick.
 	if hub := h.service.WSHub; hub != nil {
-		log.Printf("[WS Broadcast] MarkChatRead: chatID=%s reader=%s → looking up other participant",
+		log.Printf("[WS Broadcast] MarkChatRead: chatID=%s reader=%s â†’ looking up other participant",
 			payload.ChatID, uuidUserId)
 		chatUUID, _ := uuid.Parse(payload.ChatID)
 		chat, err := h.service.PersonalQueries.GetChatByID(c.Request().Context(), chatUUID)
@@ -511,10 +511,10 @@ func (h *ChatHandler) UnsendMessage(c *echo.Context) error {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 
-	// ── WS Broadcast: unsend ─────────────────────────────────────────────
+	// â”€â”€ WS Broadcast: unsend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	// Notify both participants that messages were unsent.
 	if hub := h.service.WSHub; hub != nil {
-		log.Printf("[WS Broadcast] Unsend: chatID=%s sender=%s messageIDs=%v → looking up recipient",
+		log.Printf("[WS Broadcast] Unsend: chatID=%s sender=%s messageIDs=%v â†’ looking up recipient",
 			payload.ChatID, uuidUserId, payload.MessageIDs)
 		chatUUID, _ := uuid.Parse(payload.ChatID)
 		chat, err := h.service.PersonalQueries.GetChatByID(c.Request().Context(), chatUUID)
@@ -589,7 +589,7 @@ func (h *ChatHandler) DeleteMessageForMe(c *echo.Context) error {
 		return c.JSON(apiErr.Code, apiErr)
 	}
 
-	// ── WS Broadcast: delete_for_me ──────────────────────────────────────
+	// â”€â”€ WS Broadcast: delete_for_me â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	// Notify the SAME user's other devices (for sync).
 	if hub := h.service.WSHub; hub != nil {
 		sessionId, _ := c.Get("sessionId").(string)
@@ -604,7 +604,7 @@ func (h *ChatHandler) DeleteMessageForMe(c *echo.Context) error {
 			}
 		}
 
-		log.Printf("[WS Broadcast] DeleteForMe: user=%s messageIDs=%v chatID=%s → pushing to other devices (excluding session=%s)",
+		log.Printf("[WS Broadcast] DeleteForMe: user=%s messageIDs=%v chatID=%s â†’ pushing to other devices (excluding session=%s)",
 			uuidUserId, payload.MessageIDs, chatID, sessionId)
 		go hub.BroadcastToUserExcept(uuidUserId, sessionId, personalservice.WSEvent{
 			Type: personalservice.WSEventDeleteForMe,
@@ -674,3 +674,4 @@ func (h *ChatHandler) AcknowledgeSyncAction(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, model.StatusOkay{Status: true, Message: "success"})
 }
+

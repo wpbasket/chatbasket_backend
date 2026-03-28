@@ -1,7 +1,7 @@
-package commonservice
+﻿package commonservice
 
 import (
-	"chatbasket-api/services"
+	"chatbasket-api-legacy/services"
 )
 
 // Service wraps the shared GlobalService for common authenticated endpoints
@@ -15,3 +15,4 @@ type Service struct {
 func New(gs *services.GlobalService, authSecret []byte) *Service {
 	return &Service{GlobalService: gs, AuthSecret: authSecret}
 }
+

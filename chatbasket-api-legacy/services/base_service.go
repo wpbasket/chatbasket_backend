@@ -1,9 +1,9 @@
-package services
+﻿package services
 
 import (
-	"chatbasket-api/appwriteinternal"
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/internal/db/personal"
+	"chatbasket-api-legacy/appwriteinternal"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/internal/db/personal"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,3 +36,4 @@ func NewGlobalService(
 		AuthService:     authService,
 	}
 }
+

@@ -1,10 +1,10 @@
-package commonservice
+﻿package commonservice
 
 import (
-	"chatbasket-api/common/commonmodel"
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/model"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/common/commonmodel"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"net/http"
 	"time"
@@ -106,3 +106,4 @@ func (s *Service) GetUserWithSession(ctx context.Context, userID uuid.UUID, sess
 		PrimaryDeviceName: centralDeviceName,
 	}, nil
 }
+

@@ -1,10 +1,10 @@
-package personalservice
+﻿package personalservice
 
 import (
-	"chatbasket-api/internal/db/personal"
-	"chatbasket-api/model"
-	personalmodel "chatbasket-api/personal/personalmodel"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/personal"
+	"chatbasket-api-legacy/model"
+	personalmodel "chatbasket-api-legacy/personal/personalmodel"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -222,7 +222,7 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 	}
 
 	debugLog := log.New(os.Stderr, "[DEBUG-ACK] ", log.LstdFlags)
-	// 🛡️ Partial Security Check: Check if session is Primary (Central)
+	// ðŸ›¡ï¸ Partial Security Check: Check if session is Primary (Central)
 	// We need this to determine if we should mark as "primary delivered" or just "delivered"
 	isCentral, apiErr := ps.GlobalService.AuthService.IsSessionCentral(ctx, userID, sessionId)
 	debugLog.Printf("IsSessionCentral result: isCentral=%v, userID=%s, sessionId=%s", isCentral, userID, sessionId)
@@ -252,7 +252,7 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 			}
 		}
 
-		// ✨ NEW: Update persistent chat delivery timestamp
+		// âœ¨ NEW: Update persistent chat delivery timestamp
 		// This is the source of truth for the "Double Grey Tick" (delivered status).
 		// We use the message's creation time as the last delivered marker.
 		debugLog.Printf("Updating persistent chat %s delivery timestamp to %v for participant %s", message.ChatID, message.CreatedAt.Time, userID)
@@ -277,7 +277,7 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 				debugLog.Printf("MarkMessageDeliveredToRecipientPrimary ERROR: %v", err)
 			}
 
-			// ⚡ Sequential ACK: Also mark all OLDER text messages as Primary Delivered.
+			// âš¡ Sequential ACK: Also mark all OLDER text messages as Primary Delivered.
 			// This prevents relay bloat by ensuring gaps are filled when a newer message is received.
 			// Only applies to 'text' messages as per user request.
 			debugLog.Printf("Executing Sequential ACK for older messages in chat %s up to %v", message.ChatID, message.CreatedAt)
@@ -296,7 +296,7 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 	} else {
 		// Sender Sync ACK
 		debugLog.Printf("Processing sender sync ACK for message %s", messageID)
-		// 🛡️ STRICT Security: ONLY Primary device can MARK as synced to sender
+		// ðŸ›¡ï¸ STRICT Security: ONLY Primary device can MARK as synced to sender
 		if !isCentral {
 			debugLog.Printf("REJECTED: Sender sync ACK from non-central device.")
 			return &model.ApiError{
@@ -306,7 +306,7 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 			}
 		}
 
-		// 🛡️ Verify Ownership: Ensure the authenticated user IS the sender
+		// ðŸ›¡ï¸ Verify Ownership: Ensure the authenticated user IS the sender
 		if message.SenderID != userID {
 			debugLog.Printf("REJECTED: Ownership mismatch. message.SenderID=%s, userID=%s", message.SenderID, userID)
 			return &model.ApiError{
@@ -348,7 +348,7 @@ func (ps *Service) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID,
 			ps.deleteMessageFromRelay(ctx, updatedMessage)
 		}
 
-		// ⚡ Sequential Cleanup: Also proactively clear any older messages that are now fully confirmed.
+		// âš¡ Sequential Cleanup: Also proactively clear any older messages that are now fully confirmed.
 		// This handles cases where older ACKs might have completed the "pair" of flags, but didn't trigger deletion.
 		debugLog.Printf("Executing Sequential Bulk Cleanup for older messages in chat %s up to %v", updatedMessage.ChatID, updatedMessage.CreatedAt)
 		err = ps.PersonalQueries.CleanupOlderFullyAcknowledgedMessages(ctx, personal.CleanupOlderFullyAcknowledgedMessagesParams{
@@ -1367,7 +1367,7 @@ func (ps *Service) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID uu
 		}
 	}
 
-	// ⚡ Also update persistent delivery timestamp (if it's read, it's delivered)
+	// âš¡ Also update persistent delivery timestamp (if it's read, it's delivered)
 	_ = ps.PersonalQueries.UpdateChatLastDeliveredAt(ctx, personal.UpdateChatLastDeliveredAtParams{
 		ChatID:        chatID,
 		ParticipantID: userID,
@@ -1377,7 +1377,7 @@ func (ps *Service) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID uu
 		},
 	})
 
-	// 🛡️ Proactive Delivery: If this is a PRIMARY session, mark all messages as primary-delivered.
+	// ðŸ›¡ï¸ Proactive Delivery: If this is a PRIMARY session, mark all messages as primary-delivered.
 	// This ensures that simply opening a chat on a primary device counts as "consumption".
 	if isPrimary {
 		log.Printf("[MarkChatRead] Primary session detected. Marking all messages in chat %s as primary-delivered for user %s", chatID, userID)
@@ -1576,3 +1576,4 @@ func (ps *Service) GetPendingMessagesHandler(ctx context.Context, payload *perso
 		Count:    len(messageResponses),
 	}, nil
 }
+

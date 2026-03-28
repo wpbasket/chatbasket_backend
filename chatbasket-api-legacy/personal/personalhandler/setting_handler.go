@@ -1,9 +1,9 @@
-package personalhandler
+﻿package personalhandler
 
 import (
-	"chatbasket-api/model"
-	"chatbasket-api/personal/personalmodel"
-	"chatbasket-api/personal/personalservice"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/personal/personalmodel"
+	"chatbasket-api-legacy/personal/personalservice"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -79,3 +79,4 @@ func (h *SettingHandler) UpdateSessionNotificationToken(c *echo.Context) error {
 
 	return c.JSON(http.StatusOK, result)
 }
+

@@ -1,8 +1,8 @@
-package services
+﻿package services
 
 import (
-	"chatbasket-api/model"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/utils"
 	"mime/multipart"
 	"os"
 	"time"
@@ -105,3 +105,4 @@ func (gs *GlobalService) UploadFileFromMultipart(
 
 	return result, nil
 }
+

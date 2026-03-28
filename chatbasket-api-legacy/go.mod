@@ -1,4 +1,4 @@
-module chatbasket-api
+module chatbasket-api-legacy
 
 go 1.26.1
 

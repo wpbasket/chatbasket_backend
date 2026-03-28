@@ -1,7 +1,7 @@
-package utils
+﻿package utils
 
 import (
-	"chatbasket-api/model"
+	"chatbasket-api-legacy/model"
 
 	"github.com/alexedwards/argon2id"
 )
@@ -52,3 +52,4 @@ func ValidateSixDigitCode(code string) bool {
 	}
 	return true
 }
+

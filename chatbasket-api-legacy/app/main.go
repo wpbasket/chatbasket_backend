@@ -1,9 +1,9 @@
-package main
+﻿package main
 
 import (
-	"chatbasket-api/db"
-	"chatbasket-api/routes"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/db"
+	"chatbasket-api-legacy/routes"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"net/http"
 	"os"
@@ -72,9 +72,9 @@ func main() {
 	// Initialize Firebase
 	firebaseCtx, firebaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := utils.InitializeFirebase(firebaseCtx); err != nil {
-		log.Printf("⚠️  Firebase initialization failed: %v\n", err)
+		log.Printf("âš ï¸  Firebase initialization failed: %v\n", err)
 	} else {
-		log.Printf("✅ Firebase initialized successfully\n")
+		log.Printf("âœ… Firebase initialized successfully\n")
 	}
 	firebaseCancel()
 
@@ -99,15 +99,15 @@ func main() {
 	var cosmosClient *azcosmos.Client // Define variable in outer scope
 	cosmosCfg, err := db.LoadCosmosConfig()
 	if err != nil {
-		log.Printf("⚠️  Cosmos DB config issue: %v\n", err)
+		log.Printf("âš ï¸  Cosmos DB config issue: %v\n", err)
 	} else {
 		// Initialize Cosmos DB Client
 		var clientErr error
 		cosmosClient, clientErr = db.NewCosmosClient(cosmosCfg)
 		if clientErr != nil {
-			log.Printf("⚠️  Cosmos DB client creation failed: %v\n", clientErr)
+			log.Printf("âš ï¸  Cosmos DB client creation failed: %v\n", clientErr)
 		} else {
-			log.Printf("✅ Cosmos DB client initialized successfully (Database: %s)", cosmosCfg.Database)
+			log.Printf("âœ… Cosmos DB client initialized successfully (Database: %s)", cosmosCfg.Database)
 		}
 	}
 
@@ -172,3 +172,4 @@ func main() {
 
 	e.Logger.Info("Server exited")
 }
+

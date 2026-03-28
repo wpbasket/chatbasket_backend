@@ -1,9 +1,9 @@
-package commonhandler
+﻿package commonhandler
 
 import (
-	"chatbasket-api/common/commonmodel"
-	"chatbasket-api/common/commonservice"
-	"chatbasket-api/model"
+	"chatbasket-api-legacy/common/commonmodel"
+	"chatbasket-api-legacy/common/commonservice"
+	"chatbasket-api-legacy/model"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -185,3 +185,4 @@ func (h *SettingHandler) ConfirmEmailUpdate(c *echo.Context) error {
 
 	return c.JSON(http.StatusOK, response)
 }
+

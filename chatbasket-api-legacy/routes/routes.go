@@ -1,16 +1,16 @@
-package routes
+﻿package routes
 
 import (
-	"chatbasket-api/appwriteinternal"
-	"chatbasket-api/handler"
-	"chatbasket-api/model"
-	"chatbasket-api/services"
+	"chatbasket-api-legacy/appwriteinternal"
+	"chatbasket-api-legacy/handler"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/services"
 	"context"
 	"net/http"
 	"os"
 	"time"
 
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/utils"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -95,3 +95,4 @@ func RegisterRoutes(
 	RegisterPublicRoutes(api, globalService, authService, authSecret)
 	RegisterPersonalRoutes(api, globalService, authService, authSecret)
 }
+

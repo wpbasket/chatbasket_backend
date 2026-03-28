@@ -1,8 +1,8 @@
-package utils
+﻿package utils
 
 import (
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/model"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/model"
 	"context"
 	"fmt"
 	"log"
@@ -152,3 +152,4 @@ func CreateSessionFlow(ctx context.Context, q *auth.Queries, userID uuid.UUID, p
 		PrimaryDeviceName: primaryDeviceName,
 	}, nil
 }
+

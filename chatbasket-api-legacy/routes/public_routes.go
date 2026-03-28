@@ -1,10 +1,10 @@
-package routes
+﻿package routes
 
 import (
-	"chatbasket-api/middleware"
-	"chatbasket-api/public/publichandler"
-	"chatbasket-api/public/publicservice"
-	"chatbasket-api/services"
+	"chatbasket-api-legacy/middleware"
+	"chatbasket-api-legacy/public/publichandler"
+	"chatbasket-api-legacy/public/publicservice"
+	"chatbasket-api-legacy/services"
 
 	"github.com/labstack/echo/v5"
 )
@@ -26,3 +26,4 @@ func RegisterPublicRoutes(api *echo.Group, globalService *services.GlobalService
 	publicProfileGroup.DELETE("/remove-avatar", publicProfileHandler.RemoveProfilePicture)
 	publicProfileGroup.POST("/update-profile", publicProfileHandler.UpdateProfile)
 }
+

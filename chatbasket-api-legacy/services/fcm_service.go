@@ -1,7 +1,7 @@
-package services
+﻿package services
 
 import (
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"fmt"
 	"log"
@@ -41,11 +41,11 @@ func (f *FCMService) SendNotificationToToken(ctx context.Context, token, title, 
 	// Send the message
 	response, err := f.client.Send(ctx, message)
 	if err != nil {
-		log.Printf("❌ Failed to send FCM notification to token %s: %v", token, err)
+		log.Printf("âŒ Failed to send FCM notification to token %s: %v", token, err)
 		return "", fmt.Errorf("failed to send FCM notification: %w", err)
 	}
 
-	log.Printf("✅ Successfully sent FCM notification to token %s, message ID: %s", token, response)
+	log.Printf("âœ… Successfully sent FCM notification to token %s, message ID: %s", token, response)
 	return response, nil
 }
 
@@ -71,17 +71,17 @@ func (f *FCMService) SendNotificationToMultipleTokens(ctx context.Context, token
 	// Send the message to multiple tokens
 	response, err := f.client.SendEachForMulticast(ctx, multicastMessage)
 	if err != nil {
-		log.Printf("❌ Failed to send FCM multicast notification: %v", err)
+		log.Printf("âŒ Failed to send FCM multicast notification: %v", err)
 		return nil, fmt.Errorf("failed to send FCM multicast notification: %w", err)
 	}
 
-	log.Printf("✅ Successfully sent FCM multicast notification. Success: %d, Failure: %d", response.SuccessCount, response.FailureCount)
+	log.Printf("âœ… Successfully sent FCM multicast notification. Success: %d, Failure: %d", response.SuccessCount, response.FailureCount)
 
 	// Log any failures
 	if response.FailureCount > 0 {
 		for idx, resp := range response.Responses {
 			if !resp.Success {
-				log.Printf("⚠️  Failed to send to token %s: %v", tokens[idx], resp.Error)
+				log.Printf("âš ï¸  Failed to send to token %s: %v", tokens[idx], resp.Error)
 			}
 		}
 	}
@@ -107,11 +107,11 @@ func (f *FCMService) SendDataMessage(ctx context.Context, token string, data map
 	// Send the message
 	response, err := f.client.Send(ctx, message)
 	if err != nil {
-		log.Printf("❌ Failed to send FCM data message to token %s: %v", token, err)
+		log.Printf("âŒ Failed to send FCM data message to token %s: %v", token, err)
 		return "", fmt.Errorf("failed to send FCM data message: %w", err)
 	}
 
-	log.Printf("✅ Successfully sent FCM data message to token %s, message ID: %s", token, response)
+	log.Printf("âœ… Successfully sent FCM data message to token %s, message ID: %s", token, response)
 	return response, nil
 }
 
@@ -146,10 +146,11 @@ func (f *FCMService) SendWithPlatformConfig(ctx context.Context, token, title, b
 	// Send the message
 	response, err := f.client.Send(ctx, message)
 	if err != nil {
-		log.Printf("❌ Failed to send FCM notification with platform config to token %s: %v", token, err)
+		log.Printf("âŒ Failed to send FCM notification with platform config to token %s: %v", token, err)
 		return "", fmt.Errorf("failed to send FCM notification: %w", err)
 	}
 
-	log.Printf("✅ Successfully sent FCM notification with platform config to token %s, message ID: %s", token, response)
+	log.Printf("âœ… Successfully sent FCM notification with platform config to token %s, message ID: %s", token, response)
 	return response, nil
 }
+

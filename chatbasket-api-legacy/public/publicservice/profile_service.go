@@ -1,8 +1,8 @@
-package publicservice
+﻿package publicservice
 
 import (
-	"chatbasket-api/model"
-	"chatbasket-api/services"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/services"
 	"context"
 	"mime/multipart"
 	"time"
@@ -429,3 +429,4 @@ func (ps *Service) UpdateUserProfile(ctx context.Context, payload *model.UpdateU
 
 	return model.ToPrivateUser(&updatedUser, avatarUri), nil
 }
+

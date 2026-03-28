@@ -1,7 +1,7 @@
-package utils
+﻿package utils
 
 import (
-	"chatbasket-api/model"
+	"chatbasket-api-legacy/model"
 	"io"
 	"mime/multipart"
 	"os"
@@ -59,3 +59,4 @@ func ConvertToInputFile(fh *multipart.FileHeader) (file.InputFile, *model.ApiErr
 
 	return inputFile, nil
 }
+

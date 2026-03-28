@@ -1,8 +1,8 @@
-package personalmodel
+﻿package personalmodel
 
 import (
-	"chatbasket-api/internal/db/personal"
-	// "chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/personal"
+	// "chatbasket-api-legacy/utils"
 	"time"
 )
 
@@ -81,3 +81,4 @@ func ToPrivateUser(user *personal.User, username string, email string) *PrivateU
 		UpdatedAt:   user.UpdatedAt.Time,
 	}
 }
+

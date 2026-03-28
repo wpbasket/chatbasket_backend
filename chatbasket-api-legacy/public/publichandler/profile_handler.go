@@ -1,8 +1,8 @@
-package publichandler
+﻿package publichandler
 
 import (
-	"chatbasket-api/model"
-	"chatbasket-api/public/publicservice"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/public/publicservice"
 	"net/http"
 	"strings"
 
@@ -267,3 +267,4 @@ func (h *ProfileHandler) UpdateProfile(c *echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 
 }
+

@@ -1,10 +1,10 @@
-package personalservice
+﻿package personalservice
 
 import (
-	"chatbasket-api/internal/db/personal"
-	"chatbasket-api/model"
-	personalmodel "chatbasket-api/personal/personalmodel"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/personal"
+	"chatbasket-api-legacy/model"
+	personalmodel "chatbasket-api-legacy/personal/personalmodel"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"net/http"
 	"strings"
@@ -835,3 +835,4 @@ func (ps *Service) BlockUser(ctx context.Context, payload *personalmodel.BlockUs
 
 	return &personalmodel.BlockUserResponse{Blocked: true}, nil
 }
+

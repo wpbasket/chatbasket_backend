@@ -1,7 +1,7 @@
-package routes
+﻿package routes
 
 import (
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/utils"
 )
 
 type appwriteConfig struct {
@@ -89,3 +89,4 @@ func loadAppwriteConfig() (*appwriteConfig, error) {
 	}
 	return &c, nil
 }
+

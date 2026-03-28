@@ -1,9 +1,9 @@
-package personalhandler
+﻿package personalhandler
 
 import (
-	"chatbasket-api/model"
-	personalmodel "chatbasket-api/personal/personalmodel"
-	"chatbasket-api/personal/personalservice"
+	"chatbasket-api-legacy/model"
+	personalmodel "chatbasket-api-legacy/personal/personalmodel"
+	"chatbasket-api-legacy/personal/personalservice"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -298,3 +298,4 @@ func (h *ContactHandler) BlockUser(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, res)
 }
+

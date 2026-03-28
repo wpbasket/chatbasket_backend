@@ -1,11 +1,11 @@
-package routes
+﻿package routes
 
 import (
-	"chatbasket-api/middleware"
-	"chatbasket-api/personal/personalhandler"
-	"chatbasket-api/personal/personalservice"
-	"chatbasket-api/personal/personalutils"
-	"chatbasket-api/services"
+	"chatbasket-api-legacy/middleware"
+	"chatbasket-api-legacy/personal/personalhandler"
+	"chatbasket-api-legacy/personal/personalservice"
+	"chatbasket-api-legacy/personal/personalutils"
+	"chatbasket-api-legacy/services"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -69,3 +69,4 @@ func RegisterPersonalRoutes(api *echo.Group, globalService *services.GlobalServi
 	personalChatGroup.GET("/pending", persChatHandler.GetPendingMessages)
 	personalChatGroup.GET("/ws", persChatHandler.WebSocketUpgrade)
 }
+

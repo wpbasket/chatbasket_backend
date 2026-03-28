@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"net/http"
@@ -6,8 +6,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"chatbasket-api/model"
-	"chatbasket-api/services"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/services"
 	"strings"
 )
 
@@ -251,3 +251,4 @@ func (h *UserHandler) ResendOTP(c *echo.Context) error {
 
 	return c.JSON(http.StatusOK, response)
 }
+

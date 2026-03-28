@@ -1,9 +1,9 @@
-package services
+﻿package services
 
 import (
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/model"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"log"
 	"net/http"
@@ -58,3 +58,4 @@ func (s *AuthService) IsSessionCentral(ctx context.Context, userID uuid.UUID, se
 	log.Printf("[DEBUG-SESSION] Session found: id=%s, is_central=%v", session.ID, session.IsCentral)
 	return session.IsCentral, nil
 }
+

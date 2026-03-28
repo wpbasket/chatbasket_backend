@@ -1,12 +1,12 @@
-package personalservice
+﻿package personalservice
 
 import (
-	"chatbasket-api/appwriteinternal"
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/internal/db/personal"
-	"chatbasket-api/model"
-	"chatbasket-api/services"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/appwriteinternal"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/internal/db/personal"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/services"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"net/http"
 	"time"
@@ -111,3 +111,4 @@ func (ps *Service) buildAvatarURL(
 
 	return finalAvatar, nil
 }
+

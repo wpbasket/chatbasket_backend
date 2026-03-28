@@ -1,13 +1,13 @@
-package personalservice
+﻿package personalservice
 
 import (
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/internal/db/personal"
-	"chatbasket-api/model"
-	personalmodel "chatbasket-api/personal/personalmodel"
-	personalutils "chatbasket-api/personal/personalutils"
-	"chatbasket-api/services"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/internal/db/personal"
+	"chatbasket-api-legacy/model"
+	personalmodel "chatbasket-api-legacy/personal/personalmodel"
+	personalutils "chatbasket-api-legacy/personal/personalutils"
+	"chatbasket-api-legacy/services"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"mime/multipart"
 	"net/http"
@@ -366,3 +366,4 @@ func (ps *Service) RegisterOrUpdateFcmOrApnToken(ctx context.Context, payload *p
 		Message: "Token registered successfully",
 	}, nil
 }
+

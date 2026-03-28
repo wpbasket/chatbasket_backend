@@ -1,9 +1,9 @@
-package services
+﻿package services
 
 import (
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/model"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"log"
 	"net/http"
@@ -222,3 +222,4 @@ func (s *AuthService) ResendOTP(ctx context.Context, payload *model.ResendOTPPay
 
 	return &model.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
+

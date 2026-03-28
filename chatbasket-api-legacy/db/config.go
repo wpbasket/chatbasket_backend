@@ -1,7 +1,7 @@
-package db
+﻿package db
 
 import (
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/utils"
 	"time"
 )
 
@@ -32,3 +32,4 @@ func LoadPostgresConfig() (*PostgresConfig, error) {
 		MaxConnLifetimeJitter: 5 * time.Minute,
 	}, nil
 }
+

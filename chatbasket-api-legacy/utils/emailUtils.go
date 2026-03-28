@@ -1,8 +1,8 @@
-package utils
+﻿package utils
 
 import (
 	"bytes"
-	"chatbasket-api/model"
+	"chatbasket-api-legacy/model"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -75,3 +75,4 @@ func SendEmail(to []string, subject string, bodyHTML string) *model.AppError {
 
 	return nil
 }
+

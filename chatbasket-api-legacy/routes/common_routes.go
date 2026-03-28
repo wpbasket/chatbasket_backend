@@ -1,10 +1,10 @@
-package routes
+﻿package routes
 
 import (
-	"chatbasket-api/common/commonhandler"
-	"chatbasket-api/common/commonservice"
-	"chatbasket-api/middleware"
-	"chatbasket-api/services"
+	"chatbasket-api-legacy/common/commonhandler"
+	"chatbasket-api-legacy/common/commonservice"
+	"chatbasket-api-legacy/middleware"
+	"chatbasket-api-legacy/services"
 
 	"github.com/labstack/echo/v5"
 )
@@ -30,3 +30,4 @@ func RegisterCommonRoutes(api *echo.Group, globalService *services.GlobalService
 	commonAuthGroup.POST("/logout", commonAuthHandler.Logout)
 	commonAuthGroup.GET("/me", commonAuthHandler.GetUser)
 }
+

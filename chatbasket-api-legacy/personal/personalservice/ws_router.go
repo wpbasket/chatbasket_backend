@@ -1,8 +1,8 @@
-package personalservice
+﻿package personalservice
 
 import (
-	"chatbasket-api/model"
-	personalmodel "chatbasket-api/personal/personalmodel"
+	"chatbasket-api-legacy/model"
+	personalmodel "chatbasket-api-legacy/personal/personalmodel"
 	"context"
 	"encoding/json"
 	"log"
@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// WSRouter handles client→server WebSocket messages
+// WSRouter handles clientâ†’server WebSocket messages
 type WSRouter struct {
 	service *Service
 	hub     *WSHub
@@ -25,7 +25,7 @@ func NewWSRouter(service *Service, hub *WSHub) *WSRouter {
 	}
 }
 
-// HandleMessage is the main dispatcher for client→server WS messages
+// HandleMessage is the main dispatcher for clientâ†’server WS messages
 func (r *WSRouter) HandleMessage(ctx context.Context, conn *WSConn, event WSClientEvent) WSResponseEvent {
 	log.Printf("[WS Router] Handling message type=%s ref=%s from user=%s", event.Type, event.Ref, conn.UserID)
 
@@ -48,7 +48,7 @@ func (r *WSRouter) HandleMessage(ctx context.Context, conn *WSConn, event WSClie
 	case "ack_sync_action":
 		payload, err = r.handleAckSyncAction(ctx, conn, event.Payload)
 	case "ping":
-		// Client keepalive ping — respond with pong to confirm connection is alive.
+		// Client keepalive ping â€” respond with pong to confirm connection is alive.
 		// Required on mobile (Android/iOS) where NAT/firewall can silently drop idle sockets.
 		payload = map[string]string{"type": "pong"}
 	default:
@@ -332,3 +332,4 @@ func (r *WSRouter) handleAckSyncAction(ctx context.Context, conn *WSConn, rawPay
 
 	return model.StatusOkay{Status: true, Message: "success"}, nil
 }
+

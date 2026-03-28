@@ -1,10 +1,10 @@
-package middleware
+﻿package middleware
 
 import (
-	"chatbasket-api/internal/db/auth"
-	"chatbasket-api/model"
-	"chatbasket-api/services"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/auth"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/services"
+	"chatbasket-api-legacy/utils"
 	"net/http"
 	"strings"
 	"time"
@@ -55,7 +55,7 @@ func AuthSessionMiddleware(authService *services.AuthService, requireVerified bo
 				}
 			}
 
-			// 🔒 Check missing auth
+			// ðŸ”’ Check missing auth
 			if sessionId == "" || userId == "" {
 				// log.Printf("401 returned: Missing session ID or User ID. sessionId='%s', userId='%s', platform='%s'", sessionId, userId, platform)
 				return c.JSON(http.StatusUnauthorized, model.SessionError{
@@ -65,7 +65,7 @@ func AuthSessionMiddleware(authService *services.AuthService, requireVerified bo
 				})
 			}
 
-			// 🔐 Verify session using internal Auth Service (HMAC + User Check)
+			// ðŸ” Verify session using internal Auth Service (HMAC + User Check)
 			// Secret Key is injected via AuthService
 			secretKey := authService.AuthSecret
 
@@ -127,7 +127,7 @@ func AuthSessionMiddleware(authService *services.AuthService, requireVerified bo
 			// Removed as per user request (was not in original implementation)
 			// if requireVerified && !authUser.IsEmailVerified { ... }
 
-			// ✅ Set context for handler access
+			// âœ… Set context for handler access
 			c.Set("uuidUserId", authUser.ID) // auth_users.ID is same as users.ID
 			c.Set("userId", authUser.ID.String())
 			c.Set("sessionId", sessionId) // Context keeps original input sessionId
@@ -139,3 +139,4 @@ func AuthSessionMiddleware(authService *services.AuthService, requireVerified bo
 		}
 	}
 }
+

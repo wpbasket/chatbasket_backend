@@ -1,10 +1,10 @@
-package personalservice
+﻿package personalservice
 
 import (
-	"chatbasket-api/internal/db/personal"
-	"chatbasket-api/model"
-	"chatbasket-api/services"
-	"chatbasket-api/utils"
+	"chatbasket-api-legacy/internal/db/personal"
+	"chatbasket-api-legacy/model"
+	"chatbasket-api-legacy/services"
+	"chatbasket-api-legacy/utils"
 	"context"
 	"fmt"
 	"log"
@@ -513,4 +513,5 @@ func (ps *Service) GenerateMessageFileURLs(ctx context.Context, message personal
 
 	return viewURL, downloadURL, nil
 }
+
 
