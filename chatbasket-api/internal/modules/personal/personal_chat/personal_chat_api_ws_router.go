@@ -1,4 +1,4 @@
-﻿package personal_chat
+package personal_chat
 
 import (
 	"chatbasket-api/internal/platform/kit"
@@ -53,7 +53,7 @@ func (r *chatWSRouter) HandleRawMessage(ctx context.Context, conn *websocket.WSC
 
 // handleMessage is the main dispatcher for clientâ†’server WS messages
 func (r *chatWSRouter) handleMessage(ctx context.Context, conn *websocket.WSConn, event websocket.WSClientEvent) websocket.WSResponseEvent {
-	log.Printf("[WS Router] Handling message type=%s ref=%s from user=%s", event.Type, event.Ref, conn.UserID)
+	log.Printf("[WS Router] Handling message type=%s ref=%s from user=%v", event.Type, event.Ref, conn.UserID)
 
 	var payload any
 	var wsErr *websocket.WSError
@@ -120,7 +120,7 @@ func (r *chatWSRouter) handleSendMessage(ctx context.Context, conn *websocket.WS
 		})
 
 		// To sender's other devices: is_from_me = true
-		go r.hub.BroadcastToUserExcept(conn.UserID, conn.SessionID, websocket.WSEvent{
+		go r.hub.BroadcastToUserExcept(conn.UserID.UuidUserId, conn.SessionID, websocket.WSEvent{
 			Type:    WSEventNewMessage,
 			Payload: resp,
 		})
@@ -238,7 +238,7 @@ func (r *chatWSRouter) handleMarkRead(ctx context.Context, conn *websocket.WSCon
 		chat, err := r.service.PostgresQueries.GetChatByID(ctx, chatUUID)
 		if err == nil {
 			var otherUserID uuid.UUID
-			if chat.Participant1ID == conn.UserID {
+			if chat.Participant1ID == conn.UserID.UuidUserId {
 				otherUserID = chat.Participant2ID
 			} else {
 				otherUserID = chat.Participant1ID
@@ -248,7 +248,7 @@ func (r *chatWSRouter) handleMarkRead(ctx context.Context, conn *websocket.WSCon
 				Type: WSEventReadReceipt,
 				Payload: ReadReceiptEventPayload{
 					ChatID:   payload.ChatID,
-					ReaderID: conn.UserID.String(),
+					ReaderID: conn.UserID.StringUserId,
 					ReadAt:   chat.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
 				},
 			})
@@ -275,7 +275,7 @@ func (r *chatWSRouter) handleUnsend(ctx context.Context, conn *websocket.WSConn,
 		chat, err := r.service.PostgresQueries.GetChatByID(ctx, chatUUID)
 		if err == nil {
 			var recipientID uuid.UUID
-			if chat.Participant1ID == conn.UserID {
+			if chat.Participant1ID == conn.UserID.UuidUserId {
 				recipientID = chat.Participant2ID
 			} else {
 				recipientID = chat.Participant1ID
@@ -286,12 +286,12 @@ func (r *chatWSRouter) handleUnsend(ctx context.Context, conn *websocket.WSConn,
 				Payload: UnsendEventPayload{
 					ChatID:     payload.ChatID,
 					MessageIDs: payload.MessageIDs,
-					SenderID:   conn.UserID.String(),
+					SenderID:   conn.UserID.StringUserId,
 				},
 			}
 
 			go r.hub.BroadcastToUser(recipientID, unsendEvent)
-			go r.hub.BroadcastToUserExcept(conn.UserID, conn.SessionID, unsendEvent)
+			go r.hub.BroadcastToUserExcept(conn.UserID.UuidUserId, conn.SessionID, unsendEvent)
 		}
 	}
 
@@ -320,7 +320,7 @@ func (r *chatWSRouter) handleDeleteForMe(ctx context.Context, conn *websocket.WS
 			}
 		}
 
-		go r.hub.BroadcastToUserExcept(conn.UserID, conn.SessionID, websocket.WSEvent{
+		go r.hub.BroadcastToUserExcept(conn.UserID.UuidUserId, conn.SessionID, websocket.WSEvent{
 			Type: WSEventDeleteForMe,
 			Payload: DeleteForMeEventPayload{
 				MessageIDs: payload.MessageIDs,

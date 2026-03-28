@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"chatbasket-api/internal/platform/kit"
 	"context"
 	"encoding/json"
 	"sync"
@@ -54,7 +55,7 @@ const (
 // WSConn wraps a single WebSocket connection with metadata.
 type WSConn struct {
 	Conn      *websocket.Conn
-	UserID    uuid.UUID
+	UserID    kit.UserId
 	SessionID string
 	IsPrimary bool
 	Send      chan []byte // buffered outbound queue
@@ -62,7 +63,7 @@ type WSConn struct {
 }
 
 // NewWSConn creates a new WSConn with a buffered send channel.
-func NewWSConn(conn *websocket.Conn, userID uuid.UUID, sessionID string, isPrimary bool) *WSConn {
+func NewWSConn(conn *websocket.Conn, userID kit.UserId, sessionID string, isPrimary bool) *WSConn {
 	return &WSConn{
 		Conn:      conn,
 		UserID:    userID,
@@ -85,7 +86,7 @@ func (wc *WSConn) WritePump(ctx context.Context) {
 				wc.Conn.Close(websocket.StatusNormalClosure, "server closing")
 				return
 			}
-			log.Printf("[WS] WritePump: SENDING %d bytes to session %s (user=%s): %s",
+			log.Printf("[WS] WritePump: SENDING %d bytes to session %s (user=%v): %s",
 				len(msg), wc.SessionID, wc.UserID, string(msg))
 			writeCtx, cancel := context.WithTimeout(ctx, wsWriteWait)
 			err := wc.Conn.Write(writeCtx, websocket.MessageText, msg)
@@ -158,10 +159,10 @@ func (h *WSHub) Register(wc *WSConn) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	userConns, exists := h.conns[wc.UserID]
+	userConns, exists := h.conns[wc.UserID.UuidUserId]
 	if !exists {
 		userConns = make(map[string]*WSConn)
-		h.conns[wc.UserID] = userConns
+		h.conns[wc.UserID.UuidUserId] = userConns
 	}
 
 	// Enforce per-user connection limit
@@ -183,7 +184,7 @@ func (h *WSHub) Unregister(wc *WSConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	userConns, exists := h.conns[wc.UserID]
+	userConns, exists := h.conns[wc.UserID.UuidUserId]
 	if !exists {
 		return
 	}
@@ -193,7 +194,7 @@ func (h *WSHub) Unregister(wc *WSConn) {
 		wc.Close()
 
 		if len(userConns) == 0 {
-			delete(h.conns, wc.UserID)
+			delete(h.conns, wc.UserID.UuidUserId)
 		}
 	}
 }

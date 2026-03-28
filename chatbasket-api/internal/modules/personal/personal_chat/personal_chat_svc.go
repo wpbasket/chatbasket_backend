@@ -7,6 +7,7 @@ import (
 	"chatbasket-api/internal/platform/kit"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -36,9 +38,9 @@ type personalProfilePersonalChatProvider interface {
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 // Chat Service
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 
 type chatService struct {
 	Pool            *pgxpool.Pool
@@ -66,26 +68,55 @@ func NewChatService(
 	}
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 // Core Messaging Functions
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 
-func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID, recipientID uuid.UUID) (string, error) {
-	// 1. Check recipient exists + profile_type (profile-owned â€” delegated to ProfileProvider)
+func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID kit.UserId, recipientID uuid.UUID) (string, error) {
+	// 1. Self-check (Legacy feature)
+	if senderID.UuidUserId == recipientID {
+		return "", kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot check eligibility with yourself")
+	}
+
+	// 2. Fetch recipient exists + profile stats (Required for all subsequent checks)
 	coreProfile, err := s.ProfileProvider.GetUserCoreProfile(ctx, recipientID)
 	if err != nil {
-		// pgx.ErrNoRows surfaces as a kit 404 from the profile module
+		if errors.Is(err, pgx.ErrNoRows) {
+			return EligibilityRecipientNotFound, nil
+		}
 		if pe, ok := err.(kit.ProcessedError); ok && pe.Status() == http.StatusNotFound {
 			return EligibilityRecipientNotFound, nil
 		}
 		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to fetch recipient profile: "+err.Error())
 	}
+
+	// 3. Contact check (Legacy Priority #2)
+	// We MUST check if they are in contacts BEFORE checking privacy/blocks to match legacy logic order
+	// This prevents leaking private status to non-contacts.
+	status, err := s.PostgresQueries.CanSendMessageLite(ctx, personal_chat_store.CanSendMessageLiteParams{
+		Column1: senderID.UuidUserId,
+		Column2: recipientID,
+	})
+	if err != nil {
+		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", kit.GetPostgresError(err).Message)
+	}
+
+	if status == EligibilityNotInContacts {
+		return EligibilityNotInContacts, nil
+	}
+
+	// 4. Recipient Private check (Legacy Priority #3)
 	if coreProfile.ProfileType == "private" {
 		return EligibilityRecipientPrivate, nil
 	}
 
-	// 2. Admin-block checks (profile-owned â€” delegated to ProfileProvider)
-	senderBlocked, err := s.ProfileProvider.IsUserAdminBlocked(ctx, senderID)
+	// 5. Block checks (Legacy Priority #4)
+	if status != EligibilityAllowed {
+		return status, nil // (blocked_by_recipient, blocked_by_me)
+	}
+
+	// 6. Admin-block checks (Legacy Priority #5)
+	senderBlocked, err := s.ProfileProvider.IsUserAdminBlocked(ctx, senderID.UuidUserId)
 	if err != nil {
 		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to check sender admin status")
 	}
@@ -101,21 +132,8 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID, r
 		return EligibilityAdminBlocked, nil
 	}
 
-	// 3. Contact / block checks (same-schema tables â€” CanSendMessageLite)
-	status, err := s.PostgresQueries.CanSendMessageLite(ctx, personal_chat_store.CanSendMessageLiteParams{
-		Column1: senderID,
-		Column2: recipientID,
-	})
-	if err != nil {
-		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", kit.GetPostgresError(err).Message)
-	}
-
-	if status != EligibilityAllowed {
-		return status, nil
-	}
-
-	// 4. Primary-device check (auth-owned â€” AuthProvider)
-	senderPrimaryID, err := s.AuthProvider.GetUserPrimarySessionID(ctx, senderID)
+	// 7. Primary-device check (Legacy Priority #6)
+	senderPrimaryID, err := s.AuthProvider.GetUserPrimarySessionID(ctx, senderID.UuidUserId)
 	if err != nil {
 		if pe, ok := err.(kit.ProcessedError); ok && pe.Status() == http.StatusNotFound {
 			return EligibilityNoPrimaryDevice, nil
@@ -140,13 +158,13 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID, r
 	return EligibilityAllowed, nil
 }
 
-func (s *chatService) CheckEligibilityHandler(ctx context.Context, payload *CheckEligibilityPayload, userID uuid.UUID) (*MessagingEligibilityResponse, error) {
+func (s *chatService) CheckEligibilityHandler(ctx context.Context, payload *CheckEligibilityPayload, userID kit.UserId) (*MessagingEligibilityResponse, error) {
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
 	}
 
-	if userID == recipientID {
+	if userID.UuidUserId == recipientID {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot check eligibility with yourself")
 	}
 
@@ -182,13 +200,13 @@ func (s *chatService) CreateOrGetChat(ctx context.Context, user1ID, user2ID uuid
 	return &chat, nil
 }
 
-func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChatPayload, userID uuid.UUID) (*ChatResponse, error) {
+func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChatPayload, userID kit.UserId) (*ChatResponse, error) {
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
 	}
 
-	if userID == recipientID {
+	if userID.UuidUserId == recipientID {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot create chat with yourself")
 	}
 
@@ -201,13 +219,13 @@ func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChat
 		return nil, messagingEligibilityError(eligibility)
 	}
 
-	chat, chatErr := s.CreateOrGetChat(ctx, userID, recipientID)
+	chat, chatErr := s.CreateOrGetChat(ctx, userID.UuidUserId, recipientID)
 	if chatErr != nil {
 		return nil, chatErr
 	}
 
 	var otherReadAt, otherDeliveredAt time.Time
-	if chat.Participant1ID == userID {
+	if chat.Participant1ID == userID.UuidUserId {
 		otherReadAt = kit.DerefTime(chat.P2LastReadAt)
 		otherDeliveredAt = kit.DerefTime(chat.P2LastDeliveredAt)
 	} else {
@@ -252,7 +270,7 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 		return nil, messagingEligibilityError(eligibility)
 	}
 
-	chat, chatErr := s.CreateOrGetChat(ctx, params.SenderID, params.RecipientID)
+	chat, chatErr := s.CreateOrGetChat(ctx, params.SenderID.UuidUserId, params.RecipientID)
 	if chatErr != nil {
 		return nil, chatErr
 	}
@@ -263,7 +281,7 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 	message, dbErr := s.PostgresQueries.CreateMessage(ctx, personal_chat_store.CreateMessageParams{
 		ID:                          messageID,
 		ChatID:                      chat.ID,
-		SenderID:                    params.SenderID,
+		SenderID:                    params.SenderID.UuidUserId,
 		RecipientID:                 params.RecipientID,
 		Content:                     params.Content,
 		MessageType:                 params.MessageType,
@@ -289,13 +307,13 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 	return &message, nil
 }
 
-func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessagePayload, userID uuid.UUID, isPrimary bool) (*MessageResponse, error) {
+func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessagePayload, userID kit.UserId, isPrimary bool) (*MessageResponse, error) {
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
 	}
 
-	if userID == recipientID {
+	if userID.UuidUserId == recipientID {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send message to yourself")
 	}
 
@@ -329,11 +347,11 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 	}, nil
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 // Delivery Acknowledgment
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 
-func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID, acknowledgedBy string, sessionId string, userID uuid.UUID) error {
+func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID, acknowledgedBy string, sessionId string, userID kit.UserId) error {
 	var err error
 
 	// 1. Fetch message details first
@@ -344,8 +362,8 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 
 	debugLog := log.New(os.Stderr, "[DEBUG-ACK] ", log.LstdFlags)
 	// Check if session is Primary (Central)
-	isCentral, centralErr := s.AuthProvider.IsSessionCentral(ctx, userID, sessionId)
-	debugLog.Printf("IsSessionCentral result: isCentral=%v, userID=%s, sessionId=%s", isCentral, userID, sessionId)
+	isCentral, centralErr := s.AuthProvider.IsSessionCentral(ctx, userID.UuidUserId, sessionId)
+	debugLog.Printf("IsSessionCentral result: isCentral=%v, userID=%s, sessionId=%s", isCentral, userID.UuidUserId, sessionId)
 	if centralErr != nil {
 		debugLog.Printf("IsSessionCentral ERROR: %v", centralErr)
 		if pe, ok := centralErr.(kit.ProcessedError); ok && pe.Status() == http.StatusUnauthorized {
@@ -364,10 +382,10 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 		}
 
 		// Update persistent chat delivery timestamp
-		debugLog.Printf("Updating persistent chat %s delivery timestamp to %v for participant %s", message.ChatID, kit.DerefTime(message.CreatedAt), userID)
+		debugLog.Printf("Updating persistent chat %s delivery timestamp to %v for participant %s", message.ChatID, kit.DerefTime(message.CreatedAt), userID.UuidUserId)
 		_ = s.PostgresQueries.UpdateChatLastDeliveredAt(ctx, personal_chat_store.UpdateChatLastDeliveredAtParams{
 			ChatID:          message.ChatID,
-			ParticipantID:   userID,
+			ParticipantID:   userID.UuidUserId,
 			LastDeliveredAt: kit.DerefTime(message.CreatedAt),
 		})
 
@@ -383,7 +401,7 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 			debugLog.Printf("Executing Sequential ACK for older messages in chat %s up to %v", message.ChatID, message.CreatedAt)
 			err = s.PostgresQueries.MarkOlderMessagesAsDeliveredToRecipientPrimary(ctx, personal_chat_store.MarkOlderMessagesAsDeliveredToRecipientPrimaryParams{
 				ChatID:      message.ChatID,
-				RecipientID: userID,
+				RecipientID: userID.UuidUserId,
 				CreatedAt:   message.CreatedAt,
 			})
 			if err != nil {
@@ -403,8 +421,8 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 		}
 
 		// Verify Ownership
-		if message.SenderID != userID {
-			debugLog.Printf("REJECTED: Ownership mismatch. message.SenderID=%s, userID=%s", message.SenderID, userID)
+		if message.SenderID != userID.UuidUserId {
+			debugLog.Printf("REJECTED: Ownership mismatch. message.SenderID=%s, userID=%s", message.SenderID, userID.UuidUserId)
 			return kit.NewError(http.StatusForbidden, "forbidden", "Forbidden: You are not the sender of this message")
 		}
 
@@ -442,7 +460,7 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 	return nil
 }
 
-func (s *chatService) AcknowledgeDeliveryHandler(ctx context.Context, payload *AcknowledgeDeliveryPayload, userID uuid.UUID, sessionId string) (*AcknowledgeDeliveryResponse, error) {
+func (s *chatService) AcknowledgeDeliveryHandler(ctx context.Context, payload *AcknowledgeDeliveryPayload, userID kit.UserId, sessionId string) (*AcknowledgeDeliveryResponse, error) {
 	messageID, err := uuid.Parse(payload.MessageID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message ID")
@@ -465,16 +483,16 @@ func (s *chatService) AcknowledgeDeliveryHandler(ctx context.Context, payload *A
 	}, nil
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 // Message Queries
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 
-func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, userID uuid.UUID, limit, offset int32) ([]personal_chat_store.Message, error) {
+func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, userID kit.UserId, limit, offset int32) ([]personal_chat_store.Message, error) {
 	messages, err := s.PostgresQueries.GetChatMessages(ctx, personal_chat_store.GetChatMessagesParams{
 		ChatID:   chatID,
 		Limit:    limit,
 		Offset:   offset,
-		SenderID: userID,
+		SenderID: userID.UuidUserId,
 	})
 
 	if err != nil {
@@ -485,7 +503,7 @@ func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, use
 }
 
 // buildMessageResponse maps a DB message to a MessageResponse with optional file URLs.
-func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_chat_store.Message, userID uuid.UUID) MessageResponse {
+func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_chat_store.Message, userID kit.UserId) MessageResponse {
 	viewURL, downloadURL := "", ""
 	if msg.FileID != nil && *msg.FileID != "" {
 		var fileErr error
@@ -503,7 +521,7 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 	return MessageResponse{
 		MessageID:                   msg.ID.String(),
 		ChatID:                      msg.ChatID.String(),
-		IsFromMe:                    msg.SenderID == userID,
+		IsFromMe:                    msg.SenderID == userID.UuidUserId,
 		RecipientID:                 msg.RecipientID.String(),
 		Content:                     msg.Content,
 		MessageType:                 msg.MessageType,
@@ -521,13 +539,13 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 	}
 }
 
-func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessagesPayload, userID uuid.UUID) (*GetMessagesResponse, error) {
+func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessagesPayload, userID kit.UserId) (*GetMessagesResponse, error) {
 	chatID, err := uuid.Parse(payload.ChatID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_chat_id", "Invalid chat ID")
 	}
 
-	isParticipant, partErr := s.IsChatParticipant(ctx, chatID, userID)
+	isParticipant, partErr := s.IsChatParticipant(ctx, chatID, userID.UuidUserId)
 	if partErr != nil {
 		return nil, partErr
 	}
@@ -556,7 +574,7 @@ func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessag
 	otherUserLastReadAt := time.Time{}
 	otherUserLastDeliveredAt := time.Time{}
 	if chat.ID != uuid.Nil {
-		if chat.Participant1ID == userID {
+		if chat.Participant1ID == userID.UuidUserId {
 			otherUserLastReadAt = kit.DerefTime(chat.P2LastReadAt)
 			otherUserLastDeliveredAt = kit.DerefTime(chat.P2LastDeliveredAt)
 		} else {
@@ -584,7 +602,7 @@ func (s *chatService) IsChatParticipant(ctx context.Context, chatID uuid.UUID, u
 	return isParticipant, nil
 }
 
-func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *GetPendingMessagesPayload, userID uuid.UUID) (*GetMessagesResponse, error) {
+func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *GetPendingMessagesPayload, userID kit.UserId) (*GetMessagesResponse, error) {
 	limit := payload.Limit
 	if limit <= 0 {
 		limit = 50
@@ -592,7 +610,7 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 
 	// 1. Fetch undelivered messages (where user is recipient)
 	messagesRecv, err := s.PostgresQueries.GetPendingMessagesForRecipient(ctx, personal_chat_store.GetPendingMessagesForRecipientParams{
-		RecipientID: userID,
+		RecipientID: userID.UuidUserId,
 		Limit:       limit,
 	})
 	if err != nil {
@@ -601,7 +619,7 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 
 	// 2. Fetch unsynced messages (where user is sender but primary doesn't have it yet)
 	messagesSent, err := s.PostgresQueries.GetPendingSenderSyncMessages(ctx, personal_chat_store.GetPendingSenderSyncMessagesParams{
-		SenderID: userID,
+		SenderID: userID.UuidUserId,
 		Limit:    limit,
 	})
 	if err != nil {
@@ -624,9 +642,8 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 	}, nil
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 // Chat List
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func (s *chatService) GetUserChatsLite(ctx context.Context, userID uuid.UUID) ([]personal_chat_store.GetUserChatsLiteRow, error) {
 	chats, err := s.PostgresQueries.GetUserChatsLite(ctx, userID)
@@ -637,9 +654,9 @@ func (s *chatService) GetUserChatsLite(ctx context.Context, userID uuid.UUID) ([
 	return chats, nil
 }
 
-func (s *chatService) GetUserChatsHandler(ctx context.Context, userID uuid.UUID) (*GetUserChatsResponse, error) {
+func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId) (*GetUserChatsResponse, error) {
 	// Step 1: Fetch slim chat rows (zero cross-module JOINs)
-	chats, err := s.GetUserChatsLite(ctx, userID)
+	chats, err := s.GetUserChatsLite(ctx, userID.UuidUserId)
 	if err != nil {
 		return nil, err
 	}
@@ -656,7 +673,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID uuid.UUID)
 	}
 
 	// Step 3: Batch-resolve profiles via provider (handles decryption, privacy, avatar refresh)
-	profilesByID, err := s.ProfileProvider.GetVisibleProfilesForContactViewer(ctx, userID, targetIDs)
+	profilesByID, err := s.ProfileProvider.GetVisibleProfilesForContactViewer(ctx, userID.UuidUserId, targetIDs)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", "failed to resolve chat profiles: "+err.Error())
 	}
@@ -682,19 +699,21 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID uuid.UUID)
 		var lastMessageType *string
 		var lastMessageSenderID *string
 
-		// Check if a last message exists using LastMessageID
+		// Check if a last message exists using LastMessageID (Coalesced to uuid.Nil if missing)
 		if chat.LastMessageID != uuid.Nil {
-			if chat.LastMessageContent != "" {
-				val := chat.LastMessageContent
-				lastMessageContent = &val
+			if chat.LastMessageContent != nil {
+				if s, ok := chat.LastMessageContent.(string); ok {
+					lastMessageContent = &s
+				}
+			}
+
+			if chat.LastMessageType != nil {
+				if s, ok := chat.LastMessageType.(string); ok {
+					lastMessageType = &s
+				}
 			}
 
 			lastMessageCreatedAt = chat.LastMessageCreatedAt
-
-			if chat.LastMessageType != "" {
-				val := chat.LastMessageType
-				lastMessageType = &val
-			}
 
 			if chat.LastMessageSenderID != uuid.Nil {
 				senderStr := chat.LastMessageSenderID.String()
@@ -717,12 +736,13 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID uuid.UUID)
 			AvatarURL:                avatarURL,
 			CreatedAt:                kit.DerefTime(chat.CreatedAt),
 			UpdatedAt:                kit.DerefTime(chat.UpdatedAt),
+			OtherUserLastReadAt:      chat.OtherUserLastReadAt,
 			OtherUserLastDeliveredAt: chat.OtherUserLastDeliveredAt,
 			LastMessageContent:       lastMessageContent,
 			LastMessageCreatedAt:     lastMessageCreatedAt,
 			LastMessageType:          lastMessageType,
 			LastMessageSenderID:      lastMessageSenderID,
-			LastMessageIsFromMe:      chat.LastMessageSenderID != uuid.Nil && chat.LastMessageSenderID == userID,
+			LastMessageIsFromMe:      chat.LastMessageSenderID != uuid.Nil && chat.LastMessageSenderID == userID.UuidUserId,
 			LastMessageStatus:        chat.LastMessageStatus,
 			LastMessageIsUnsent:      lastMessageType != nil && *lastMessageType == "unsent",
 			LastMessageID:            lastMessageID,
@@ -736,15 +756,15 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID uuid.UUID)
 	}, nil
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 // Mark Read
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 
-func (s *chatService) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, isPrimary bool) error {
+func (s *chatService) MarkChatRead(ctx context.Context, userID kit.UserId, chatID uuid.UUID, isPrimary bool) error {
 	// Verify user is participant
 	isParticipant, err := s.PostgresQueries.IsChatParticipant(ctx, personal_chat_store.IsChatParticipantParams{
 		Column1: chatID,
-		Column2: userID,
+		Column2: userID.UuidUserId,
 	})
 	if err != nil {
 		return kit.NewError(http.StatusInternalServerError, "server_error", "Failed to check chat participation")
@@ -753,10 +773,10 @@ func (s *chatService) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID
 		return kit.NewError(http.StatusForbidden, "forbidden", "User is not a participant of this chat")
 	}
 
-	log.Printf("[MarkChatRead] Resetting read status for chat %s, user %s", chatID, userID)
+	log.Printf("[MarkChatRead] Resetting read status for chat %s, user %s", chatID, userID.UuidUserId)
 	err = s.PostgresQueries.ResetChatReadStatus(ctx, personal_chat_store.ResetChatReadStatusParams{
 		ID:             chatID,
-		Participant1ID: userID,
+		Participant1ID: userID.UuidUserId,
 	})
 	if err != nil {
 		log.Printf("[MarkChatRead] ERROR: Failed to reset read status: %v", err)
@@ -766,16 +786,16 @@ func (s *chatService) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID
 	// Also update persistent delivery timestamp (if it's read, it's delivered)
 	_ = s.PostgresQueries.UpdateChatLastDeliveredAt(ctx, personal_chat_store.UpdateChatLastDeliveredAtParams{
 		ChatID:          chatID,
-		ParticipantID:   userID,
+		ParticipantID:   userID.UuidUserId,
 		LastDeliveredAt: time.Now(),
 	})
 
 	// Proactive Delivery: If primary, mark all messages as primary-delivered
 	if isPrimary {
-		log.Printf("[MarkChatRead] Primary session detected. Marking all messages in chat %s as primary-delivered for user %s", chatID, userID)
+		log.Printf("[MarkChatRead] Primary session detected. Marking all messages in chat %s as primary-delivered for user %s", chatID, userID.UuidUserId)
 		err = s.PostgresQueries.MarkChatMessagesAsReadPrimary(ctx, personal_chat_store.MarkChatMessagesAsReadPrimaryParams{
 			ChatID:      chatID,
-			RecipientID: userID,
+			RecipientID: userID.UuidUserId,
 		})
 		if err != nil {
 			log.Printf("[MarkChatRead] ERROR: Failed to mark messages as read primary: %v", err)
@@ -785,7 +805,7 @@ func (s *chatService) MarkChatRead(ctx context.Context, userID uuid.UUID, chatID
 	return nil
 }
 
-func (s *chatService) MarkChatReadHandler(ctx context.Context, payload *MarkChatReadPayload, userID uuid.UUID, isPrimary bool) error {
+func (s *chatService) MarkChatReadHandler(ctx context.Context, payload *MarkChatReadPayload, userID kit.UserId, isPrimary bool) error {
 	chatID, err := uuid.Parse(payload.ChatID)
 	if err != nil {
 		return kit.NewError(http.StatusBadRequest, "invalid_request", "Invalid chat ID")
@@ -794,12 +814,12 @@ func (s *chatService) MarkChatReadHandler(ctx context.Context, payload *MarkChat
 	return s.MarkChatRead(ctx, userID, chatID, isPrimary)
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 // Unsend
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 
-func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messageIDs []uuid.UUID, senderID uuid.UUID, isPrimary bool) error {
-	log.Printf("[UnsendMessage] START: Processing %d messages for sender %s in chat %s (isPrimary=%v)", len(messageIDs), senderID, chatID, isPrimary)
+func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messageIDs []uuid.UUID, senderID kit.UserId, isPrimary bool) error {
+	log.Printf("[UnsendMessage] START: Processing %d messages for sender %s in chat %s (isPrimary=%v)", len(messageIDs), senderID.UuidUserId, chatID, isPrimary)
 
 	// Start transaction
 	tx, err := s.Pool.Begin(ctx)
@@ -820,12 +840,12 @@ func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messa
 
 	// Identify recipient
 	var recipientID uuid.UUID
-	if chat.Participant1ID == senderID {
+	if chat.Participant1ID == senderID.UuidUserId {
 		recipientID = chat.Participant2ID
-	} else if chat.Participant2ID == senderID {
+	} else if chat.Participant2ID == senderID.UuidUserId {
 		recipientID = chat.Participant1ID
 	} else {
-		log.Printf("[UnsendMessage] ERROR: User %s is not a participant in chat %s", senderID, chatID)
+		log.Printf("[UnsendMessage] ERROR: User %s is not a participant in chat %s", senderID.UuidUserId, chatID)
 		return kit.NewError(http.StatusForbidden, "forbidden", "unauthorized: not a participant in this chat")
 	}
 
@@ -843,7 +863,7 @@ func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messa
 				senderPayload, _ := json.Marshal(SyncActionPayload{MessageIDs: []string{msgID.String()}, ChatID: chatID.String()})
 				_, _ = qtx.CreateSyncAction(ctx, personal_chat_store.CreateSyncActionParams{
 					ID:         uuid.New(),
-					UserID:     senderID,
+					UserID:     senderID.UuidUserId,
 					ActionType: "unsend",
 					Payload:    senderPayload,
 				})
@@ -860,8 +880,8 @@ func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messa
 			})
 		} else {
 			// Security: Only sender can unsend
-			if msg.SenderID != senderID {
-				log.Printf("[UnsendMessage] ERROR: Unauthorized unsend attempt for msg %s by user %s", msgID, senderID)
+			if msg.SenderID != senderID.UuidUserId {
+				log.Printf("[UnsendMessage] ERROR: Unauthorized unsend attempt for msg %s by user %s", msgID, senderID.UuidUserId)
 				return kit.NewError(http.StatusForbidden, "forbidden", "unauthorized: you can only unsend your own messages")
 			}
 
@@ -884,7 +904,7 @@ func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messa
 				senderPayload, _ := json.Marshal(SyncActionPayload{MessageIDs: []string{msgID.String()}, ChatID: chatID.String()})
 				_, _ = qtx.CreateSyncAction(ctx, personal_chat_store.CreateSyncActionParams{
 					ID:         uuid.New(),
-					UserID:     senderID,
+					UserID:     senderID.UuidUserId,
 					ActionType: "unsend",
 					Payload:    senderPayload,
 				})
@@ -936,7 +956,7 @@ func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messa
 	return nil
 }
 
-func (s *chatService) UnsendMessageHandler(ctx context.Context, payload *UnsendMessagePayload, userID uuid.UUID, isPrimary bool) error {
+func (s *chatService) UnsendMessageHandler(ctx context.Context, payload *UnsendMessagePayload, userID kit.UserId, isPrimary bool) error {
 	chatID, err := uuid.Parse(payload.ChatID)
 	if err != nil {
 		return kit.NewError(http.StatusBadRequest, "invalid_request", "Invalid chat ID")
@@ -954,25 +974,25 @@ func (s *chatService) UnsendMessageHandler(ctx context.Context, payload *UnsendM
 	return s.UnsendMessage(ctx, chatID, msgUUIDs, userID, isPrimary)
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 // Delete For Me
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 
-func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.UUID, userID uuid.UUID, isPrimary bool) error {
-	log.Printf("[DeleteMessageForMe] Processing %d messages for user %s (isPrimary=%v)", len(messageIDs), userID, isPrimary)
+func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.UUID, userID kit.UserId, isPrimary bool) error {
+	log.Printf("[DeleteMessageForMe] Processing %d messages for user %s (isPrimary=%v)", len(messageIDs), userID.UuidUserId, isPrimary)
 
 	for _, msgID := range messageIDs {
 		msg, err := s.PostgresQueries.GetMessageByID(ctx, msgID)
 		if err != nil {
 			// Message already deleted (e.g., by relay cleanup). Still try to clear the chat preview
-			// by scanning the user's chats for a matching last_message_id â€” matches legacy behaviour.
+			// by scanning the user's chats for a matching last_message_id — matches legacy behaviour.
 			log.Printf("[DeleteMessageForMe] Message %s not found (likely relay-cleaned). Attempting preview clear.", msgID)
-			chats, chatsErr := s.PostgresQueries.GetChatsByUserID(ctx, userID)
+			chats, chatsErr := s.PostgresQueries.GetChatsByUserID(ctx, userID.UuidUserId)
 			if chatsErr == nil {
 				for _, chat := range chats {
 					if chat.LastMessageID == msgID {
 						_ = s.PostgresQueries.ClearLastMessageForParticipant(ctx, personal_chat_store.ClearLastMessageForParticipantParams{
-							UserID:    userID,
+							UserID:    userID.UuidUserId,
 							ChatID:    chat.ID,
 							MessageID: msgID,
 						})
@@ -985,21 +1005,21 @@ func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.
 
 		// Clear preview for the participant who is deleting
 		_ = s.PostgresQueries.ClearLastMessageForParticipant(ctx, personal_chat_store.ClearLastMessageForParticipantParams{
-			UserID:    userID,
+			UserID:    userID.UuidUserId,
 			ChatID:    msg.ChatID,
 			MessageID: msg.ID,
 		})
 
 		// Mark as deleted by the appropriate party
-		if msg.SenderID == userID {
+		if msg.SenderID == userID.UuidUserId {
 			_ = s.PostgresQueries.MarkMessageDeletedBySender(ctx, personal_chat_store.MarkMessageDeletedBySenderParams{
 				ID:       msgID,
-				SenderID: userID,
+				SenderID: userID.UuidUserId,
 			})
-		} else if msg.RecipientID == userID {
+		} else if msg.RecipientID == userID.UuidUserId {
 			_ = s.PostgresQueries.MarkMessageDeletedByRecipient(ctx, personal_chat_store.MarkMessageDeletedByRecipientParams{
 				ID:          msgID,
-				RecipientID: userID,
+				RecipientID: userID.UuidUserId,
 			})
 		}
 
@@ -1008,13 +1028,13 @@ func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.
 			payload, _ := json.Marshal(SyncActionPayload{MessageIDs: []string{msgID.String()}, ChatID: msg.ChatID.String()})
 			_, _ = s.PostgresQueries.CreateSyncAction(ctx, personal_chat_store.CreateSyncActionParams{
 				ID:         uuid.New(),
-				UserID:     userID,
+				UserID:     userID.UuidUserId,
 				ActionType: "delete_for_me",
 				Payload:    payload,
 			})
 		}
 
-		// Check if both parties have deleted â€” instant relay cleanup
+		// Check if both parties have deleted — instant relay cleanup
 		updatedMsg, err := s.PostgresQueries.GetMessageByID(ctx, msgID)
 		if err == nil && updatedMsg.DeletedBySender && updatedMsg.DeletedByRecipient {
 			log.Printf("[DeleteMessageForMe] Both parties deleted msg %s, cleaning up from relay", msgID)
@@ -1025,7 +1045,7 @@ func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.
 	return nil
 }
 
-func (s *chatService) DeleteMessageForMeHandler(ctx context.Context, payload *DeleteMessageForMePayload, userID uuid.UUID, isPrimary bool) error {
+func (s *chatService) DeleteMessageForMeHandler(ctx context.Context, payload *DeleteMessageForMePayload, userID kit.UserId, isPrimary bool) error {
 	msgUUIDs := make([]uuid.UUID, 0, len(payload.MessageIDs))
 	for _, idStr := range payload.MessageIDs {
 		id, err := uuid.Parse(idStr)
@@ -1038,13 +1058,13 @@ func (s *chatService) DeleteMessageForMeHandler(ctx context.Context, payload *De
 	return s.DeleteMessageForMe(ctx, msgUUIDs, userID, isPrimary)
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 // Sync Actions
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ————————————————————————————————————————————————————————————————————————————————
 
-func (s *chatService) GetSyncActions(ctx context.Context, userID uuid.UUID, limit int32) ([]personal_chat_store.MessageSyncAction, error) {
+func (s *chatService) GetSyncActions(ctx context.Context, userID kit.UserId, limit int32) ([]personal_chat_store.MessageSyncAction, error) {
 	actions, err := s.PostgresQueries.GetPendingSyncActions(ctx, personal_chat_store.GetPendingSyncActionsParams{
-		UserID: userID,
+		UserID: userID.UuidUserId,
 		Limit:  limit,
 	})
 	if err != nil {
@@ -1053,7 +1073,7 @@ func (s *chatService) GetSyncActions(ctx context.Context, userID uuid.UUID, limi
 	return actions, nil
 }
 
-func (s *chatService) GetSyncActionsHandler(ctx context.Context, payload *GetSyncActionsPayload, userID uuid.UUID) (*GetSyncActionsResponse, error) {
+func (s *chatService) GetSyncActionsHandler(ctx context.Context, payload *GetSyncActionsPayload, userID kit.UserId) (*GetSyncActionsResponse, error) {
 	limit := payload.Limit
 	if limit <= 0 {
 		limit = 50
@@ -1061,7 +1081,7 @@ func (s *chatService) GetSyncActionsHandler(ctx context.Context, payload *GetSyn
 
 	actions, err := s.GetSyncActions(ctx, userID, limit)
 	if err != nil {
-		log.Printf("[PersonalChat] GetSyncActions failed for user %s: %v", userID, err)
+		log.Printf("[PersonalChat] GetSyncActions failed for user %s: %v", userID.UuidUserId, err)
 		return nil, err
 	}
 

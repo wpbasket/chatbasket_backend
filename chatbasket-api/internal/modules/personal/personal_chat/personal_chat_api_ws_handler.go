@@ -1,4 +1,4 @@
-﻿package personal_chat
+package personal_chat
 
 import (
 	"chatbasket-api/internal/platform/kit"
@@ -18,8 +18,9 @@ import (
 // Auth:     Same AuthSessionMiddleware as all other /personal/chat/* routes.
 func (h *chatHandler) WebSocketUpgrade(c *echo.Context) error {
 	// â”€â”€ 1. Extract auth context (set by AuthSessionMiddleware) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
-	if !ok {
+	userId, okStr := c.Get("userId").(string)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okStr || userId == "" || !okUUID {
 		return c.JSON(http.StatusUnauthorized, &kit.ApiError{
 			Code:    http.StatusUnauthorized,
 			Message: "User id is missing or invalid",
@@ -57,8 +58,11 @@ func (h *chatHandler) WebSocketUpgrade(c *echo.Context) error {
 		return nil
 	}
 
-	// â”€â”€ 4. Create WSConn and register with hub â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-	wc := websocket.NewWSConn(wsConn, uuidUserId, sessionId, isPrimary)
+	// ——— 4. Create WSConn and register with hub ——————————————————————————————————
+	wc := websocket.NewWSConn(wsConn, kit.UserId{
+		StringUserId: userId,
+		UuidUserId:   uuidUserId,
+	}, sessionId, isPrimary)
 
 	if !h.hub.Register(wc) {
 		wsConn.Close(ws.StatusTryAgainLater, "too many connections")

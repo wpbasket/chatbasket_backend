@@ -1,6 +1,7 @@
 package personal_chat
 
 import (
+	"chatbasket-api/internal/platform/kit"
 	"mime/multipart"
 	"time"
 
@@ -235,7 +236,7 @@ type SyncActionPayload struct {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type SendMessageParams struct {
-	SenderID    uuid.UUID
+	SenderID    kit.UserId
 	RecipientID uuid.UUID
 	Content     string
 	MessageType string
@@ -243,7 +244,7 @@ type SendMessageParams struct {
 }
 
 type UploadFileForMessageParams struct {
-	SenderID    uuid.UUID
+	SenderID    kit.UserId
 	RecipientID uuid.UUID
 	FileHeader  *multipart.FileHeader
 	MessageType string

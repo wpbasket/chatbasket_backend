@@ -37,7 +37,24 @@ LIMIT 1;
 -- Profile hydration (name, username, avatar, privacy) is delegated
 -- to the personalProfilePersonalChatProvider at the service layer.
 SELECT
-    c.*,
+    c.id,
+    c.participant_1_id,
+    c.participant_2_id,
+    c.p1_unread_count,
+    c.p2_unread_count,
+    c.p1_last_read_at,
+    c.p2_last_read_at,
+    c.p1_last_delivered_at,
+    c.p2_last_delivered_at,
+    c.p1_last_message_content,
+    c.p2_last_message_content,
+    c.p1_last_message_type,
+    c.p2_last_message_type,
+    c.last_message_created_at,
+    c.created_at,
+    c.updated_at,
+    COALESCE(c.last_message_sender_id, '00000000-0000-0000-0000-000000000000'::UUID)::UUID AS last_message_sender_id,
+    COALESCE(c.last_message_id, '00000000-0000-0000-0000-000000000000'::UUID)::UUID AS last_message_id,
     (CASE
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
@@ -53,11 +70,11 @@ END)::INT AS unread_count,
 (CASE
     WHEN c.participant_1_id = $1 THEN c.p1_last_message_content
     ELSE c.p2_last_message_content
-END)::TEXT AS last_message_content,
+END) AS last_message_content,
 (CASE
     WHEN c.participant_1_id = $1 THEN c.p1_last_message_type
     ELSE c.p2_last_message_type
-END)::TEXT AS last_message_type,
+END) AS last_message_type,
 
 -- Last Message Status (Calculated from chat metadata only)
 (CASE
@@ -76,6 +93,10 @@ END)::TEXT AS last_message_type,
     ) THEN 'delivered'
     ELSE 'sent'
 END)::TEXT AS last_message_status,
+(CASE
+    WHEN c.participant_1_id = $1 THEN COALESCE(c.p2_last_read_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
+    ELSE COALESCE(c.p1_last_read_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
+END)::TIMESTAMPTZ AS other_user_last_read_at,
 (CASE
     WHEN c.participant_1_id = $1 THEN COALESCE(c.p2_last_delivered_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
     ELSE COALESCE(c.p1_last_delivered_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)

@@ -19,14 +19,14 @@ import (
 // File URL Generation
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_chat_store.Message, viewerID uuid.UUID) (string, string, error) {
-	// Ownership guard â€” matches legacy GenerateMessageFileURLs
-	if msg.SenderID != viewerID && msg.RecipientID != viewerID {
+func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_chat_store.Message, viewerID kit.UserId) (string, string, error) {
+	// Ownership guard — matches legacy GenerateMessageFileURLs
+	if msg.SenderID != viewerID.UuidUserId && msg.RecipientID != viewerID.UuidUserId {
 		return "", "", kit.NewError(http.StatusForbidden, "forbidden", "not authorized to access this file")
 	}
 
-	// Soft-delete guard â€” treat as no file if user deleted this message
-	if (msg.SenderID == viewerID && msg.DeletedBySender) || (msg.RecipientID == viewerID && msg.DeletedByRecipient) {
+	// Soft-delete guard — treat as no file if user deleted this message
+	if (msg.SenderID == viewerID.UuidUserId && msg.DeletedBySender) || (msg.RecipientID == viewerID.UuidUserId && msg.DeletedByRecipient) {
 		return "", "", nil
 	}
 
@@ -94,7 +94,7 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 	return viewURL, downloadURL, nil
 }
 
-func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURLPayload, userID uuid.UUID) (*GetFileURLResponse, error) {
+func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURLPayload, userID kit.UserId) (*GetFileURLResponse, error) {
 	messageID, err := uuid.Parse(payload.MessageID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_request", "Invalid message ID")
@@ -164,7 +164,7 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_file_type", err.Error())
 	}
 
-	chat, chatErr := s.CreateOrGetChat(ctx, params.SenderID, params.RecipientID)
+	chat, chatErr := s.CreateOrGetChat(ctx, params.SenderID.UuidUserId, params.RecipientID)
 	if chatErr != nil {
 		return nil, chatErr
 	}
@@ -209,7 +209,7 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	message, dbErr := s.PostgresQueries.CreateMessageWithFile(ctx, personal_chat_store.CreateMessageWithFileParams{
 		ID:                          messageID,
 		ChatID:                      chat.ID,
-		SenderID:                    params.SenderID,
+		SenderID:                    params.SenderID.UuidUserId,
 		RecipientID:                 params.RecipientID,
 		Content:                     content,
 		MessageType:                 params.MessageType,

@@ -1,4 +1,4 @@
-﻿package personal_chat
+package personal_chat
 
 import (
 	"chatbasket-api/internal/platform/kit"
@@ -24,12 +24,16 @@ func newChatHandler(service *chatService, hub *websocket.WSHub) *chatHandler {
 // Auth helpers
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-func extractUserID(c *echo.Context) (uuid.UUID, error) {
-	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
-	if !ok {
-		return uuid.Nil, kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+func extractUserID(c *echo.Context) (kit.UserId, error) {
+	userId, okStr := c.Get("userId").(string)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okStr || userId == "" || !okUUID {
+		return kit.UserId{}, kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
 	}
-	return uuidUserId, nil
+	return kit.UserId{
+		StringUserId: userId,
+		UuidUserId:   uuidUserId,
+	}, nil
 }
 
 func extractSessionId(c *echo.Context) string {
@@ -99,13 +103,13 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 		return svcErr
 	}
 
-	// â”€â”€ WS Broadcast: new_message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+	// ——— WS Broadcast: new_message ————————————————————————————————————————————————————————————————
 	if h.hub != nil {
 		sessionId := extractSessionId(c)
 		recipientUUID, _ := uuid.Parse(resp.RecipientID)
 
 		log.Printf("[WS Broadcast] SendMessage: msgID=%s chatID=%s sender=%s recipient=%s sessionId=%s",
-			resp.MessageID, resp.ChatID, userID, resp.RecipientID, sessionId)
+			resp.MessageID, resp.ChatID, userID.StringUserId, resp.RecipientID, sessionId)
 
 		// For recipient: is_from_me = false
 		recipientPayload := *resp
@@ -118,8 +122,8 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 
 		// For sender's OTHER devices: is_from_me = true (sync)
 		log.Printf("[WS Broadcast] SendMessage: pushing new_message to SENDER=%s other devices (excluding session=%s)",
-			userID, sessionId)
-		go h.hub.BroadcastToUserExcept(userID, sessionId, websocket.WSEvent{
+			userID.StringUserId, sessionId)
+		go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, websocket.WSEvent{
 			Type:    WSEventNewMessage,
 			Payload: resp,
 		})
@@ -165,10 +169,10 @@ func (h *chatHandler) AcknowledgeDelivery(c *echo.Context) error {
 		return svcErr
 	}
 
-	// â”€â”€ WS Broadcast: delivery_ack â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+	// ——— WS Broadcast: delivery_ack ———————————————————————————————————————————————————————————————
 	if h.hub != nil && resp.Acknowledged && payload.AcknowledgedBy == "recipient" {
-		log.Printf("[WS Broadcast] AckDelivery: msgID=%s acknowledged_by=%s user=%s â†’ looking up sender",
-			payload.MessageID, payload.AcknowledgedBy, userID)
+		log.Printf("[WS Broadcast] AckDelivery: msgID=%s acknowledged_by=%s user=%s → looking up sender",
+			payload.MessageID, payload.AcknowledgedBy, userID.StringUserId)
 		msgUUID, parseErr := uuid.Parse(payload.MessageID)
 		if parseErr == nil {
 			msg, lookupErr := h.Service.PostgresQueries.GetMessageByID(c.Request().Context(), msgUUID)
@@ -187,7 +191,7 @@ func (h *chatHandler) AcknowledgeDelivery(c *echo.Context) error {
 				log.Printf("[WS Broadcast] AckDelivery: GetMessageByID FAILED for msgID=%s: %v", payload.MessageID, lookupErr)
 			}
 		} else {
-			log.Printf("[WS Broadcast] AckDelivery: parse msgID FAILED: %s â†’ %v", payload.MessageID, parseErr)
+			log.Printf("[WS Broadcast] AckDelivery: parse msgID FAILED: %s → %v", payload.MessageID, parseErr)
 		}
 	} else if h.hub != nil {
 		log.Printf("[WS Broadcast] AckDelivery: SKIPPED (acknowledged=%v, acknowledged_by=%s)",
@@ -242,10 +246,10 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 
 	recipientID, err := uuid.Parse(recipientIDStr)
 	if err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
+		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
 	}
 
-	if userID == recipientID {
+	if userID.UuidUserId == recipientID {
 		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send file to yourself")
 	}
 
@@ -307,13 +311,13 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		ExpiresAt:    message.ExpiresAt,
 	}
 
-	// â”€â”€ WS Broadcast: new_message (File Upload) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+	// ——— WS Broadcast: new_message (File Upload) —————————————————————————————————————————————————
 	if h.hub != nil {
 		sessionId := extractSessionId(c)
 		recipientUUID, _ := uuid.Parse(msgInfo.RecipientID)
 
 		log.Printf("[WS Broadcast] UploadFileForMessage: msgID=%s chatID=%s sender=%s recipient=%s sessionId=%s",
-			msgInfo.MessageID, msgInfo.ChatID, userID, msgInfo.RecipientID, sessionId)
+			msgInfo.MessageID, msgInfo.ChatID, userID.StringUserId, msgInfo.RecipientID, sessionId)
 
 		// For recipient: is_from_me = false
 		recipientPayload := *msgInfo
@@ -325,8 +329,8 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		})
 
 		// For sender's OTHER devices: is_from_me = true
-		log.Printf("[WS Broadcast] UploadFileForMessage: pushing new_message to SENDER=%s other devices", userID)
-		go h.hub.BroadcastToUserExcept(userID, sessionId, websocket.WSEvent{
+		log.Printf("[WS Broadcast] UploadFileForMessage: pushing new_message to SENDER=%s other devices", userID.StringUserId)
+		go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, websocket.WSEvent{
 			Type:    WSEventNewMessage,
 			Payload: msgInfo,
 		})
@@ -371,15 +375,15 @@ func (h *chatHandler) MarkChatRead(c *echo.Context) error {
 		return svcErr
 	}
 
-	// â”€â”€ WS Broadcast: read_receipt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+	// ——— WS Broadcast: read_receipt ———————————————————————————————————————————————————————————————
 	if h.hub != nil {
-		log.Printf("[WS Broadcast] MarkChatRead: chatID=%s reader=%s â†’ looking up other participant",
-			payload.ChatID, userID)
+		log.Printf("[WS Broadcast] MarkChatRead: chatID=%s reader=%s → looking up other participant",
+			payload.ChatID, userID.StringUserId)
 		chatUUID, _ := uuid.Parse(payload.ChatID)
 		chat, chatErr := h.Service.PostgresQueries.GetChatByID(c.Request().Context(), chatUUID)
 		if chatErr == nil {
 			var otherUserID uuid.UUID
-			if chat.Participant1ID == userID {
+			if chat.Participant1ID == userID.UuidUserId {
 				otherUserID = chat.Participant2ID
 			} else {
 				otherUserID = chat.Participant1ID
@@ -392,7 +396,7 @@ func (h *chatHandler) MarkChatRead(c *echo.Context) error {
 				Type: WSEventReadReceipt,
 				Payload: ReadReceiptEventPayload{
 					ChatID:   payload.ChatID,
-					ReaderID: userID.String(),
+					ReaderID: userID.StringUserId,
 					ReadAt:   readAt,
 				},
 			})
@@ -421,15 +425,15 @@ func (h *chatHandler) UnsendMessage(c *echo.Context) error {
 		return svcErr
 	}
 
-	// â”€â”€ WS Broadcast: unsend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+	// ——— WS Broadcast: unsend —————————————————————————————————————————————————————————————————————
 	if h.hub != nil {
-		log.Printf("[WS Broadcast] Unsend: chatID=%s sender=%s messageIDs=%v â†’ looking up recipient",
-			payload.ChatID, userID, payload.MessageIDs)
+		log.Printf("[WS Broadcast] Unsend: chatID=%s sender=%s messageIDs=%v → looking up recipient",
+			payload.ChatID, userID.StringUserId, payload.MessageIDs)
 		chatUUID, _ := uuid.Parse(payload.ChatID)
 		chat, chatErr := h.Service.PostgresQueries.GetChatByID(c.Request().Context(), chatUUID)
 		if chatErr == nil {
 			var recipientID uuid.UUID
-			if chat.Participant1ID == userID {
+			if chat.Participant1ID == userID.UuidUserId {
 				recipientID = chat.Participant2ID
 			} else {
 				recipientID = chat.Participant1ID
@@ -440,7 +444,7 @@ func (h *chatHandler) UnsendMessage(c *echo.Context) error {
 				Payload: UnsendEventPayload{
 					ChatID:     payload.ChatID,
 					MessageIDs: payload.MessageIDs,
-					SenderID:   userID.String(),
+					SenderID:   userID.StringUserId,
 				},
 			}
 
@@ -451,8 +455,8 @@ func (h *chatHandler) UnsendMessage(c *echo.Context) error {
 			// Notify sender's other devices (for sync)
 			sessionId := extractSessionId(c)
 			log.Printf("[WS Broadcast] Unsend: pushing unsend to SENDER=%s other devices (excluding session=%s)",
-				userID, sessionId)
-			go h.hub.BroadcastToUserExcept(userID, sessionId, unsendEvent)
+				userID.StringUserId, sessionId)
+			go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, unsendEvent)
 		} else {
 			log.Printf("[WS Broadcast] Unsend: GetChatByID FAILED for chatID=%s: %v", payload.ChatID, chatErr)
 		}
@@ -478,7 +482,7 @@ func (h *chatHandler) DeleteMessageForMe(c *echo.Context) error {
 		return svcErr
 	}
 
-	// â”€â”€ WS Broadcast: delete_for_me â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+	// ——— WS Broadcast: delete_for_me ——————————————————————————————————————————————————————————————
 	if h.hub != nil {
 		sessionId := extractSessionId(c)
 
@@ -492,9 +496,9 @@ func (h *chatHandler) DeleteMessageForMe(c *echo.Context) error {
 			}
 		}
 
-		log.Printf("[WS Broadcast] DeleteForMe: user=%s messageIDs=%v chatID=%s â†’ pushing to other devices (excluding session=%s)",
-			userID, payload.MessageIDs, chatID, sessionId)
-		go h.hub.BroadcastToUserExcept(userID, sessionId, websocket.WSEvent{
+		log.Printf("[WS Broadcast] DeleteForMe: user=%s messageIDs=%v chatID=%s → pushing to other devices (excluding session=%s)",
+			userID.StringUserId, payload.MessageIDs, chatID, sessionId)
+		go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, websocket.WSEvent{
 			Type: WSEventDeleteForMe,
 			Payload: DeleteForMeEventPayload{
 				MessageIDs: payload.MessageIDs,
