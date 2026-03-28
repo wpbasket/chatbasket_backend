@@ -111,9 +111,6 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			continue // Skip if profile not found
 		}
 
-		createdAt := c.ContactCreatedAt
-
-		updatedAt := c.ContactUpdatedAt
 
 		_, isMutual := addedMeMap[c.ID.String()]
 
@@ -132,8 +129,8 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			Username:  profile.Username,
 			Bio:       profile.Bio,
 			Nickname:  nickname,
-			CreatedAt: createdAt,
-			UpdatedAt: updatedAt,
+			CreatedAt: kit.DerefTime(c.ContactCreatedAt),
+			UpdatedAt: kit.DerefTime(c.ContactUpdatedAt),
 			AvatarURL: profile.AvatarURL,
 			IsMutual:  isMutual,
 		})
@@ -147,9 +144,6 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			continue // Skip if profile not found
 		}
 
-		createdAt := p.ContactCreatedAt
-
-		updatedAt := p.ContactUpdatedAt
 
 		_, isMutual := myContactsMap[p.ID.String()]
 
@@ -168,8 +162,8 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			Username:  profile.Username,
 			Bio:       profile.Bio,
 			Nickname:  myNickname,
-			CreatedAt: createdAt,
-			UpdatedAt: updatedAt,
+			CreatedAt: kit.DerefTime(p.ContactCreatedAt),
+			UpdatedAt: kit.DerefTime(p.ContactUpdatedAt),
 			AvatarURL: profile.AvatarURL,
 			IsMutual:  isMutual,
 		})
@@ -625,17 +619,14 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 			continue
 		}
 
-		requestedAt := r.RequestCreatedAt
-		updatedAt := r.RequestUpdatedAt
-
 		pending = append(pending, PendingContactRequest{
 			ID:          r.ID.String(),
 			Name:        profile.Name,
 			Username:    profile.Username,
 			Bio:         profile.Bio,
 			Nickname:    nil, // Privacy: Receiver should not see the nickname given by requester
-			RequestedAt: requestedAt,
-			UpdatedAt:   updatedAt,
+			RequestedAt: kit.DerefTime(r.RequestCreatedAt),
+			UpdatedAt:   kit.DerefTime(r.RequestUpdatedAt),
 			Status:      r.Status,
 			AvatarURL:   profile.AvatarURL,
 		})
@@ -648,9 +639,6 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 		if !ok {
 			continue
 		}
-
-		requestedAt := r.RequestCreatedAt
-		updatedAt := r.RequestUpdatedAt
 
 		var nickname *string
 		if r.Nickname != nil {
@@ -667,8 +655,8 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 			Username:    profile.Username,
 			Bio:         profile.Bio,
 			Nickname:    nickname,
-			RequestedAt: requestedAt,
-			UpdatedAt:   updatedAt,
+			RequestedAt: kit.DerefTime(r.RequestCreatedAt),
+			UpdatedAt:   kit.DerefTime(r.RequestUpdatedAt),
 			Status:      r.Status,
 			AvatarURL:   profile.AvatarURL,
 		})

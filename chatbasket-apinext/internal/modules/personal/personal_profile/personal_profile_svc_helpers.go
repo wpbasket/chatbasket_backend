@@ -117,12 +117,17 @@ func ShouldExposeAvatar(globalRestrictProfile, exceptionGlobalProfile, globalRes
 }
 
 // GetRefreshedAvatarURL refreshes avatar tokens if needed and returns the avatar URL
-func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid.UUID, fileID, tokenID, tokenSecret *string, tokenExpiry time.Time) (*string, error) {
+func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid.UUID, fileID, tokenID, tokenSecret *string, tokenExpiry *time.Time) (*string, error) {
+	effectiveExpiry := time.Time{}
+	if tokenExpiry != nil {
+		effectiveExpiry = *tokenExpiry
+	}
+
 	refreshed, needsUpdate, err := kit.EnsureFreshAvatarTokens(
 		fileID,
 		tokenID,
 		tokenSecret,
-		tokenExpiry,
+		effectiveExpiry,
 		ps.AppwriteStorage.Tokens,
 		ps.PersonalProfilePicBucketID,
 	)
@@ -135,7 +140,7 @@ func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid
 			UserID:      userID,
 			TokenID:     &refreshed.TokenID,
 			TokenSecret: &refreshed.TokenSecret,
-			TokenExpiry: refreshed.TokenExpiry,
+			TokenExpiry: &refreshed.TokenExpiry,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to update refreshed tokens in DB: "+kit.GetPostgresError(err).Message)

@@ -54,13 +54,13 @@ RETURNING
 `
 
 type CreateAvatarParams struct {
-	ID          uuid.UUID `json:"id"`
-	UserID      uuid.UUID `json:"user_id"`
-	FileID      string    `json:"file_id"`
-	AvatarType  string    `json:"avatar_type"`
-	TokenID     *string   `json:"token_id"`
-	TokenSecret *string   `json:"token_secret"`
-	TokenExpiry time.Time `json:"token_expiry"`
+	ID          uuid.UUID  `json:"id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	FileID      string     `json:"file_id"`
+	AvatarType  string     `json:"avatar_type"`
+	TokenID     *string    `json:"token_id"`
+	TokenSecret *string    `json:"token_secret"`
+	TokenExpiry *time.Time `json:"token_expiry"`
 }
 
 // Inserts a new avatar and returns all columns
@@ -166,20 +166,20 @@ SELECT
     COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
     COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
     COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-FROM users u
-LEFT JOIN avatars a
-    ON u.id = a.user_id
-   AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions ugr
-    ON u.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions ugre
-    ON u.id = ugre.user_id
-   AND ugre.exempted_user_id = $1
-LEFT JOIN user_restrictions ur
-    ON u.id = ur.user_id
-   AND ur.restricted_user_id = $1
-WHERE u.id = ANY($2::uuid[])
-  AND u.is_admin_blocked IS FALSE
+FROM
+    users u
+    LEFT JOIN avatars a ON u.id = a.user_id
+    AND a.avatar_type = 'profile'
+    LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
+    LEFT JOIN user_global_restriction_exemptions ugre ON u.id = ugre.user_id
+    AND ugre.exempted_user_id = $1
+    LEFT JOIN user_restrictions ur ON u.id = ur.user_id
+    AND ur.restricted_user_id = $1
+WHERE
+    u.id = ANY (
+        $2::uuid []
+    )
+    AND u.is_admin_blocked IS FALSE
 ORDER BY u.id
 `
 
@@ -189,20 +189,20 @@ type GetProfilesForContactViewerParams struct {
 }
 
 type GetProfilesForContactViewerRow struct {
-	ID                     uuid.UUID `json:"id"`
-	Name                   string    `json:"name"`
-	Username               string    `json:"username"`
-	Bio                    *string   `json:"bio"`
-	FileID                 *string   `json:"file_id"`
-	TokenID                *string   `json:"token_id"`
-	TokenSecret            *string   `json:"token_secret"`
-	TokenExpiry            time.Time `json:"token_expiry"`
-	GlobalRestrictProfile  bool      `json:"global_restrict_profile"`
-	GlobalRestrictAvatar   bool      `json:"global_restrict_avatar"`
-	ExceptionGlobalProfile bool      `json:"exception_global_profile"`
-	ExceptionGlobalAvatar  bool      `json:"exception_global_avatar"`
-	UserRestrictProfile    bool      `json:"user_restrict_profile"`
-	UserRestrictAvatar     bool      `json:"user_restrict_avatar"`
+	ID                     uuid.UUID  `json:"id"`
+	Name                   string     `json:"name"`
+	Username               string     `json:"username"`
+	Bio                    *string    `json:"bio"`
+	FileID                 *string    `json:"file_id"`
+	TokenID                *string    `json:"token_id"`
+	TokenSecret            *string    `json:"token_secret"`
+	TokenExpiry            *time.Time `json:"token_expiry"`
+	GlobalRestrictProfile  bool       `json:"global_restrict_profile"`
+	GlobalRestrictAvatar   bool       `json:"global_restrict_avatar"`
+	ExceptionGlobalProfile bool       `json:"exception_global_profile"`
+	ExceptionGlobalAvatar  bool       `json:"exception_global_avatar"`
+	UserRestrictProfile    bool       `json:"user_restrict_profile"`
+	UserRestrictAvatar     bool       `json:"user_restrict_avatar"`
 }
 
 func (q *Queries) GetProfilesForContactViewer(ctx context.Context, arg GetProfilesForContactViewerParams) ([]GetProfilesForContactViewerRow, error) {
@@ -243,8 +243,9 @@ func (q *Queries) GetProfilesForContactViewer(ctx context.Context, arg GetProfil
 const getUserByHashedUsernameForContact = `-- name: GetUserByHashedUsernameForContact :one
 SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 FROM users
-WHERE hmac_sha256_hex_username = $1
-  AND is_admin_blocked IS NOT TRUE
+WHERE
+    hmac_sha256_hex_username = $1
+    AND is_admin_blocked IS NOT TRUE
 `
 
 func (q *Queries) GetUserByHashedUsernameForContact(ctx context.Context, hmacSha256HexUsername string) (User, error) {
@@ -298,20 +299,20 @@ WHERE
 `
 
 type GetUserProfileRow struct {
-	ID                                uuid.UUID `json:"id"`
-	Name                              string    `json:"name"`
-	Bio                               *string   `json:"bio"`
-	ProfileType                       string    `json:"profile_type"`
-	IsAdminBlocked                    bool      `json:"is_admin_blocked"`
-	AdminBlockReason                  *string   `json:"admin_block_reason"`
-	HmacSha256HexUsername             string    `json:"hmac_sha256_hex_username"`
-	B64CipherChacha20poly1305Username string    `json:"b64_cipher_chacha20poly1305_username"`
-	CreatedAt                         time.Time `json:"created_at"`
-	UpdatedAt                         time.Time `json:"updated_at"`
-	FileID                            *string   `json:"file_id"`
-	TokenID                           *string   `json:"token_id"`
-	TokenSecret                       *string   `json:"token_secret"`
-	TokenExpiry                       time.Time `json:"token_expiry"`
+	ID                                uuid.UUID  `json:"id"`
+	Name                              string     `json:"name"`
+	Bio                               *string    `json:"bio"`
+	ProfileType                       string     `json:"profile_type"`
+	IsAdminBlocked                    bool       `json:"is_admin_blocked"`
+	AdminBlockReason                  *string    `json:"admin_block_reason"`
+	HmacSha256HexUsername             string     `json:"hmac_sha256_hex_username"`
+	B64CipherChacha20poly1305Username string     `json:"b64_cipher_chacha20poly1305_username"`
+	CreatedAt                         *time.Time `json:"created_at"`
+	UpdatedAt                         *time.Time `json:"updated_at"`
+	FileID                            *string    `json:"file_id"`
+	TokenID                           *string    `json:"token_id"`
+	TokenSecret                       *string    `json:"token_secret"`
+	TokenExpiry                       *time.Time `json:"token_expiry"`
 }
 
 // Returns full user record along with its profile avatar tokens and file_id
@@ -395,8 +396,8 @@ LIMIT $2
 `
 
 type ListUsersAfterParams struct {
-	CreatedAt time.Time `json:"created_at"`
-	Limit     int32     `json:"limit"`
+	CreatedAt *time.Time `json:"created_at"`
+	Limit     int32      `json:"limit"`
 }
 
 // Returns users created before a certain timestamp (keyset pagination)
@@ -445,10 +446,10 @@ RETURNING
 `
 
 type UpdateAvatarTokensParams struct {
-	UserID      uuid.UUID `json:"user_id"`
-	TokenID     *string   `json:"token_id"`
-	TokenSecret *string   `json:"token_secret"`
-	TokenExpiry time.Time `json:"token_expiry"`
+	UserID      uuid.UUID  `json:"user_id"`
+	TokenID     *string    `json:"token_id"`
+	TokenSecret *string    `json:"token_secret"`
+	TokenExpiry *time.Time `json:"token_expiry"`
 }
 
 // Updates token_id, token_secret, and token_expiry for the main profile avatar (where user_id == file_id)

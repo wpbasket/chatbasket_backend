@@ -1,6 +1,7 @@
 package core_auth
 
 import (
+	"chatbasket-apinext/internal/platform/kit"
 	"net/http"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 func (h *authHandler) Logout(c *echo.Context) error {
 	var payload LogoutPayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", "Invalid logout payload")
 	}
 
 	// Extract user ID from context
@@ -72,13 +73,13 @@ func (h *authHandler) GetUser(c *echo.Context) error {
 	// Extract user ID from context
 	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
 	if !okUUID {
-		return ErrInvalidUserContext
+		return kit.NewError(401, "unauthorized", "Invalid user context")
 	}
 
 	// Extract session ID from context
 	sessionId, ok := c.Get("sessionId").(string)
 	if !ok || sessionId == "" {
-		return ErrInvalidSessionContext
+		return kit.NewError(401, "unauthorized", "No session context")
 	}
 
 	res, err := h.Service.GetUserWithSession(c.Request().Context(), uuidUserId, sessionId)
@@ -92,7 +93,7 @@ func (h *authHandler) GetUser(c *echo.Context) error {
 func (h *authHandler) RequestUpdateOTP(c *echo.Context) error {
 	var payload RequestUpdateOTPPayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", "Invalid request payload")
 	}
 
 	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
@@ -113,7 +114,7 @@ func (h *authHandler) RequestUpdateOTP(c *echo.Context) error {
 func (h *authHandler) ConfirmPasswordUpdate(c *echo.Context) error {
 	var payload ConfirmPasswordUpdatePayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", "Invalid request payload")
 	}
 
 	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
@@ -134,7 +135,7 @@ func (h *authHandler) ConfirmPasswordUpdate(c *echo.Context) error {
 func (h *authHandler) RequestEmailUpdate(c *echo.Context) error {
 	var payload RequestEmailUpdatePayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", "Invalid request payload")
 	}
 
 	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION
@@ -155,7 +156,7 @@ func (h *authHandler) RequestEmailUpdate(c *echo.Context) error {
 func (h *authHandler) ConfirmEmailUpdate(c *echo.Context) error {
 	var payload ConfirmEmailUpdatePayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", "Invalid request payload")
 	}
 
 	// Get userId from context (set by auth middleware) - SAFE TYPE ASSERTION

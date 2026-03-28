@@ -1,6 +1,7 @@
 package personal_setting
 
 import (
+	"chatbasket-apinext/internal/platform/kit"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -43,7 +44,7 @@ func (h *settingHandler) updateSessionCentral(c *echo.Context) error {
 func (h *settingHandler) updateSessionNotificationToken(c *echo.Context) error {
 	var payload registerOrUpdateFcmOrApnTokenPayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(http.StatusBadRequest, "bad_request", "Invalid payload: "+err.Error())
 	}
 
 	// 1. Get UserID and SessionID from Context (set by AuthSessionMiddleware)

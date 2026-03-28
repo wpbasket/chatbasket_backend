@@ -133,24 +133,25 @@ SELECT
     COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
     COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
     COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
-FROM users u
-LEFT JOIN avatars a
-    ON u.id = a.user_id
-   AND a.avatar_type = 'profile'
-LEFT JOIN user_global_restrictions ugr
-    ON u.id = ugr.user_id
-LEFT JOIN user_global_restriction_exemptions ugre
-    ON u.id = ugre.user_id
-   AND ugre.exempted_user_id = sqlc.arg(viewer_user_id)
-LEFT JOIN user_restrictions ur
-    ON u.id = ur.user_id
-   AND ur.restricted_user_id = sqlc.arg(viewer_user_id)
-WHERE u.id = ANY(sqlc.arg(target_user_ids)::uuid[])
-  AND u.is_admin_blocked IS FALSE
+FROM
+    users u
+    LEFT JOIN avatars a ON u.id = a.user_id
+    AND a.avatar_type = 'profile'
+    LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
+    LEFT JOIN user_global_restriction_exemptions ugre ON u.id = ugre.user_id
+    AND ugre.exempted_user_id = sqlc.arg (viewer_user_id)
+    LEFT JOIN user_restrictions ur ON u.id = ur.user_id
+    AND ur.restricted_user_id = sqlc.arg (viewer_user_id)
+WHERE
+    u.id = ANY (
+        sqlc.arg (target_user_ids)::uuid []
+    )
+    AND u.is_admin_blocked IS FALSE
 ORDER BY u.id;
 
 -- name: GetUserByHashedUsernameForContact :one
 SELECT *
 FROM users
-WHERE hmac_sha256_hex_username = $1
-  AND is_admin_blocked IS NOT TRUE;
+WHERE
+    hmac_sha256_hex_username = $1
+    AND is_admin_blocked IS NOT TRUE;

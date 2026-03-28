@@ -49,6 +49,16 @@ func (s *AuthService) GetUserPrimarySession(ctx context.Context, userID uuid.UUI
 	return &session, nil
 }
 
+// GetUserPrimarySessionID returns the session ID of the user's primary device.
+// Public wrapper around GetUserPrimarySession that avoids exposing core_auth_store types.
+func (s *AuthService) GetUserPrimarySessionID(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	session, err := s.GetUserPrimarySession(ctx, userID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return session.ID, nil
+}
+
 // SetCentralDevice promotes a specific session (by token) to be the Central Device.
 // It first demotes all other sessions for this user to ensure uniqueness.
 func (s *AuthService) SetCentralDevice(ctx context.Context, userID uuid.UUID, token string) (*kit.StatusOkay, error) {
@@ -126,6 +136,6 @@ func (s *AuthService) RegisterOrUpdateFcmOrApnToken(ctx context.Context, payload
 
 	return &kit.StatusOkay{
 		Status:  true,
-		Message: "Token registered successfully",
+		Message: "Notification token updated",
 	}, nil
 }

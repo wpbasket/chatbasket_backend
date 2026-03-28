@@ -6,7 +6,7 @@ import (
 
 // Module-specific error definitions
 var (
-	ErrInvalidUserContext    = kit.NewError(500, "internal_server_error", "Invalid user context")
-	ErrInvalidSessionContext = kit.NewError(500, "internal_server_error", "Invalid session context")
+	ErrInvalidUserContext    = kit.NewError(401, "unauthorized", "Unauthorized")
+	ErrInvalidSessionContext = kit.NewError(401, "unauthorized", "No session context")
 	ErrInvalidPayload        = kit.NewError(400, "bad_request", "Invalid request payload")
 )

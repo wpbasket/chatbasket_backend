@@ -1,9 +1,11 @@
 package core_auth
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
+	"chatbasket-apinext/internal/platform/kit"
 	"github.com/labstack/echo/v5"
 	"strings"
 )
@@ -23,7 +25,7 @@ func (h *authHandler) Signup(c *echo.Context) error {
 
 	// Parse and bind request body
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "missing_value", fmt.Sprintf("Invalid signup payload: %v", err))
 	}
 
 	// Validate required fields
@@ -44,7 +46,7 @@ func (h *authHandler) Signup(c *echo.Context) error {
 func (h *authHandler) AccountVerification(c *echo.Context) error {
 	var payload AuthVerificationPayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", fmt.Sprintf("Invalid OTP payload: %v", err))
 	}
 
 	if payload.Email == "" || payload.Secret == "" || payload.Platform == "" {
@@ -120,7 +122,7 @@ func (h *authHandler) Login(c *echo.Context) error {
 
 	// Parse and bind request body
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", fmt.Sprintf("Invalid login payload: %v", err))
 	}
 
 	// Validate required fields
@@ -141,7 +143,7 @@ func (h *authHandler) Login(c *echo.Context) error {
 func (h *authHandler) LoginVerification(c *echo.Context) error {
 	var payload AuthVerificationPayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", fmt.Sprintf("Invalid OTP payload: %v", err))
 	}
 
 	if payload.Email == "" || payload.Secret == "" || payload.Platform == "" {
@@ -217,7 +219,7 @@ func (h *authHandler) ResendOTP(c *echo.Context) error {
 
 	// Parse and bind request body
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", fmt.Sprintf("Invalid resend OTP payload: %v", err))
 	}
 
 	// Validate required fields

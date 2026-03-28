@@ -31,7 +31,10 @@ func VerifyOTP(plainOTP, hashedOTP string) (bool, error) {
 }
 
 // IsExpiredOTP checks if the OTP is expired based on createdAt and duration (in minutes)
-func IsExpiredOTP(createdAt time.Time, validMinutes int) bool {
+func IsExpiredOTP(createdAt *time.Time, validMinutes int) bool {
+	if createdAt == nil {
+		return true
+	}
 	expiry := createdAt.Add(time.Duration(validMinutes) * time.Minute)
 	return time.Now().After(expiry)
 }

@@ -16,10 +16,10 @@ func Register(personalGroup *echo.Group, profileService *profileService, authPro
 
 	// Profile Routes
 	profile := personalGroup.Group("/profile")
-	profile.POST("/create", handler.CreateUserProfile)
-	profile.GET("", handler.GetProfile)
-	profile.POST("/update", handler.UpdateProfile)
-	profile.POST("/picture/upload", handler.UploadProfilePicture)
-	profile.POST("/picture/remove", handler.RemoveProfilePicture)
+	profile.GET("/get-profile", handler.GetProfile)
+	profile.POST("/create-profile", handler.CreateUserProfile)
+	profile.POST("/upload-avatar", handler.UploadProfilePicture)
+	profile.DELETE("/remove-avatar", handler.RemoveProfilePicture)
+	profile.POST("/update-profile", handler.UpdateProfile)
 
 }

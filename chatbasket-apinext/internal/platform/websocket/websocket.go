@@ -35,6 +35,7 @@ type WSResponseEvent struct {
 // WSError represents an error in a WS response.
 type WSError struct {
 	Code    int    `json:"code"`
+	Type    string `json:"type,omitempty"`
 	Message string `json:"message"`
 }
 

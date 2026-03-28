@@ -197,7 +197,7 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 			AvatarType:  "profile",
 			TokenID:     new(result.TokenIDs[0]),
 			TokenSecret: new(result.TokenSecrets[0]),
-			TokenExpiry: expireTime,
+			TokenExpiry: &expireTime,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create avatar: "+kit.GetPostgresError(err).Message)
@@ -209,7 +209,7 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 			UserID:      userId.UuidUserId,
 			TokenID:     new(result.TokenIDs[0]),
 			TokenSecret: new(result.TokenSecrets[0]),
-			TokenExpiry: expireTime,
+			TokenExpiry: &expireTime,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update avatar tokens: "+kit.GetPostgresError(err).Message)
@@ -267,7 +267,7 @@ func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId k
 		userId.StringUserId,
 	)
 	if err != nil {
-		return nil, kit.NewError(http.StatusNotFound, "not_found", "Failed to delete profile picture from storage: "+err.Error())
+		return nil, kit.NewError(http.StatusInternalServerError, "not_found", "Failed to delete profile picture from storage: "+err.Error())
 	}
 
 	if resUser {

@@ -2,6 +2,7 @@ package personal_profile
 
 import (
 	"net/http"
+	"strings"
 
 	"chatbasket-apinext/internal/platform/kit"
 
@@ -20,7 +21,7 @@ func newProfileHandler(service *profileService) *profileHandler {
 func (h *profileHandler) CreateUserProfile(c *echo.Context) error {
 	var payload createUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", "Invalid create user profile payload")
 	}
 	stringUserId, ok := c.Get("userId").(string)
 	if !ok || stringUserId == "" {
@@ -66,7 +67,7 @@ func (h *profileHandler) GetProfile(c *echo.Context) error {
 func (h *profileHandler) UploadProfilePicture(c *echo.Context) error {
 	err := c.Request().ParseMultipartForm(5 << 20) // 5MB
 	if err != nil {
-		return ErrFailedParseForm
+		return kit.NewError(400, "bad_request", "Failed to parse multipart form: "+err.Error())
 	}
 
 	if c.Request().MultipartForm == nil {
@@ -75,7 +76,19 @@ func (h *profileHandler) UploadProfilePicture(c *echo.Context) error {
 
 	fh, err := c.FormFile("avatar")
 	if err != nil {
-		return ErrAvatarNotFound
+		availableFields := []string{}
+		if c.Request().MultipartForm != nil && c.Request().MultipartForm.File != nil {
+			for field := range c.Request().MultipartForm.File {
+				availableFields = append(availableFields, field)
+			}
+		}
+
+		message := "Avatar file not found in request: " + err.Error()
+		if len(availableFields) > 0 {
+			message += ". Available file fields: " + strings.Join(availableFields, ", ")
+		}
+
+		return kit.NewError(400, "bad_request", message)
 	}
 
 	if fh.Size > 5<<20 {
@@ -114,7 +127,7 @@ func (h *profileHandler) RemoveProfilePicture(c *echo.Context) error {
 func (h *profileHandler) UpdateProfile(c *echo.Context) error {
 	var payload updateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
-		return ErrInvalidPayload
+		return kit.NewError(400, "bad_request", "Invalid update profile payload: "+err.Error())
 	}
 	userId, ok := c.Get("userId").(string)
 	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)

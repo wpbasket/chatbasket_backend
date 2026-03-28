@@ -14,6 +14,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// DerefTime safely dereferences a *time.Time to time.Time, returning Time{} if nil.
+func DerefTime(t *time.Time) time.Time {
+	if t != nil {
+		return *t
+	}
+	return time.Time{}
+}
+
 // ported from utils/baseUtils.go
 func LoadKeyFromEnvInByte(envVar string) ([]byte, error) {
 	val := os.Getenv(envVar)

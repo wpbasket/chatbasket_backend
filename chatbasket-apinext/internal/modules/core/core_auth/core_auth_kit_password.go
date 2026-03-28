@@ -9,7 +9,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 
 	"github.com/alexedwards/argon2id"
 )
@@ -25,7 +24,7 @@ import (
 //    in the password hash itself, making large-scale database cracking significantly harder.
 func HashPassword(password string, pepper []byte, userID string) (string, error) {
 	if !ValidateSixDigitCode(password) {
-		return "", errors.New("password must be a 6-digit number")
+		return "", ErrValidationError
 	}
 
 	// Generate HMAC as the peppered input with userID binding
@@ -54,7 +53,7 @@ func HashPassword(password string, pepper []byte, userID string) (string, error)
 // VerifyPassword compares a plain password (plus pepper and userID) with the hashed password.
 func VerifyPassword(plainPassword, hashedPassword string, pepper []byte, userID string) (bool, error) {
 	if !ValidateSixDigitCode(plainPassword) {
-		return false, errors.New("password must be a 6-digit number")
+		return false, ErrValidationError
 	}
 
 	h := hmac.New(sha256.New, pepper)

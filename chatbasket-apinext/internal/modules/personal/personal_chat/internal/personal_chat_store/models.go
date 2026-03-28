@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package personal_contact_store
+package personal_chat_store
 
 import (
 	"time"

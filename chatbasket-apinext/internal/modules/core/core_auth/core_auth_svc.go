@@ -63,7 +63,7 @@ func (s *AuthService) Signup(ctx context.Context, payload *SignupPayload) (*kit.
 
 	hashedPassword, err := HashPassword(payload.Password, s.AuthSecret, userID.String())
 	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "hashing_error", "Failed to hash password: "+err.Error())
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to hash password: "+err.Error())
 	}
 
 	// 3. Create User (Unverified)
@@ -162,10 +162,10 @@ func (s *AuthService) Login(ctx context.Context, payload *LoginPayload) (*kit.St
 
 	// 4. Send Login OTP via Utils
 	if err := s.SendVerificationOTPFlow(ctx, user.ID, user.Email, "login"); err != nil {
-		return nil, err
+		log.Printf("Login OTP Send Warning: %v", err.Error())
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
+	return &kit.StatusOkay{Status: true, Message: "Login successful, OTP sent to email"}, nil
 }
 
 // LoginVerification verifies Login OTP and creates session.

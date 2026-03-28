@@ -2,6 +2,7 @@ package personal_profile
 
 import (
 	"chatbasket-apinext/internal/modules/personal/personal_profile/internal/personal_profile_store"
+	"chatbasket-apinext/internal/platform/kit"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,6 +52,8 @@ type updateUserProfilePayload struct {
 	ProfileType *string `json:"profile_type,omitempty" validate:"omitempty,oneof=public private personal"`
 }
 
+
+
 func toPrivateUserWithAvatar(user *personal_profile_store.GetUserProfileRow, username string, email string, avatarUrl *string) *privateUser {
 	return &privateUser{
 		Id:          user.ID.String(),
@@ -60,8 +63,8 @@ func toPrivateUserWithAvatar(user *personal_profile_store.GetUserProfileRow, use
 		AvatarUrl:   avatarUrl,
 		Bio:         user.Bio,
 		ProfileType: user.ProfileType,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
+		CreatedAt:   kit.DerefTime(user.CreatedAt),
+		UpdatedAt:   kit.DerefTime(user.UpdatedAt),
 	}
 }
 
@@ -74,7 +77,7 @@ func toPrivateUser(user *personal_profile_store.User, username string, email str
 		Bio:         user.Bio,
 		AvatarUrl:   nil,
 		ProfileType: user.ProfileType,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
+		CreatedAt:   kit.DerefTime(user.CreatedAt),
+		UpdatedAt:   kit.DerefTime(user.UpdatedAt),
 	}
 }

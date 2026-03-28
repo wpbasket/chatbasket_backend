@@ -15,7 +15,7 @@ import (
 // failures into high-level business failures that know their transport mapping.
 type ProcessedError interface {
 	error
-	Status() int // HTTP Status Code
+	Status() int  // HTTP Status Code
 	Kind() string // e.g., "NOT_FOUND", "FORBIDDEN" (matches ApiError.Type)
 }
 
@@ -46,7 +46,7 @@ type processedError struct {
 
 func (e *processedError) Error() string { return e.message }
 func (e *processedError) Status() int   { return e.code }
-func (e *processedError) Kind() string   { return e.errType }
+func (e *processedError) Kind() string  { return e.errType }
 
 // NewError creates a new "Smart Processed Error" that implements kit.ProcessedError.
 func NewError(code int, errType, message string) error {
@@ -63,6 +63,19 @@ func NewError(code int, errType, message string) error {
 // registered with Echo via e.HTTPErrorHandler.
 func GlobalErrorHandler(c *echo.Context, err error) {
 	if err == nil {
+		return
+	}
+
+	// 0. Ensure we don't write the response multiple times in the middleware chain.
+	if resp, uErr := echo.UnwrapResponse(c.Response()); uErr == nil {
+		if resp.Committed {
+			return // response has been already sent to the client by handler or some middleware
+		}
+	}
+
+	// Handle HEAD requests specifically to avoid body transmission
+	if c.Request().Method == http.MethodHead {
+		_ = c.NoContent(GetStatusCodeFromError(err))
 		return
 	}
 

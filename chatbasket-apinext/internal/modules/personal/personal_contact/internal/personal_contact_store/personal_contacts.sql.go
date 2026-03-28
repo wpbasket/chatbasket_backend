@@ -186,12 +186,12 @@ ORDER BY cr.created_at DESC
 `
 
 type DetectOrphanedContactRequestsFromBlocksRow struct {
-	RequesterUserID  uuid.UUID `json:"requester_user_id"`
-	ReceiverUserID   uuid.UUID `json:"receiver_user_id"`
-	CrStatus         string    `json:"cr_status"`
-	RequestCreatedAt time.Time `json:"request_created_at"`
-	BlockCreatedAt   time.Time `json:"block_created_at"`
-	BlockDirection   string    `json:"block_direction"`
+	RequesterUserID  uuid.UUID  `json:"requester_user_id"`
+	ReceiverUserID   uuid.UUID  `json:"receiver_user_id"`
+	CrStatus         string     `json:"cr_status"`
+	RequestCreatedAt *time.Time `json:"request_created_at"`
+	BlockCreatedAt   *time.Time `json:"block_created_at"`
+	BlockDirection   string     `json:"block_direction"`
 }
 
 // Finds contact requests that exist despite blocks (trigger failure detection)
@@ -242,11 +242,11 @@ ORDER BY uc.created_at DESC
 `
 
 type DetectOrphanedContactsFromBlocksRow struct {
-	OwnerUserID      uuid.UUID `json:"owner_user_id"`
-	ContactUserID    uuid.UUID `json:"contact_user_id"`
-	ContactCreatedAt time.Time `json:"contact_created_at"`
-	BlockCreatedAt   time.Time `json:"block_created_at"`
-	BlockDirection   string    `json:"block_direction"`
+	OwnerUserID      uuid.UUID  `json:"owner_user_id"`
+	ContactUserID    uuid.UUID  `json:"contact_user_id"`
+	ContactCreatedAt *time.Time `json:"contact_created_at"`
+	BlockCreatedAt   *time.Time `json:"block_created_at"`
+	BlockDirection   string     `json:"block_direction"`
 }
 
 // Finds contacts that exist despite blocks (trigger failure detection)
@@ -314,11 +314,11 @@ ORDER BY cr.created_at DESC
 `
 
 type GetPendingContactRequestsLiteRow struct {
-	ID               uuid.UUID `json:"id"`
-	Nickname         *string   `json:"nickname"`
-	RequestCreatedAt time.Time `json:"request_created_at"`
-	RequestUpdatedAt time.Time `json:"request_updated_at"`
-	Status           string    `json:"status"`
+	ID               uuid.UUID  `json:"id"`
+	Nickname         *string    `json:"nickname"`
+	RequestCreatedAt *time.Time `json:"request_created_at"`
+	RequestUpdatedAt *time.Time `json:"request_updated_at"`
+	Status           string     `json:"status"`
 }
 
 func (q *Queries) GetPendingContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetPendingContactRequestsLiteRow, error) {
@@ -367,11 +367,11 @@ ORDER BY cr.created_at DESC
 `
 
 type GetSentContactRequestsLiteRow struct {
-	ID               uuid.UUID `json:"id"`
-	Nickname         *string   `json:"nickname"`
-	RequestCreatedAt time.Time `json:"request_created_at"`
-	RequestUpdatedAt time.Time `json:"request_updated_at"`
-	Status           string    `json:"status"`
+	ID               uuid.UUID  `json:"id"`
+	Nickname         *string    `json:"nickname"`
+	RequestCreatedAt *time.Time `json:"request_created_at"`
+	RequestUpdatedAt *time.Time `json:"request_updated_at"`
+	Status           string     `json:"status"`
 }
 
 func (q *Queries) GetSentContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetSentContactRequestsLiteRow, error) {
@@ -418,10 +418,10 @@ ORDER BY uc.created_at DESC
 `
 
 type GetUserContactsLiteRow struct {
-	ID               uuid.UUID `json:"id"`
-	Nickname         *string   `json:"nickname"`
-	ContactCreatedAt time.Time `json:"contact_created_at"`
-	ContactUpdatedAt time.Time `json:"contact_updated_at"`
+	ID               uuid.UUID  `json:"id"`
+	Nickname         *string    `json:"nickname"`
+	ContactCreatedAt *time.Time `json:"contact_created_at"`
+	ContactUpdatedAt *time.Time `json:"contact_updated_at"`
 }
 
 func (q *Queries) GetUserContactsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetUserContactsLiteRow, error) {
@@ -470,10 +470,10 @@ ORDER BY uc.created_at DESC
 `
 
 type GetUsersWhoAddedYouLiteRow struct {
-	ID               uuid.UUID `json:"id"`
-	Nickname         *string   `json:"nickname"`
-	ContactCreatedAt time.Time `json:"contact_created_at"`
-	ContactUpdatedAt time.Time `json:"contact_updated_at"`
+	ID               uuid.UUID  `json:"id"`
+	Nickname         *string    `json:"nickname"`
+	ContactCreatedAt *time.Time `json:"contact_created_at"`
+	ContactUpdatedAt *time.Time `json:"contact_updated_at"`
 }
 
 func (q *Queries) GetUsersWhoAddedYouLite(ctx context.Context, ownerUserID uuid.UUID) ([]GetUsersWhoAddedYouLiteRow, error) {
