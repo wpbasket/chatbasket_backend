@@ -4,7 +4,6 @@ import (
 	"chatbasket-api/internal/platform/kit"
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
 
@@ -17,16 +16,12 @@ func newContactHandler(service *contactService) *contactHandler {
 }
 
 func (h *contactHandler) GetContacts(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
-	res, err := h.Service.GetContacts(c.Request().Context(), kit.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	res, err := h.Service.GetContacts(c.Request().Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -34,13 +29,9 @@ func (h *contactHandler) GetContacts(c *echo.Context) error {
 }
 
 func (h *contactHandler) CreateContact(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload CreateContactPayload
@@ -48,7 +39,7 @@ func (h *contactHandler) CreateContact(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	res, err := h.Service.CreateContact(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	res, err := h.Service.CreateContact(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}
@@ -56,13 +47,9 @@ func (h *contactHandler) CreateContact(c *echo.Context) error {
 }
 
 func (h *contactHandler) RemoveContactNickname(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload RemoveContactNicknamePayload
@@ -70,7 +57,7 @@ func (h *contactHandler) RemoveContactNickname(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	res, err := h.Service.RemoveContactNickname(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uid})
+	res, err := h.Service.RemoveContactNickname(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}
@@ -78,14 +65,9 @@ func (h *contactHandler) RemoveContactNickname(c *echo.Context) error {
 }
 
 func (h *contactHandler) CheckContactExistance(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-
-	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload CheckContactExistancePayload
@@ -100,7 +82,7 @@ func (h *contactHandler) CheckContactExistance(c *echo.Context) error {
 	resp, err := h.Service.CheckContactExistance(
 		c.Request().Context(),
 		&payload,
-		kit.UserId{StringUserId: userId, UuidUserId: uuidUserId},
+		userID,
 	)
 	if err != nil {
 		return err
@@ -110,13 +92,9 @@ func (h *contactHandler) CheckContactExistance(c *echo.Context) error {
 }
 
 func (h *contactHandler) AcceptContactRequest(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload AcceptContactRequestPayload
@@ -124,7 +102,7 @@ func (h *contactHandler) AcceptContactRequest(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	res, err := h.Service.AcceptContactRequest(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uid})
+	res, err := h.Service.AcceptContactRequest(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}
@@ -132,13 +110,9 @@ func (h *contactHandler) AcceptContactRequest(c *echo.Context) error {
 }
 
 func (h *contactHandler) RejectContactRequest(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload RejectContactRequestPayload
@@ -146,7 +120,7 @@ func (h *contactHandler) RejectContactRequest(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	res, err := h.Service.RejectContactRequest(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uid})
+	res, err := h.Service.RejectContactRequest(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}
@@ -154,13 +128,9 @@ func (h *contactHandler) RejectContactRequest(c *echo.Context) error {
 }
 
 func (h *contactHandler) DeleteContact(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload DeleteContactPayload
@@ -172,7 +142,7 @@ func (h *contactHandler) DeleteContact(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "contact_user_id is required")
 	}
 
-	res, err := h.Service.DeleteContact(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uid})
+	res, err := h.Service.DeleteContact(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}
@@ -180,13 +150,9 @@ func (h *contactHandler) DeleteContact(c *echo.Context) error {
 }
 
 func (h *contactHandler) UndoContactRequest(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload UndoContactRequestPayload
@@ -194,7 +160,7 @@ func (h *contactHandler) UndoContactRequest(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	res, err := h.Service.UndoContactRequest(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uid})
+	res, err := h.Service.UndoContactRequest(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}
@@ -202,16 +168,12 @@ func (h *contactHandler) UndoContactRequest(c *echo.Context) error {
 }
 
 func (h *contactHandler) GetContactRequests(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
-	resp, err := h.Service.GetContactRequests(c.Request().Context(), kit.UserId{StringUserId: userId, UuidUserId: uid})
+	resp, err := h.Service.GetContactRequests(c.Request().Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -219,13 +181,9 @@ func (h *contactHandler) GetContactRequests(c *echo.Context) error {
 }
 
 func (h *contactHandler) UpdateContactNickname(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload UpdateContactNicknamePayload
@@ -233,7 +191,7 @@ func (h *contactHandler) UpdateContactNickname(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	res, err := h.Service.UpdateContactNickname(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uid})
+	res, err := h.Service.UpdateContactNickname(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}
@@ -241,13 +199,9 @@ func (h *contactHandler) UpdateContactNickname(c *echo.Context) error {
 }
 
 func (h *contactHandler) BlockUser(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	if !ok || userId == "" {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	uid, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okUUID {
-		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 
 	var payload BlockUserPayload
@@ -255,7 +209,7 @@ func (h *contactHandler) BlockUser(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	res, err := h.Service.BlockUser(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uid})
+	res, err := h.Service.BlockUser(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}

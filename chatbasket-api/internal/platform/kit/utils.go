@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/appwrite/sdk-for-go/file"
 	"github.com/appwrite/sdk-for-go/tokens"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v5"
 )
 
 // DerefTime safely dereferences a *time.Time to time.Time, returning Time{} if nil.
@@ -209,4 +211,17 @@ func ConvertToInputFile(fh *multipart.FileHeader) (file.InputFile, error) {
 	}
 
 	return inputFile, nil
+}
+
+// ExtractUserID extracts UserId from Echo context (set by auth middleware)
+func ExtractUserID(c *echo.Context) (UserId, error) {
+	userId, okStr := (*c).Get("userId").(string)
+	uuidUserId, okUUID := (*c).Get("uuidUserId").(uuid.UUID)
+	if !okStr || userId == "" || !okUUID {
+		return UserId{}, NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
+	}
+	return UserId{
+		StringUserId: userId,
+		UuidUserId:   uuidUserId,
+	}, nil
 }

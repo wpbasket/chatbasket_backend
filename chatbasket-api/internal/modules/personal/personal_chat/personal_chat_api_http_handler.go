@@ -24,18 +24,6 @@ func newChatHandler(service *chatService, hub *websocket.WSHub) *chatHandler {
 // Auth helpers
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-func extractUserID(c *echo.Context) (kit.UserId, error) {
-	userId, okStr := c.Get("userId").(string)
-	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !okStr || userId == "" || !okUUID {
-		return kit.UserId{}, kit.NewError(http.StatusUnauthorized, "unauthorized", "User id is missing or invalid")
-	}
-	return kit.UserId{
-		StringUserId: userId,
-		UuidUserId:   uuidUserId,
-	}, nil
-}
-
 func extractSessionId(c *echo.Context) string {
 	sessionId, _ := c.Get("sessionId").(string)
 	return sessionId
@@ -51,7 +39,7 @@ func extractIsPrimary(c *echo.Context) bool {
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func (h *chatHandler) CheckEligibility(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -69,7 +57,7 @@ func (h *chatHandler) CheckEligibility(c *echo.Context) error {
 }
 
 func (h *chatHandler) CreateChat(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -87,7 +75,7 @@ func (h *chatHandler) CreateChat(c *echo.Context) error {
 }
 
 func (h *chatHandler) SendMessage(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -135,7 +123,7 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 }
 
 func (h *chatHandler) GetMessages(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -153,7 +141,7 @@ func (h *chatHandler) GetMessages(c *echo.Context) error {
 }
 
 func (h *chatHandler) AcknowledgeDelivery(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -202,7 +190,7 @@ func (h *chatHandler) AcknowledgeDelivery(c *echo.Context) error {
 }
 
 func (h *chatHandler) GetUserChats(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -215,7 +203,7 @@ func (h *chatHandler) GetUserChats(c *echo.Context) error {
 }
 
 func (h *chatHandler) GetPendingMessages(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -233,7 +221,7 @@ func (h *chatHandler) GetPendingMessages(c *echo.Context) error {
 }
 
 func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -342,7 +330,7 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 }
 
 func (h *chatHandler) GetFileURL(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -359,7 +347,7 @@ func (h *chatHandler) GetFileURL(c *echo.Context) error {
 }
 
 func (h *chatHandler) MarkChatRead(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -409,7 +397,7 @@ func (h *chatHandler) MarkChatRead(c *echo.Context) error {
 }
 
 func (h *chatHandler) UnsendMessage(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -466,7 +454,7 @@ func (h *chatHandler) UnsendMessage(c *echo.Context) error {
 }
 
 func (h *chatHandler) DeleteMessageForMe(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}
@@ -511,7 +499,7 @@ func (h *chatHandler) DeleteMessageForMe(c *echo.Context) error {
 }
 
 func (h *chatHandler) GetSyncActions(c *echo.Context) error {
-	userID, err := extractUserID(c)
+	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
 	}

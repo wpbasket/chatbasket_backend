@@ -6,7 +6,6 @@ import (
 
 	"chatbasket-api/internal/platform/kit"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
 
@@ -23,20 +22,16 @@ func (h *profileHandler) CreateUserProfile(c *echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(400, "bad_request", "Invalid create user profile payload")
 	}
-	stringUserId, ok := c.Get("userId").(string)
-	if !ok || stringUserId == "" {
-		return ErrInvalidUserContext
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 	email, ok := c.Get("email").(string)
 	if !ok || email == "" {
 		return ErrInvalidEmailContext
 	}
-	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
-	if !ok {
-		return ErrInvalidUserContext
-	}
 
-	res, err := h.Service.CreateUserProfile(c.Request().Context(), &payload, &kit.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId}, email)
+	res, err := h.Service.CreateUserProfile(c.Request().Context(), &payload, &userID, email)
 	if err != nil {
 		return err
 	}
@@ -44,19 +39,14 @@ func (h *profileHandler) CreateUserProfile(c *echo.Context) error {
 }
 
 func (h *profileHandler) GetProfile(c *echo.Context) error {
-	stringUserId, ok := c.Get("userId").(string)
-	if !ok || stringUserId == "" {
-		return ErrInvalidUserContext
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
 	}
 	email, ok := c.Get("email").(string)
 	if !ok || email == "" {
 		return ErrInvalidEmailContext
 	}
-	uuidUserId, ok := c.Get("uuidUserId").(uuid.UUID)
-	if !ok {
-		return ErrInvalidUserContext
-	}
-	userID := kit.UserId{StringUserId: stringUserId, UuidUserId: uuidUserId}
 	res, err := h.Service.GetProfile(c.Request().Context(), &userID, email)
 	if err != nil {
 		return err
@@ -95,12 +85,11 @@ func (h *profileHandler) UploadProfilePicture(c *echo.Context) error {
 		return ErrFileSizeExceeded
 	}
 
-	userId, ok := c.Get("userId").(string)
-	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !ok || !okUUID {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
 		return ErrInvalidUserContext
 	}
-	user, err := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, kit.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	user, err := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, userID)
 
 	if err != nil {
 		return err
@@ -110,13 +99,12 @@ func (h *profileHandler) UploadProfilePicture(c *echo.Context) error {
 }
 
 func (h *profileHandler) RemoveProfilePicture(c *echo.Context) error {
-	userId, ok := c.Get("userId").(string)
-	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !ok || !okUUID {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
 		return ErrInvalidUserContext
 	}
 
-	res, err := h.Service.RemoveUserProfilePicture(c.Request().Context(), kit.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	res, err := h.Service.RemoveUserProfilePicture(c.Request().Context(), userID)
 	if err != nil {
 		return err
 	}
@@ -129,13 +117,12 @@ func (h *profileHandler) UpdateProfile(c *echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(400, "bad_request", "Invalid update profile payload: "+err.Error())
 	}
-	userId, ok := c.Get("userId").(string)
-	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
-	if !ok || !okUUID {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
 		return ErrInvalidUserContext
 	}
 
-	res, err := h.Service.UpdateUserProfile(c.Request().Context(), &payload, kit.UserId{StringUserId: userId, UuidUserId: uuidUserId})
+	res, err := h.Service.UpdateUserProfile(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err
 	}
