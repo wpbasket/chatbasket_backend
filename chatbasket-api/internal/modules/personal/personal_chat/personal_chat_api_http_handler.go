@@ -184,7 +184,7 @@ func (h *chatHandler) AcknowledgeDelivery(c *echo.Context) error {
 					Payload: DeliveryAckEventPayload{
 						MessageIDs:  []string{payload.MessageID},
 						ChatID:      msg.ChatID.String(),
-						DeliveredAt: kit.DerefTime(msg.CreatedAt),
+						DeliveredAt: msg.CreatedAt,
 					},
 				})
 			} else {
@@ -287,7 +287,7 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		MessageType:           message.MessageType,
 		DeliveredToRecipient:  false,
 		SyncedToSenderPrimary: message.SyncedToSenderPrimary,
-		CreatedAt:             kit.DerefTime(message.CreatedAt),
+		CreatedAt:             message.CreatedAt,
 		ExpiresAt:             message.ExpiresAt,
 		IsFromMe:              true,
 		FileID:                message.FileID,
@@ -307,7 +307,7 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		DownloadURL:  downloadURL,
 		FileName:     message.FileName,
 		FileSize:     message.FileSize,
-		CreatedAt:    kit.DerefTime(message.CreatedAt),
+		CreatedAt:    message.CreatedAt,
 		ExpiresAt:    message.ExpiresAt,
 	}
 

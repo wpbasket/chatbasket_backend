@@ -13,5 +13,3 @@ DROP INDEX IF EXISTS idx_contact_requests_requester_pending;          -- Request
 DROP INDEX IF EXISTS idx_contact_requests_receiver_pending;           -- Receiver pending requests index
 DROP TABLE IF EXISTS contact_requests CASCADE;                        -- Also drops PK, FK, UNIQUE, CHECK constraints and indexes
 
--- Drop enum type
-DROP TYPE IF EXISTS request_status_enum;

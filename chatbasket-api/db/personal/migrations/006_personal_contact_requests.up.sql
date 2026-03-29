@@ -1,17 +1,6 @@
 -- +migrate Up
 
 -- ======================================
--- Create an ENUM type for the request status
--- ======================================
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'request_status_enum') THEN
-        CREATE TYPE request_status_enum AS ENUM ('pending', 'accepted', 'declined');
-    END IF;
-END
-$$;
-
--- ======================================
 -- Table: contact_requests
 --        Stores pending friend/contact requests
 -- ======================================
@@ -19,11 +8,13 @@ CREATE TABLE IF NOT EXISTS contact_requests (
     id                      UUID                    PRIMARY KEY,  -- Direct index via PK
     requester_user_id       UUID                    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     receiver_user_id        UUID                    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    status                  request_status_enum     NOT NULL DEFAULT 'pending',
+    status                  TEXT                    NOT NULL DEFAULT 'pending' CHECK (
+        status IN ('pending', 'accepted', 'declined')
+    ),
     nickname                TEXT                    CHECK (length(nickname) <= 40),
-    created_at              TIMESTAMPTZ,
-    updated_at              TIMESTAMPTZ,
-    
+    created_at              TIMESTAMPTZ             NOT NULL,
+    updated_at              TIMESTAMPTZ             NOT NULL,
+
     CONSTRAINT contact_requests_unique_pair UNIQUE(requester_user_id, receiver_user_id),  -- Composite unique index
     CONSTRAINT contact_requests_no_self_request CHECK (requester_user_id != receiver_user_id)  -- Prevent self-contact requests
 );

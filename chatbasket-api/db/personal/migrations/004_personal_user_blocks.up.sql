@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS user_blocks (
     id                  UUID            PRIMARY KEY,  -- Direct index via PK
     blocker_user_id     UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     blocked_user_id     UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at          TIMESTAMPTZ,
-    updated_at          TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ     NOT NULL,
+    updated_at          TIMESTAMPTZ     NOT NULL,
     
     CONSTRAINT user_blocks_unique_pair UNIQUE(blocker_user_id, blocked_user_id)  -- Composite unique index
 );

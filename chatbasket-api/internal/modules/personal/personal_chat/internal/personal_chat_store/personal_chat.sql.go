@@ -70,8 +70,8 @@ WHERE
 `
 
 type CleanupOlderFullyAcknowledgedMessagesParams struct {
-	ChatID    uuid.UUID  `json:"chat_id"`
-	CreatedAt *time.Time `json:"created_at"`
+	ChatID    uuid.UUID `json:"chat_id"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
@@ -108,9 +108,9 @@ WHERE
 `
 
 type ClearLastMessageForParticipantParams struct {
-	UserID    uuid.UUID `json:"user_id"`
-	ChatID    uuid.UUID `json:"chat_id"`
-	MessageID uuid.UUID `json:"message_id"`
+	UserID    uuid.UUID  `json:"user_id"`
+	ChatID    uuid.UUID  `json:"chat_id"`
+	MessageID *uuid.UUID `json:"message_id"`
 }
 
 // ===========================================
@@ -1106,8 +1106,8 @@ SELECT
     c.last_message_created_at,
     c.created_at,
     c.updated_at,
-    COALESCE(c.last_message_sender_id, '00000000-0000-0000-0000-000000000000'::UUID)::UUID AS last_message_sender_id,
-    COALESCE(c.last_message_id, '00000000-0000-0000-0000-000000000000'::UUID)::UUID AS last_message_id,
+    c.last_message_sender_id,
+    c.last_message_id,
     (CASE
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id
@@ -1173,10 +1173,10 @@ type GetUserChatsLiteRow struct {
 	P1LastMessageType        *string     `json:"p1_last_message_type"`
 	P2LastMessageType        *string     `json:"p2_last_message_type"`
 	LastMessageCreatedAt     *time.Time  `json:"last_message_created_at"`
-	CreatedAt                *time.Time  `json:"created_at"`
-	UpdatedAt                *time.Time  `json:"updated_at"`
-	LastMessageSenderID      uuid.UUID   `json:"last_message_sender_id"`
-	LastMessageID            uuid.UUID   `json:"last_message_id"`
+	CreatedAt                time.Time   `json:"created_at"`
+	UpdatedAt                time.Time   `json:"updated_at"`
+	LastMessageSenderID      *uuid.UUID  `json:"last_message_sender_id"`
+	LastMessageID            *uuid.UUID  `json:"last_message_id"`
 	OtherUserID              uuid.UUID   `json:"other_user_id"`
 	UnreadCount              int32       `json:"unread_count"`
 	LastMessageContent       interface{} `json:"last_message_content"`
@@ -1423,9 +1423,9 @@ WHERE
 `
 
 type MarkOlderMessagesAsDeliveredToRecipientPrimaryParams struct {
-	ChatID      uuid.UUID  `json:"chat_id"`
-	RecipientID uuid.UUID  `json:"recipient_id"`
-	CreatedAt   *time.Time `json:"created_at"`
+	ChatID      uuid.UUID `json:"chat_id"`
+	RecipientID uuid.UUID `json:"recipient_id"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Marks all messages in a chat as delivered to primary if they are older than a specific message
@@ -1541,8 +1541,8 @@ type UpdateChatStatusParams struct {
 	P1LastMessageContent *string    `json:"p1_last_message_content"`
 	LastMessageCreatedAt *time.Time `json:"last_message_created_at"`
 	P1LastMessageType    *string    `json:"p1_last_message_type"`
-	LastMessageSenderID  uuid.UUID  `json:"last_message_sender_id"`
-	LastMessageID        uuid.UUID  `json:"last_message_id"`
+	LastMessageSenderID  *uuid.UUID `json:"last_message_sender_id"`
+	LastMessageID        *uuid.UUID `json:"last_message_id"`
 }
 
 // ===========================================
@@ -1607,8 +1607,8 @@ WHERE
 `
 
 type UpdateChatUnsendPreviewParams struct {
-	ID            uuid.UUID `json:"id"`
-	LastMessageID uuid.UUID `json:"last_message_id"`
+	ID            uuid.UUID  `json:"id"`
+	LastMessageID *uuid.UUID `json:"last_message_id"`
 }
 
 func (q *Queries) UpdateChatUnsendPreview(ctx context.Context, arg UpdateChatUnsendPreviewParams) error {

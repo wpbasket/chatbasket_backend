@@ -159,7 +159,7 @@ func (r *chatWSRouter) handleAckDelivery(ctx context.Context, conn *websocket.WS
 			Payload: DeliveryAckEventPayload{
 				ChatID:      message.ChatID.String(),
 				MessageIDs:  []string{messageID.String()},
-				DeliveredAt: kit.DerefTime(message.CreatedAt),
+				DeliveredAt: message.CreatedAt,
 			},
 		})
 	}
@@ -191,8 +191,8 @@ func (r *chatWSRouter) handleAckDeliveryBatch(ctx context.Context, conn *websock
 				chatID = msg.ChatID
 				senderID = msg.SenderID
 			}
-			if kit.DerefTime(msg.CreatedAt).After(latestCreatedAt) {
-				latestCreatedAt = kit.DerefTime(msg.CreatedAt)
+			if msg.CreatedAt.After(latestCreatedAt) {
+				latestCreatedAt = msg.CreatedAt
 			}
 		}
 

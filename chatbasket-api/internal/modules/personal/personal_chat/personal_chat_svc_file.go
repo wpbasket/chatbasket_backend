@@ -235,10 +235,10 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	_ = s.PostgresQueries.UpdateChatStatus(ctx, personal_chat_store.UpdateChatStatusParams{
 		ID:                   chat.ID,
 		P1LastMessageContent: &content,
-		LastMessageCreatedAt: message.CreatedAt,
+		LastMessageCreatedAt: &message.CreatedAt,
 		P1LastMessageType:    &message.MessageType,
-		LastMessageSenderID:  message.SenderID,
-		LastMessageID:        message.ID,
+		LastMessageSenderID:  &message.SenderID,
+		LastMessageID:        &message.ID,
 	})
 
 	return &message, nil

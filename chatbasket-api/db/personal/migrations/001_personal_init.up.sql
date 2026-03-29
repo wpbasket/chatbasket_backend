@@ -47,8 +47,8 @@ CREATE TABLE IF NOT EXISTS users (
             b64_cipher_chacha20poly1305_username
         ) <= 52
     ),
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT fk_users_auth_users FOREIGN KEY (id) REFERENCES auth_users (id) ON DELETE CASCADE
 );
 
@@ -92,8 +92,8 @@ CREATE TABLE IF NOT EXISTS avatars (
     token_id TEXT,
     token_secret TEXT,
     token_expiry TIMESTAMPTZ,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT avatars_unique_user_file UNIQUE (user_id, file_id), -- Composite unique index
     CONSTRAINT avatars_check_profile_file CHECK (
         avatar_type != 'profile'
@@ -135,8 +135,8 @@ WHERE
 CREATE TABLE IF NOT EXISTS alone_username (
     id UUID PRIMARY KEY, -- Direct index via PK
     username TEXT NOT NULL UNIQUE CHECK (length(username) = 10), -- Direct index via UNIQUE
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 -- Drop existing trigger if already present

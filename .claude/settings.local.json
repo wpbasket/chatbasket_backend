@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__gitnexus__query",
+      "mcp__gitnexus__context",
+      "WebSearch",
+      "mcp__gitnexus__cypher"
+    ]
+  }
+}

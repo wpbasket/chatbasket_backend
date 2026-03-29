@@ -28,8 +28,8 @@ last_message_created_at             TIMESTAMPTZ,
     p1_last_message_type                TEXT,
     p2_last_message_type                TEXT,
 
-    created_at                          TIMESTAMPTZ,
-    updated_at                          TIMESTAMPTZ,
+    created_at                          TIMESTAMPTZ     NOT NULL,
+    updated_at                          TIMESTAMPTZ     NOT NULL,
     CONSTRAINT chats_unique_pair UNIQUE(participant_1_id, participant_2_id),
     CONSTRAINT chats_no_self_chat CHECK (participant_1_id != participant_2_id),
     CONSTRAINT chats_ordered_pair CHECK (participant_1_id < participant_2_id)
@@ -116,8 +116,8 @@ deleted_by_recipient BOOLEAN NOT NULL DEFAULT FALSE,
 -- Retry and TTL management
 delivery_attempts INTEGER NOT NULL DEFAULT 0,
 expires_at TIMESTAMPTZ NOT NULL, -- 30-day TTL default
-created_at TIMESTAMPTZ,
-updated_at TIMESTAMPTZ,
+created_at TIMESTAMPTZ NOT NULL,
+updated_at TIMESTAMPTZ NOT NULL,
 CONSTRAINT messages_valid_participants CHECK (sender_id != recipient_id),
 
 -- File Attachment Constraints
@@ -190,8 +190,8 @@ CREATE TABLE IF NOT EXISTS message_sync_actions (
     action_type TEXT NOT NULL,
     payload JSONB NOT NULL,
     delivered_to_primary BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT fk_sync_actions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT ck_sync_action_type CHECK (
         action_type IN ('unsend', 'delete_for_me')

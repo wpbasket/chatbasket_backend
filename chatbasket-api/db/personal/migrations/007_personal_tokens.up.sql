@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS tokens (
     type TEXT NOT NULL,
     CONSTRAINT tokens_type_check CHECK (type IN ('fcm', 'apn')),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT tokens_unique_session_user_type UNIQUE (
         sha256_hex_session_id,
         user_id,

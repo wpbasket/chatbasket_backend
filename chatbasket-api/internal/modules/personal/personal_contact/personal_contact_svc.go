@@ -129,8 +129,8 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			Username:  profile.Username,
 			Bio:       profile.Bio,
 			Nickname:  nickname,
-			CreatedAt: kit.DerefTime(c.ContactCreatedAt),
-			UpdatedAt: kit.DerefTime(c.ContactUpdatedAt),
+			CreatedAt: c.ContactCreatedAt,
+			UpdatedAt: c.ContactUpdatedAt,
 			AvatarURL: profile.AvatarURL,
 			IsMutual:  isMutual,
 		})
@@ -162,8 +162,8 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			Username:  profile.Username,
 			Bio:       profile.Bio,
 			Nickname:  myNickname,
-			CreatedAt: kit.DerefTime(p.ContactCreatedAt),
-			UpdatedAt: kit.DerefTime(p.ContactUpdatedAt),
+			CreatedAt: p.ContactCreatedAt,
+			UpdatedAt: p.ContactUpdatedAt,
 			AvatarURL: profile.AvatarURL,
 			IsMutual:  isMutual,
 		})
@@ -625,8 +625,8 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 			Username:    profile.Username,
 			Bio:         profile.Bio,
 			Nickname:    nil, // Privacy: Receiver should not see the nickname given by requester
-			RequestedAt: kit.DerefTime(r.RequestCreatedAt),
-			UpdatedAt:   kit.DerefTime(r.RequestUpdatedAt),
+			RequestedAt: r.RequestCreatedAt,
+			UpdatedAt:   r.RequestUpdatedAt,
 			Status:      r.Status,
 			AvatarURL:   profile.AvatarURL,
 		})
@@ -655,8 +655,8 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 			Username:    profile.Username,
 			Bio:         profile.Bio,
 			Nickname:    nickname,
-			RequestedAt: kit.DerefTime(r.RequestCreatedAt),
-			UpdatedAt:   kit.DerefTime(r.RequestUpdatedAt),
+			RequestedAt: r.RequestCreatedAt,
+			UpdatedAt:   r.RequestUpdatedAt,
 			Status:      r.Status,
 			AvatarURL:   profile.AvatarURL,
 		})

@@ -11,20 +11,20 @@ import (
 )
 
 type AloneUsername struct {
-	ID        uuid.UUID  `json:"id"`
-	Username  string     `json:"username"`
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
+	ID        uuid.UUID `json:"id"`
+	Username  string    `json:"username"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type AuthUser struct {
-	ID              uuid.UUID  `json:"id"`
-	Name            string     `json:"name"`
-	Email           string     `json:"email"`
-	PasswordHash    string     `json:"password_hash"`
-	IsEmailVerified bool       `json:"is_email_verified"`
-	CreatedAt       *time.Time `json:"created_at"`
-	UpdatedAt       *time.Time `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	Name            string    `json:"name"`
+	Email           string    `json:"email"`
+	PasswordHash    string    `json:"password_hash"`
+	IsEmailVerified bool      `json:"is_email_verified"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Avatar struct {
@@ -35,8 +35,8 @@ type Avatar struct {
 	TokenID     *string    `json:"token_id"`
 	TokenSecret *string    `json:"token_secret"`
 	TokenExpiry *time.Time `json:"token_expiry"`
-	CreatedAt   *time.Time `json:"created_at"`
-	UpdatedAt   *time.Time `json:"updated_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 type Chat struct {
@@ -54,9 +54,9 @@ type Chat struct {
 	// Timestamp of the last message delivered to participant 2
 	P2LastDeliveredAt    *time.Time `json:"p2_last_delivered_at"`
 	LastMessageCreatedAt *time.Time `json:"last_message_created_at"`
-	LastMessageSenderID  uuid.UUID  `json:"last_message_sender_id"`
+	LastMessageSenderID  *uuid.UUID `json:"last_message_sender_id"`
 	// UUID of the message currently displayed as the preview
-	LastMessageID uuid.UUID `json:"last_message_id"`
+	LastMessageID *uuid.UUID `json:"last_message_id"`
 	// Last message preview content for participant_1
 	P1LastMessageContent *string `json:"p1_last_message_content"`
 	// Last message preview content for participant_2
@@ -64,19 +64,19 @@ type Chat struct {
 	// Last message type for participant_1 preview
 	P1LastMessageType *string `json:"p1_last_message_type"`
 	// Last message type for participant_2 preview
-	P2LastMessageType *string    `json:"p2_last_message_type"`
-	CreatedAt         *time.Time `json:"created_at"`
-	UpdatedAt         *time.Time `json:"updated_at"`
+	P2LastMessageType *string   `json:"p2_last_message_type"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 type ContactRequest struct {
-	ID              uuid.UUID   `json:"id"`
-	RequesterUserID uuid.UUID   `json:"requester_user_id"`
-	ReceiverUserID  uuid.UUID   `json:"receiver_user_id"`
-	Status          interface{} `json:"status"`
-	Nickname        *string     `json:"nickname"`
-	CreatedAt       *time.Time  `json:"created_at"`
-	UpdatedAt       *time.Time  `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
+	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
+	Status          string    `json:"status"`
+	Nickname        *string   `json:"nickname"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Message struct {
@@ -103,111 +103,111 @@ type Message struct {
 	DeletedByRecipient          bool       `json:"deleted_by_recipient"`
 	DeliveryAttempts            int32      `json:"delivery_attempts"`
 	ExpiresAt                   time.Time  `json:"expires_at"`
-	CreatedAt                   *time.Time `json:"created_at"`
-	UpdatedAt                   *time.Time `json:"updated_at"`
+	CreatedAt                   time.Time  `json:"created_at"`
+	UpdatedAt                   time.Time  `json:"updated_at"`
 }
 
 type MessageSyncAction struct {
-	ID                 uuid.UUID  `json:"id"`
-	UserID             uuid.UUID  `json:"user_id"`
-	ActionType         string     `json:"action_type"`
-	Payload            []byte     `json:"payload"`
-	DeliveredToPrimary bool       `json:"delivered_to_primary"`
-	CreatedAt          *time.Time `json:"created_at"`
-	UpdatedAt          *time.Time `json:"updated_at"`
+	ID                 uuid.UUID `json:"id"`
+	UserID             uuid.UUID `json:"user_id"`
+	ActionType         string    `json:"action_type"`
+	Payload            []byte    `json:"payload"`
+	DeliveredToPrimary bool      `json:"delivered_to_primary"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type Session struct {
-	ID          uuid.UUID  `json:"id"`
-	AuthUserID  uuid.UUID  `json:"auth_user_id"`
-	TokenHash   string     `json:"token_hash"`
-	DeviceToken *string    `json:"device_token"`
-	Platform    *string    `json:"platform"`
-	DeviceName  *string    `json:"device_name"`
-	IsCentral   bool       `json:"is_central"`
-	UserAgent   *string    `json:"user_agent"`
-	IpAddress   *string    `json:"ip_address"`
-	ExpiresAt   time.Time  `json:"expires_at"`
-	CreatedAt   *time.Time `json:"created_at"`
-	UpdatedAt   *time.Time `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	AuthUserID  uuid.UUID `json:"auth_user_id"`
+	TokenHash   string    `json:"token_hash"`
+	DeviceToken *string   `json:"device_token"`
+	Platform    *string   `json:"platform"`
+	DeviceName  *string   `json:"device_name"`
+	IsCentral   bool      `json:"is_central"`
+	UserAgent   *string   `json:"user_agent"`
+	IpAddress   *string   `json:"ip_address"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Token struct {
-	ID                 uuid.UUID  `json:"id"`
-	UserID             uuid.UUID  `json:"user_id"`
-	Sha256HexSessionID string     `json:"sha256_hex_session_id"`
-	Token              string     `json:"token"`
-	Type               string     `json:"type"`
-	IsActive           bool       `json:"is_active"`
-	CreatedAt          *time.Time `json:"created_at"`
-	UpdatedAt          *time.Time `json:"updated_at"`
+	ID                 uuid.UUID `json:"id"`
+	UserID             uuid.UUID `json:"user_id"`
+	Sha256HexSessionID string    `json:"sha256_hex_session_id"`
+	Token              string    `json:"token"`
+	Type               string    `json:"type"`
+	IsActive           bool      `json:"is_active"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 type User struct {
-	ID                                uuid.UUID  `json:"id"`
-	Name                              string     `json:"name"`
-	Bio                               *string    `json:"bio"`
-	ProfileType                       string     `json:"profile_type"`
-	IsAdminBlocked                    bool       `json:"is_admin_blocked"`
-	AdminBlockReason                  *string    `json:"admin_block_reason"`
-	HmacSha256HexUsername             string     `json:"hmac_sha256_hex_username"`
-	B64CipherChacha20poly1305Username string     `json:"b64_cipher_chacha20poly1305_username"`
-	CreatedAt                         *time.Time `json:"created_at"`
-	UpdatedAt                         *time.Time `json:"updated_at"`
+	ID                                uuid.UUID `json:"id"`
+	Name                              string    `json:"name"`
+	Bio                               *string   `json:"bio"`
+	ProfileType                       string    `json:"profile_type"`
+	IsAdminBlocked                    bool      `json:"is_admin_blocked"`
+	AdminBlockReason                  *string   `json:"admin_block_reason"`
+	HmacSha256HexUsername             string    `json:"hmac_sha256_hex_username"`
+	B64CipherChacha20poly1305Username string    `json:"b64_cipher_chacha20poly1305_username"`
+	CreatedAt                         time.Time `json:"created_at"`
+	UpdatedAt                         time.Time `json:"updated_at"`
 }
 
 type UserBlock struct {
-	ID            uuid.UUID  `json:"id"`
-	BlockerUserID uuid.UUID  `json:"blocker_user_id"`
-	BlockedUserID uuid.UUID  `json:"blocked_user_id"`
-	CreatedAt     *time.Time `json:"created_at"`
-	UpdatedAt     *time.Time `json:"updated_at"`
+	ID            uuid.UUID `json:"id"`
+	BlockerUserID uuid.UUID `json:"blocker_user_id"`
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type UserContact struct {
-	OwnerUserID   uuid.UUID  `json:"owner_user_id"`
-	ContactUserID uuid.UUID  `json:"contact_user_id"`
-	Nickname      *string    `json:"nickname"`
-	CreatedAt     *time.Time `json:"created_at"`
-	UpdatedAt     *time.Time `json:"updated_at"`
+	OwnerUserID   uuid.UUID `json:"owner_user_id"`
+	ContactUserID uuid.UUID `json:"contact_user_id"`
+	Nickname      *string   `json:"nickname"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type UserGlobalRestriction struct {
-	UserID          uuid.UUID  `json:"user_id"`
-	RestrictAvatar  bool       `json:"restrict_avatar"`
-	RestrictStatus  bool       `json:"restrict_status"`
-	RestrictProfile bool       `json:"restrict_profile"`
-	CreatedAt       *time.Time `json:"created_at"`
-	UpdatedAt       *time.Time `json:"updated_at"`
+	UserID          uuid.UUID `json:"user_id"`
+	RestrictAvatar  bool      `json:"restrict_avatar"`
+	RestrictStatus  bool      `json:"restrict_status"`
+	RestrictProfile bool      `json:"restrict_profile"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type UserGlobalRestrictionExemption struct {
-	UserID           uuid.UUID  `json:"user_id"`
-	ExemptedUserID   uuid.UUID  `json:"exempted_user_id"`
-	ExceptionAvatar  bool       `json:"exception_avatar"`
-	ExceptionStatus  bool       `json:"exception_status"`
-	ExceptionProfile bool       `json:"exception_profile"`
-	CreatedAt        *time.Time `json:"created_at"`
-	UpdatedAt        *time.Time `json:"updated_at"`
+	UserID           uuid.UUID `json:"user_id"`
+	ExemptedUserID   uuid.UUID `json:"exempted_user_id"`
+	ExceptionAvatar  bool      `json:"exception_avatar"`
+	ExceptionStatus  bool      `json:"exception_status"`
+	ExceptionProfile bool      `json:"exception_profile"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type UserRestriction struct {
-	ID               uuid.UUID  `json:"id"`
-	UserID           uuid.UUID  `json:"user_id"`
-	RestrictedUserID uuid.UUID  `json:"restricted_user_id"`
-	RestrictProfile  bool       `json:"restrict_profile"`
-	RestrictAvatar   bool       `json:"restrict_avatar"`
-	RestrictStatus   bool       `json:"restrict_status"`
-	CreatedAt        *time.Time `json:"created_at"`
-	UpdatedAt        *time.Time `json:"updated_at"`
+	ID               uuid.UUID `json:"id"`
+	UserID           uuid.UUID `json:"user_id"`
+	RestrictedUserID uuid.UUID `json:"restricted_user_id"`
+	RestrictProfile  bool      `json:"restrict_profile"`
+	RestrictAvatar   bool      `json:"restrict_avatar"`
+	RestrictStatus   bool      `json:"restrict_status"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type VerificationCode struct {
 	ID        uuid.UUID  `json:"id"`
-	UpdateID  uuid.UUID  `json:"update_id"`
+	UpdateID  *uuid.UUID `json:"update_id"`
 	Email     string     `json:"email"`
 	CodeHash  string     `json:"code_hash"`
 	Type      string     `json:"type"`
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }

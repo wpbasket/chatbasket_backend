@@ -307,8 +307,8 @@ type GetUserProfileRow struct {
 	AdminBlockReason                  *string    `json:"admin_block_reason"`
 	HmacSha256HexUsername             string     `json:"hmac_sha256_hex_username"`
 	B64CipherChacha20poly1305Username string     `json:"b64_cipher_chacha20poly1305_username"`
-	CreatedAt                         *time.Time `json:"created_at"`
-	UpdatedAt                         *time.Time `json:"updated_at"`
+	CreatedAt                         time.Time  `json:"created_at"`
+	UpdatedAt                         time.Time  `json:"updated_at"`
 	FileID                            *string    `json:"file_id"`
 	TokenID                           *string    `json:"token_id"`
 	TokenSecret                       *string    `json:"token_secret"`
@@ -396,8 +396,8 @@ LIMIT $2
 `
 
 type ListUsersAfterParams struct {
-	CreatedAt *time.Time `json:"created_at"`
-	Limit     int32      `json:"limit"`
+	CreatedAt time.Time `json:"created_at"`
+	Limit     int32     `json:"limit"`
 }
 
 // Returns users created before a certain timestamp (keyset pagination)

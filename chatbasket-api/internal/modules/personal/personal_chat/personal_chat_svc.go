@@ -236,8 +236,8 @@ func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChat
 	return &ChatResponse{
 		ChatID:                   chat.ID.String(),
 		OtherUserID:              recipientID.String(),
-		CreatedAt:                kit.DerefTime(chat.CreatedAt),
-		UpdatedAt:                kit.DerefTime(chat.UpdatedAt),
+		CreatedAt:                chat.CreatedAt,
+		UpdatedAt:                chat.UpdatedAt,
 		OtherUserLastReadAt:      otherReadAt,
 		OtherUserLastDeliveredAt: otherDeliveredAt,
 		LastMessageIsFromMe:      false,
@@ -298,10 +298,10 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 	_ = s.PostgresQueries.UpdateChatStatus(ctx, personal_chat_store.UpdateChatStatusParams{
 		ID:                   chat.ID,
 		P1LastMessageContent: &message.Content,
-		LastMessageCreatedAt: message.CreatedAt,
+		LastMessageCreatedAt: &message.CreatedAt,
 		P1LastMessageType:    &message.MessageType,
-		LastMessageSenderID:  message.SenderID,
-		LastMessageID:        message.ID,
+		LastMessageSenderID:  &message.SenderID,
+		LastMessageID:        &message.ID,
 	})
 
 	return &message, nil
@@ -337,7 +337,7 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		MessageType:           message.MessageType,
 		DeliveredToRecipient:  message.DeliveredToRecipient,
 		SyncedToSenderPrimary: message.SyncedToSenderPrimary,
-		CreatedAt:             kit.DerefTime(message.CreatedAt),
+		CreatedAt:             message.CreatedAt,
 		ExpiresAt:             message.ExpiresAt,
 		IsFromMe:              true,
 		FileID:                message.FileID,
@@ -382,11 +382,11 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 		}
 
 		// Update persistent chat delivery timestamp
-		debugLog.Printf("Updating persistent chat %s delivery timestamp to %v for participant %s", message.ChatID, kit.DerefTime(message.CreatedAt), userID.UuidUserId)
+		debugLog.Printf("Updating persistent chat %s delivery timestamp to %v for participant %s", message.ChatID, message.CreatedAt, userID.UuidUserId)
 		_ = s.PostgresQueries.UpdateChatLastDeliveredAt(ctx, personal_chat_store.UpdateChatLastDeliveredAtParams{
 			ChatID:          message.ChatID,
 			ParticipantID:   userID.UuidUserId,
-			LastDeliveredAt: kit.DerefTime(message.CreatedAt),
+			LastDeliveredAt: message.CreatedAt,
 		})
 
 		// 2. Primary Delivery: ONLY Primary device
@@ -528,7 +528,7 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 		DeliveredToRecipient:        msg.DeliveredToRecipient,
 		DeliveredToRecipientPrimary: deliveredToRecipientPrimary,
 		SyncedToSenderPrimary:       msg.SyncedToSenderPrimary,
-		CreatedAt:                   kit.DerefTime(msg.CreatedAt),
+		CreatedAt:                   msg.CreatedAt,
 		ExpiresAt:                   msg.ExpiresAt,
 		FileID:                      msg.FileID,
 		FileName:                    msg.FileName,
@@ -648,7 +648,6 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 func (s *chatService) GetUserChatsLite(ctx context.Context, userID uuid.UUID) ([]personal_chat_store.GetUserChatsLiteRow, error) {
 	chats, err := s.PostgresQueries.GetUserChatsLite(ctx, userID)
 	if err != nil {
-		log.Printf("[PersonalChat] GetUserChatsLite failed for user %s: %v", userID, err)
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
 	}
 	return chats, nil
@@ -685,47 +684,44 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 
 		profile := profilesByID[otherID]
 
-		var otherUserName string
-		var otherUserUsername string
-		var avatarURL *string
-		if profile != nil {
-			otherUserName = profile.Name
-			otherUserUsername = profile.Username
-			avatarURL = profile.AvatarURL
+		// CRITICAL FIDELITY: The legacy SQL uses an INNER JOIN on the users table.
+		// If a user has been deleted but the chat remains (orphaned data),
+		// the legacy backend automatically filters it out from the list.
+		if profile == nil {
+			continue
 		}
 
-		var lastMessageContent *string
-		var lastMessageCreatedAt *time.Time
-		var lastMessageType *string
-		var lastMessageSenderID *string
+		otherUserName := profile.Name
+		otherUserUsername := profile.Username
+		avatarURL := profile.AvatarURL
 
-		// Check if a last message exists using LastMessageID (Coalesced to uuid.Nil if missing)
-		if chat.LastMessageID != uuid.Nil {
+
+		var lastMessageContent, lastMessageType, lastMessageSenderID, lastMessageID *string
+		var lastMessageCreatedAt *time.Time
+
+		// Check if a last message exists using LastMessageID (now a pointer)
+		if chat.LastMessageID != nil {
 			if chat.LastMessageContent != nil {
-				if s, ok := chat.LastMessageContent.(string); ok {
-					lastMessageContent = &s
+				if strVal, ok := chat.LastMessageContent.(string); ok {
+					lastMessageContent = &strVal
 				}
 			}
 
 			if chat.LastMessageType != nil {
-				if s, ok := chat.LastMessageType.(string); ok {
-					lastMessageType = &s
+				if strVal, ok := chat.LastMessageType.(string); ok {
+					lastMessageType = &strVal
 				}
 			}
 
 			lastMessageCreatedAt = chat.LastMessageCreatedAt
 
-			if chat.LastMessageSenderID != uuid.Nil {
+			if chat.LastMessageSenderID != nil {
 				senderStr := chat.LastMessageSenderID.String()
 				lastMessageSenderID = &senderStr
 			}
-		}
 
-
-		var lastMessageID *string
-		if chat.LastMessageID != uuid.Nil {
-			id := chat.LastMessageID.String()
-			lastMessageID = &id
+			idStr := chat.LastMessageID.String()
+			lastMessageID = &idStr
 		}
 
 		chatResponses = append(chatResponses, ChatResponse{
@@ -734,15 +730,15 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 			OtherUserName:            otherUserName,
 			OtherUserUsername:        otherUserUsername,
 			AvatarURL:                avatarURL,
-			CreatedAt:                kit.DerefTime(chat.CreatedAt),
-			UpdatedAt:                kit.DerefTime(chat.UpdatedAt),
+			CreatedAt:                chat.CreatedAt,
+			UpdatedAt:                chat.UpdatedAt,
 			OtherUserLastReadAt:      chat.OtherUserLastReadAt,
 			OtherUserLastDeliveredAt: chat.OtherUserLastDeliveredAt,
 			LastMessageContent:       lastMessageContent,
 			LastMessageCreatedAt:     lastMessageCreatedAt,
 			LastMessageType:          lastMessageType,
 			LastMessageSenderID:      lastMessageSenderID,
-			LastMessageIsFromMe:      chat.LastMessageSenderID != uuid.Nil && chat.LastMessageSenderID == userID.UuidUserId,
+			LastMessageIsFromMe:      chat.LastMessageSenderID != nil && *chat.LastMessageSenderID == userID.UuidUserId,
 			LastMessageStatus:        chat.LastMessageStatus,
 			LastMessageIsUnsent:      lastMessageType != nil && *lastMessageType == "unsent",
 			LastMessageID:            lastMessageID,
@@ -923,9 +919,10 @@ func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messa
 	// Update chat preview + unread after unsend
 	if len(messagesToUnsend) > 0 {
 		// Update preview to "unsent" text
+		lastMsgID := messagesToUnsend[len(messagesToUnsend)-1].ID
 		_ = qtx.UpdateChatUnsendPreview(ctx, personal_chat_store.UpdateChatUnsendPreviewParams{
 			ID:            chatID,
-			LastMessageID: messagesToUnsend[len(messagesToUnsend)-1].ID,
+			LastMessageID: &lastMsgID,
 		})
 
 		// Decrement unread only for recipient
@@ -990,11 +987,11 @@ func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.
 			chats, chatsErr := s.PostgresQueries.GetChatsByUserID(ctx, userID.UuidUserId)
 			if chatsErr == nil {
 				for _, chat := range chats {
-					if chat.LastMessageID == msgID {
+					if chat.LastMessageID != nil && *chat.LastMessageID == msgID {
 						_ = s.PostgresQueries.ClearLastMessageForParticipant(ctx, personal_chat_store.ClearLastMessageForParticipantParams{
 							UserID:    userID.UuidUserId,
 							ChatID:    chat.ID,
-							MessageID: msgID,
+							MessageID: &msgID,
 						})
 						break
 					}
@@ -1004,10 +1001,11 @@ func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.
 		}
 
 		// Clear preview for the participant who is deleting
+		msgID := msg.ID
 		_ = s.PostgresQueries.ClearLastMessageForParticipant(ctx, personal_chat_store.ClearLastMessageForParticipantParams{
 			UserID:    userID.UuidUserId,
 			ChatID:    msg.ChatID,
-			MessageID: msg.ID,
+			MessageID: &msgID,
 		})
 
 		// Mark as deleted by the appropriate party
@@ -1096,7 +1094,7 @@ func (s *chatService) GetSyncActionsHandler(ctx context.Context, payload *GetSyn
 			ActionType:         a.ActionType,
 			Payload:            payloadObj,
 			DeliveredToPrimary: a.DeliveredToPrimary,
-			CreatedAt:          kit.DerefTime(a.CreatedAt),
+			CreatedAt:          a.CreatedAt,
 		})
 	}
 

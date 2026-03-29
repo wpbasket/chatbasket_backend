@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS user_global_restrictions (
     restrict_avatar BOOLEAN NOT NULL DEFAULT FALSE,
     restrict_status BOOLEAN NOT NULL DEFAULT FALSE,
     restrict_profile BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 -- Drop existing trigger if already present
@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS user_global_restriction_exemptions (
     exception_avatar BOOLEAN NOT NULL DEFAULT FALSE,
     exception_status BOOLEAN NOT NULL DEFAULT FALSE,
     exception_profile BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     
     CONSTRAINT user_global_restriction_exemptions_pk PRIMARY KEY(user_id, exempted_user_id)
 );

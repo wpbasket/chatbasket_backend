@@ -251,11 +251,11 @@ RETURNING
 `
 
 type CreateVerificationCodeWithUpdateIDParams struct {
-	ID       uuid.UUID `json:"id"`
-	UpdateID uuid.UUID `json:"update_id"`
-	Email    string    `json:"email"`
-	CodeHash string    `json:"code_hash"`
-	Type     string    `json:"type"`
+	ID       uuid.UUID  `json:"id"`
+	UpdateID *uuid.UUID `json:"update_id"`
+	Email    string     `json:"email"`
+	CodeHash string     `json:"code_hash"`
+	Type     string     `json:"type"`
 }
 
 func (q *Queries) CreateVerificationCodeWithUpdateID(ctx context.Context, arg CreateVerificationCodeWithUpdateIDParams) (VerificationCode, error) {

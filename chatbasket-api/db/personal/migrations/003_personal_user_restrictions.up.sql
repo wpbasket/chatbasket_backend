@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS user_restrictions (
     restrict_profile        BOOLEAN         NOT NULL DEFAULT FALSE,
     restrict_avatar         BOOLEAN         NOT NULL DEFAULT FALSE,
     restrict_status         BOOLEAN         NOT NULL DEFAULT FALSE,
-    created_at              TIMESTAMPTZ,
-    updated_at              TIMESTAMPTZ,
+    created_at              TIMESTAMPTZ     NOT NULL,
+    updated_at              TIMESTAMPTZ     NOT NULL,
     
     CONSTRAINT user_restrictions_unique_pair UNIQUE(user_id, restricted_user_id)  -- Composite unique index covers main lookup
 );

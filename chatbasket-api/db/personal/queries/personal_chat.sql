@@ -53,8 +53,8 @@ SELECT
     c.last_message_created_at,
     c.created_at,
     c.updated_at,
-    COALESCE(c.last_message_sender_id, '00000000-0000-0000-0000-000000000000'::UUID)::UUID AS last_message_sender_id,
-    COALESCE(c.last_message_id, '00000000-0000-0000-0000-000000000000'::UUID)::UUID AS last_message_id,
+    c.last_message_sender_id,
+    c.last_message_id,
     (CASE
         WHEN c.participant_1_id = $1 THEN c.participant_2_id
         ELSE c.participant_1_id

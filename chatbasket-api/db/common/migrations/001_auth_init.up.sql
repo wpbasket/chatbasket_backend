@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS auth_users (
     email TEXT NOT NULL CHECK (email = lower(email)),
     password_hash TEXT NOT NULL,
     is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 -- Drop existing trigger if present (safe idempotent)
@@ -65,8 +65,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_agent TEXT,
     ip_address TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT sessions_token_hash_unique UNIQUE (token_hash),
     CONSTRAINT sessions_platform_check CHECK (
         platform IN ('ios', 'android', 'web')
@@ -111,8 +111,8 @@ CREATE TABLE IF NOT EXISTS verification_codes (
             'account_deletion'
         )
     ),
-    created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 -- Drop existing trigger if present (safe idempotent)

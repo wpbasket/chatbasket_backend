@@ -3,20 +3,21 @@
 ```
 chatbasket_backend/
 ├── .claude/
-│   └── skills/
-│       └── gitnexus/
-│           ├── gitnexus-cli/
-│           │   └── SKILL.md
-│           ├── gitnexus-debugging/
-│           │   └── SKILL.md
-│           ├── gitnexus-exploring/
-│           │   └── SKILL.md
-│           ├── gitnexus-guide/
-│           │   └── SKILL.md
-│           ├── gitnexus-impact-analysis/
-│           │   └── SKILL.md
-│           └── gitnexus-refactoring/
-│               └── SKILL.md
+│   ├── skills/
+│   │   └── gitnexus/
+│   │       ├── gitnexus-cli/
+│   │       │   └── SKILL.md
+│   │       ├── gitnexus-debugging/
+│   │       │   └── SKILL.md
+│   │       ├── gitnexus-exploring/
+│   │       │   └── SKILL.md
+│   │       ├── gitnexus-guide/
+│   │       │   └── SKILL.md
+│   │       ├── gitnexus-impact-analysis/
+│   │       │   └── SKILL.md
+│   │       └── gitnexus-refactoring/
+│   │           └── SKILL.md
+│   └── settings.local.json
 ├── .github/
 │   └── workflows/
 │       ├── deploy_relay.yml
@@ -25,6 +26,154 @@ chatbasket_backend/
 │   ├── lbug
 │   └── meta.json
 ├── chatbasket-api/
+│   ├── app/
+│   │   └── main.go
+│   ├── db/
+│   │   ├── common/
+│   │   │   ├── migrations/
+│   │   │   │   ├── 001_auth_init.down.sql
+│   │   │   │   └── 001_auth_init.up.sql
+│   │   │   └── queries/
+│   │   │       └── auth.sql
+│   │   ├── personal/
+│   │   │   ├── migrations/
+│   │   │   │   ├── 001_personal_init.down.sql
+│   │   │   │   ├── 001_personal_init.up.sql
+│   │   │   │   ├── 002_personal_user_contacts.down.sql
+│   │   │   │   ├── 002_personal_user_contacts.up.sql
+│   │   │   │   ├── 003_personal_user_restrictions.down.sql
+│   │   │   │   ├── 003_personal_user_restrictions.up.sql
+│   │   │   │   ├── 004_personal_user_blocks.down.sql
+│   │   │   │   ├── 004_personal_user_blocks.up.sql
+│   │   │   │   ├── 005_personal_global_restrictions.down.sql
+│   │   │   │   ├── 005_personal_global_restrictions.up.sql
+│   │   │   │   ├── 006_personal_contact_requests.down.sql
+│   │   │   │   ├── 006_personal_contact_requests.up.sql
+│   │   │   │   ├── 007_personal_tokens.down.sql
+│   │   │   │   ├── 007_personal_tokens.up.sql
+│   │   │   │   ├── 008_personal_chat_system.down.sql
+│   │   │   │   ├── 008_personal_chat_system.up.sql
+│   │   │   │   ├── 009_personal_secure_nicknames.down.sql
+│   │   │   │   ├── 009_personal_secure_nicknames.up.sql
+│   │   │   │   ├── 010_personal_block_contact_requests.down.sql
+│   │   │   │   └── 010_personal_block_contact_requests.up.sql
+│   │   │   └── queries/
+│   │   │       ├── personal_chat.sql
+│   │   │       ├── personal_contacts.sql
+│   │   │       ├── personal_profile.sql
+│   │   │       └── personal_user.sql
+│   │   └── public/
+│   │       ├── migrations/
+│   │       └── queries/
+│   │           └── placeholder.sql
+│   ├── internal/
+│   │   ├── modules/
+│   │   │   ├── core/
+│   │   │   │   └── core_auth/
+│   │   │   │       ├── internal/
+│   │   │   │       │   └── core_auth_store/
+│   │   │   │       │       ├── auth.sql.go
+│   │   │   │       │       ├── db.go
+│   │   │   │       │       ├── models.go
+│   │   │   │       │       └── querier.go
+│   │   │   │       ├── core_auth_api_common_http_handler.go
+│   │   │   │       ├── core_auth_api_http_handler.go
+│   │   │   │       ├── core_auth_api_routes.go
+│   │   │   │       ├── core_auth_errors.go
+│   │   │   │       ├── core_auth_kit_otp.go
+│   │   │   │       ├── core_auth_kit_password.go
+│   │   │   │       ├── core_auth_mdl.go
+│   │   │   │       ├── core_auth_mdl_common.go
+│   │   │   │       ├── core_auth_mdl_helpers.go
+│   │   │   │       ├── core_auth_svc.go
+│   │   │   │       ├── core_auth_svc_common.go
+│   │   │   │       ├── core_auth_svc_flows.go
+│   │   │   │       ├── core_auth_svc_helpers.go
+│   │   │   │       └── core_auth_svc_middleware.go
+│   │   │   ├── personal/
+│   │   │   │   ├── personal_chat/
+│   │   │   │   │   ├── internal/
+│   │   │   │   │   │   └── personal_chat_store/
+│   │   │   │   │   │       ├── db.go
+│   │   │   │   │   │       ├── models.go
+│   │   │   │   │   │       ├── personal_chat.sql.go
+│   │   │   │   │   │       └── querier.go
+│   │   │   │   │   ├── personal_chat_api_http_handler.go
+│   │   │   │   │   ├── personal_chat_api_routes.go
+│   │   │   │   │   ├── personal_chat_api_ws_handler.go
+│   │   │   │   │   ├── personal_chat_api_ws_router.go
+│   │   │   │   │   ├── personal_chat_errors.go
+│   │   │   │   │   ├── personal_chat_mdl.go
+│   │   │   │   │   ├── personal_chat_svc.go
+│   │   │   │   │   ├── personal_chat_svc_cleanup.go
+│   │   │   │   │   └── personal_chat_svc_file.go
+│   │   │   │   ├── personal_contact/
+│   │   │   │   │   ├── internal/
+│   │   │   │   │   │   └── personal_contact_store/
+│   │   │   │   │   │       ├── db.go
+│   │   │   │   │   │       ├── models.go
+│   │   │   │   │   │       ├── personal_contacts.sql.go
+│   │   │   │   │   │       └── querier.go
+│   │   │   │   │   ├── personal_contact_api_http_handler.go
+│   │   │   │   │   ├── personal_contact_api_routes.go
+│   │   │   │   │   ├── personal_contact_errors.go
+│   │   │   │   │   ├── personal_contact_mdl.go
+│   │   │   │   │   ├── personal_contact_svc.go
+│   │   │   │   │   └── personal_contact_svc_helpers.go
+│   │   │   │   ├── personal_profile/
+│   │   │   │   │   ├── internal/
+│   │   │   │   │   │   └── personal_profile_store/
+│   │   │   │   │   │       ├── db.go
+│   │   │   │   │   │       ├── models.go
+│   │   │   │   │   │       ├── personal_profile.sql.go
+│   │   │   │   │   │       └── querier.go
+│   │   │   │   │   ├── personal_profile_api_http_handler.go
+│   │   │   │   │   ├── personal_profile_api_routes.go
+│   │   │   │   │   ├── personal_profile_errors.go
+│   │   │   │   │   ├── personal_profile_mdl.go
+│   │   │   │   │   ├── personal_profile_svc.go
+│   │   │   │   │   └── personal_profile_svc_helpers.go
+│   │   │   │   └── personal_setting/
+│   │   │   │       ├── personal_setting_api_http_handler.go
+│   │   │   │       ├── personal_setting_api_routes.go
+│   │   │   │       ├── personal_setting_errors.go
+│   │   │   │       ├── personal_setting_mdl.go
+│   │   │   │       └── personal_setting_svc.go
+│   │   │   └── public/
+│   │   └── platform/
+│   │       ├── clients/
+│   │       │   ├── appwrite.go
+│   │       │   ├── cosmos.go
+│   │       │   ├── email.go
+│   │       │   ├── firebase.go
+│   │       │   ├── postgres.go
+│   │       │   └── secrets.go
+│   │       ├── config/
+│   │       │   └── config.go
+│   │       ├── kit/
+│   │       │   ├── crypto.go
+│   │       │   ├── errors.go
+│   │       │   ├── models.go
+│   │       │   └── utils.go
+│   │       ├── logger/
+│   │       │   └── logger.go
+│   │       ├── middleware/
+│   │       │   ├── auth_session_middleware.go
+│   │       │   └── middleware.go
+│   │       ├── router/
+│   │       │   └── routes.go
+│   │       ├── services/
+│   │       │   ├── services.go
+│   │       │   └── storage_svc.go
+│   │       └── websocket/
+│   │           └── websocket.go
+│   ├── .env
+│   ├── .gitignore
+│   ├── Dockerfile
+│   ├── go.mod
+│   ├── go.sum
+│   └── sqlc.yaml
+├── chatbasket-api-legacy/
 │   ├── app/
 │   │   ├── README.md
 │   │   └── main.go
@@ -182,139 +331,6 @@ chatbasket_backend/
 │   ├── Dockerfile
 │   ├── go.mod
 │   └── go.sum
-├── chatbasket-apinext/
-│   ├── app/
-│   │   └── main.go
-│   ├── db/
-│   │   ├── common/
-│   │   │   ├── migrations/
-│   │   │   │   ├── 001_auth_init.down.sql
-│   │   │   │   └── 001_auth_init.up.sql
-│   │   │   └── queries/
-│   │   │       └── auth.sql
-│   │   ├── personal/
-│   │   │   ├── migrations/
-│   │   │   │   ├── 001_personal_init.down.sql
-│   │   │   │   ├── 001_personal_init.up.sql
-│   │   │   │   ├── 002_personal_user_contacts.down.sql
-│   │   │   │   ├── 002_personal_user_contacts.up.sql
-│   │   │   │   ├── 003_personal_user_restrictions.down.sql
-│   │   │   │   ├── 003_personal_user_restrictions.up.sql
-│   │   │   │   ├── 004_personal_user_blocks.down.sql
-│   │   │   │   ├── 004_personal_user_blocks.up.sql
-│   │   │   │   ├── 005_personal_global_restrictions.down.sql
-│   │   │   │   ├── 005_personal_global_restrictions.up.sql
-│   │   │   │   ├── 006_personal_contact_requests.down.sql
-│   │   │   │   ├── 006_personal_contact_requests.up.sql
-│   │   │   │   ├── 007_personal_tokens.down.sql
-│   │   │   │   ├── 007_personal_tokens.up.sql
-│   │   │   │   ├── 008_personal_chat_system.down.sql
-│   │   │   │   ├── 008_personal_chat_system.up.sql
-│   │   │   │   ├── 009_personal_secure_nicknames.down.sql
-│   │   │   │   ├── 009_personal_secure_nicknames.up.sql
-│   │   │   │   ├── 010_personal_block_contact_requests.down.sql
-│   │   │   │   └── 010_personal_block_contact_requests.up.sql
-│   │   │   └── queries/
-│   │   │       ├── personal_chat.sql
-│   │   │       ├── personal_contacts.sql
-│   │   │       ├── personal_profile.sql
-│   │   │       └── personal_user.sql
-│   │   └── public/
-│   │       ├── migrations/
-│   │       └── queries/
-│   │           └── placeholder.sql
-│   ├── internal/
-│   │   ├── events/
-│   │   ├── modules/
-│   │   │   ├── core/
-│   │   │   │   └── core_auth/
-│   │   │   │       ├── internal/
-│   │   │   │       │   └── core_auth_store/
-│   │   │   │       │       ├── auth.sql.go
-│   │   │   │       │       ├── db.go
-│   │   │   │       │       ├── models.go
-│   │   │   │       │       └── querier.go
-│   │   │   │       ├── core_auth_api_common_http_handler.go
-│   │   │   │       ├── core_auth_api_http_handler.go
-│   │   │   │       ├── core_auth_api_routes.go
-│   │   │   │       ├── core_auth_errors.go
-│   │   │   │       ├── core_auth_kit_otp.go
-│   │   │   │       ├── core_auth_kit_password.go
-│   │   │   │       ├── core_auth_mdl.go
-│   │   │   │       ├── core_auth_mdl_common.go
-│   │   │   │       ├── core_auth_mdl_helpers.go
-│   │   │   │       ├── core_auth_svc.go
-│   │   │   │       ├── core_auth_svc_common.go
-│   │   │   │       ├── core_auth_svc_flows.go
-│   │   │   │       ├── core_auth_svc_helpers.go
-│   │   │   │       └── core_auth_svc_middleware.go
-│   │   │   ├── personal/
-│   │   │   │   ├── personal_chat/
-│   │   │   │   ├── personal_contact/
-│   │   │   │   │   ├── internal/
-│   │   │   │   │   │   └── personal_contact_store/
-│   │   │   │   │   │       ├── db.go
-│   │   │   │   │   │       ├── models.go
-│   │   │   │   │   │       ├── personal_contacts.sql.go
-│   │   │   │   │   │       └── querier.go
-│   │   │   │   │   ├── personal_contact_api_http_handler.go
-│   │   │   │   │   ├── personal_contact_api_routes.go
-│   │   │   │   │   ├── personal_contact_errors.go
-│   │   │   │   │   ├── personal_contact_mdl.go
-│   │   │   │   │   ├── personal_contact_svc.go
-│   │   │   │   │   └── personal_contact_svc_helpers.go
-│   │   │   │   ├── personal_profile/
-│   │   │   │   │   ├── internal/
-│   │   │   │   │   │   └── personal_profile_store/
-│   │   │   │   │   │       ├── db.go
-│   │   │   │   │   │       ├── models.go
-│   │   │   │   │   │       ├── personal_profile.sql.go
-│   │   │   │   │   │       └── querier.go
-│   │   │   │   │   ├── personal_profile_api_http_handler.go
-│   │   │   │   │   ├── personal_profile_api_routes.go
-│   │   │   │   │   ├── personal_profile_errors.go
-│   │   │   │   │   ├── personal_profile_mdl.go
-│   │   │   │   │   ├── personal_profile_svc.go
-│   │   │   │   │   └── personal_profile_svc_helpers.go
-│   │   │   │   └── personal_setting/
-│   │   │   │       ├── personal_setting_api_http_handler.go
-│   │   │   │       ├── personal_setting_api_routes.go
-│   │   │   │       ├── personal_setting_errors.go
-│   │   │   │       ├── personal_setting_mdl.go
-│   │   │   │       └── personal_setting_svc.go
-│   │   │   └── public/
-│   │   └── platform/
-│   │       ├── clients/
-│   │       │   ├── appwrite.go
-│   │       │   ├── cosmos.go
-│   │       │   ├── email.go
-│   │       │   ├── firebase.go
-│   │       │   ├── postgres.go
-│   │       │   └── secrets.go
-│   │       ├── config/
-│   │       │   └── config.go
-│   │       ├── kit/
-│   │       │   ├── crypto.go
-│   │       │   ├── errors.go
-│   │       │   ├── models.go
-│   │       │   └── utils.go
-│   │       ├── logger/
-│   │       │   └── logger.go
-│   │       ├── middleware/
-│   │       │   ├── auth_session_middleware.go
-│   │       │   └── middleware.go
-│   │       ├── router/
-│   │       │   └── routes.go
-│   │       ├── services/
-│   │       │   ├── services.go
-│   │       │   └── storage_svc.go
-│   │       └── websocket/
-│   │           └── websocket.go
-│   ├── .env
-│   ├── .gitignore
-│   ├── go.mod
-│   ├── go.sum
-│   └── sqlc.yaml
 ├── deployment/
 │   ├── docker-compose.yml
 │   └── nginx.conf

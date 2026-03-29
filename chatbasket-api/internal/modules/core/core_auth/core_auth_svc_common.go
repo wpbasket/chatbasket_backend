@@ -124,7 +124,7 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpda
 	// Store verification code with update_id
 	_, err = s.PostgresQuerier.CreateVerificationCodeWithUpdateID(ctx, core_auth_store.CreateVerificationCodeWithUpdateIDParams{
 		ID:       userID,
-		UpdateID: updateID,
+		UpdateID: &updateID,
 		Email:    user.Email,
 		CodeHash: hashedOTP,
 		Type:     payload.UpdateType, // "password_update" or "email_update"
@@ -165,7 +165,7 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 	}
 
 	// Verify update_id matches
-	if record.UpdateID != updateID {
+	if record.UpdateID == nil || *record.UpdateID != updateID {
 		return nil, kit.NewError(http.StatusUnauthorized, "flow_error", "Request session invalid")
 	}
 
@@ -257,7 +257,7 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEm
 	// Store verification code with update_id and new email
 	_, err = s.PostgresQuerier.CreateVerificationCodeWithUpdateID(ctx, core_auth_store.CreateVerificationCodeWithUpdateIDParams{
 		ID:       userID,
-		UpdateID: updateID,
+		UpdateID: &updateID,
 		Email:    payload.NewEmail, // Store new email in verification code
 		CodeHash: hashedOTP,
 		Type:     "email_update",
@@ -298,7 +298,7 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 	}
 
 	// Verify update_id matches
-	if record.UpdateID != updateID {
+	if record.UpdateID == nil || *record.UpdateID != updateID {
 		return nil, kit.NewError(http.StatusUnauthorized, "flow_error", "Request session invalid")
 	}
 

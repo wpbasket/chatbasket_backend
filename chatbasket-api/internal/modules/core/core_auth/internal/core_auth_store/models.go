@@ -11,36 +11,36 @@ import (
 )
 
 type AuthUser struct {
-	ID              uuid.UUID  `json:"id"`
-	Name            string     `json:"name"`
-	Email           string     `json:"email"`
-	PasswordHash    string     `json:"password_hash"`
-	IsEmailVerified bool       `json:"is_email_verified"`
-	CreatedAt       *time.Time `json:"created_at"`
-	UpdatedAt       *time.Time `json:"updated_at"`
+	ID              uuid.UUID `json:"id"`
+	Name            string    `json:"name"`
+	Email           string    `json:"email"`
+	PasswordHash    string    `json:"password_hash"`
+	IsEmailVerified bool      `json:"is_email_verified"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Session struct {
-	ID          uuid.UUID  `json:"id"`
-	AuthUserID  uuid.UUID  `json:"auth_user_id"`
-	TokenHash   string     `json:"token_hash"`
-	DeviceToken *string    `json:"device_token"`
-	Platform    *string    `json:"platform"`
-	DeviceName  *string    `json:"device_name"`
-	IsCentral   bool       `json:"is_central"`
-	UserAgent   *string    `json:"user_agent"`
-	IpAddress   *string    `json:"ip_address"`
-	ExpiresAt   time.Time  `json:"expires_at"`
-	CreatedAt   *time.Time `json:"created_at"`
-	UpdatedAt   *time.Time `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	AuthUserID  uuid.UUID `json:"auth_user_id"`
+	TokenHash   string    `json:"token_hash"`
+	DeviceToken *string   `json:"device_token"`
+	Platform    *string   `json:"platform"`
+	DeviceName  *string   `json:"device_name"`
+	IsCentral   bool      `json:"is_central"`
+	UserAgent   *string   `json:"user_agent"`
+	IpAddress   *string   `json:"ip_address"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type VerificationCode struct {
 	ID        uuid.UUID  `json:"id"`
-	UpdateID  uuid.UUID  `json:"update_id"`
+	UpdateID  *uuid.UUID `json:"update_id"`
 	Email     string     `json:"email"`
 	CodeHash  string     `json:"code_hash"`
 	Type      string     `json:"type"`
-	CreatedAt *time.Time `json:"created_at"`
-	UpdatedAt *time.Time `json:"updated_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }

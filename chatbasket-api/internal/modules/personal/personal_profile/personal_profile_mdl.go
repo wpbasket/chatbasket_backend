@@ -2,7 +2,6 @@
 
 import (
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
-	"chatbasket-api/internal/platform/kit"
 	"time"
 
 	"github.com/google/uuid"
@@ -63,8 +62,8 @@ func toPrivateUserWithAvatar(user *personal_profile_store.GetUserProfileRow, use
 		AvatarUrl:   avatarUrl,
 		Bio:         user.Bio,
 		ProfileType: user.ProfileType,
-		CreatedAt:   kit.DerefTime(user.CreatedAt),
-		UpdatedAt:   kit.DerefTime(user.UpdatedAt),
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
 	}
 }
 
@@ -77,8 +76,8 @@ func toPrivateUser(user *personal_profile_store.User, username string, email str
 		Bio:         user.Bio,
 		AvatarUrl:   nil,
 		ProfileType: user.ProfileType,
-		CreatedAt:   kit.DerefTime(user.CreatedAt),
-		UpdatedAt:   kit.DerefTime(user.UpdatedAt),
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
 	}
 }
 
