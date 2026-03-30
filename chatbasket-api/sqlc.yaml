@@ -5,6 +5,199 @@ sql:
   # ==========================================
   # --- AUTH MODULE ---
 
+  # ==========================================
+  # IMPORTANT: Query Writing Guidelines for Nullable Types
+  # ==========================================
+  # Last Updated: 2026-03-29
+  #
+  # PROBLEM: When writing SQL queries with nullable columns, you need to understand
+  # how sqlc generates Go types to avoid pointer types or runtime crashes.
+  #
+  # KEY FINDING: Adding COALESCE to a direct column select does NOT change the
+  # generated Go type. sqlc looks at the table schema, sees the column is nullable,
+  # and generates a pointer type regardless of COALESCE. The ONLY way to get
+  # non-pointer types is to use CASE expressions combined with COALESCE.
+  #
+  # BUG FIXED: NULL comparison bug in message status calculation - comparing timestamps
+  # with nullable columns returned NULL instead of true/false, breaking CASE logic.
+
+  # ──────────────────────────────────────────
+  # TIMESTAMPS (timestamptz)
+  # ──────────────────────────────────────────
+  #
+  # GOAL: Get time.Time (non-pointer) instead of *time.Time (pointer) for cleaner code
+  #
+  # ✅ WHAT WORKS - Generates time.Time (non-pointer):
+  #
+  #    Use CASE expression with COALESCE on all nullable branches:
+  #
+  #    SELECT (CASE
+  #      WHEN condition THEN COALESCE(nullable_col, '0001-01-01'::TIMESTAMPTZ)
+  #      ELSE COALESCE(another_nullable_col, '0001-01-01'::TIMESTAMPTZ)
+  #    END)::TIMESTAMPTZ AS computed_field
+  #
+  #    WHY IT WORKS: The CASE expression creates a computed column, not a direct
+  #    table column reference. sqlc sees the COALESCE guarantees non-null output
+  #    and generates time.Time instead of *time.Time.
+  #
+  #    WHEN TO USE: When you need to compute a value from nullable columns and want
+  #    to avoid nil checks in Go code. Common for "other user" fields in chat queries.
+  #
+  # ❌ WHAT DOESN'T WORK - Still generates *time.Time (pointer):
+  #
+  #    Direct column select:
+  #    SELECT nullable_col
+  #
+  #    Direct column with COALESCE:
+  #    SELECT COALESCE(nullable_col, '0001-01-01'::TIMESTAMPTZ)
+  #
+  #    WHY IT DOESN'T WORK: sqlc analyzes the table schema first. When it sees
+  #    you're selecting a column that's defined as nullable in the schema, it
+  #    generates a pointer type (*time.Time) regardless of any COALESCE wrapping.
+  #    The COALESCE is ignored during type generation.
+  #
+  #    WHEN YOU'LL SEE THIS: When selecting raw table columns for struct fields.
+  #    This is expected behavior - use kit.DerefTime() in Go to handle these.
+  #
+  # ❌ WHAT'S BROKEN - Generates interface{} (unusable):
+  #
+  #    CASE expression without COALESCE:
+  #    SELECT (CASE WHEN condition THEN nullable_col ELSE another_col END)
+  #
+  #    WHY IT'S BROKEN: sqlc can't determine the concrete type when CASE branches
+  #    reference nullable columns without COALESCE. It falls back to interface{}
+  #    which is unusable in Go without type assertions.
+  #
+  #    HOW TO FIX: Add COALESCE to all nullable columns in the CASE branches.
+  #
+  # ⚠️ CRITICAL - NULL Comparisons in WHERE/CASE:
+  #
+  #    PROBLEM: In SQL, comparing anything with NULL returns NULL (not false).
+  #    This breaks CASE logic because NULL conditions are skipped, not treated as false.
+  #
+  #    DON'T USE:
+  #    WHERE timestamp <= nullable_col
+  #    WHEN timestamp <= nullable_col THEN 'read'
+  #
+  #    WHAT HAPPENS: If nullable_col is NULL, the comparison returns NULL.
+  #    In CASE expressions, NULL conditions are skipped (not matched).
+  #    In WHERE clauses, NULL is treated as false (row excluded).
+  #
+  #    USE THIS:
+  #    WHERE timestamp <= COALESCE(nullable_col, '0001-01-01'::TIMESTAMPTZ)
+  #    WHEN timestamp <= COALESCE(nullable_col, '0001-01-01'::TIMESTAMPTZ) THEN 'read'
+  #
+  #    WHY IT WORKS: COALESCE replaces NULL with a default value, ensuring the
+  #    comparison always returns true or false, never NULL.
+  #
+  #    REAL EXAMPLE - Message status calculation:
+  #    SELECT (CASE
+  #      WHEN last_message_at IS NULL THEN 'no_message'
+  #      WHEN last_message_at <= COALESCE(read_at, '0001-01-01'::TIMESTAMPTZ) THEN 'read'
+  #      WHEN last_message_at <= COALESCE(delivered_at, '0001-01-01'::TIMESTAMPTZ) THEN 'delivered'
+  #      ELSE 'sent'
+  #    END)::TEXT AS status
+  #
+  #    Without COALESCE, messages would never show as 'read' or 'delivered' when
+  #    the timestamps are NULL - they'd always show as 'sent'.
+  #
+  # Service layer handling:
+  #   - Struct fields (*time.Time): Use kit.DerefTime() to convert to time.Time
+  #   - Query results (time.Time): Use directly, no nil checks needed
+
+  # ──────────────────────────────────────────
+  # UUIDs
+  # ──────────────────────────────────────────
+  #
+  # GOAL: Get uuid.UUID (non-pointer) instead of *uuid.UUID (pointer) for cleaner code
+  #
+  # ✅ WHAT WORKS - Generates uuid.UUID (non-pointer):
+  #
+  #    CASE with both branches NOT NULL:
+  #    SELECT (CASE
+  #      WHEN condition THEN not_null_col
+  #      ELSE another_not_null_col
+  #    END)::UUID AS computed_id
+  #
+  #    WHY IT WORKS: When all CASE branches reference NOT NULL columns, sqlc knows
+  #    the result can never be NULL and generates uuid.UUID (non-pointer).
+  #
+  #    CASE with COALESCE on nullable branches:
+  #    SELECT (CASE
+  #      WHEN condition THEN COALESCE(nullable_col, '00000000-0000-0000-0000-000000000000'::UUID)
+  #      ELSE not_null_col
+  #    END)::UUID AS computed_id
+  #
+  #    WHY IT WORKS: COALESCE ensures the nullable branch never returns NULL,
+  #    so sqlc generates uuid.UUID (non-pointer).
+  #
+  #    WHEN TO USE: Computing "other user ID" in chat queries where you pick
+  #    between participant_1_id and participant_2_id (both NOT NULL).
+  #
+  # ❌ WHAT DOESN'T WORK - Still generates *uuid.UUID (pointer):
+  #
+  #    Direct column select:
+  #    SELECT nullable_col
+  #
+  #    Direct column with COALESCE:
+  #    SELECT COALESCE(nullable_col, '00000000-0000-0000-0000-000000000000'::UUID)
+  #
+  #    WHY IT DOESN'T WORK: Same reason as timestamps - sqlc checks the table schema
+  #    first, sees the column is nullable, and generates a pointer type regardless
+  #    of COALESCE. The COALESCE is ignored during type generation.
+  #
+  #    WHEN YOU'LL SEE THIS: When selecting raw table columns like last_message_sender_id
+  #    which is nullable in the schema. This is expected - handle with nil checks in Go.
+  #
+  # ⚠️ DANGEROUS - Compiles but FAILS at runtime:
+  #
+  #    CASE with nullable branch WITHOUT COALESCE:
+  #    SELECT (CASE
+  #      WHEN condition THEN nullable_col
+  #      ELSE not_null_col
+  #    END)::UUID
+  #
+  #    WHY IT'S DANGEROUS: The ::UUID cast tells sqlc "this is always a UUID",
+  #    so it generates uuid.UUID (non-pointer). But if the nullable_col branch
+  #    returns NULL at runtime, the scan fails with a type mismatch error.
+  #
+  #    WHAT HAPPENS: Code compiles fine. At runtime, when the CASE takes the
+  #    nullable branch and returns NULL, Go's sql.Scan() tries to scan NULL into
+  #    a non-pointer uuid.UUID and crashes.
+  #
+  #    HOW TO FIX: Always add COALESCE to nullable branches:
+  #    SELECT (CASE
+  #      WHEN condition THEN COALESCE(nullable_col, '00000000-0000-0000-0000-000000000000'::UUID)
+  #      ELSE not_null_col
+  #    END)::UUID
+  #
+  #    WHY THE FIX WORKS: COALESCE ensures NULL is replaced with a valid UUID,
+  #    so the scan never fails.
+  #
+  # Service layer handling:
+  #   - Struct fields (*uuid.UUID): Check for nil before dereferencing
+  #   - Query results (uuid.UUID): Use directly, no nil checks needed
+
+  # ──────────────────────────────────────────
+  # SUMMARY - Quick Reference
+  # ──────────────────────────────────────────
+  # 1. Direct column select → Always generates pointer type, even with COALESCE
+  #    Reason: sqlc checks table schema, ignores COALESCE on direct selects
+  #
+  # 2. CASE + COALESCE → Generates non-pointer type (the only way that works)
+  #    Reason: CASE creates computed column, COALESCE guarantees non-null
+  #
+  # 3. CASE without COALESCE → Generates interface{} (timestamps) or crashes (UUIDs)
+  #    Reason: sqlc can't determine type (timestamps) or hides NULL risk (UUIDs)
+  #
+  # 4. Always use COALESCE in NULL comparisons (WHERE/CASE conditions)
+  #    Reason: Comparing with NULL returns NULL, not false, breaking logic
+  #
+  # 5. UUID ::UUID cast hides nullable branches - dangerous without COALESCE
+  #    Reason: Cast forces non-pointer type but doesn't prevent NULL at runtime
+  # ==========================================
+  # ==========================================
+
   - schema: "db/common/migrations/"
     queries: "db/common/queries/"
     engine: "postgresql"

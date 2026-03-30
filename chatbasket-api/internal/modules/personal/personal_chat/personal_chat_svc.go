@@ -161,11 +161,7 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID ki
 func (s *chatService) CheckEligibilityHandler(ctx context.Context, payload *CheckEligibilityPayload, userID kit.UserId) (*MessagingEligibilityResponse, error) {
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
-	}
-
-	if userID.UuidUserId == recipientID {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot check eligibility with yourself")
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
 	}
 
 	eligibility, eligErr := s.CheckMessagingEligibility(ctx, userID, recipientID)
@@ -203,7 +199,7 @@ func (s *chatService) CreateOrGetChat(ctx context.Context, user1ID, user2ID uuid
 func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChatPayload, userID kit.UserId) (*ChatResponse, error) {
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
 	}
 
 	if userID.UuidUserId == recipientID {

@@ -81,14 +81,14 @@ END) AS last_message_type,
     WHEN c.last_message_created_at IS NULL THEN ''
     WHEN c.last_message_created_at <= (
         CASE
-            WHEN c.participant_1_id = $1 THEN c.p2_last_read_at
-            ELSE c.p1_last_read_at
+            WHEN c.participant_1_id = $1 THEN COALESCE(c.p2_last_read_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
+            ELSE COALESCE(c.p1_last_read_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
         END
     ) THEN 'read'
     WHEN c.last_message_created_at <= (
         CASE
-            WHEN c.participant_1_id = $1 THEN c.p2_last_delivered_at
-            ELSE c.p1_last_delivered_at
+            WHEN c.participant_1_id = $1 THEN COALESCE(c.p2_last_delivered_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
+            ELSE COALESCE(c.p1_last_delivered_at, '0001-01-01T00:00:00Z'::TIMESTAMPTZ)
         END
     ) THEN 'delivered'
     ELSE 'sent'
