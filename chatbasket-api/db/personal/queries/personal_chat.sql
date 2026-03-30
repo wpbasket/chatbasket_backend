@@ -68,13 +68,13 @@ END)::INT AS unread_count,
 
 -- Per-Participant Last Message Preview
 (CASE
-    WHEN c.participant_1_id = $1 THEN c.p1_last_message_content
-    ELSE c.p2_last_message_content
-END) AS last_message_content,
+    WHEN c.participant_1_id = $1 THEN COALESCE(c.p1_last_message_content, '')
+    ELSE COALESCE(c.p2_last_message_content, '')
+END)::TEXT AS last_message_content,
 (CASE
-    WHEN c.participant_1_id = $1 THEN c.p1_last_message_type
-    ELSE c.p2_last_message_type
-END) AS last_message_type,
+    WHEN c.participant_1_id = $1 THEN COALESCE(c.p1_last_message_type, '')
+    ELSE COALESCE(c.p2_last_message_type, '')
+END)::TEXT AS last_message_type,
 
 -- Last Message Status (Calculated from chat metadata only)
 (CASE
@@ -359,35 +359,6 @@ WHERE (
 -- Messaging Eligibility Checks
 -- ===========================================
 
--- name: CanSendMessageLite :one
--- Lite version: checks ONLY user_contacts and user_blocks (same-schema tables).
--- Profile-owned checks (recipient_not_found, recipient_private, admin_blocked)
--- are delegated to personalProfilePersonalChatProvider at the service layer.
-SELECT
-    CASE
-        WHEN NOT EXISTS (
-            SELECT 1
-            FROM user_contacts
-            WHERE
-                owner_user_id = $1::uuid
-                AND contact_user_id = $2::uuid
-        ) THEN 'not_in_contacts'
-        WHEN EXISTS (
-            SELECT 1
-            FROM user_blocks
-            WHERE
-                blocker_user_id = $2::uuid
-                AND blocked_user_id = $1::uuid
-        ) THEN 'blocked_by_recipient'
-        WHEN EXISTS (
-            SELECT 1
-            FROM user_blocks
-            WHERE
-                blocker_user_id = $1::uuid
-                AND blocked_user_id = $2::uuid
-        ) THEN 'blocked_by_me'
-        ELSE 'allowed'
-    END AS eligibility_status;
 
 -- name: IsChatParticipant :one
 SELECT EXISTS (

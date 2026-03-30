@@ -1,4 +1,4 @@
-﻿package router
+package router
 
 import (
 	"chatbasket-api/internal/modules/core/core_auth"
@@ -81,8 +81,9 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	personal_contact.Register(personalGroup, contactService, authService)
 
 	// 3. Chat Module
-	chatService := personal_chat.NewChatService(r.Pool, authService, profileService, r.AppwriteStorage)
+	chatService := personal_chat.NewChatService(r.Pool, authService, profileService, contactService, r.AppwriteStorage)
 	personal_chat.Register(personalGroup, chatService, wsHub, authService)
+
 	personal_chat.StartMessageCleanupJob(chatService, 1*time.Hour)
 
 	// 4. Settings Module

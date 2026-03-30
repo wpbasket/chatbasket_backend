@@ -1,4 +1,4 @@
-﻿package personal_contact
+package personal_contact
 
 import (
 	"chatbasket-api/internal/modules/personal/personal_contact/internal/personal_contact_store"
@@ -813,4 +813,21 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 
 	return &BlockUserResponse{Blocked: true}, nil
 }
+
+// GetMessagingBlockStatus returns 0 if no block, 1 if user1 blocked user2, 2 if user2 blocked user1.
+func (ps *contactService) GetMessagingBlockStatus(ctx context.Context, user1ID uuid.UUID, user2ID uuid.UUID) (int32, error) {
+	return ps.PostgresQueries.IsEitherBlocked(ctx, personal_contact_store.IsEitherBlockedParams{
+		BlockerUserID: user1ID,
+		BlockedUserID: user2ID,
+	})
+}
+
+// IsAlreadyContact returns true if ownerID has contactID in their contacts list.
+func (ps *contactService) IsAlreadyContact(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error) {
+	return ps.PostgresQueries.IsAlreadyContact(ctx, personal_contact_store.IsAlreadyContactParams{
+		OwnerUserID:   ownerID,
+		ContactUserID: contactID,
+	})
+}
+
 

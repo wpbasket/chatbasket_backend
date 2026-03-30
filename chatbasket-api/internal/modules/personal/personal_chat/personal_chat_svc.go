@@ -38,6 +38,14 @@ type personalProfilePersonalChatProvider interface {
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
+// personalContactPersonalChatProvider defines the minimal set of methods required from the Contact module.
+// *personal_contact.contactService satisfies this interface directly — no adapter needed.
+type personalContactPersonalChatProvider interface {
+	IsAlreadyContact(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error)
+	GetMessagingBlockStatus(ctx context.Context, user1ID uuid.UUID, user2ID uuid.UUID) (int32, error)
+}
+
+
 // ————————————————————————————————————————————————————————————————————————————————
 // Chat Service
 // ————————————————————————————————————————————————————————————————————————————————
@@ -48,13 +56,16 @@ type chatService struct {
 	PostgresQueries *personal_chat_store.Queries
 	AuthProvider    coreAuthChatProvider
 	ProfileProvider personalProfilePersonalChatProvider
+	ContactProvider personalContactPersonalChatProvider
 	AppwriteStorage *clients.AppwriteStorageService
 }
+
 
 func NewChatService(
 	pool *pgxpool.Pool,
 	authProvider coreAuthChatProvider,
 	profileProvider personalProfilePersonalChatProvider,
+	contactProvider personalContactPersonalChatProvider,
 	appwriteStorage *clients.AppwriteStorageService,
 ) *chatService {
 	store := personal_chat_store.New(pool)
@@ -64,9 +75,11 @@ func NewChatService(
 		PostgresQueries: store,
 		AuthProvider:    authProvider,
 		ProfileProvider: profileProvider,
+		ContactProvider: contactProvider,
 		AppwriteStorage: appwriteStorage,
 	}
 }
+
 
 // ————————————————————————————————————————————————————————————————————————————————
 // Core Messaging Functions
@@ -90,18 +103,15 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID ki
 		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to fetch recipient profile: "+err.Error())
 	}
 
-	// 3. Contact check (Legacy Priority #2)
+	// 3. Contact check (Legacy Priority #2 + DB boundary check)
 	// We MUST check if they are in contacts BEFORE checking privacy/blocks to match legacy logic order
 	// This prevents leaking private status to non-contacts.
-	status, err := s.PostgresQueries.CanSendMessageLite(ctx, personal_chat_store.CanSendMessageLiteParams{
-		Column1: senderID.UuidUserId,
-		Column2: recipientID,
-	})
+	isContact, err := s.ContactProvider.IsAlreadyContact(ctx, senderID.UuidUserId, recipientID)
 	if err != nil {
-		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", kit.GetPostgresError(err).Message)
+		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to verify contact relationship: "+err.Error())
 	}
 
-	if status == EligibilityNotInContacts {
+	if !isContact {
 		return EligibilityNotInContacts, nil
 	}
 
@@ -110,10 +120,19 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID ki
 		return EligibilityRecipientPrivate, nil
 	}
 
-	// 5. Block checks (Legacy Priority #4)
-	if status != EligibilityAllowed {
-		return status, nil // (blocked_by_recipient, blocked_by_me)
+	// 5. Block checks (Legacy Priority #4 + DB boundary check)
+	// Returns 0: none, 1: sender blocked recipient, 2: recipient blocked sender
+	blockStatus, err := s.ContactProvider.GetMessagingBlockStatus(ctx, senderID.UuidUserId, recipientID)
+	if err != nil {
+		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to verify block status: "+err.Error())
 	}
+
+	if blockStatus == 1 {
+		return EligibilityBlockedByMe, nil
+	} else if blockStatus == 2 {
+		return EligibilityBlockedByRecipient, nil
+	}
+
 
 	// 6. Admin-block checks (Legacy Priority #5)
 	senderBlocked, err := s.ProfileProvider.IsUserAdminBlocked(ctx, senderID.UuidUserId)
@@ -695,19 +714,13 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 		var lastMessageContent, lastMessageType, lastMessageSenderID, lastMessageID *string
 		var lastMessageCreatedAt *time.Time
 
-		// Check if a last message exists using LastMessageID (now a pointer)
+		// Check if a last message exists using LastMessageID
 		if chat.LastMessageID != nil {
-			if chat.LastMessageContent != nil {
-				if strVal, ok := chat.LastMessageContent.(string); ok {
-					lastMessageContent = &strVal
-				}
-			}
+			msgContent := chat.LastMessageContent
+			lastMessageContent = &msgContent
 
-			if chat.LastMessageType != nil {
-				if strVal, ok := chat.LastMessageType.(string); ok {
-					lastMessageType = &strVal
-				}
-			}
+			msgType := chat.LastMessageType
+			lastMessageType = &msgType
 
 			lastMessageCreatedAt = chat.LastMessageCreatedAt
 

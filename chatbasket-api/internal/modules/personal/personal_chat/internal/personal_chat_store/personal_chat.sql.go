@@ -12,53 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const canSendMessageLite = `-- name: CanSendMessageLite :one
-
-SELECT
-    CASE
-        WHEN NOT EXISTS (
-            SELECT 1
-            FROM user_contacts
-            WHERE
-                owner_user_id = $1::uuid
-                AND contact_user_id = $2::uuid
-        ) THEN 'not_in_contacts'
-        WHEN EXISTS (
-            SELECT 1
-            FROM user_blocks
-            WHERE
-                blocker_user_id = $2::uuid
-                AND blocked_user_id = $1::uuid
-        ) THEN 'blocked_by_recipient'
-        WHEN EXISTS (
-            SELECT 1
-            FROM user_blocks
-            WHERE
-                blocker_user_id = $1::uuid
-                AND blocked_user_id = $2::uuid
-        ) THEN 'blocked_by_me'
-        ELSE 'allowed'
-    END AS eligibility_status
-`
-
-type CanSendMessageLiteParams struct {
-	Column1 uuid.UUID `json:"column_1"`
-	Column2 uuid.UUID `json:"column_2"`
-}
-
-// ===========================================
-// Messaging Eligibility Checks
-// ===========================================
-// Lite version: checks ONLY user_contacts and user_blocks (same-schema tables).
-// Profile-owned checks (recipient_not_found, recipient_private, admin_blocked)
-// are delegated to personalProfilePersonalChatProvider at the service layer.
-func (q *Queries) CanSendMessageLite(ctx context.Context, arg CanSendMessageLiteParams) (string, error) {
-	row := q.db.QueryRow(ctx, canSendMessageLite, arg.Column1, arg.Column2)
-	var eligibility_status string
-	err := row.Scan(&eligibility_status)
-	return eligibility_status, err
-}
-
 const cleanupOlderFullyAcknowledgedMessages = `-- name: CleanupOlderFullyAcknowledgedMessages :exec
 DELETE FROM messages
 WHERE
@@ -1119,13 +1072,13 @@ SELECT
 END)::INT AS unread_count,
 
 (CASE
-    WHEN c.participant_1_id = $1 THEN c.p1_last_message_content
-    ELSE c.p2_last_message_content
-END) AS last_message_content,
+    WHEN c.participant_1_id = $1 THEN COALESCE(c.p1_last_message_content, '')
+    ELSE COALESCE(c.p2_last_message_content, '')
+END)::TEXT AS last_message_content,
 (CASE
-    WHEN c.participant_1_id = $1 THEN c.p1_last_message_type
-    ELSE c.p2_last_message_type
-END) AS last_message_type,
+    WHEN c.participant_1_id = $1 THEN COALESCE(c.p1_last_message_type, '')
+    ELSE COALESCE(c.p2_last_message_type, '')
+END)::TEXT AS last_message_type,
 
 (CASE
     WHEN c.last_message_created_at IS NULL THEN ''
@@ -1159,31 +1112,31 @@ ORDER BY c.updated_at DESC
 `
 
 type GetUserChatsLiteRow struct {
-	ID                       uuid.UUID   `json:"id"`
-	Participant1ID           uuid.UUID   `json:"participant_1_id"`
-	Participant2ID           uuid.UUID   `json:"participant_2_id"`
-	P1UnreadCount            int32       `json:"p1_unread_count"`
-	P2UnreadCount            int32       `json:"p2_unread_count"`
-	P1LastReadAt             *time.Time  `json:"p1_last_read_at"`
-	P2LastReadAt             *time.Time  `json:"p2_last_read_at"`
-	P1LastDeliveredAt        *time.Time  `json:"p1_last_delivered_at"`
-	P2LastDeliveredAt        *time.Time  `json:"p2_last_delivered_at"`
-	P1LastMessageContent     *string     `json:"p1_last_message_content"`
-	P2LastMessageContent     *string     `json:"p2_last_message_content"`
-	P1LastMessageType        *string     `json:"p1_last_message_type"`
-	P2LastMessageType        *string     `json:"p2_last_message_type"`
-	LastMessageCreatedAt     *time.Time  `json:"last_message_created_at"`
-	CreatedAt                time.Time   `json:"created_at"`
-	UpdatedAt                time.Time   `json:"updated_at"`
-	LastMessageSenderID      *uuid.UUID  `json:"last_message_sender_id"`
-	LastMessageID            *uuid.UUID  `json:"last_message_id"`
-	OtherUserID              uuid.UUID   `json:"other_user_id"`
-	UnreadCount              int32       `json:"unread_count"`
-	LastMessageContent       interface{} `json:"last_message_content"`
-	LastMessageType          interface{} `json:"last_message_type"`
-	LastMessageStatus        string      `json:"last_message_status"`
-	OtherUserLastReadAt      time.Time   `json:"other_user_last_read_at"`
-	OtherUserLastDeliveredAt time.Time   `json:"other_user_last_delivered_at"`
+	ID                       uuid.UUID  `json:"id"`
+	Participant1ID           uuid.UUID  `json:"participant_1_id"`
+	Participant2ID           uuid.UUID  `json:"participant_2_id"`
+	P1UnreadCount            int32      `json:"p1_unread_count"`
+	P2UnreadCount            int32      `json:"p2_unread_count"`
+	P1LastReadAt             *time.Time `json:"p1_last_read_at"`
+	P2LastReadAt             *time.Time `json:"p2_last_read_at"`
+	P1LastDeliveredAt        *time.Time `json:"p1_last_delivered_at"`
+	P2LastDeliveredAt        *time.Time `json:"p2_last_delivered_at"`
+	P1LastMessageContent     *string    `json:"p1_last_message_content"`
+	P2LastMessageContent     *string    `json:"p2_last_message_content"`
+	P1LastMessageType        *string    `json:"p1_last_message_type"`
+	P2LastMessageType        *string    `json:"p2_last_message_type"`
+	LastMessageCreatedAt     *time.Time `json:"last_message_created_at"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
+	LastMessageSenderID      *uuid.UUID `json:"last_message_sender_id"`
+	LastMessageID            *uuid.UUID `json:"last_message_id"`
+	OtherUserID              uuid.UUID  `json:"other_user_id"`
+	UnreadCount              int32      `json:"unread_count"`
+	LastMessageContent       string     `json:"last_message_content"`
+	LastMessageType          string     `json:"last_message_type"`
+	LastMessageStatus        string     `json:"last_message_status"`
+	OtherUserLastReadAt      time.Time  `json:"other_user_last_read_at"`
+	OtherUserLastDeliveredAt time.Time  `json:"other_user_last_delivered_at"`
 }
 
 // Lite version: reads ONLY from chats table.
@@ -1253,6 +1206,8 @@ func (q *Queries) IncrementDeliveryAttempts(ctx context.Context, id uuid.UUID) e
 }
 
 const isChatParticipant = `-- name: IsChatParticipant :one
+
+
 SELECT EXISTS (
         SELECT 1
         FROM chats
@@ -1270,6 +1225,9 @@ type IsChatParticipantParams struct {
 	Column2 uuid.UUID `json:"column_2"`
 }
 
+// ===========================================
+// Messaging Eligibility Checks
+// ===========================================
 func (q *Queries) IsChatParticipant(ctx context.Context, arg IsChatParticipantParams) (bool, error) {
 	row := q.db.QueryRow(ctx, isChatParticipant, arg.Column1, arg.Column2)
 	var exists bool

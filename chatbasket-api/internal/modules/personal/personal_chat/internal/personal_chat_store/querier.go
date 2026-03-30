@@ -11,13 +11,6 @@ import (
 )
 
 type Querier interface {
-	// ===========================================
-	// Messaging Eligibility Checks
-	// ===========================================
-	// Lite version: checks ONLY user_contacts and user_blocks (same-schema tables).
-	// Profile-owned checks (recipient_not_found, recipient_private, admin_blocked)
-	// are delegated to personalProfilePersonalChatProvider at the service layer.
-	CanSendMessageLite(ctx context.Context, arg CanSendMessageLiteParams) (string, error)
 	// Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
 	// and are older than or equal to a specific timestamp, but ONLY if they are plain text.
 	CleanupOlderFullyAcknowledgedMessages(ctx context.Context, arg CleanupOlderFullyAcknowledgedMessagesParams) error
@@ -67,6 +60,9 @@ type Querier interface {
 	// Last Message Status (Calculated from chat metadata only)
 	GetUserChatsLite(ctx context.Context, participant1ID uuid.UUID) ([]GetUserChatsLiteRow, error)
 	IncrementDeliveryAttempts(ctx context.Context, id uuid.UUID) error
+	// ===========================================
+	// Messaging Eligibility Checks
+	// ===========================================
 	IsChatParticipant(ctx context.Context, arg IsChatParticipantParams) (bool, error)
 	MarkChatMessagesAsRead(ctx context.Context, arg MarkChatMessagesAsReadParams) error
 	MarkChatMessagesAsReadPrimary(ctx context.Context, arg MarkChatMessagesAsReadPrimaryParams) error
