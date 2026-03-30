@@ -377,7 +377,7 @@ func (h *chatHandler) MarkChatRead(c *echo.Context) error {
 				otherUserID = chat.Participant1ID
 			}
 
-			readAt := time.Now().UTC().Format(time.RFC3339Nano)
+			readAt := time.Now().UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
 			log.Printf("[WS Broadcast] MarkChatRead: pushing read_receipt to OTHER_USER=%s for chatID=%s read_at=%s",
 				otherUserID, payload.ChatID, readAt)
 			go h.hub.BroadcastToUser(otherUserID, websocket.WSEvent{

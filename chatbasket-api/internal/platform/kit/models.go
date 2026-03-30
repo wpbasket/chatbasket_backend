@@ -5,8 +5,8 @@ import (
 )
 
 type UserId struct {
-	StringUserId string    `json:"userId"`
-	UuidUserId   uuid.UUID `json:"uuidUserId"`
+	StringUserId string
+	UuidUserId   uuid.UUID
 }
 
 
