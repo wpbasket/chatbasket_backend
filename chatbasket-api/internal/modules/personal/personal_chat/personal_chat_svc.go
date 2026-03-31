@@ -127,9 +127,10 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID ki
 		return "", kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to verify block status: "+err.Error())
 	}
 
-	if blockStatus == 1 {
+	switch blockStatus {
+	case 1:
 		return EligibilityBlockedByMe, nil
-	} else if blockStatus == 2 {
+	case 2:
 		return EligibilityBlockedByRecipient, nil
 	}
 
