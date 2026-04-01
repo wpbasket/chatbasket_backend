@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"log"
+
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
-	"log"
 )
 
 // WSEvent is the envelope for server→client push events (broadcasts).
@@ -36,7 +37,7 @@ type WSResponseEvent struct {
 // WSError represents an error in a WS response.
 type WSError struct {
 	Code    int    `json:"code"`
-	Type    string `json:"type,omitempty"`
+	Type    string `json:"type"`
 	Message string `json:"message"`
 }
 

@@ -334,8 +334,9 @@ func (h *chatHandler) GetFileURL(c *echo.Context) error {
 		return err
 	}
 
-	payload := GetFileURLPayload{
-		MessageID: c.QueryParam("message_id"),
+	var payload GetFileURLPayload
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(http.StatusBadRequest, "invalid_request", "invalid request payload")
 	}
 
 	res, svcErr := h.Service.GetFileURLHandler(c.Request().Context(), &payload, userID)
