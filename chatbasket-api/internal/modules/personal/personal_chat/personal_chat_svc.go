@@ -985,12 +985,31 @@ func (s *chatService) UnsendMessageHandler(ctx context.Context, payload *UnsendM
 func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.UUID, userID kit.UserId, isPrimary bool) error {
 	log.Printf("[DeleteMessageForMe] Processing %d messages for user %s (isPrimary=%v)", len(messageIDs), userID.UuidUserId, isPrimary)
 
+	// Clear the per-participant preview if the deleted message is the current preview.
+	// This works for BOTH primary and secondary devices.
 	for _, msgID := range messageIDs {
 		msg, err := s.PostgresQueries.GetMessageByID(ctx, msgID)
-		if err != nil {
-			// Message already deleted (e.g., by relay cleanup). Still try to clear the chat preview
-			// by scanning the user's chats for a matching last_message_id — matches legacy behaviour.
-			log.Printf("[DeleteMessageForMe] Message %s not found (likely relay-cleaned). Attempting preview clear.", msgID)
+		if err == nil {
+			_ = s.PostgresQueries.ClearLastMessageForParticipant(ctx, personal_chat_store.ClearLastMessageForParticipantParams{
+				UserID:    userID.UuidUserId,
+				ChatID:    msg.ChatID,
+				MessageID: &msgID,
+			})
+
+			// Mark the message as deleted in the database based on sender/recipient
+			if msg.SenderID == userID.UuidUserId {
+				_ = s.PostgresQueries.MarkMessageDeletedBySender(ctx, personal_chat_store.MarkMessageDeletedBySenderParams{
+					ID:       msgID,
+					SenderID: userID.UuidUserId,
+				})
+			} else if msg.RecipientID == userID.UuidUserId {
+				_ = s.PostgresQueries.MarkMessageDeletedByRecipient(ctx, personal_chat_store.MarkMessageDeletedByRecipientParams{
+					ID:          msgID,
+					RecipientID: userID.UuidUserId,
+				})
+			}
+		} else {
+			// Message already deleted (e.g., by relay cleanup). Still try to clear the chat preview.
 			chats, chatsErr := s.PostgresQueries.GetChatsByUserID(ctx, userID.UuidUserId)
 			if chatsErr == nil {
 				for _, chat := range chats {
@@ -1004,46 +1023,51 @@ func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.
 					}
 				}
 			}
-			continue
 		}
+	}
 
-		// Clear preview for the participant who is deleting
-		msgID := msg.ID
-		_ = s.PostgresQueries.ClearLastMessageForParticipant(ctx, personal_chat_store.ClearLastMessageForParticipantParams{
-			UserID:    userID.UuidUserId,
-			ChatID:    msg.ChatID,
-			MessageID: &msgID,
-		})
-
-		// Mark as deleted by the appropriate party
-		if msg.SenderID == userID.UuidUserId {
-			_ = s.PostgresQueries.MarkMessageDeletedBySender(ctx, personal_chat_store.MarkMessageDeletedBySenderParams{
-				ID:       msgID,
-				SenderID: userID.UuidUserId,
-			})
-		} else if msg.RecipientID == userID.UuidUserId {
-			_ = s.PostgresQueries.MarkMessageDeletedByRecipient(ctx, personal_chat_store.MarkMessageDeletedByRecipientParams{
-				ID:          msgID,
-				RecipientID: userID.UuidUserId,
-			})
-		}
-
-		// Create sync action if non-primary
-		if !isPrimary {
-			payload, _ := json.Marshal(SyncActionPayload{MessageIDs: []string{msgID.String()}, ChatID: msg.ChatID.String()})
-			_, _ = s.PostgresQueries.CreateSyncAction(ctx, personal_chat_store.CreateSyncActionParams{
+	// If initiated by primary, we do nothing on the backend relay (as per requirements)
+	// The primary handles local deletion and other secondaries catch up via p2p later.
+	if isPrimary {
+	} else {
+		// If initiated by secondary, we create a sync action to notify the primary
+		for _, msgID := range messageIDs {
+			payload, _ := json.Marshal(SyncActionPayload{MessageIDs: []string{msgID.String()}})
+			_, err := s.PostgresQueries.CreateSyncAction(ctx, personal_chat_store.CreateSyncActionParams{
 				ID:         uuid.New(),
 				UserID:     userID.UuidUserId,
 				ActionType: "delete_for_me",
 				Payload:    payload,
 			})
+			if err != nil {
+				return kit.NewError(http.StatusInternalServerError, "server_error", "failed to create sync action for secondary deletion")
+			}
+		}
+	}
+
+	// Instant Cleanup Optimization:
+	// If the message is already fully "safe" for the other party, wipe it from the relay right away.
+	for _, msgID := range messageIDs {
+		msg, err := s.PostgresQueries.GetMessageByID(ctx, msgID)
+		if err != nil {
+			continue
 		}
 
-		// Check if both parties have deleted — instant relay cleanup
-		updatedMsg, err := s.PostgresQueries.GetMessageByID(ctx, msgID)
-		if err == nil && updatedMsg.DeletedBySender && updatedMsg.DeletedByRecipient {
-			log.Printf("[DeleteMessageForMe] Both parties deleted msg %s, cleaning up from relay", msgID)
-			s.deleteMessageFromRelay(ctx, updatedMsg)
+		shouldDeleteNow := false
+		if msg.SenderID == userID.UuidUserId {
+			// User is SENDER deleting: check if recipient already consumed
+			if msg.DeliveredToRecipientPrimary != nil && *msg.DeliveredToRecipientPrimary {
+				shouldDeleteNow = true
+			}
+		} else if msg.RecipientID == userID.UuidUserId {
+			// User is RECIPIENT deleting: check if sender already synced
+			if msg.SyncedToSenderPrimary {
+				shouldDeleteNow = true
+			}
+		}
+
+		if shouldDeleteNow {
+			s.deleteMessageFromRelay(ctx, msg)
 		}
 	}
 
