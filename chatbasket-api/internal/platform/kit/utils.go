@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -81,9 +82,17 @@ type RefreshFileData struct {
 	TokenExpiry time.Time
 }
 
-// EnsureFreshAvatarTokens checks if avatar tokens are expired and refreshes them via Appwrite if needed.
+// EnsureFreshFileTokens checks if Appwrite file tokens need refresh and regenerates them if needed.
+
+// Refresh is triggered when:
+//   - tokenExpiry is zero (NULL in DB) OR tokenID is empty OR tokenSecret is empty
+//   - tokenExpiry has already expired
+//
+// When refresh is triggered: lists all existing tokens for the file, deletes them one by one, then creates a new token.
+// This ensures Appwrite does not accumulate orphaned tokens.
+//
 // Returns (refreshedData, needsUpdate, error).
-func EnsureFreshAvatarTokens(
+func EnsureFreshFileTokens(
 	fileID *string,
 	tokenID *string,
 	tokenSecret *string,
@@ -96,10 +105,15 @@ func EnsureFreshAvatarTokens(
 	}
 
 	now := time.Now().UTC()
+
+	// Determine if refresh is needed
 	needsRefresh := false
-	if !tokenExpiry.IsZero() {
-		needsRefresh = !tokenExpiry.UTC().After(now)
-	} else if tokenID != nil && *tokenID != "" && tokenSecret != nil && *tokenSecret != "" {
+
+	// Refresh if any credential is missing (zero/empty)
+	if tokenExpiry.IsZero() || (tokenID == nil || *tokenID == "") || (tokenSecret == nil || *tokenSecret == "") {
+		needsRefresh = true
+	} else if !tokenExpiry.UTC().After(now) {
+		// Refresh if expiry has passed
 		needsRefresh = true
 	}
 
@@ -107,9 +121,22 @@ func EnsureFreshAvatarTokens(
 		return nil, false, nil
 	}
 
-	// Create new token
+	// ——— Refresh triggered: delete all existing tokens for this file ——————————————————————
+	tokenList, err := appwriteTokens.List(bucketID, *fileID)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to list existing tokens for file %s: %w", *fileID, err)
+	}
+	if tokenList.Total > 0 {
+		for _, tok := range tokenList.Tokens {
+			if _, delErr := appwriteTokens.Delete(tok.Id); delErr != nil {
+				log.Printf("[EnsureFreshFileTokens] warning: failed to delete token %s for file %s: %v", tok.Id, *fileID, delErr)
+			}
+		}
+	}
+
+	// ——— Create new token —————————————————————————————————————————————————————————————————————
 	exp := now.AddDate(1, 0, 0).Format("2006-01-02 15:04:05")
-	tok, err := appwriteTokens.CreateFileToken(
+	newTok, err := appwriteTokens.CreateFileToken(
 		bucketID,
 		*fileID,
 		appwriteTokens.WithCreateFileTokenExpire(exp),
@@ -118,15 +145,14 @@ func EnsureFreshAvatarTokens(
 		return nil, false, fmt.Errorf("failed to create Appwrite file token: %w", err)
 	}
 
-	tokTime, err := time.Parse(time.RFC3339, tok.Expire)
+	tokTime, err := time.Parse(time.RFC3339, newTok.Expire)
 	if err != nil {
-		// Fallback for non-RFC3339 formats if any, but Appwrite usually uses RFC3339
 		return nil, false, fmt.Errorf("failed to parse Appwrite expire time: %w", err)
 	}
 
 	return &RefreshFileData{
-		TokenID:     tok.Id,
-		TokenSecret: tok.Secret,
+		TokenID:     newTok.Id,
+		TokenSecret: newTok.Secret,
 		TokenExpiry: tokTime,
 	}, true, nil
 }

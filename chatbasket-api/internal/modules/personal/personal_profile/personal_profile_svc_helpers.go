@@ -123,7 +123,7 @@ func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid
 		effectiveExpiry = *tokenExpiry
 	}
 
-	refreshed, needsUpdate, err := kit.EnsureFreshAvatarTokens(
+	refreshed, needsUpdate, err := kit.EnsureFreshFileTokens(
 		fileID,
 		tokenID,
 		tokenSecret,

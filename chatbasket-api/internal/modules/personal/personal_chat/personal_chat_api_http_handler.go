@@ -165,14 +165,13 @@ func (h *chatHandler) AcknowledgeDelivery(c *echo.Context) error {
 		if parseErr == nil {
 			msg, lookupErr := h.Service.PostgresQueries.GetMessageByID(c.Request().Context(), msgUUID)
 			if lookupErr == nil {
-				log.Printf("[WS Broadcast] AckDelivery: pushing delivery_ack to SENDER=%s for msgID=%s chatID=%s deliveredAt=%v",
-					msg.SenderID, payload.MessageID, msg.ChatID, msg.CreatedAt)
+				log.Printf("[WS Broadcast] AckDelivery: pushing delivery_ack to SENDER=%s for msgID=%s chatID=%s",
+					msg.SenderID, payload.MessageID, msg.ChatID)
 				go h.hub.BroadcastToUser(msg.SenderID, websocket.WSEvent{
 					Type: WSEventDeliveryAck,
 					Payload: DeliveryAckEventPayload{
-						MessageIDs:  []string{payload.MessageID},
-						ChatID:      msg.ChatID.String(),
-						DeliveredAt: msg.CreatedAt,
+						MessageIDs: []string{payload.MessageID},
+						ChatID:     msg.ChatID.String(),
 					},
 				})
 			} else {

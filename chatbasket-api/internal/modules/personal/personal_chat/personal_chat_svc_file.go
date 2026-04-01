@@ -41,7 +41,7 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 	tokenSecret := msg.FileTokenSecret
 	tokenExpiry := kit.DerefTime(msg.FileTokenExpiry)
 
-	refreshData, refreshed, err := kit.EnsureFreshAvatarTokens(
+	refreshData, refreshed, err := kit.EnsureFreshFileTokens(
 		msg.FileID, tokenID, tokenSecret, tokenExpiry,
 		s.AppwriteStorage.Tokens,
 		bucketID,
@@ -249,7 +249,24 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func (s *chatService) DeleteChatFile(ctx context.Context, fileID string) {
-	_, err := s.AppwriteStorage.Storage.DeleteFile(ChatFilesBucketID, fileID)
+	if fileID == "" {
+		return
+	}
+
+	// Delete all tokens for this file
+	tokenList, err := s.AppwriteStorage.Tokens.List(ChatFilesBucketID, fileID)
+	if err != nil {
+		log.Printf("[DeleteChatFile] Failed to list tokens for file %s: %v", fileID, err)
+	} else if tokenList.Total > 0 {
+		for _, tok := range tokenList.Tokens {
+			if _, delErr := s.AppwriteStorage.Tokens.Delete(tok.Id); delErr != nil {
+				log.Printf("[DeleteChatFile] Failed to delete token %s for file %s: %v", tok.Id, fileID, delErr)
+			}
+		}
+	}
+
+	// Delete the file
+	_, err = s.AppwriteStorage.Storage.DeleteFile(ChatFilesBucketID, fileID)
 	if err != nil {
 		log.Printf("[DeleteChatFile] Failed to delete file %s from bucket %s: %v", fileID, ChatFilesBucketID, err)
 	}
