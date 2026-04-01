@@ -924,22 +924,19 @@ func (s *chatService) UnsendMessage(ctx context.Context, chatID uuid.UUID, messa
 				Payload:    recipientPayload,
 			})
 		}
-	}
 
-	// Update chat preview + unread after unsend
-	if len(messagesToUnsend) > 0 {
-		// Update preview to "unsent" text
-		lastMsgID := messagesToUnsend[len(messagesToUnsend)-1].ID
+		// ALWAYS attempt to update Chat Status (Preview/Unread) for EACH msgID being unsent.
+		// The UpdateChatUnsendPreview SQL contains 'AND last_message_id = ...', so it will ONLY apply
+		// if this specific message is the one shown in the chat list.
 		_ = qtx.UpdateChatUnsendPreview(ctx, personal_chat_store.UpdateChatUnsendPreviewParams{
 			ID:            chatID,
-			LastMessageID: &lastMsgID,
+			LastMessageID: &msgID,
 		})
 
-		// Decrement unread only for recipient
 		_ = qtx.UpdateChatUnsendDecrement(ctx, personal_chat_store.UpdateChatUnsendDecrementParams{
-			RecipientID: recipientID,
-			Amount:      int32(len(messagesToUnsend)),
 			ID:          chatID,
+			RecipientID: recipientID,
+			Amount:      1,
 		})
 	}
 

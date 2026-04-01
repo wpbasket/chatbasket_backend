@@ -135,7 +135,7 @@ func EnsureFreshFileTokens(
 	}
 
 	// ——— Create new token —————————————————————————————————————————————————————————————————————
-	exp := now.AddDate(1, 0, 0).Format("2006-01-02 15:04:05")
+	exp := now.AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
 	newTok, err := appwriteTokens.CreateFileToken(
 		bucketID,
 		*fileID,

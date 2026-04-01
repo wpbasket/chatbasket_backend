@@ -188,13 +188,21 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 		return nil, kit.NewError(http.StatusInternalServerError, "upload_failed", "Failed to upload file: "+err.Error())
 	}
 
-	var tokenID, tokenSecret *string
-	if len(uploadResult.TokenIDs) > 0 {
-		tokenID = &uploadResult.TokenIDs[0]
+	// Guard 1: verify Appwrite actually generated tokens (matches legacy)
+	if len(uploadResult.TokenIDs) == 0 || len(uploadResult.TokenSecrets) == 0 {
+		go s.DeleteChatFile(context.Background(), fileID)
+		return nil, kit.NewError(http.StatusInternalServerError, "file_token_generation_failed", "token generation returned no tokens")
 	}
-	if len(uploadResult.TokenSecrets) > 0 {
-		tokenSecret = &uploadResult.TokenSecrets[0]
+
+	// Guard 2: parse Appwrite's actual expiry string (matches legacy)
+	tokenExpiry, err := time.Parse(time.RFC3339, uploadResult.Expire)
+	if err != nil {
+		go s.DeleteChatFile(context.Background(), fileID)
+		return nil, kit.NewError(http.StatusInternalServerError, "token_expiry_parse_failed", "failed to parse token expiry from Appwrite")
 	}
+
+	tokenID := &uploadResult.TokenIDs[0]
+	tokenSecret := &uploadResult.TokenSecrets[0]
 
 	content := params.Caption
 	if content == "" {
@@ -205,7 +213,6 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	fileSize := params.FileHeader.Size
 	fileMimeType := params.FileHeader.Header.Get("Content-Type")
 
-	expiry := time.Now().AddDate(1, 0, 0)
 	message, dbErr := s.PostgresQueries.CreateMessageWithFile(ctx, personal_chat_store.CreateMessageWithFileParams{
 		ID:                          messageID,
 		ChatID:                      chat.ID,
@@ -219,7 +226,7 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 		FileMimeType:                &fileMimeType,
 		FileTokenID:                 tokenID,
 		FileTokenSecret:             tokenSecret,
-		FileTokenExpiry:             &expiry,
+		FileTokenExpiry:             &tokenExpiry,
 		ExpiresAt:                   expiresAt,
 		SyncedToSenderPrimary:       params.IsPrimary,
 		DeliveredToRecipientPrimary: new(bool),
