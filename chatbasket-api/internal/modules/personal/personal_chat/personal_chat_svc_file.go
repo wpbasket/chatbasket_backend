@@ -204,10 +204,9 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	tokenID := &uploadResult.TokenIDs[0]
 	tokenSecret := &uploadResult.TokenSecrets[0]
 
+	// Content field should only contain user-provided caption, not auto-filled filename
+	// Frontend will display filename from file_name field
 	content := params.Caption
-	if content == "" {
-		content = params.FileHeader.Filename
-	}
 
 	fileName := params.FileHeader.Filename
 	fileSize := params.FileHeader.Size
