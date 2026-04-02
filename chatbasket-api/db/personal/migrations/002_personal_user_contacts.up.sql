@@ -1,5 +1,4 @@
 -- +migrate Up
--- 003_personal_user_contacts.up.sql
 
 -- ======================================
 -- Table: user_contacts
@@ -8,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS user_contacts (
     owner_user_id       UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     contact_user_id     UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    nickname            TEXT            CHECK (length(nickname) <= 40),
+    nickname            TEXT            CHECK (length(nickname) <= 512),
     created_at          TIMESTAMPTZ     NOT NULL,
     updated_at          TIMESTAMPTZ     NOT NULL,
     

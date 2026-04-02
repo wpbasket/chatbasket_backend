@@ -33,12 +33,20 @@ CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_user_i
 CREATE OR REPLACE FUNCTION remove_contact_on_block()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Use VALUES for better performance with tuple deletion
+    -- Remove contacts (both directions)
     DELETE FROM user_contacts
     WHERE (owner_user_id, contact_user_id) = ANY (VALUES 
         (NEW.blocker_user_id, NEW.blocked_user_id),
         (NEW.blocked_user_id, NEW.blocker_user_id)
     );
+
+    -- Remove contact requests (both directions)
+    DELETE FROM contact_requests
+    WHERE (requester_user_id, receiver_user_id) = ANY (VALUES
+        (NEW.blocker_user_id, NEW.blocked_user_id),
+        (NEW.blocked_user_id, NEW.blocker_user_id)
+    );
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

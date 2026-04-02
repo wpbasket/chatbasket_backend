@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS contact_requests (
     status                  TEXT                    NOT NULL DEFAULT 'pending' CHECK (
         status IN ('pending', 'accepted', 'declined')
     ),
-    nickname                TEXT                    CHECK (length(nickname) <= 40),
+    nickname                TEXT                    CHECK (length(nickname) <= 512),
     created_at              TIMESTAMPTZ             NOT NULL,
     updated_at              TIMESTAMPTZ             NOT NULL,
 
