@@ -11,9 +11,18 @@ import (
 )
 
 type Querier interface {
+	// ===========================================
+	// Block Cleanup Operations (Background Worker)
+	// ===========================================
+	// Background cleanup: Deletes messages for chats where users have blocked each other.
+	// NOTE: This only handles DB records. Apprites file cleanup must be done in Go.
+	CleanupMessagesForBlockedUsers(ctx context.Context) error
 	// Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
 	// and are older than or equal to a specific timestamp, but ONLY if they are plain text.
 	CleanupOlderFullyAcknowledgedMessages(ctx context.Context, arg CleanupOlderFullyAcknowledgedMessagesParams) error
+	// Background cleanup: Deletes sync actions for chats where users have blocked each other.
+	// This handles orphaned sync actions even if the trigger (007) is not yet applied or was missed.
+	CleanupSyncActionsForBlockedUsers(ctx context.Context) error
 	// ===========================================
 	// Per-Participant Preview Operations
 	// ===========================================
@@ -40,15 +49,16 @@ type Querier interface {
 	DeleteExpiredMessages(ctx context.Context) error
 	DeleteMessage(ctx context.Context, id uuid.UUID) error
 	DeleteOldSyncActions(ctx context.Context) error
-	DeletePendingMessagesBetweenUsers(ctx context.Context, arg DeletePendingMessagesBetweenUsersParams) error
 	GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error)
 	GetChatByParticipants(ctx context.Context, arg GetChatByParticipantsParams) (Chat, error)
 	GetChatMessages(ctx context.Context, arg GetChatMessagesParams) ([]Message, error)
 	GetChatsByUserID(ctx context.Context, participant1ID uuid.UUID) ([]Chat, error)
 	GetDeliveredMessagesByChat(ctx context.Context, arg GetDeliveredMessagesByChatParams) ([]Message, error)
-	GetExpiredMessagesWithFiles(ctx context.Context, limit int32) ([]Message, error)
+	GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpiredMessagesWithFilesParams) ([]Message, error)
 	GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error)
 	GetMessagesWithExpiredFileTokens(ctx context.Context, limit int32) ([]Message, error)
+	// Fetches messages with files for chats between blocked users for cleanup.
+	GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg GetMessagesWithFilesForBlockedUsersParams) ([]Message, error)
 	GetPendingMessagesForRecipient(ctx context.Context, arg GetPendingMessagesForRecipientParams) ([]Message, error)
 	GetPendingSenderSyncMessages(ctx context.Context, arg GetPendingSenderSyncMessagesParams) ([]Message, error)
 	GetPendingSyncActions(ctx context.Context, arg GetPendingSyncActionsParams) ([]MessageSyncAction, error)

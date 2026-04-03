@@ -344,16 +344,6 @@ WHERE
         )
     );
 
--- name: DeletePendingMessagesBetweenUsers :exec
-DELETE FROM messages
-WHERE (
-        sender_id = $1
-        AND recipient_id = $2
-    )
-    OR (
-        sender_id = $2
-        AND recipient_id = $1
-    );
 
 -- ===========================================
 -- Messaging Eligibility Checks
@@ -535,7 +525,8 @@ WHERE (
         )
     )
     AND file_id IS NOT NULL
-ORDER BY created_at ASC
+    AND id > sqlc.arg('last_id')
+ORDER BY id ASC
 LIMIT $1;
 
 -- ===========================================
@@ -628,3 +619,46 @@ SET
     updated_at = now()
 WHERE
     id = sqlc.arg ('chat_id');
+
+-- ===========================================
+-- Block Cleanup Operations (Background Worker)
+-- ===========================================
+
+-- name: CleanupMessagesForBlockedUsers :exec
+-- Background cleanup: Deletes messages for chats where users have blocked each other.
+-- NOTE: This only handles DB records. Apprites file cleanup must be done in Go.
+DELETE FROM messages m
+USING chats c, user_blocks ub
+WHERE m.chat_id = c.id
+AND (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR
+    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+);
+
+-- name: CleanupSyncActionsForBlockedUsers :exec
+-- Background cleanup: Deletes sync actions for chats where users have blocked each other.
+-- This handles orphaned sync actions even if the trigger (007) is not yet applied or was missed.
+DELETE FROM message_sync_actions msa
+USING chats c, user_blocks ub
+WHERE (msa.payload::jsonb->>'chatId')::uuid = c.id
+AND (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR
+    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+);
+
+-- name: GetMessagesWithFilesForBlockedUsers :many
+-- Fetches messages with files for chats between blocked users for cleanup.
+SELECT m.*
+FROM messages m
+INNER JOIN chats c ON m.chat_id = c.id
+INNER JOIN user_blocks ub ON (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR
+    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+)
+WHERE (m.file_id IS NOT NULL OR m.thumbnail_file_id IS NOT NULL)
+AND m.id > sqlc.arg('last_id')
+ORDER BY m.id ASC
+LIMIT sqlc.arg('limit');

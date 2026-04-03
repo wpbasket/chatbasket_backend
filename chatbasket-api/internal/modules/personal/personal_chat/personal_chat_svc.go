@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -1193,12 +1192,17 @@ func (s *chatService) deleteMessageFromRelay(ctx context.Context, message person
 }
 
 func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
-	log.Printf("[CleanupJob] Starting cleanup of expired and orphaned (fully delivered) messages/files")
+	log.Printf("[CleanupJob] Starting cleanup of expired and orphaned messages/files")
 
-	// 1. Fetch expired messages that have files (batched to avoid memory issues)
 	const batchSize = 100
+
+	// 1. Fetch and clean up EXPIRED messages that have files (Atomic Per-Message Cleanup within Batches)
+	lastExpiredID := uuid.Nil
 	for {
-		expiredMessages, err := s.PostgresQueries.GetExpiredMessagesWithFiles(ctx, batchSize)
+		expiredMessages, err := s.PostgresQueries.GetExpiredMessagesWithFiles(ctx, personal_chat_store.GetExpiredMessagesWithFilesParams{
+			Limit:  int32(batchSize),
+			LastID: lastExpiredID,
+		})
 		if err != nil {
 			log.Printf("[CleanupJob] ERROR: Failed to fetch expired messages with files: %v", err)
 			break
@@ -1208,15 +1212,22 @@ func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 			break
 		}
 
-		log.Printf("[CleanupJob] Found %d expired/orphaned messages with files to clean up", len(expiredMessages))
-
+		log.Printf("[CleanupJob] Processing %d expired/orphaned messages with files (Cursor: %s)", len(expiredMessages), lastExpiredID)
 		for _, msg := range expiredMessages {
+			// 1.1 Store file cleanup
 			if msg.FileID != nil && *msg.FileID != "" {
 				s.DeleteChatFile(ctx, *msg.FileID)
 			}
 			if msg.ThumbnailFileID != nil && *msg.ThumbnailFileID != "" {
 				s.DeleteChatFile(ctx, *msg.ThumbnailFileID)
 			}
+
+			// 1.2 Immediate database record cleanup for this message
+			if err := s.PostgresQueries.DeleteMessage(ctx, msg.ID); err != nil {
+				log.Printf("[CleanupJob] WARNING: Failed to delete expired message record %s: %v", msg.ID, err)
+			}
+
+			lastExpiredID = msg.ID
 		}
 
 		if len(expiredMessages) < batchSize {
@@ -1224,24 +1235,69 @@ func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 		}
 	}
 
-	// 2. Perform bulk database deletion of ALL expired messages
-	err := s.PostgresQueries.DeleteExpiredMessages(ctx)
-	if err != nil {
-		log.Printf("[CleanupJob] ERROR: Failed to bulk delete expired messages from DB: %v", err)
-		return fmt.Errorf("failed to delete expired messages: %w", err)
+	// 2. Fetch and clean up messages with files from BLOCKED users (Atomic Per-Message Cleanup within Batches)
+	lastBlockedID := uuid.Nil
+	for {
+		blockedMessages, err := s.PostgresQueries.GetMessagesWithFilesForBlockedUsers(ctx, personal_chat_store.GetMessagesWithFilesForBlockedUsersParams{
+			Limit:  int32(batchSize),
+			LastID: lastBlockedID,
+		})
+		if err != nil {
+			log.Printf("[CleanupJob] ERROR: Failed to fetch blocked-user messages with files: %v", err)
+			break
+		}
+
+		if len(blockedMessages) == 0 {
+			break
+		}
+
+		log.Printf("[CleanupJob] Processing %d blocked-user messages with files (Cursor: %s)", len(blockedMessages), lastBlockedID)
+		for _, msg := range blockedMessages {
+			// 2.1 Store file cleanup
+			if msg.FileID != nil && *msg.FileID != "" {
+				s.DeleteChatFile(ctx, *msg.FileID)
+			}
+			if msg.ThumbnailFileID != nil && *msg.ThumbnailFileID != "" {
+				s.DeleteChatFile(ctx, *msg.ThumbnailFileID)
+			}
+
+			// 2.2 Immediate database record cleanup for this message
+			if err := s.PostgresQueries.DeleteMessage(ctx, msg.ID); err != nil {
+				log.Printf("[CleanupJob] WARNING: Failed to delete blocked-user message record %s: %v", msg.ID, err)
+			}
+
+			lastBlockedID = msg.ID
+		}
+
+		if len(blockedMessages) < batchSize {
+			break
+		}
 	}
 
-	// Also clean up old sync actions (Improvement over legacy)
+	// 3. Final bulk database purging (Optimized for messages without files)
+	log.Printf("[CleanupJob] Starting final bulk sweep for any remaining expired or blocked-user records")
+
+	// 3.1. Bulk delete ALL remaining expired messages
+	if err := s.PostgresQueries.DeleteExpiredMessages(ctx); err != nil {
+		log.Printf("[CleanupJob] ERROR: Failed to bulk delete expired messages: %v", err)
+	}
+
+	// 3.2. Bulk delete remaining messages for BLOCKED users
+	if err := s.PostgresQueries.CleanupMessagesForBlockedUsers(ctx); err != nil {
+		log.Printf("[CleanupJob] ERROR: Failed to bulk delete blocked-user messages: %v", err)
+	}
+
+	// 3.3. Bulk delete remaining sync actions for BLOCKED users
+	if err := s.PostgresQueries.CleanupSyncActionsForBlockedUsers(ctx); err != nil {
+		log.Printf("[CleanupJob] ERROR: Failed to bulk delete blocked-user sync actions: %v", err)
+	}
+
+	// 3.4. Final cleanup of old sync actions (standard 30-day window)
 	_ = s.PostgresQueries.DeleteOldSyncActions(ctx)
 
-	log.Printf("[CleanupJob] Cleanup of expired/orphaned messages completed successfully")
+	log.Printf("[CleanupJob] Cleanup process completed successfully")
 	return nil
 }
 
-func (s *chatService) DropPendingMessagesBetweenUsers(ctx context.Context, user1ID, user2ID uuid.UUID) error {
-	return s.PostgresQueries.DeletePendingMessagesBetweenUsers(ctx, personal_chat_store.DeletePendingMessagesBetweenUsersParams{
-		SenderID:    user1ID,
-		RecipientID: user2ID,
-	})
-}
+
 

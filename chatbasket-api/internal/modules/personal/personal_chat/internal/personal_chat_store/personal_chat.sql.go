@@ -12,6 +12,28 @@ import (
 	"github.com/google/uuid"
 )
 
+const cleanupMessagesForBlockedUsers = `-- name: CleanupMessagesForBlockedUsers :exec
+
+DELETE FROM messages m
+USING chats c, user_blocks ub
+WHERE m.chat_id = c.id
+AND (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR
+    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+)
+`
+
+// ===========================================
+// Block Cleanup Operations (Background Worker)
+// ===========================================
+// Background cleanup: Deletes messages for chats where users have blocked each other.
+// NOTE: This only handles DB records. Apprites file cleanup must be done in Go.
+func (q *Queries) CleanupMessagesForBlockedUsers(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, cleanupMessagesForBlockedUsers)
+	return err
+}
+
 const cleanupOlderFullyAcknowledgedMessages = `-- name: CleanupOlderFullyAcknowledgedMessages :exec
 DELETE FROM messages
 WHERE
@@ -31,6 +53,24 @@ type CleanupOlderFullyAcknowledgedMessagesParams struct {
 // and are older than or equal to a specific timestamp, but ONLY if they are plain text.
 func (q *Queries) CleanupOlderFullyAcknowledgedMessages(ctx context.Context, arg CleanupOlderFullyAcknowledgedMessagesParams) error {
 	_, err := q.db.Exec(ctx, cleanupOlderFullyAcknowledgedMessages, arg.ChatID, arg.CreatedAt)
+	return err
+}
+
+const cleanupSyncActionsForBlockedUsers = `-- name: CleanupSyncActionsForBlockedUsers :exec
+DELETE FROM message_sync_actions msa
+USING chats c, user_blocks ub
+WHERE (msa.payload::jsonb->>'chatId')::uuid = c.id
+AND (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR
+    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+)
+`
+
+// Background cleanup: Deletes sync actions for chats where users have blocked each other.
+// This handles orphaned sync actions even if the trigger (007) is not yet applied or was missed.
+func (q *Queries) CleanupSyncActionsForBlockedUsers(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, cleanupSyncActionsForBlockedUsers)
 	return err
 }
 
@@ -426,28 +466,6 @@ func (q *Queries) DeleteOldSyncActions(ctx context.Context) error {
 	return err
 }
 
-const deletePendingMessagesBetweenUsers = `-- name: DeletePendingMessagesBetweenUsers :exec
-DELETE FROM messages
-WHERE (
-        sender_id = $1
-        AND recipient_id = $2
-    )
-    OR (
-        sender_id = $2
-        AND recipient_id = $1
-    )
-`
-
-type DeletePendingMessagesBetweenUsersParams struct {
-	SenderID    uuid.UUID `json:"sender_id"`
-	RecipientID uuid.UUID `json:"recipient_id"`
-}
-
-func (q *Queries) DeletePendingMessagesBetweenUsers(ctx context.Context, arg DeletePendingMessagesBetweenUsersParams) error {
-	_, err := q.db.Exec(ctx, deletePendingMessagesBetweenUsers, arg.SenderID, arg.RecipientID)
-	return err
-}
-
 const getChatByID = `-- name: GetChatByID :one
 SELECT id, participant_1_id, participant_2_id, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, p1_last_delivered_at, p2_last_delivered_at, last_message_created_at, last_message_sender_id, last_message_id, p1_last_message_content, p2_last_message_content, p1_last_message_type, p2_last_message_type, created_at, updated_at FROM chats WHERE id = $1 LIMIT 1
 `
@@ -727,12 +745,18 @@ WHERE (
         )
     )
     AND file_id IS NOT NULL
-ORDER BY created_at ASC
+    AND id > $2
+ORDER BY id ASC
 LIMIT $1
 `
 
-func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, limit int32) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getExpiredMessagesWithFiles, limit)
+type GetExpiredMessagesWithFilesParams struct {
+	Limit  int32     `json:"limit"`
+	LastID uuid.UUID `json:"last_id"`
+}
+
+func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpiredMessagesWithFilesParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getExpiredMessagesWithFiles, arg.Limit, arg.LastID)
 	if err != nil {
 		return nil, err
 	}
@@ -828,6 +852,73 @@ LIMIT $1
 
 func (q *Queries) GetMessagesWithExpiredFileTokens(ctx context.Context, limit int32) ([]Message, error) {
 	rows, err := q.db.Query(ctx, getMessagesWithExpiredFileTokens, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChatID,
+			&i.SenderID,
+			&i.RecipientID,
+			&i.Content,
+			&i.MessageType,
+			&i.FileID,
+			&i.FileName,
+			&i.FileSize,
+			&i.FileMimeType,
+			&i.FileTokenID,
+			&i.FileTokenSecret,
+			&i.FileTokenExpiry,
+			&i.ThumbnailFileID,
+			&i.ThumbnailTokenID,
+			&i.ThumbnailTokenSecret,
+			&i.DeliveredToRecipient,
+			&i.DeliveredToRecipientPrimary,
+			&i.SyncedToSenderPrimary,
+			&i.DeletedBySender,
+			&i.DeletedByRecipient,
+			&i.DeliveryAttempts,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMessagesWithFilesForBlockedUsers = `-- name: GetMessagesWithFilesForBlockedUsers :many
+SELECT m.id, m.chat_id, m.sender_id, m.recipient_id, m.content, m.message_type, m.file_id, m.file_name, m.file_size, m.file_mime_type, m.file_token_id, m.file_token_secret, m.file_token_expiry, m.thumbnail_file_id, m.thumbnail_token_id, m.thumbnail_token_secret, m.delivered_to_recipient, m.delivered_to_recipient_primary, m.synced_to_sender_primary, m.deleted_by_sender, m.deleted_by_recipient, m.delivery_attempts, m.expires_at, m.created_at, m.updated_at
+FROM messages m
+INNER JOIN chats c ON m.chat_id = c.id
+INNER JOIN user_blocks ub ON (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR
+    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+)
+WHERE (m.file_id IS NOT NULL OR m.thumbnail_file_id IS NOT NULL)
+AND m.id > $1
+ORDER BY m.id ASC
+LIMIT $2
+`
+
+type GetMessagesWithFilesForBlockedUsersParams struct {
+	LastID uuid.UUID `json:"last_id"`
+	Limit  int32     `json:"limit"`
+}
+
+// Fetches messages with files for chats between blocked users for cleanup.
+func (q *Queries) GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg GetMessagesWithFilesForBlockedUsersParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getMessagesWithFilesForBlockedUsers, arg.LastID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
