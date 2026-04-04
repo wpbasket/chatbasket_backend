@@ -208,6 +208,12 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	// Frontend will display filename from file_name field
 	content := params.Caption
 
+	// Chat list preview should fallback to filename if caption is empty (legacy behavior)
+	previewContent := content
+	if previewContent == "" {
+		previewContent = params.FileHeader.Filename
+	}
+
 	fileName := params.FileHeader.Filename
 	fileSize := params.FileHeader.Size
 	fileMimeType := params.FileHeader.Header.Get("Content-Type")
@@ -240,7 +246,7 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	// Update chat status
 	_ = s.PostgresQueries.UpdateChatStatus(ctx, personal_chat_store.UpdateChatStatusParams{
 		ID:                   chat.ID,
-		P1LastMessageContent: &content,
+		P1LastMessageContent: &previewContent,
 		LastMessageCreatedAt: &message.CreatedAt,
 		P1LastMessageType:    &message.MessageType,
 		LastMessageSenderID:  &message.SenderID,
