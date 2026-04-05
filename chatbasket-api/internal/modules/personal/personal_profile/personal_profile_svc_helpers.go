@@ -1,4 +1,4 @@
-﻿package personal_profile
+package personal_profile
 
 import (
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
@@ -265,5 +265,62 @@ func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UU
 		IsAdminBlocked: u.IsAdminBlocked,
 		ProfileType:    u.ProfileType,
 	}, nil
+}
+
+// GetContactableProfilesForViewer fetches profiles for contact enrichment with privacy filtering,
+// excluding users who have switched to a private profile type.
+// Used by the Contact module instead of GetVisibleProfilesForContactViewer.
+func (ps *profileService) GetContactableProfilesForViewer(
+	ctx context.Context,
+	viewerID uuid.UUID,
+	targetIDs []uuid.UUID,
+) (map[uuid.UUID]*ContactProfileView, error) {
+	if len(targetIDs) == 0 {
+		return map[uuid.UUID]*ContactProfileView{}, nil
+	}
+
+	rows, err := ps.PostgresQueries.GetContactableProfilesForViewer(ctx, personal_profile_store.GetContactableProfilesForViewerParams{
+		ViewerUserID:  viewerID,
+		TargetUserIds: targetIDs,
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to fetch contactable profiles: "+kit.GetPostgresError(err).Message)
+	}
+
+	result := make(map[uuid.UUID]*ContactProfileView, len(rows))
+	for _, row := range rows {
+		// Decrypt username
+		username, err := DecryptUsername(row.Username, ps.PersonalUsernameKey)
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt username")
+		}
+
+		// Check avatar visibility
+		var avatarURL *string
+		if ShouldExposeAvatar(
+			row.GlobalRestrictProfile,
+			row.ExceptionGlobalProfile,
+			row.GlobalRestrictAvatar,
+			row.ExceptionGlobalAvatar,
+			row.UserRestrictProfile,
+			row.UserRestrictAvatar,
+		) {
+			url, err := ps.GetRefreshedAvatarURL(ctx, row.ID, row.FileID, row.TokenID, row.TokenSecret, row.TokenExpiry)
+			if err != nil {
+				return nil, err
+			}
+			avatarURL = url
+		}
+
+		result[row.ID] = &ContactProfileView{
+			ID:        row.ID,
+			Name:      row.Name,
+			Username:  username,
+			Bio:       row.Bio,
+			AvatarURL: avatarURL,
+		}
+	}
+
+	return result, nil
 }
 

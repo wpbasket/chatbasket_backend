@@ -19,6 +19,7 @@ type personalProfilePersonalContactProvider interface {
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
 	GetVisibleProfilesForContactViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
+	GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	FindContactableUserByUsername(ctx context.Context, viewerID uuid.UUID, username string) (*personal_profile.ContactLookupResult, error)
 }
 
@@ -80,7 +81,7 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 	}
 
 	// Batch fetch enriched profiles
-	profilesByID, err := ps.personalProfilePersonalContactProvider.GetVisibleProfilesForContactViewer(
+	profilesByID, err := ps.personalProfilePersonalContactProvider.GetContactableProfilesForViewer(
 		ctx,
 		userId.UuidUserId,
 		targetIDs,
@@ -599,7 +600,7 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 	// Batch fetch enriched profiles
 	var profilesByID map[uuid.UUID]*personal_profile.ContactProfileView
 	if len(targetIDs) > 0 {
-		profilesByID, err = ps.personalProfilePersonalContactProvider.GetVisibleProfilesForContactViewer(
+		profilesByID, err = ps.personalProfilePersonalContactProvider.GetContactableProfilesForViewer(
 			ctx,
 			userId.UuidUserId,
 			targetIDs,

@@ -149,6 +149,42 @@ WHERE
     AND u.is_admin_blocked IS FALSE
 ORDER BY u.id;
 
+-- name: GetContactableProfilesForViewer :many
+-- Same as GetProfilesForContactViewer but excludes private profiles.
+-- Used by the Contact module to enforce the rule that users who switch
+-- to a private profile are no longer visible in contact lists.
+SELECT
+    u.id,
+    u.name,
+    u.b64_cipher_chacha20poly1305_username AS username,
+    u.bio,
+    a.file_id,
+    a.token_id,
+    a.token_secret,
+    a.token_expiry,
+    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
+    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
+    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
+    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
+    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
+    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
+FROM
+    users u
+    LEFT JOIN avatars a ON u.id = a.user_id
+    AND a.avatar_type = 'profile'
+    LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
+    LEFT JOIN user_global_restriction_exemptions ugre ON u.id = ugre.user_id
+    AND ugre.exempted_user_id = sqlc.arg (viewer_user_id)
+    LEFT JOIN user_restrictions ur ON u.id = ur.user_id
+    AND ur.restricted_user_id = sqlc.arg (viewer_user_id)
+WHERE
+    u.id = ANY (
+        sqlc.arg (target_user_ids)::uuid []
+    )
+    AND u.is_admin_blocked IS FALSE
+    AND u.profile_type IN ('public', 'personal')
+ORDER BY u.id;
+
 -- name: GetUserByHashedUsernameForContact :one
 SELECT *
 FROM users

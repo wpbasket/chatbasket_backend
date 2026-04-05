@@ -286,7 +286,7 @@ The three-form storage approach provides defense in depth:
 - Query filtering:
   - Excludes blocked users (either direction)
   - Excludes administratively blocked users (filtered during profile hydration)
-  - Does not currently exclude private profiles (if a user changes profile_type after being added) (MUST BE IMPLEMENTED)
+  - Excludes private profiles: If a user changes profile_type to private after being added, they are filtered out during profile enrichment
   - Applies privacy restrictions to avatar visibility
 - Username decryption:
   - System decrypts encrypted usernames for display
