@@ -130,7 +130,7 @@ The three-form storage approach provides defense in depth:
 - Frontend validation: Must be exactly 10 characters after whitespace removal
 - Frontend input: Split into two fields (4 letters + 6 numbers) with auto-uppercase conversion
 - Backend validation: Enforced via database constraints (exactly 10 characters)
-- Username lookup: Case-insensitive (converted to uppercase before hashing)
+- Username lookup: Frontend must uppercase before hashing/lookup (backend does not normalize casing)
 
 ---
 
@@ -177,15 +177,15 @@ The three-form storage approach provides defense in depth:
 #### 4.2.1 Check Contact Existence
 - Input: Username of the user to check
 - Process:
-  1. Frontend converts username to uppercase
-  2. System computes HMAC-SHA256 hash of the provided username
-  3. System queries user database using the hashed value
-  4. System validates user is not checking themselves
+   1. Frontend converts username to uppercase (backend does not normalize casing)
+   2. System computes HMAC-SHA256 hash of the provided username
+   3. System queries user database using the hashed value
+   4. System validates user is not checking themselves
 - Response rules:
   - For private profiles: Confirm existence and profile type, but do not reveal user identifier
   - For public or personal profiles: Return user identifier and profile type
 - Error conditions:
-  - User not found: Return appropriate error message
+  - User not found: Return exists as false
   - Self-check: Return exists as false
 
 #### 4.2.2 Create Contact
@@ -200,8 +200,10 @@ The three-form storage approach provides defense in depth:
      - If requester blocked target: Return "you_blocked_user" error
      - If target blocked requester: Return "user_blocked_you" error
   8. Contact must not already exist (returns "already_in_contacts" success message)
-  9. User cannot add users with private profiles (returns "user_private_profile" error)
-  10. Nickname validation: If provided, must be 40 characters or less (Unicode character count)
+   9. User cannot add users with private profiles (returns "user_private_profile" error)
+   10. Nickname validation: If provided, must be 40 characters or less (Unicode character count)
+
+- Nickname storage: Stored encrypted at rest (Base64 ChaCha20-Poly1305) in both user_contacts and contact_requests
 
 - Behavior by target profile type:
   - **Public profile**:
@@ -229,7 +231,7 @@ The three-form storage approach provides defense in depth:
 - Automatic contact creation:
   - Database trigger fires AFTER UPDATE when status changes from "pending" to "accepted"
   - Creates one-way contact relationship: requester → receiver
-  - Copies nickname from contact request to contact record
+   - Copies encrypted nickname from contact request to contact record
   - Uses ON CONFLICT DO NOTHING to prevent duplicates
 - Response messages:
   - Success: "contact_request_accepted"
@@ -248,7 +250,7 @@ The three-form storage approach provides defense in depth:
   3. User cannot reject their own request (returns "self_action_not_allowed" error)
 - Database operation:
   - Updates request status from "pending" to "declined"
-  - Returns same outcome types as accept: "accepted", "not_found", or "processed"
+  - Returns outcome: "declined", "not_found", or "processed"
 - Response messages:
   - Success: "contact_request_declined"
   - Not found: "pending_request_not_found" (404)
@@ -282,8 +284,9 @@ The three-form storage approach provides defense in depth:
   - For each outgoing contact, checks if they exist in the map
   - Sets mutual flag to true if bidirectional relationship exists
 - Query filtering:
-  - Excludes private profiles
-  - Excludes administratively blocked users
+  - Excludes blocked users (either direction)
+  - Excludes administratively blocked users (filtered during profile hydration)
+  - Does not currently exclude private profiles (if a user changes profile_type after being added) (MUST BE IMPLEMENTED)
   - Applies privacy restrictions to avatar visibility
 - Username decryption:
   - System decrypts encrypted usernames for display
@@ -327,8 +330,8 @@ The three-form storage approach provides defense in depth:
      - If trimmed string is empty: Sets nickname to null (removes nickname)
      - If trimmed string exceeds 40 characters (Unicode character count): Returns "invalid_nickname_length" error
 - Database operation:
-  - Updates nickname field in user_contacts table
-  - Stores trimmed value or null
+  - Updates nickname field in user_contacts table (encrypted at rest)
+  - Stores encrypted value or null
 - Response message: "contact_nickname_updated"
 - Frontend behavior:
   - Input field enforces 40 character limit in real-time
@@ -361,7 +364,7 @@ The three-form storage approach provides defense in depth:
 
 ### 5.2 Automatic Mutual Contact Removal
 - Database trigger fires AFTER INSERT on user_blocks table
-- Automatically removes both directional contact relationships:
+- Automatically removes both directional contact relationships and both directional contact requests:
   - Blocker → Blocked contact removed
   - Blocked → Blocker contact removed
 - Uses tuple deletion pattern for performance
@@ -378,8 +381,8 @@ The three-form storage approach provides defense in depth:
   - Block creation: Checks for existing blocks
 
 ### 5.4 Message Cleanup on Block
-- System automatically deletes pending messages between users in both directions
-- Ensures no pending messages remain after block is created
+- System automatically deletes message sync actions between users in both directions
+- Ensures no message_sync_actions remain after block is created
 
 ### 5.5 Block Cascade Behavior
 - If user account is deleted: All block records are automatically removed via ON DELETE CASCADE
@@ -448,7 +451,7 @@ The system shall evaluate visibility in the following priority order (circuit br
 ### 6.3 Implementation Details
 
 #### 6.3.1 Visibility Function
-- Function: shouldExposeAvatar (duplicated in contact_service.go and chat_service.go)
+- Function: ShouldExposeAvatar (centralized in personal_profile module)
 - Parameters: Six boolean flags for global restrictions, exemptions, and user restrictions
 - Returns: Boolean indicating whether to show avatar
 - Used in: GetContacts, GetContactRequests, GetUserChats
@@ -480,7 +483,7 @@ All contact and chat queries use identical LEFT JOIN pattern:
 - Accepts uri parameter (string or null)
 - If uri is null: Shows colored placeholder with initials
 - If uri exists: Shows actual avatar image
-- No client-side privacy logic (backend controls uri presence)
+- No frontend-side privacy logic (backend controls uri presence)
 - Placeholder color: Deterministic hash based on name
 - Backend returns null for restricted avatars
 
@@ -525,14 +528,16 @@ All contact and chat queries use identical LEFT JOIN pattern:
   - System shall prompt the user that data may be lost
   - System shall not allow the switch without explicit user confirmation
   - Default behavior: Reject the switch request
+- Current implementation: Demotes all sessions and promotes the current session
+- Current implementation: No online/offline check or confirmation flow is enforced
 
 ---
 
-## Appendix: Database Schema
+## 8. Appendix: Database Schema
 
-### 7.1 Tables
+### 8.1 Tables
 
-#### 7.1.1 users
+#### 8.1.1 users
 Stores user profile information.
 
 **Columns:**
@@ -544,8 +549,8 @@ Stores user profile information.
 - `admin_block_reason` (TEXT) - Reason for administrative block
 - `hmac_sha256_hex_username` (TEXT, NOT NULL, UNIQUE) - HMAC-SHA256 hash of username, exactly 64 characters
 - `b64_cipher_chacha20poly1305_username` (TEXT, NOT NULL) - ChaCha20-Poly1305 encrypted username, max 52 characters
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Foreign key to auth_users(id) with CASCADE delete
@@ -567,7 +572,7 @@ Stores user profile information.
 
 ---
 
-#### 7.1.2 alone_username
+#### 8.1.2 alone_username
 Stores plaintext usernames with random identifiers unlinked to user accounts.
 
 **Purpose:**
@@ -578,8 +583,8 @@ Stores plaintext usernames with random identifiers unlinked to user accounts.
 **Columns:**
 - `id` (UUID, Primary Key) - Random identifier (not linked to user ID)
 - `username` (TEXT, NOT NULL, UNIQUE) - Plaintext username, exactly 10 characters
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Primary key on `id`
@@ -595,7 +600,7 @@ Stores plaintext usernames with random identifiers unlinked to user accounts.
 
 ---
 
-#### 7.1.3 avatars
+#### 8.1.3 avatars
 Stores user avatar information and access tokens.
 
 **Columns:**
@@ -605,9 +610,9 @@ Stores user avatar information and access tokens.
 - `avatar_type` (TEXT, NOT NULL, DEFAULT 'profile') - Avatar type
 - `token_id` (TEXT) - Access token identifier
 - `token_secret` (TEXT) - Access token secret
-- `token_expiry` (TIMESTAMPTZ) - Token expiration timestamp (1 year from creation)
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `token_expiry` (TIMESTAMPTZ) - Token expiration timestamp (current implementation requests now + 1 year)
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Primary key on `id`
@@ -626,28 +631,28 @@ Stores user avatar information and access tokens.
 - `avatars_timestamps_trigger` - Automatic timestamp management via set_timestamps()
 
 **Token Management:**
-- Tokens expire after 1 year from creation
+- Tokens expire after 1 year from creation (current implementation)
 - Refresh triggered if token is expired or expiry is invalid
 - Empty file_id returns null (no avatar)
 
 ---
 
-#### 7.1.4 sessions
+#### 8.1.4 sessions
 Stores user session information including primary device designation.
 
 **Columns:**
 - `id` (UUID, Primary Key) - Session identifier
 - `auth_user_id` (UUID, NOT NULL) - User identifier, references auth_users(id)
 - `token_hash` (TEXT, NOT NULL, UNIQUE) - Hashed session token
-- `device_token` (TEXT) - Firebase Cloud Messaging token
+- `device_token` (TEXT) - Push notification token (FCM/APN)
 - `platform` (TEXT) - Platform type: 'ios', 'android', or 'web'
 - `device_name` (TEXT) - Human-readable device name
 - `is_central` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Primary device designation
 - `user_agent` (TEXT) - Browser/app user agent string
 - `ip_address` (TEXT) - IP address of the session
 - `expires_at` (TIMESTAMPTZ, NOT NULL) - Session expiration timestamp
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Primary key on `id`
@@ -666,20 +671,20 @@ Stores user session information including primary device designation.
 
 ---
 
-#### 7.1.5 user_contacts
+#### 8.1.5 user_contacts
 Stores one-way contact relationships between users.
 
 **Columns:**
 - `owner_user_id` (UUID, NOT NULL) - User who added the contact, references users(id)
 - `contact_user_id` (UUID, NOT NULL) - User being added as contact, references users(id)
-- `nickname` (TEXT) - Optional nickname for the contact, max 40 characters (Unicode character count)
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `nickname` (TEXT) - Encrypted nickname (Base64 ChaCha20-Poly1305), max 512 characters
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Composite primary key on `(owner_user_id, contact_user_id)`
 - Foreign keys to users(id) with CASCADE delete
-- Nickname max 40 characters (CHECK constraint)
+- Nickname max 512 characters (CHECK constraint)
 
 **Indexes:**
 - Primary key creates index on `(owner_user_id, contact_user_id)`
@@ -689,31 +694,31 @@ Stores one-way contact relationships between users.
 - `user_contacts_timestamps_trigger` - Automatic timestamp management via set_timestamps()
 
 **Nickname Handling:**
-- Trimmed before storage
-- Empty trimmed strings stored as NULL
-- Validated using Unicode character count (not byte count)
+- Plaintext is trimmed and validated (<= 40 Unicode characters) before encryption
+- Stored as Base64 ciphertext in DB; empty trimmed strings stored as NULL
 - Frontend enforces 40 character limit in real-time
 
 ---
 
-#### 7.1.6 contact_requests
+#### 8.1.6 contact_requests
 Stores pending, accepted, and declined contact requests.
 
 **Columns:**
 - `id` (UUID, Primary Key) - Request identifier
 - `requester_user_id` (UUID, NOT NULL) - User sending the request, references users(id)
 - `receiver_user_id` (UUID, NOT NULL) - User receiving the request, references users(id)
-- `status` (request_status_enum, NOT NULL, DEFAULT 'pending') - Request status: 'pending', 'accepted', or 'declined'
-- `nickname` (TEXT) - Optional nickname for the contact, max 40 characters
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `status` (TEXT, NOT NULL, DEFAULT 'pending') - Request status: 'pending', 'accepted', or 'declined'
+- `nickname` (TEXT) - Encrypted nickname (Base64 ChaCha20-Poly1305), max 512 characters
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Primary key on `id`
 - Unique constraint on `(requester_user_id, receiver_user_id)`
 - Check constraint: `requester_user_id != receiver_user_id` (no self-requests)
+- Status must be one of: 'pending', 'accepted', 'declined' (CHECK constraint)
 - Foreign keys to users(id) with CASCADE delete
-- Nickname max 40 characters (CHECK constraint)
+- Nickname max 512 characters (CHECK constraint)
 
 **Indexes:**
 - Primary key on `id`
@@ -726,11 +731,8 @@ Stores pending, accepted, and declined contact requests.
 - `contact_requests_timestamps_trigger` - Automatic timestamp management via set_timestamps()
 - `auto_add_contact_on_accept` - Automatically creates one-way contact when request is accepted (AFTER UPDATE OF status when status changes from 'pending' to 'accepted')
 
-**Enums:**
-- `request_status_enum` - Values: 'pending', 'accepted', 'declined'
-
 **Functions:**
-- `add_contact_on_accept()` - Inserts record into user_contacts with owner_user_id = requester_user_id and contact_user_id = receiver_user_id, copies nickname from request, uses ON CONFLICT DO NOTHING for idempotency
+- `add_contact_on_accept()` - Inserts record into user_contacts with owner_user_id = requester_user_id and contact_user_id = receiver_user_id, copies encrypted nickname from request, uses ON CONFLICT DO NOTHING for idempotency
 
 **Status Transitions:**
 - pending → accepted: Triggers automatic contact creation
@@ -742,15 +744,15 @@ Stores pending, accepted, and declined contact requests.
 - Requests remain indefinitely until accepted/declined/undone
 - Cleanup index exists for processed requests
 
-#### 7.1.7 user_blocks
+#### 8.1.7 user_blocks
 Stores block relationships between users.
 
 **Columns:**
 - `id` (UUID, Primary Key) - Block record identifier
 - `blocker_user_id` (UUID, NOT NULL) - User who initiated the block, references users(id)
 - `blocked_user_id` (UUID, NOT NULL) - User being blocked, references users(id)
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Primary key on `id`
@@ -764,16 +766,16 @@ Stores block relationships between users.
 
 **Triggers:**
 - `user_blocks_timestamps_trigger` - Automatic timestamp management via set_timestamps()
-- `auto_remove_contact_on_block` - Automatically removes mutual contacts when block is created (AFTER INSERT)
+- `auto_remove_contact_on_block` - Automatically removes mutual contacts and contact requests when block is created (AFTER INSERT)
 
 **Functions:**
-- `remove_contact_on_block()` - Deletes both directional contact relationships using tuple deletion pattern: (blocker → blocked) and (blocked → blocker)
+- `remove_contact_on_block()` - Deletes both directional contact relationships and both directional contact requests: (blocker → blocked) and (blocked → blocker)
 
 **Block Behavior:**
 - Idempotent: Blocking already-blocked user returns success
 - Reciprocal blocking allowed: If B blocked A, A can still block B
 - Automatic contact cleanup in both directions
-- Automatic pending message deletion in both directions
+- Automatic message_sync_actions cleanup in both directions
 - Uses ON CONFLICT DO NOTHING for idempotency
 
 ---
@@ -788,8 +790,8 @@ Stores user-specific restrictions for profile, avatar, and status visibility.
 - `restrict_profile` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Hide profile from restricted user
 - `restrict_avatar` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Hide avatar from restricted user
 - `restrict_status` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Hide status from restricted user
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Primary key on `id`
@@ -822,8 +824,8 @@ Stores global restrictions set by a user that apply to all users except exempted
 - `restrict_avatar` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Hide avatar globally
 - `restrict_status` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Hide status globally
 - `restrict_profile` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Hide profile globally
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Primary key on `user_id`
@@ -858,8 +860,8 @@ Stores users who are exempted from owner's global restrictions.
 - `exception_avatar` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Allow avatar view despite global restriction
 - `exception_status` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Allow status view despite global restriction
 - `exception_profile` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Allow profile view despite global restriction
-- `created_at` (TIMESTAMPTZ) - Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) - Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
 **Constraints:**
 - Composite primary key on `(user_id, exempted_user_id)`
