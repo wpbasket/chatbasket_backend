@@ -1,4 +1,4 @@
-# Personal Profile System - Business Rules
+# Personal Profile & Contact System - Business Rules
 
 ## 1. Profile Types
 
@@ -318,6 +318,13 @@ The three-form storage approach provides defense in depth:
   - Contact remains visible in "People who added you" if they still have requester added
 
 #### 4.2.6 Nickname Operations
+
+**Nickname Encryption Upgrade (Server-side at-rest encryption):**
+- **Algorithm:** ChaCha20-Poly1305 (AEAD)
+- **Storage:** Encrypted and stored as Base64 (ciphertext includes prepended nonce)
+- **Owner-Binding (AAD):** `OwnerUserID` is used as Additional Authenticated Data (AAD) during encryption to cryptographically bind the nickname to the owner account and prevent cross-account data swapping
+- **Nonce Uniqueness:** The first 12 bytes of the recipient/contact user ID are used as the nonce so the same nickname for different contacts produces different ciphertext (reduces pattern leakage / "same-name" analysis)
+- **Note:** This is not end-to-end / zero-knowledge encryption; the server holds the encryption key
 
 ##### 4.2.6.1 Update Nickname
 - Validation rules:
@@ -696,6 +703,7 @@ Stores one-way contact relationships between users.
 **Nickname Handling:**
 - Plaintext is trimmed and validated (<= 40 Unicode characters) before encryption
 - Stored as Base64 ciphertext in DB; empty trimmed strings stored as NULL
+- Encryption uses owner_user_id as AAD and derives nonce from contact_user_id (first 12 bytes)
 - Frontend enforces 40 character limit in real-time
 
 ---
