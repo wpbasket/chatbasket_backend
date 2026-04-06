@@ -18,7 +18,6 @@ import (
 type personalProfilePersonalContactProvider interface {
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
-	GetVisibleProfilesForContactViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	FindContactableUserByUsername(ctx context.Context, viewerID uuid.UUID, username string) (*personal_profile.ContactLookupResult, error)
 }

@@ -160,61 +160,6 @@ func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid
 	}), nil
 }
 
-// GetVisibleProfilesForContactViewer fetches profiles for contact enrichment with privacy filtering
-func (ps *profileService) GetVisibleProfilesForContactViewer(
-	ctx context.Context,
-	viewerID uuid.UUID,
-	targetIDs []uuid.UUID,
-) (map[uuid.UUID]*ContactProfileView, error) {
-	if len(targetIDs) == 0 {
-		return map[uuid.UUID]*ContactProfileView{}, nil
-	}
-
-	rows, err := ps.PostgresQueries.GetProfilesForContactViewer(ctx, personal_profile_store.GetProfilesForContactViewerParams{
-		ViewerUserID:  viewerID,
-		TargetUserIds: targetIDs,
-	})
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to fetch profiles: "+kit.GetPostgresError(err).Message)
-	}
-
-	result := make(map[uuid.UUID]*ContactProfileView, len(rows))
-	for _, row := range rows {
-		// Decrypt username
-		username, err := DecryptUsername(row.Username, ps.PersonalUsernameKey)
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt username")
-		}
-
-		// Check avatar visibility
-		var avatarURL *string
-		if ShouldExposeAvatar(
-			row.GlobalRestrictProfile,
-			row.ExceptionGlobalProfile,
-			row.GlobalRestrictAvatar,
-			row.ExceptionGlobalAvatar,
-			row.UserRestrictProfile,
-			row.UserRestrictAvatar,
-		) {
-			url, err := ps.GetRefreshedAvatarURL(ctx, row.ID, row.FileID, row.TokenID, row.TokenSecret, row.TokenExpiry)
-			if err != nil {
-				return nil, err
-			}
-			avatarURL = url
-		}
-
-		result[row.ID] = &ContactProfileView{
-			ID:        row.ID,
-			Name:      row.Name,
-			Username:  username,
-			Bio:       row.Bio,
-			AvatarURL: avatarURL,
-		}
-	}
-
-	return result, nil
-}
-
 // FindContactableUserByUsername looks up a user by username for contact operations
 func (ps *profileService) FindContactableUserByUsername(
 	ctx context.Context,
@@ -269,7 +214,6 @@ func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UU
 
 // GetContactableProfilesForViewer fetches profiles for contact enrichment with privacy filtering,
 // excluding users who have switched to a private profile type.
-// Used by the Contact module instead of GetVisibleProfilesForContactViewer.
 func (ps *profileService) GetContactableProfilesForViewer(
 	ctx context.Context,
 	viewerID uuid.UUID,
@@ -323,4 +267,3 @@ func (ps *profileService) GetContactableProfilesForViewer(
 
 	return result, nil
 }
-

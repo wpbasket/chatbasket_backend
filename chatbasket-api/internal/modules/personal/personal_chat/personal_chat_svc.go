@@ -30,9 +30,9 @@ type coreAuthChatProvider interface {
 }
 
 // personalProfilePersonalChatProvider defines the minimal set of methods required from the Profile module.
-// *personal_profile.profileService satisfies this interface directly â€” no adapter needed.
+// *personal_profile.profileService satisfies this interface directly — no adapter needed.
 type personalProfilePersonalChatProvider interface {
-	GetVisibleProfilesForContactViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
+	GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 }
@@ -687,7 +687,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 	}
 
 	// Step 3: Batch-resolve profiles via provider (handles decryption, privacy, avatar refresh)
-	profilesByID, err := s.ProfileProvider.GetVisibleProfilesForContactViewer(ctx, userID.UuidUserId, targetIDs)
+	profilesByID, err := s.ProfileProvider.GetContactableProfilesForViewer(ctx, userID.UuidUserId, targetIDs)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", "failed to resolve chat profiles: "+err.Error())
 	}
