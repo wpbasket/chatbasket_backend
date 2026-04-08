@@ -17,6 +17,8 @@ func Register(group *echo.Group, authService *AuthService) {
 	auth.POST("/login", handler.Login)
 	auth.POST("/login-verification", handler.LoginVerification)
 	auth.POST("/resend-otp", handler.ResendOTP)
+	auth.POST("/forgot-password", handler.ForgotPassword)
+	auth.POST("/forgot-password-verify", handler.VerifyForgotPassword)
 
 	// Common Auth Routes (logout works for both modes)
 	common := group.Group("/common")

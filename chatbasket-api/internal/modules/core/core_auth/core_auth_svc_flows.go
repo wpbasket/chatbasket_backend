@@ -52,6 +52,9 @@ func (s *AuthService) SendVerificationOTPFlow(ctx context.Context, userID uuid.U
 	case "email_verification":
 		subject = "Your Verification Code"
 		body = fmt.Sprintf("<p>Your email verification code is: <b>%s</b></p><p>Expires in 3 minutes.</p>", otp)
+	case "password_reset":
+		subject = "Reset Your Password"
+		body = fmt.Sprintf("<p>Your password reset code is: <b>%s</b></p><p>Expires in 3 minutes.</p>", otp)
 	}
 
 	if err := clients.SendEmail([]string{email}, subject, body); err != nil {
@@ -152,4 +155,3 @@ func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, p
 		PrimaryDeviceName: primaryDeviceName,
 	}, nil
 }
-

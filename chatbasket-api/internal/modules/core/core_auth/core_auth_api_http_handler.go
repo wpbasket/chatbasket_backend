@@ -236,3 +236,47 @@ func (h *authHandler) ResendOTP(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
+func (h *authHandler) ForgotPassword(c *echo.Context) error {
+	var payload ForgotPasswordPayload
+
+	// Parse and bind request body
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(400, "bad_request", fmt.Sprintf("Invalid forgot password payload: %v", err))
+	}
+
+	// Validate required fields
+	if payload.Email == "" {
+		return ErrMissingRequired
+	}
+
+	// Initiate forgot password flow via service
+	response, err := h.Service.ForgotPassword(c.Request().Context(), &payload)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+func (h *authHandler) VerifyForgotPassword(c *echo.Context) error {
+	var payload ForgotPasswordVerifyPayload
+
+	// Parse and bind request body
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(400, "bad_request", fmt.Sprintf("Invalid forgot password verify payload: %v", err))
+	}
+
+	// Validate required fields
+	if payload.UpdateID == "" || payload.Otp == "" || payload.NewPassword == "" {
+		return ErrMissingRequired
+	}
+
+	// Verify OTP and update password via service
+	response, err := h.Service.VerifyForgotPassword(c.Request().Context(), &payload)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+

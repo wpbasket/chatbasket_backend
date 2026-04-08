@@ -35,3 +35,15 @@ type ResendOTPPayload struct {
 	Email string `json:"email"`
 	Type  string `json:"type"` // "signup" or "login"
 }
+
+// 🔑 Forgot Password payload
+type ForgotPasswordPayload struct {
+	Email string `json:"email"`
+}
+
+// 🔑 Forgot Password Verify payload
+type ForgotPasswordVerifyPayload struct {
+	UpdateID    string `json:"updateId"`
+	Otp         string `json:"otp"`
+	NewPassword string `json:"newPassword"`
+}

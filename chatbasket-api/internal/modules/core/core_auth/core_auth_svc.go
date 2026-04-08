@@ -244,3 +244,86 @@ func (s *AuthService) ResendOTP(ctx context.Context, payload *ResendOTPPayload) 
 	return &kit.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
 
+// ForgotPassword initiates the forgot password flow by sending OTP to email.
+func (s *AuthService) ForgotPassword(ctx context.Context, payload *ForgotPasswordPayload) (*kit.StatusOkay, error) {
+	// 1. Get user by email
+	user, err := s.PostgresQuerier.GetAuthUserByEmail(ctx, payload.Email)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// Return conflict error for email not found (as per frontend spec)
+			return nil, kit.NewError(http.StatusConflict, "conflict", "Email not found")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to query email")
+	}
+
+	// 2. User must be verified to reset password
+	if !user.IsEmailVerified {
+		return nil, kit.NewError(http.StatusConflict, "conflict", "Email not found")
+	}
+
+	// 3. Send OTP for password reset
+	if err := s.SendVerificationOTPFlow(ctx, user.ID, user.Email, "password_reset"); err != nil {
+		return nil, err
+	}
+
+	// 4. Return updateId (user ID as string) for verification step
+	return &kit.StatusOkay{Status: true, Message: user.ID.String()}, nil
+}
+
+// VerifyForgotPassword verifies OTP and updates the password.
+func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotPasswordVerifyPayload) (*kit.StatusOkay, error) {
+	// 1. Parse updateId as UUID
+	userID, err := uuid.Parse(payload.UpdateID)
+	if err != nil {
+		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "Invalid updateId")
+	}
+
+	// 2. Get verification code by user ID
+	record, err := s.PostgresQuerier.GetVerificationCode(ctx, core_auth_store.GetVerificationCodeParams{
+		ID:   userID,
+		Type: "password_reset",
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+	}
+
+	// 3. Verify updateId matches (flow validation)
+	// For password_reset, we store the userID as the updateId, so we just verify the record exists
+	// This ensures the OTP request came from the same flow
+
+	// 4. Check expiry (3 minutes)
+	if IsExpiredOTP(record.CreatedAt, 3) {
+		// Delete expired code
+		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
+		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")
+	}
+
+	// 5. Verify OTP
+	match, err := VerifyOTP(payload.Otp, record.CodeHash)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify OTP: "+err.Error())
+	}
+	if !match {
+		return nil, kit.NewError(http.StatusUnauthorized, "invalid_otp", "Invalid OTP")
+	}
+
+	// 6. Hash new password
+	hashedPassword, err := HashPassword(payload.NewPassword, s.AuthSecret, userID.String())
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to hash password: "+err.Error())
+	}
+
+	// 7. Update password
+	err = s.PostgresQuerier.UpdateAuthUserPassword(ctx, core_auth_store.UpdateAuthUserPasswordParams{
+		ID:           userID,
+		PasswordHash: hashedPassword,
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update password")
+	}
+
+	// 8. Delete verification code
+	_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
+
+	return &kit.StatusOkay{Status: true, Message: "Password updated successfully"}, nil
+}
