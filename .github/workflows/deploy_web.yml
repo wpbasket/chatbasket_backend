@@ -20,7 +20,7 @@ jobs:
       # 2. Login to GitHub Container Registry (GHCR) on the Runner
       - name: Login to GHCR
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       # 3. Build Docker image
       - name: Build Docker image
@@ -103,7 +103,7 @@ jobs:
           echo "MAIL_RELAY_SECRET=${{ secrets.MAIL_RELAY_SECRET }}" >> .env
 
           # Login to GHCR on the Droplet (Required to pull the private image)
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
           # Pull and Start
           docker compose pull
