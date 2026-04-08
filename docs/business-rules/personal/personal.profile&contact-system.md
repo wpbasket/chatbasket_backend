@@ -24,8 +24,9 @@ The system supports three profile types that determine how users can be discover
 - Only the profile owner may view their own private profile
 
 ### 1.3 Enforcement Rules
-- The system shall reject any attempt to create a contact relationship with a private profile
-- When checking if a user exists, the system shall confirm existence for private profiles but shall not reveal the user identifier
+- The system shall reject any attempt to create a contact relationship with a private profile.
+- When checking if a user exists, the system shall confirm existence for private profiles but shall not reveal the user identifier.
+- **Retrospective Filtering**: If a user changes their profile type to private after being added as a contact, they shall be filtered out of the requester's lists during the profile enrichment phase.
 
 ---
 
@@ -140,8 +141,15 @@ The three-form storage approach provides defense in depth:
 - The system shall reject contact creation if the requester has been administratively blocked
 - The system shall reject contact creation if the target user has been administratively blocked
 
-### 3.2 Query Filtering
-- All contact list queries shall exclude administratively blocked users from results
+### 3.2 Query Filtering (Hard Exclusions)
+The system implements a profile enrichment layer (`GetContactableProfilesForViewer`) that serves as a central bottleneck for visibility. This layer enforces "Hard Exclusions" by completely omitting a target user's profile from any list (Contacts, Chat List, Contact Requests) if any of the following conditions are met:
+
+1.  **Administrative Block**: The target user is administratively blocked.
+2.  **Private Profile**: The target user has set their profile type to `private`.
+3.  **Bidirectional User Block**: A block relationship exists between the viewer and the target in either direction.
+
+### 3.3 Persistence vs. Visibility
+Hard exclusions do not delete the underlying relationship (e.g., the contact record or chat entry) but prevent its display and interaction. If the exclusion condition is lifted (e.g., user switches back to public or unblocks), the entry automatically reappears during the next enrichment cycle ("self-healing").
 
 ---
 
@@ -284,10 +292,10 @@ The three-form storage approach provides defense in depth:
   - For each outgoing contact, checks if they exist in the map
   - Sets mutual flag to true if bidirectional relationship exists
 - Query filtering:
-  - Excludes blocked users (either direction)
-  - Excludes administratively blocked users (filtered during profile hydration)
-  - Excludes private profiles: If a user changes profile_type to private after being added, they are filtered out during profile enrichment
-  - Applies privacy restrictions to avatar visibility
+  - Excludes administratively blocked users (Hard Exclusion).
+  - Excludes private profiles: If a user changes profile_type to private after being added, they are filtered out during profile enrichment (Hard Exclusion).
+  - Excludes blocked users in **either direction** (Hard Exclusion via anti-join).
+  - Applies "Soft Restrictions" to avatar, bio, and status visibility based on global/user settings.
 - Username decryption:
   - System decrypts encrypted usernames for display
   - Returns decrypted username in API response
@@ -383,9 +391,10 @@ The three-form storage approach provides defense in depth:
   - 1: Requester blocked target ("you_blocked_user")
   - 2: Target blocked requester ("user_blocked_you")
 - Used in multiple operations:
-  - Contact creation: Prevents adding blocked users
-  - Message sending: Prevents messaging blocked users
-  - Block creation: Checks for existing blocks
+  - Contact creation: Prevents adding blocked users.
+  - Message sending: Prevents messaging blocked users.
+  - Block creation: Checks for existing blocks.
+  - **Profile Listing/Enrichment**: Dynamically filters out blocked profiles from Contacts, Chat Lists, and Request Lists using an anti-join (`NOT EXISTS`) in the database query.
 
 ### 5.4 Message Cleanup on Block
 - System automatically deletes message sync actions between users in both directions

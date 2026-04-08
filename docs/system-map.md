@@ -37,26 +37,20 @@ chatbasket_backend/
 │   │   │       └── auth.sql
 │   │   ├── personal/
 │   │   │   ├── migrations/
-│   │   │   │   ├── 001_personal_init.down.sql
-│   │   │   │   ├── 001_personal_init.up.sql
-│   │   │   │   ├── 002_personal_user_contacts.down.sql
-│   │   │   │   ├── 002_personal_user_contacts.up.sql
-│   │   │   │   ├── 003_personal_user_restrictions.down.sql
-│   │   │   │   ├── 003_personal_user_restrictions.up.sql
-│   │   │   │   ├── 004_personal_user_blocks.down.sql
-│   │   │   │   ├── 004_personal_user_blocks.up.sql
-│   │   │   │   ├── 005_personal_global_restrictions.down.sql
-│   │   │   │   ├── 005_personal_global_restrictions.up.sql
-│   │   │   │   ├── 006_personal_contact_requests.down.sql
-│   │   │   │   ├── 006_personal_contact_requests.up.sql
-│   │   │   │   ├── 007_personal_tokens.down.sql
-│   │   │   │   ├── 007_personal_tokens.up.sql
-│   │   │   │   ├── 008_personal_chat_system.down.sql
-│   │   │   │   ├── 008_personal_chat_system.up.sql
-│   │   │   │   ├── 009_personal_secure_nicknames.down.sql
-│   │   │   │   ├── 009_personal_secure_nicknames.up.sql
-│   │   │   │   ├── 010_personal_block_contact_requests.down.sql
-│   │   │   │   └── 010_personal_block_contact_requests.up.sql
+│   │   │   │   ├── 001_personal_profile_system.down.sql
+│   │   │   │   ├── 001_personal_profile_system.up.sql
+│   │   │   │   ├── 002_personal_contact_system.down.sql
+│   │   │   │   ├── 002_personal_contact_system.up.sql
+│   │   │   │   ├── 003_personal_block_system.down.sql
+│   │   │   │   ├── 003_personal_block_system.up.sql
+│   │   │   │   ├── 004_personal_restrictions_system.down.sql
+│   │   │   │   ├── 004_personal_restrictions_system.up.sql
+│   │   │   │   ├── 005_personal_token_system.down.sql
+│   │   │   │   ├── 005_personal_token_system.up.sql
+│   │   │   │   ├── 006_personal_chat_system.down.sql
+│   │   │   │   ├── 006_personal_chat_system.up.sql
+│   │   │   │   ├── 007_block_sync_actions_cleanup.down.sql
+│   │   │   │   └── 007_block_sync_actions_cleanup.up.sql
 │   │   │   └── queries/
 │   │   │       ├── personal_chat.sql
 │   │   │       ├── personal_contacts.sql
@@ -339,7 +333,7 @@ chatbasket_backend/
 │   │   ├── common/
 │   │   ├── personal/
 │   │   │   ├── personal.chat-system.md
-│   │   │   └── personal.profile-system.md
+│   │   │   └── personal.profile&contact-system.md
 │   │   └── public/
 │   ├── BACKEND_CONSISTENCY.md
 │   └── CHANGE_POLICY.md
@@ -440,11 +434,15 @@ chatbasket/
 │   └── fix-cloudflare-pages.ts
 ├── src/
 │   ├── __tests__/
-│   │   └── lib/
-│   │       └── storage/
-│   │           └── personalStorage/
-│   │               └── chat/
-│   │                   └── chat.storage.web.test.ts
+│   │   ├── lib/
+│   │   │   └── storage/
+│   │   │       └── personalStorage/
+│   │   │           └── chat/
+│   │   └── state/
+│   │       ├── chat/
+│   │       │   └── is_contactable.test.ts
+│   │       └── personalState/
+│   │           └── chat/
 │   ├── app/
 │   │   ├── (auth)/
 │   │   │   ├── auth-verify.tsx
@@ -642,6 +640,7 @@ chatbasket/
 │   │   │   └── index.ts
 │   │   ├── personalLib/
 │   │   │   ├── chatApi/
+│   │   │   │   ├── __tests__/
 │   │   │   │   ├── chat.transport.ts
 │   │   │   │   ├── connection.watcher.ts
 │   │   │   │   ├── outbox.queue.ts
