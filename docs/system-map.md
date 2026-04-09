@@ -706,6 +706,7 @@ chatbasket/
 │   │   │   └── state.appMode.ts
 │   │   ├── auth/
 │   │   │   ├── README_AUTH.md
+│   │   │   ├── state.auth.forgotPassword.ts
 │   │   │   ├── state.auth.loginOrSignup.ts
 │   │   │   └── state.auth.ts
 │   │   ├── modals/
