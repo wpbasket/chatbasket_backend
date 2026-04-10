@@ -96,8 +96,17 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			session, err := authProvider.GetSessionByToken(ctx, tokenHash, uuidVal)
 
 			// Check if session found and not expired
-			if err != nil || session.ExpiresAt.Before(time.Now()) {
-				return kit.NewError(http.StatusUnauthorized, "session_invalid", "Invalid or expired session")
+			if err != nil {
+				// Distinguish between legitimate auth errors and infrastructure errors
+				if err == pgx.ErrNoRows {
+					return kit.NewError(http.StatusUnauthorized, "session_invalid", "Invalid or expired session")
+				}
+				// Database connection error or other infrastructure issue
+				return kit.NewError(http.StatusServiceUnavailable, "service_unavailable", "Unable to verify session: "+kit.GetPostgresError(err).Message)
+			}
+
+			if session.ExpiresAt.Before(time.Now()) {
+				return kit.NewError(http.StatusUnauthorized, "session_invalid", "Session expired")
 			}
 
 			// 4. Get User details
