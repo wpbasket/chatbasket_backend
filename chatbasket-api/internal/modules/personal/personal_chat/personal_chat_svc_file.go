@@ -19,19 +19,19 @@ import (
 // File URL Generation
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_chat_store.Message, viewerID kit.UserId) (string, string, error) {
+func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_chat_store.Message, viewerID kit.UserId) (string, string, *time.Time, error) {
 	// Ownership guard — matches legacy GenerateMessageFileURLs
 	if msg.SenderID != viewerID.UuidUserId && msg.RecipientID != viewerID.UuidUserId {
-		return "", "", kit.NewError(http.StatusForbidden, "forbidden", "not authorized to access this file")
+		return "", "", nil, kit.NewError(http.StatusForbidden, "forbidden", "not authorized to access this file")
 	}
 
 	// Soft-delete guard — treat as no file if user deleted this message
 	if (msg.SenderID == viewerID.UuidUserId && msg.DeletedBySender) || (msg.RecipientID == viewerID.UuidUserId && msg.DeletedByRecipient) {
-		return "", "", nil
+		return "", "", nil, nil
 	}
 
 	if msg.FileID == nil || *msg.FileID == "" {
-		return "", "", nil
+		return "", "", nil, nil
 	}
 
 	bucketID := ChatFilesBucketID
@@ -48,7 +48,7 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 	)
 	if err != nil {
 		log.Printf("[GenerateMessageFileURLs] Token refresh failed for message %s: %v", msg.ID, err)
-		return "", "", kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to refresh file token")
+		return "", "", nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to refresh file token")
 	}
 
 	if refreshed && refreshData != nil {
@@ -56,13 +56,14 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 		newTokenSecret := refreshData.TokenSecret
 		tokenID = &newTokenID
 		tokenSecret = &newTokenSecret
+		tokenExpiry = refreshData.TokenExpiry
 
 		// Persist the new tokens
 		_ = s.PostgresQueries.UpdateMessageFileToken(ctx, personal_chat_store.UpdateMessageFileTokenParams{
 			ID:              msg.ID,
 			FileTokenID:     tokenID,
 			FileTokenSecret: tokenSecret,
-			FileTokenExpiry: &refreshData.TokenExpiry,
+			FileTokenExpiry: &tokenExpiry,
 		})
 	}
 
@@ -91,7 +92,7 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 		downloadURL = *downloadURLPtr
 	}
 
-	return viewURL, downloadURL, nil
+	return viewURL, downloadURL, &tokenExpiry, nil
 }
 
 func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURLPayload, userID kit.UserId) (*GetFileURLResponse, error) {
@@ -105,14 +106,15 @@ func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURL
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "Message not found")
 	}
 
-	viewURL, downloadURL, fileErr := s.GenerateMessageFileURLs(ctx, message, userID)
+	viewURL, downloadURL, tokenExpiry, fileErr := s.GenerateMessageFileURLs(ctx, message, userID)
 	if fileErr != nil {
 		return nil, fileErr
 	}
 
 	return &GetFileURLResponse{
-		ViewURL:     viewURL,
-		DownloadURL: downloadURL,
+		ViewURL:         viewURL,
+		DownloadURL:     downloadURL,
+		FileTokenExpiry: tokenExpiry,
 	}, nil
 }
 

@@ -264,7 +264,7 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		return svcErr
 	}
 
-	viewURL, downloadURL, _ := h.Service.GenerateMessageFileURLs(c.Request().Context(), *message, userID)
+	viewURL, downloadURL, tokenExpiry, _ := h.Service.GenerateMessageFileURLs(c.Request().Context(), *message, userID)
 
 	msgInfo := &MessageResponse{
 		MessageID:             message.ID.String(),
@@ -283,6 +283,7 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		FileMimeType:          message.FileMimeType,
 		ViewURL:               viewURL,
 		DownloadURL:           downloadURL,
+		FileTokenExpiry:       tokenExpiry,
 	}
 
 	uploadResponse := &UploadFileResponse{
@@ -295,7 +296,8 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		FileName:     message.FileName,
 		FileSize:     message.FileSize,
 		CreatedAt:    message.CreatedAt,
-		ExpiresAt:    message.ExpiresAt,
+		ExpiresAt:       message.ExpiresAt,
+		FileTokenExpiry: tokenExpiry,
 	}
 
 	// ——— WS Broadcast: new_message (File Upload) —————————————————————————————————————————————————

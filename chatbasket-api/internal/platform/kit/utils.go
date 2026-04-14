@@ -139,8 +139,8 @@ func EnsureFreshFileTokens(
 	}
 
 	// ——— Create new token —————————————————————————————————————————————————————————————————————
-	// Set expiry to 30 minutes
-	exp := now.Add(30 * time.Minute).Format("2006-01-02T15:04:05.000Z")
+	// Set expiry using central AppwriteFileTokenDuration
+	exp := now.Add(AppwriteFileTokenDuration).Format("2006-01-02T15:04:05.000Z")
 	newTok, err := appwriteTokens.CreateFileToken(
 		bucketID,
 		*fileID,
@@ -161,6 +161,10 @@ func EnsureFreshFileTokens(
 		TokenExpiry: tokTime,
 	}, true, nil
 }
+
+const AppwriteFileTokenDuration = 30 * time.Minute
+const DefaultPostgresMaxConnLifetime = 30 * time.Minute
+
 
 // BuildFileDownloadURL constructs a download URL for chat files, ported from utils/baseUtils.go
 func BuildFileDownloadURL(endpoint, projectID, bucketID string, ad *AppwriteFileData) *string {

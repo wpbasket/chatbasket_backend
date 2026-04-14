@@ -359,6 +359,7 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		FileName:              message.FileName,
 		FileSize:              message.FileSize,
 		FileMimeType:          message.FileMimeType,
+		FileTokenExpiry:       message.FileTokenExpiry,
 	}, nil
 }
 
@@ -520,9 +521,10 @@ func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, use
 // buildMessageResponse maps a DB message to a MessageResponse with optional file URLs.
 func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_chat_store.Message, userID kit.UserId) MessageResponse {
 	viewURL, downloadURL := "", ""
+	var tokenExpiry *time.Time
 	if msg.FileID != nil && *msg.FileID != "" {
 		var fileErr error
-		viewURL, downloadURL, fileErr = s.GenerateMessageFileURLs(ctx, msg, userID)
+		viewURL, downloadURL, tokenExpiry, fileErr = s.GenerateMessageFileURLs(ctx, msg, userID)
 		if fileErr != nil {
 			log.Printf("[buildMessageResponse] Failed to generate URLs for message %s: %v", msg.ID, fileErr)
 		}
@@ -551,6 +553,7 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 		FileMimeType:                msg.FileMimeType,
 		ViewURL:                     viewURL,
 		DownloadURL:                 downloadURL,
+		FileTokenExpiry:             tokenExpiry,
 	}
 }
 

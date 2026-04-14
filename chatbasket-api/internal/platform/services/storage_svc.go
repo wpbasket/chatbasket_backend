@@ -95,8 +95,8 @@ func UploadFileFromMultipart(
 	}
 
 	if opts.GenerateTokens {
-		// Set initial expiry to 30 minutes
-		exp := time.Now().Add(30 * time.Minute).Format("2006-01-02T15:04:05.000Z")
+		// Set initial expiry using central duration
+		exp := time.Now().Add(kit.AppwriteFileTokenDuration).Format("2006-01-02T15:04:05.000Z")
 		personalToken, err := appwriteStorage.Tokens.CreateFileToken(bucketId, fileId, appwriteStorage.Tokens.WithCreateFileTokenExpire(exp))
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create personal token: "+err.Error())

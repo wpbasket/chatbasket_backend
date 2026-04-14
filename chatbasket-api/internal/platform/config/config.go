@@ -1,4 +1,4 @@
-﻿package config
+package config
 
 import (
 	"chatbasket-api/internal/platform/kit"
@@ -111,7 +111,8 @@ func Load() (*Config, error) {
 		MaxConns:              30,
 		MinConns:              2,
 		MinIdleConns:          2,
-		MaxConnLifetime:       30 * time.Minute,
+		MaxConnLifetime:       kit.DefaultPostgresMaxConnLifetime,
+
 		MaxConnIdleTime:       2 * time.Minute,
 		HealthCheckPeriod:     1 * time.Minute,
 		MaxConnLifetimeJitter: 5 * time.Minute,

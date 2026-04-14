@@ -76,6 +76,7 @@ type MessageResponse struct {
 	FileMimeType                *string   `json:"file_mime_type"`
 	ViewURL                     string    `json:"view_url,omitempty"`
 	DownloadURL                 string    `json:"download_url,omitempty"`
+	FileTokenExpiry             *time.Time `json:"file_token_expiry,omitempty"`
 }
 
 type MessagingEligibilityResponse struct {
@@ -104,8 +105,9 @@ type AckDeliveryBatchResponse struct {
 }
 
 type GetFileURLResponse struct {
-	ViewURL     string `json:"view_url,omitempty"`
-	DownloadURL string `json:"download_url"`
+	ViewURL         string     `json:"view_url,omitempty"`
+	DownloadURL     string     `json:"download_url"`
+	FileTokenExpiry *time.Time `json:"file_token_expiry,omitempty"`
 }
 
 type UploadFileResponse struct {
@@ -118,7 +120,8 @@ type UploadFileResponse struct {
 	FileName     *string   `json:"file_name"`
 	FileSize     *int64    `json:"file_size"`
 	CreatedAt    time.Time `json:"created_at"`
-	ExpiresAt    time.Time `json:"expires_at"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	FileTokenExpiry *time.Time `json:"file_token_expiry,omitempty"`
 }
 
 type SyncActionResponse struct {
