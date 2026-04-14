@@ -1,4 +1,4 @@
-﻿package services
+package services
 
 import (
 	"chatbasket-api/internal/platform/clients"
@@ -95,7 +95,8 @@ func UploadFileFromMultipart(
 	}
 
 	if opts.GenerateTokens {
-		exp := time.Now().AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
+		// Set initial expiry to 30 minutes
+		exp := time.Now().Add(30 * time.Minute).Format("2006-01-02T15:04:05.000Z")
 		personalToken, err := appwriteStorage.Tokens.CreateFileToken(bucketId, fileId, appwriteStorage.Tokens.WithCreateFileTokenExpire(exp))
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create personal token: "+err.Error())

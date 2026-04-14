@@ -109,11 +109,15 @@ func EnsureFreshFileTokens(
 	// Determine if refresh is needed
 	needsRefresh := false
 
+	// 5-minute buffer: refresh if expiring within 5 minutes to ensure client always gets a live link
+	refreshBuffer := 5 * time.Minute
+	refreshThreshold := now.Add(refreshBuffer).UTC()
+
 	// Refresh if any credential is missing (zero/empty)
 	if tokenExpiry.IsZero() || (tokenID == nil || *tokenID == "") || (tokenSecret == nil || *tokenSecret == "") {
 		needsRefresh = true
-	} else if !tokenExpiry.UTC().After(now) {
-		// Refresh if expiry has passed
+	} else if tokenExpiry.UTC().Before(refreshThreshold) {
+		// Refresh if expired OR expiring soon (within buffer)
 		needsRefresh = true
 	}
 
@@ -135,7 +139,8 @@ func EnsureFreshFileTokens(
 	}
 
 	// ——— Create new token —————————————————————————————————————————————————————————————————————
-	exp := now.AddDate(1, 0, 0).Format("2006-01-02T15:04:05.000Z")
+	// Set expiry to 30 minutes
+	exp := now.Add(30 * time.Minute).Format("2006-01-02T15:04:05.000Z")
 	newTok, err := appwriteTokens.CreateFileToken(
 		bucketID,
 		*fileID,

@@ -87,18 +87,14 @@ WHERE
 CREATE TABLE IF NOT EXISTS avatars (
     id UUID PRIMARY KEY, -- Direct index via PK
     user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    file_id TEXT NOT NULL,
+    file_id TEXT,
     avatar_type TEXT NOT NULL DEFAULT 'profile',
     token_id TEXT,
     token_secret TEXT,
     token_expiry TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
-    CONSTRAINT avatars_unique_user_file UNIQUE (user_id, file_id), -- Composite unique index
-    CONSTRAINT avatars_check_profile_file CHECK (
-        avatar_type != 'profile'
-        OR file_id::TEXT = user_id::TEXT
-    ) -- Profile avatars must use user_id as file_id
+    CONSTRAINT avatars_unique_user_file UNIQUE (user_id, file_id) -- Composite unique index
 );
 
 -- Drop existing trigger if already present

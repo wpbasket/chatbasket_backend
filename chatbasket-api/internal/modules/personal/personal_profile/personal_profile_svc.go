@@ -1,4 +1,4 @@
-﻿package personal_profile
+package personal_profile
 
 import (
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
-
 	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -142,35 +141,54 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 	if fh == nil {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "no file provided")
 	}
-	// check if user profile pic exists and if it exists, delete it
-	resUser, err := ps.PostgresQueries.IsUserProfilePicExists(ctx, userId.UuidUserId)
+
+	// 1. Get current avatar metadata to find the existing file_id
+	existingFileID, err := ps.PostgresQueries.GetAvatarFileID(ctx, userId.UuidUserId)
+	hasExisting := err == nil && existingFileID != nil
+
+	if hasExisting {
+		// 2. Safety check: List file in Appwrite to confirm existence before purging
+		checkFiles, err := ps.AppwriteStorage.Storage.ListFiles(
+			ps.PersonalProfilePicBucketID,
+			ps.AppwriteStorage.Storage.WithListFilesQueries([]string{
+				query.Equal("$id", *existingFileID),
+			}),
+		)
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to verify existing avatar in storage: "+err.Error())
+		}
+
+		if checkFiles.Total > 0 {
+			// Clear tokens
+			toks, err := ps.AppwriteStorage.Tokens.List(ps.PersonalProfilePicBucketID, *existingFileID)
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to list tokens for old avatar: "+err.Error())
+			}
+			if toks.Total > 0 {
+				for _, t := range toks.Tokens {
+					_, _ = ps.AppwriteStorage.Tokens.Delete(t.Id)
+				}
+			}
+
+			// Delete file
+			_, _ = ps.AppwriteStorage.Storage.DeleteFile(ps.PersonalProfilePicBucketID, *existingFileID)
+		}
+	}
+
+	// 3. Generate a NEW unique File ID (using UUID v7 for sequential/sorting benefits)
+	newFileId, err := uuid.NewV7()
 	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to check user profile pic: "+kit.GetPostgresError(err).Message)
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to generate unique file id")
 	}
+	stringFileId := newFileId.String()
 
-	checkExistInStorage, err := ps.AppwriteStorage.Storage.ListFiles(
-		ps.PersonalProfilePicBucketID,
-		ps.AppwriteStorage.Storage.WithListFilesQueries(
-			[]string{
-				query.Equal("$id", userId.StringUserId),
-			},
-		),
-	)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to list files: "+err.Error())
-	}
-
-	var deleteExisting bool
-	if checkExistInStorage.Total == 1 {
-		deleteExisting = true
-	}
-
+	// 4. Upload fresh file
 	result, err := services.UploadFileFromMultipart(
 		ps.AppwriteStorage,
 		ps.PersonalProfilePicBucketID,
-		userId.StringUserId,
+		stringFileId,
 		fh,
-		services.UploadOptions{DeleteExisting: deleteExisting, GenerateTokens: true},
+		services.UploadOptions{DeleteExisting: false, GenerateTokens: true}, // Manual deletion handled above
 	)
 	if err != nil {
 		return nil, err
@@ -185,7 +203,7 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to parse expire time")
 	}
 
-	if !resUser {
+	if !hasExisting {
 		rdmUUID, err := uuid.NewV7()
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate uuid")
@@ -193,7 +211,7 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 		_, err = ps.PostgresQueries.CreateAvatar(ctx, personal_profile_store.CreateAvatarParams{
 			ID:          rdmUUID,
 			UserID:      userId.UuidUserId,
-			FileID:      result.FileId,
+			FileID:      &stringFileId,
 			AvatarType:  "profile",
 			TokenID:     new(result.TokenIDs[0]),
 			TokenSecret: new(result.TokenSecrets[0]),
@@ -202,17 +220,16 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create avatar: "+kit.GetPostgresError(err).Message)
 		}
-	}
-
-	if resUser {
-		_, err := ps.PostgresQueries.UpdateAvatarTokens(ctx, personal_profile_store.UpdateAvatarTokensParams{
+	} else {
+		_, err := ps.PostgresQueries.UpdateAvatarFull(ctx, personal_profile_store.UpdateAvatarFullParams{
 			UserID:      userId.UuidUserId,
+			FileID:      &stringFileId,
 			TokenID:     new(result.TokenIDs[0]),
 			TokenSecret: new(result.TokenSecrets[0]),
 			TokenExpiry: &expireTime,
 		})
 		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update avatar tokens: "+kit.GetPostgresError(err).Message)
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update avatar record: "+kit.GetPostgresError(err).Message)
 		}
 	}
 
@@ -220,64 +237,54 @@ func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *mult
 }
 
 func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId kit.UserId) (*kit.StatusOkay, error) {
-	resUser, err := ps.PostgresQueries.IsUserProfilePicExists(ctx, userId.UuidUserId)
+	// 1. Get the current avatar to find the stored file_id
+	fileIDPtr, err := ps.PostgresQueries.GetAvatarFileID(ctx, userId.UuidUserId)
 	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to check user profile pic: "+kit.GetPostgresError(err).Message)
+		if err == pgx.ErrNoRows {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "Profile picture record not found")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch avatar record: "+kit.GetPostgresError(err).Message)
 	}
 
-	checkExistInStorage, err := ps.AppwriteStorage.Storage.ListFiles(
+	if fileIDPtr == nil {
+		return nil, kit.NewError(http.StatusNotFound, "not_found", "Profile picture file ID not found")
+	}
+
+	fileID := *fileIDPtr
+
+	// 2. Safety check: List file in Appwrite
+	checkFiles, err := ps.AppwriteStorage.Storage.ListFiles(
 		ps.PersonalProfilePicBucketID,
-		ps.AppwriteStorage.Storage.WithListFilesQueries(
-			[]string{
-				query.Equal("$id", userId.StringUserId),
-			},
-		),
+		ps.AppwriteStorage.Storage.WithListFilesQueries([]string{
+			query.Equal("$id", fileID),
+		}),
 	)
 	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to list files: "+err.Error())
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to verify avatar existence: "+err.Error())
 	}
 
-	if checkExistInStorage.Total == 0 {
-		if resUser {
-			err = ps.PostgresQueries.DeleteAvatar(ctx, userId.UuidUserId)
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete avatar from database: "+kit.GetPostgresError(err).Message)
-			}
-		}
-		return nil, kit.NewError(http.StatusNotFound, "not_found", "Profile picture not found")
-	}
-
-	// Delete the file access token
-	tok, err := ps.AppwriteStorage.Tokens.List(ps.PersonalProfilePicBucketID, userId.StringUserId)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to query token data: "+err.Error())
-	}
-	if tok.Total > 0 {
-		for _, tokens := range tok.Tokens {
-			_, err := ps.AppwriteStorage.Tokens.Delete(tokens.Id)
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete token data: "+err.Error())
-			}
-		}
-	}
-
-	// Delete the file from storage
-	_, err = ps.AppwriteStorage.Storage.DeleteFile(
-		ps.PersonalProfilePicBucketID,
-		userId.StringUserId,
-	)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "not_found", "Failed to delete profile picture from storage: "+err.Error())
-	}
-
-	if resUser {
-		// Delete the avatar from the database
-		err = ps.PostgresQueries.DeleteAvatar(ctx, userId.UuidUserId)
+	if checkFiles.Total > 0 {
+		// 3. Delete access tokens from Appwrite
+		tok, err := ps.AppwriteStorage.Tokens.List(ps.PersonalProfilePicBucketID, fileID)
 		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete avatar from database: "+kit.GetPostgresError(err).Message)
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to list tokens for avatar removal: "+err.Error())
 		}
+
+		if tok.Total > 0 {
+			for _, tokens := range tok.Tokens {
+				_, _ = ps.AppwriteStorage.Tokens.Delete(tokens.Id)
+			}
+		}
+
+		// 4. Delete the file from Appwrite storage
+		_, _ = ps.AppwriteStorage.Storage.DeleteFile(ps.PersonalProfilePicBucketID, fileID)
+	}
+
+	// 5. Delete the avatar record from the database
+	err = ps.PostgresQueries.DeleteAvatar(ctx, userId.UuidUserId)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete avatar from database: "+kit.GetPostgresError(err).Message)
 	}
 
 	return &kit.StatusOkay{Status: true, Message: "Profile picture removed successfully"}, nil
 }
-

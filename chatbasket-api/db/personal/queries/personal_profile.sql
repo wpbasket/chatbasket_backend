@@ -21,7 +21,7 @@ RETURNING
 SELECT u.*, a.file_id, a.token_id, a.token_secret, a.token_expiry
 FROM users u
     LEFT JOIN avatars a ON a.user_id = u.id
-    AND a.file_id = u.id::TEXT -- main profile avatar (file_id == user_id)
+    AND a.avatar_type = 'profile'
 WHERE
     u.id = $1;
 
@@ -52,7 +52,7 @@ SELECT EXISTS (
             JOIN avatars a ON a.user_id = u.id
         WHERE
             u.id = $1
-            AND a.file_id = u.id::TEXT
+            AND a.avatar_type = 'profile'
     );
 
 -- name: CreateAvatar :one
@@ -71,8 +71,22 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING
     *;
 
+-- name: UpdateAvatarFull :one
+-- Updates all avatar fields (file_id, tokens) for the main profile avatar
+UPDATE avatars
+SET
+    file_id = $2,
+    token_id = $3,
+    token_secret = $4,
+    token_expiry = $5
+WHERE
+    user_id = $1
+    AND avatar_type = 'profile'
+RETURNING
+    *;
+
 -- name: UpdateAvatarTokens :one
--- Updates token_id, token_secret, and token_expiry for the main profile avatar (where user_id == file_id)
+-- Updates token_id, token_secret, and token_expiry for the main profile avatar
 UPDATE avatars
 SET
     token_id = $2,
@@ -80,9 +94,13 @@ SET
     token_expiry = $4
 WHERE
     user_id = $1
-    AND file_id = $1::TEXT
+    AND avatar_type = 'profile'
 RETURNING
     *;
+
+-- name: GetAvatarFileID :one
+-- Fetches the storage file_id for the main profile avatar
+SELECT file_id FROM avatars WHERE user_id = $1 AND avatar_type = 'profile';
 
 -- name: UpdateUserProfile :one
 -- Updates user profile fields conditionally based on provided values (NULL values are ignored)
@@ -101,7 +119,7 @@ RETURNING
 
 -- name: DeleteAvatar :exec
 -- Deletes the main profile avatar for a user
-DELETE FROM avatars WHERE user_id = $1 AND file_id = $1::TEXT;
+DELETE FROM avatars WHERE user_id = $1 AND avatar_type = 'profile';
 
 -- name: IsUserAdminBlocked :one
 -- Returns true if the user is admin-blocked

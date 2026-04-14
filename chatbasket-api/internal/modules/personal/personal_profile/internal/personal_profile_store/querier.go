@@ -21,6 +21,8 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// Deletes the main profile avatar for a user
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
+	// Fetches the storage file_id for the main profile avatar
+	GetAvatarFileID(ctx context.Context, userID uuid.UUID) (*string, error)
 	// GetContactableProfilesForViewer fetches profiles for contact enrichment with privacy filtering.
 	GetContactableProfilesForViewer(ctx context.Context, arg GetContactableProfilesForViewerParams) ([]GetContactableProfilesForViewerRow, error)
 	GetUserByHashedUsernameForContact(ctx context.Context, hmacSha256HexUsername string) (User, error)
@@ -35,7 +37,9 @@ type Querier interface {
 	IsUserProfilePicExists(ctx context.Context, id uuid.UUID) (bool, error)
 	// Returns users created before a certain timestamp (keyset pagination)
 	ListUsersAfter(ctx context.Context, arg ListUsersAfterParams) ([]User, error)
-	// Updates token_id, token_secret, and token_expiry for the main profile avatar (where user_id == file_id)
+	// Updates all avatar fields (file_id, tokens) for the main profile avatar
+	UpdateAvatarFull(ctx context.Context, arg UpdateAvatarFullParams) (Avatar, error)
+	// Updates token_id, token_secret, and token_expiry for the main profile avatar
 	UpdateAvatarTokens(ctx context.Context, arg UpdateAvatarTokensParams) (Avatar, error)
 	// Updates user profile fields conditionally based on provided values (NULL values are ignored)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)

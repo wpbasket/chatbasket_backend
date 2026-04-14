@@ -30,7 +30,7 @@ type AuthUser struct {
 type Avatar struct {
 	ID          uuid.UUID  `json:"id"`
 	UserID      uuid.UUID  `json:"user_id"`
-	FileID      string     `json:"file_id"`
+	FileID      *string    `json:"file_id"`
 	AvatarType  string     `json:"avatar_type"`
 	TokenID     *string    `json:"token_id"`
 	TokenSecret *string    `json:"token_secret"`

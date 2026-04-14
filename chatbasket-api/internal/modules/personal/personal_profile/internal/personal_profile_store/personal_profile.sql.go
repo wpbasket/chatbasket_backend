@@ -56,7 +56,7 @@ RETURNING
 type CreateAvatarParams struct {
 	ID          uuid.UUID  `json:"id"`
 	UserID      uuid.UUID  `json:"user_id"`
-	FileID      string     `json:"file_id"`
+	FileID      *string    `json:"file_id"`
 	AvatarType  string     `json:"avatar_type"`
 	TokenID     *string    `json:"token_id"`
 	TokenSecret *string    `json:"token_secret"`
@@ -141,13 +141,25 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const deleteAvatar = `-- name: DeleteAvatar :exec
-DELETE FROM avatars WHERE user_id = $1 AND file_id = $1::TEXT
+DELETE FROM avatars WHERE user_id = $1 AND avatar_type = 'profile'
 `
 
 // Deletes the main profile avatar for a user
 func (q *Queries) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteAvatar, userID)
 	return err
+}
+
+const getAvatarFileID = `-- name: GetAvatarFileID :one
+SELECT file_id FROM avatars WHERE user_id = $1 AND avatar_type = 'profile'
+`
+
+// Fetches the storage file_id for the main profile avatar
+func (q *Queries) GetAvatarFileID(ctx context.Context, userID uuid.UUID) (*string, error) {
+	row := q.db.QueryRow(ctx, getAvatarFileID, userID)
+	var file_id *string
+	err := row.Scan(&file_id)
+	return file_id, err
 }
 
 const getContactableProfilesForViewer = `-- name: GetContactableProfilesForViewer :many
@@ -300,7 +312,7 @@ const getUserProfile = `-- name: GetUserProfile :one
 SELECT u.id, u.name, u.bio, u.profile_type, u.is_admin_blocked, u.admin_block_reason, u.hmac_sha256_hex_username, u.b64_cipher_chacha20poly1305_username, u.created_at, u.updated_at, a.file_id, a.token_id, a.token_secret, a.token_expiry
 FROM users u
     LEFT JOIN avatars a ON a.user_id = u.id
-    AND a.file_id = u.id::TEXT -- main profile avatar (file_id == user_id)
+    AND a.avatar_type = 'profile'
 WHERE
     u.id = $1
 `
@@ -381,7 +393,7 @@ SELECT EXISTS (
             JOIN avatars a ON a.user_id = u.id
         WHERE
             u.id = $1
-            AND a.file_id = u.id::TEXT
+            AND a.avatar_type = 'profile'
     )
 `
 
@@ -439,6 +451,52 @@ func (q *Queries) ListUsersAfter(ctx context.Context, arg ListUsersAfterParams) 
 	return items, nil
 }
 
+const updateAvatarFull = `-- name: UpdateAvatarFull :one
+UPDATE avatars
+SET
+    file_id = $2,
+    token_id = $3,
+    token_secret = $4,
+    token_expiry = $5
+WHERE
+    user_id = $1
+    AND avatar_type = 'profile'
+RETURNING
+    id, user_id, file_id, avatar_type, token_id, token_secret, token_expiry, created_at, updated_at
+`
+
+type UpdateAvatarFullParams struct {
+	UserID      uuid.UUID  `json:"user_id"`
+	FileID      *string    `json:"file_id"`
+	TokenID     *string    `json:"token_id"`
+	TokenSecret *string    `json:"token_secret"`
+	TokenExpiry *time.Time `json:"token_expiry"`
+}
+
+// Updates all avatar fields (file_id, tokens) for the main profile avatar
+func (q *Queries) UpdateAvatarFull(ctx context.Context, arg UpdateAvatarFullParams) (Avatar, error) {
+	row := q.db.QueryRow(ctx, updateAvatarFull,
+		arg.UserID,
+		arg.FileID,
+		arg.TokenID,
+		arg.TokenSecret,
+		arg.TokenExpiry,
+	)
+	var i Avatar
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FileID,
+		&i.AvatarType,
+		&i.TokenID,
+		&i.TokenSecret,
+		&i.TokenExpiry,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateAvatarTokens = `-- name: UpdateAvatarTokens :one
 UPDATE avatars
 SET
@@ -447,7 +505,7 @@ SET
     token_expiry = $4
 WHERE
     user_id = $1
-    AND file_id = $1::TEXT
+    AND avatar_type = 'profile'
 RETURNING
     id, user_id, file_id, avatar_type, token_id, token_secret, token_expiry, created_at, updated_at
 `
@@ -459,7 +517,7 @@ type UpdateAvatarTokensParams struct {
 	TokenExpiry *time.Time `json:"token_expiry"`
 }
 
-// Updates token_id, token_secret, and token_expiry for the main profile avatar (where user_id == file_id)
+// Updates token_id, token_secret, and token_expiry for the main profile avatar
 func (q *Queries) UpdateAvatarTokens(ctx context.Context, arg UpdateAvatarTokensParams) (Avatar, error) {
 	row := q.db.QueryRow(ctx, updateAvatarTokens,
 		arg.UserID,
