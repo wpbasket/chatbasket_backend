@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -283,6 +284,11 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 
 	if eligibility != EligibilityAllowed {
 		return nil, messagingEligibilityError(eligibility)
+	}
+
+	// 8. Content Length check (matched with DB constraint)
+	if utf8.RuneCountInString(params.Content) > 5000 {
+		return nil, kit.NewError(http.StatusBadRequest, "content_too_long", "Message content cannot exceed 5000 characters")
 	}
 
 	chat, chatErr := s.CreateOrGetChat(ctx, params.SenderID.UuidUserId, params.RecipientID)
