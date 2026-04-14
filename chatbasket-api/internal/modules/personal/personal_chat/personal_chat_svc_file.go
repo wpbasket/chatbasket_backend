@@ -48,6 +48,14 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 	)
 	if err != nil {
 		log.Printf("[GenerateMessageFileURLs] Token refresh failed for message %s: %v", msg.ID, err)
+		
+		// Map Appwrite 404s (file not found) to http.StatusNotFound so frontend can mark message as error.
+		// Appwrite SDK errors typically contain "404" or "not found" in the error string.
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "404") || strings.Contains(errStr, "not found") {
+			return "", "", nil, kit.NewError(http.StatusNotFound, "file_not_found", "Media file not found in storage")
+		}
+		
 		return "", "", nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to refresh file token")
 	}
 

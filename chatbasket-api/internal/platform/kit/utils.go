@@ -140,7 +140,7 @@ func EnsureFreshFileTokens(
 
 	// ——— Create new token —————————————————————————————————————————————————————————————————————
 	// Set expiry using central AppwriteFileTokenDuration
-	exp := now.Add(AppwriteFileTokenDuration).Format("2006-01-02T15:04:05.000Z")
+	exp := now.UTC().Add(AppwriteFileTokenDuration).Format("2006-01-02T15:04:05.000Z")
 	newTok, err := appwriteTokens.CreateFileToken(
 		bucketID,
 		*fileID,
