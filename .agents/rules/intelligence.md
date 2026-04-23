@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 ### Core Principles
 1. **Semantic Preference**: Utilize tools with **semantic embeddings** (e.g., GitNexus `query`) for conceptual discovery whenever the specific task permits.
 2. **Tiered Repository Discovery**: Utilize the root **`cb`** index for global discovery and cross-repo architectural queries. For deep implementation, refactoring, or impact analysis, switch to the specific **sub-repo index** (e.g., `chatbasket_backend`) to ensure maximum precision and local context.
@@ -5,10 +9,12 @@
 
 ---
 
+
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **chatbasket_backend** (2861 symbols, 5350 relationships, 194 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **cb** (6189 symbols, 11343 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -31,10 +37,10 @@ This project is indexed by GitNexus as **chatbasket_backend** (2861 symbols, 535
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/chatbasket_backend/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/chatbasket_backend/clusters` | All functional areas |
-| `gitnexus://repo/chatbasket_backend/processes` | All execution flows |
-| `gitnexus://repo/chatbasket_backend/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/cb/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/cb/clusters` | All functional areas |
+| `gitnexus://repo/cb/processes` | All execution flows |
+| `gitnexus://repo/cb/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 
