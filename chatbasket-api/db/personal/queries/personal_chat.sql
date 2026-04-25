@@ -157,7 +157,6 @@ SELECT *
 FROM messages
 WHERE
     recipient_id = $1
-    AND delivered_to_recipient_primary = FALSE
     AND deleted_by_recipient = FALSE
     AND expires_at > now()
 ORDER BY created_at ASC
