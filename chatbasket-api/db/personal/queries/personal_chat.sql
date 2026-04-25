@@ -168,7 +168,6 @@ SELECT *
 FROM messages
 WHERE
     sender_id = $1
-    AND synced_to_sender_primary = FALSE
     AND deleted_by_sender = FALSE
     AND expires_at > now()
 ORDER BY created_at ASC
