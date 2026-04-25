@@ -146,14 +146,14 @@ func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to update refreshed tokens in DB: "+kit.GetPostgresError(err).Message)
 		}
 
-		return kit.BuildAvatarURI(&kit.AppwriteFileData{
+		return kit.BuildFileDownloadURL(ps.AppwriteStorage.Endpoint, ps.AppwriteStorage.Project, ps.PersonalProfilePicBucketID, &kit.AppwriteFileData{
 			FileId:     fileID,
 			FileToken:  &refreshed.TokenID,
 			FileSecret: &refreshed.TokenSecret,
 		}), nil
 	}
 
-	return kit.BuildAvatarURI(&kit.AppwriteFileData{
+	return kit.BuildFileDownloadURL(ps.AppwriteStorage.Endpoint, ps.AppwriteStorage.Project, ps.PersonalProfilePicBucketID, &kit.AppwriteFileData{
 		FileId:     fileID,
 		FileToken:  tokenID,
 		FileSecret: tokenSecret,
@@ -241,6 +241,7 @@ func (ps *profileService) GetContactableProfilesForViewer(
 
 		// Check avatar visibility
 		var avatarURL *string
+		var avatarFileID *string
 		if ShouldExposeAvatar(
 			row.GlobalRestrictProfile,
 			row.ExceptionGlobalProfile,
@@ -254,14 +255,16 @@ func (ps *profileService) GetContactableProfilesForViewer(
 				return nil, err
 			}
 			avatarURL = url
+			avatarFileID = row.FileID
 		}
 
 		result[row.ID] = &ContactProfileView{
-			ID:        row.ID,
-			Name:      row.Name,
-			Username:  username,
-			Bio:       row.Bio,
-			AvatarURL: avatarURL,
+			ID:           row.ID,
+			Name:         row.Name,
+			Username:     username,
+			Bio:          row.Bio,
+			AvatarURL:    avatarURL,
+			AvatarFileId: avatarFileID,
 		}
 	}
 

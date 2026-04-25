@@ -43,6 +43,7 @@ type ChatResponse struct {
 	OtherUserName            string     `json:"other_user_name"`
 	OtherUserUsername        string     `json:"other_user_username"`
 	AvatarURL                *string    `json:"avatar_url"`
+	AvatarFileId             *string    `json:"avatar_file_id"`
 	CreatedAt                time.Time  `json:"created_at"`
 	UpdatedAt                time.Time  `json:"updated_at"`
 	OtherUserLastReadAt      time.Time  `json:"other_user_last_read_at"`

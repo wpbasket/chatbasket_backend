@@ -748,6 +748,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 			OtherUserName:            otherUserName,
 			OtherUserUsername:        otherUserUsername,
 			AvatarURL:                avatarURL,
+			AvatarFileId:             profile.AvatarFileId,
 			CreatedAt:                chat.CreatedAt,
 			UpdatedAt:                chat.UpdatedAt,
 			OtherUserLastReadAt:      chat.OtherUserLastReadAt,

@@ -124,15 +124,16 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 		}
 
 		contacts = append(contacts, Contact{
-			ID:        c.ID.String(),
-			Name:      profile.Name,
-			Username:  profile.Username,
-			Bio:       profile.Bio,
-			Nickname:  nickname,
-			CreatedAt: c.ContactCreatedAt,
-			UpdatedAt: c.ContactUpdatedAt,
-			AvatarURL: profile.AvatarURL,
-			IsMutual:  isMutual,
+			ID:           c.ID.String(),
+			Name:         profile.Name,
+			Username:     profile.Username,
+			Bio:          profile.Bio,
+			Nickname:     nickname,
+			CreatedAt:    c.ContactCreatedAt,
+			UpdatedAt:    c.ContactUpdatedAt,
+			AvatarURL:    profile.AvatarURL,
+			AvatarFileId: profile.AvatarFileId,
+			IsMutual:     isMutual,
 		})
 	}
 
@@ -157,15 +158,16 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 		}
 
 		peopleWhoAddedYou = append(peopleWhoAddedYou, Contact{
-			ID:        p.ID.String(),
-			Name:      profile.Name,
-			Username:  profile.Username,
-			Bio:       profile.Bio,
-			Nickname:  myNickname,
-			CreatedAt: p.ContactCreatedAt,
-			UpdatedAt: p.ContactUpdatedAt,
-			AvatarURL: profile.AvatarURL,
-			IsMutual:  isMutual,
+			ID:           p.ID.String(),
+			Name:         profile.Name,
+			Username:     profile.Username,
+			Bio:          profile.Bio,
+			Nickname:     myNickname,
+			CreatedAt:    p.ContactCreatedAt,
+			UpdatedAt:    p.ContactUpdatedAt,
+			AvatarURL:    profile.AvatarURL,
+			AvatarFileId: profile.AvatarFileId,
+			IsMutual:     isMutual,
 		})
 	}
 
@@ -620,15 +622,16 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 		}
 
 		pending = append(pending, PendingContactRequest{
-			ID:          r.ID.String(),
-			Name:        profile.Name,
-			Username:    profile.Username,
-			Bio:         profile.Bio,
-			Nickname:    nil, // Privacy: Receiver should not see the nickname given by requester
-			RequestedAt: r.RequestCreatedAt,
-			UpdatedAt:   r.RequestUpdatedAt,
-			Status:      r.Status,
-			AvatarURL:   profile.AvatarURL,
+			ID:           r.ID.String(),
+			Name:         profile.Name,
+			Username:     profile.Username,
+			Bio:          profile.Bio,
+			Nickname:     nil, // Privacy: Receiver should not see the nickname given by requester
+			RequestedAt:  r.RequestCreatedAt,
+			UpdatedAt:    r.RequestUpdatedAt,
+			Status:       r.Status,
+			AvatarURL:    profile.AvatarURL,
+			AvatarFileId: profile.AvatarFileId,
 		})
 	}
 
@@ -650,15 +653,16 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 		}
 
 		sent = append(sent, SentContactRequest{
-			ID:          r.ID.String(),
-			Name:        profile.Name,
-			Username:    profile.Username,
-			Bio:         profile.Bio,
-			Nickname:    nickname,
-			RequestedAt: r.RequestCreatedAt,
-			UpdatedAt:   r.RequestUpdatedAt,
-			Status:      r.Status,
-			AvatarURL:   profile.AvatarURL,
+			ID:           r.ID.String(),
+			Name:         profile.Name,
+			Username:     profile.Username,
+			Bio:          profile.Bio,
+			Nickname:     nickname,
+			RequestedAt:  r.RequestCreatedAt,
+			UpdatedAt:    r.RequestUpdatedAt,
+			Status:       r.Status,
+			AvatarURL:    profile.AvatarURL,
+			AvatarFileId: profile.AvatarFileId,
 		})
 	}
 

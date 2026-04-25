@@ -3,15 +3,16 @@ package personal_contact
 import "time"
 
 type Contact struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Username  string    `json:"username"`
-	Bio       *string   `json:"bio"`
-	Nickname  *string   `json:"nickname"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	AvatarURL *string   `json:"avatar_url"`
-	IsMutual  bool      `json:"is_mutual"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Username     string    `json:"username"`
+	Bio          *string   `json:"bio"`
+	Nickname     *string   `json:"nickname"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	AvatarURL    *string   `json:"avatar_url"`
+	AvatarFileId *string   `json:"avatar_file_id"`
+	IsMutual     bool      `json:"is_mutual"`
 }
 
 type GetContactsResponse struct {
@@ -52,27 +53,29 @@ type UndoContactRequestPayload struct {
 }
 
 type PendingContactRequest struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Username    string    `json:"username"`
-	Bio         *string   `json:"bio"`
-	Nickname    *string   `json:"nickname"`
-	RequestedAt time.Time `json:"requested_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Status      string    `json:"status"`
-	AvatarURL   *string   `json:"avatar_url"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Username     string    `json:"username"`
+	Bio          *string   `json:"bio"`
+	Nickname     *string   `json:"nickname"`
+	RequestedAt  time.Time `json:"requested_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Status       string    `json:"status"`
+	AvatarURL    *string   `json:"avatar_url"`
+	AvatarFileId *string   `json:"avatar_file_id"`
 }
 
 type SentContactRequest struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Username    string    `json:"username"`
-	Bio         *string   `json:"bio"`
-	Nickname    *string   `json:"nickname"`
-	RequestedAt time.Time `json:"requested_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Status      string    `json:"status"`
-	AvatarURL   *string   `json:"avatar_url"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Username     string    `json:"username"`
+	Bio          *string   `json:"bio"`
+	Nickname     *string   `json:"nickname"`
+	RequestedAt  time.Time `json:"requested_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Status       string    `json:"status"`
+	AvatarURL    *string   `json:"avatar_url"`
+	AvatarFileId *string   `json:"avatar_file_id"`
 }
 
 type GetContactRequestsResponse struct {
