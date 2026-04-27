@@ -207,7 +207,7 @@ func (ps *contactService) CheckContactExistance(ctx context.Context, payload *Ch
 	return existsResp, nil
 }
 
-func (ps *contactService) CreateContact(ctx context.Context, payload *CreateContactPayload, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *contactService) CreateContact(ctx context.Context, payload *CreateContactPayload, userId kit.UserId) (*CreateContactResponse, error) {
 	if payload == nil || payload.ContactUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -273,7 +273,11 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 	if alreadyContact {
-		return &kit.StatusOkay{Status: true, Message: "already_in_contacts"}, nil
+		contact, err := ps.buildSingleContactForOwner(ctx, userId.UuidUserId, targetUUID)
+		if err != nil {
+			return nil, err
+		}
+		return &CreateContactResponse{Status: true, Message: "already_in_contacts", Contact: contact}, nil
 	}
 
 	// Normalize optional nickname
@@ -312,7 +316,11 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 		}
-		return &kit.StatusOkay{Status: true, Message: "public_contact_added"}, nil
+		contact, err := ps.buildSingleContactForOwner(ctx, userId.UuidUserId, targetUUID)
+		if err != nil {
+			return nil, err
+		}
+		return &CreateContactResponse{Status: true, Message: "public_contact_added", Contact: contact}, nil
 	case "personal":
 		targetAlreadyHasMe, err := ps.PostgresQueries.IsAlreadyContact(ctx, personal_contact_store.IsAlreadyContactParams{
 			OwnerUserID:   targetUUID,
@@ -340,7 +348,11 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 			if err != nil {
 				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 			}
-			return &kit.StatusOkay{Status: true, Message: "personal_contact_added"}, nil
+			contact, err := ps.buildSingleContactForOwner(ctx, userId.UuidUserId, targetUUID)
+			if err != nil {
+				return nil, err
+			}
+			return &CreateContactResponse{Status: true, Message: "personal_contact_added", Contact: contact}, nil
 		}
 
 		// DB call to check for existing request status
@@ -361,7 +373,7 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		// If request exists, check its status
 		if err != pgx.ErrNoRows && requestStatus != "" {
 			if requestStatus == "pending" {
-				return &kit.StatusOkay{Status: true, Message: "pending_request_exists"}, nil
+				return &CreateContactResponse{Status: true, Message: "pending_request_exists"}, nil
 			}
 
 				// Encrypt nickname if provided
@@ -384,7 +396,7 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 			if err != nil {
 				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 			}
-			return &kit.StatusOkay{Status: true, Message: "contact_request_sent"}, nil
+			return &CreateContactResponse{Status: true, Message: "contact_request_sent"}, nil
 		}
 
 			// Encrypt nickname if provided
@@ -407,7 +419,7 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 		}
-		return &kit.StatusOkay{Status: true, Message: "contact_request_sent"}, nil
+		return &CreateContactResponse{Status: true, Message: "contact_request_sent"}, nil
 	default:
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid target profile type")
 	}

@@ -63,6 +63,17 @@ INSERT INTO user_contacts (owner_user_id, contact_user_id, nickname)
 VALUES ($1, $2, $3)
 ON CONFLICT DO NOTHING;
 
+-- name: GetSingleUserContactLite :one
+SELECT
+    uc.contact_user_id AS id,
+    uc.nickname,
+    uc.created_at AS contact_created_at,
+    uc.updated_at AS contact_updated_at
+FROM user_contacts uc
+WHERE uc.owner_user_id = $1
+  AND uc.contact_user_id = $2
+LIMIT 1;
+
 -- name: HasPendingRequest :one
 SELECT EXISTS(
     SELECT 1 FROM contact_requests

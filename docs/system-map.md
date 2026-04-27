@@ -2,21 +2,180 @@
 
 ```
 chatbasket_backend/
-├── .claude/
+├── .agents/
+│   ├── rules/
+│   │   └── intelligence.md
 │   ├── skills/
-│   │   └── gitnexus/
-│   │       ├── gitnexus-cli/
-│   │       │   └── SKILL.md
-│   │       ├── gitnexus-debugging/
-│   │       │   └── SKILL.md
-│   │       ├── gitnexus-exploring/
-│   │       │   └── SKILL.md
-│   │       ├── gitnexus-guide/
-│   │       │   └── SKILL.md
-│   │       ├── gitnexus-impact-analysis/
-│   │       │   └── SKILL.md
-│   │       └── gitnexus-refactoring/
-│   │           └── SKILL.md
+│   │   ├── building-native-ui/
+│   │   │   ├── references/
+│   │   │   │   ├── animations.md
+│   │   │   │   ├── controls.md
+│   │   │   │   ├── form-sheet.md
+│   │   │   │   ├── gradients.md
+│   │   │   │   ├── icons.md
+│   │   │   │   ├── media.md
+│   │   │   │   ├── route-structure.md
+│   │   │   │   ├── search.md
+│   │   │   │   ├── storage.md
+│   │   │   │   ├── tabs.md
+│   │   │   │   ├── toolbar-and-headers.md
+│   │   │   │   ├── visual-effects.md
+│   │   │   │   ├── webgpu-three.md
+│   │   │   │   └── zoom-transitions.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-api-routes/
+│   │   │   └── SKILL.md
+│   │   ├── expo-cicd-workflows/
+│   │   │   ├── scripts/
+│   │   │   │   ├── fetch.js
+│   │   │   │   ├── package.json
+│   │   │   │   └── validate.js
+│   │   │   └── SKILL.md
+│   │   ├── expo-deployment/
+│   │   │   ├── references/
+│   │   │   │   ├── app-store-metadata.md
+│   │   │   │   ├── ios-app-store.md
+│   │   │   │   ├── play-store.md
+│   │   │   │   ├── testflight.md
+│   │   │   │   └── workflows.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-dev-client/
+│   │   │   └── SKILL.md
+│   │   ├── expo-module/
+│   │   │   ├── references/
+│   │   │   │   ├── config-plugin.md
+│   │   │   │   ├── lifecycle.md
+│   │   │   │   ├── module-config.md
+│   │   │   │   ├── native-module.md
+│   │   │   │   └── native-view.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-tailwind-setup/
+│   │   │   └── SKILL.md
+│   │   ├── expo-ui-jetpack-compose/
+│   │   │   └── SKILL.md
+│   │   ├── expo-ui-swiftui/
+│   │   │   └── SKILL.md
+│   │   ├── frontend-design/
+│   │   │   ├── LICENSE.txt
+│   │   │   └── SKILL.md
+│   │   ├── native-data-fetching/
+│   │   │   ├── references/
+│   │   │   │   └── expo-router-loaders.md
+│   │   │   └── SKILL.md
+│   │   ├── ui-ux-pro-max/
+│   │   │   ├── SKILL.md
+│   │   │   ├── data
+│   │   │   └── scripts
+│   │   ├── upgrading-expo/
+│   │   │   ├── references/
+│   │   │   │   ├── expo-av-to-audio.md
+│   │   │   │   ├── expo-av-to-video.md
+│   │   │   │   ├── native-tabs.md
+│   │   │   │   ├── new-architecture.md
+│   │   │   │   ├── react-19.md
+│   │   │   │   └── react-compiler.md
+│   │   │   └── SKILL.md
+│   │   └── use-dom/
+│   │       └── SKILL.md
+│   └── workflows/
+│       ├── folder-tree-sync.md
+│       ├── gitnexus-backup-cb-docs-references.md
+│       ├── gitnexus-cb.md
+│       ├── gitnexus-chatbasket-backend.md
+│       ├── gitnexus-chatbasket.md
+│       ├── gitnexus-helper-cb-backend.md
+│       ├── gitnexus-wiki-backup-cb-docs-references.md
+│       ├── gitnexus-wiki-chatbasket-backend.md
+│       ├── gitnexus-wiki-chatbasket.md
+│       └── gitnexus-wiki-helper-cb-backend.md
+├── .claude/
+│   ├── agents/
+│   ├── skills/
+│   │   ├── building-native-ui/
+│   │   │   ├── references/
+│   │   │   │   ├── animations.md
+│   │   │   │   ├── controls.md
+│   │   │   │   ├── form-sheet.md
+│   │   │   │   ├── gradients.md
+│   │   │   │   ├── icons.md
+│   │   │   │   ├── media.md
+│   │   │   │   ├── route-structure.md
+│   │   │   │   ├── search.md
+│   │   │   │   ├── storage.md
+│   │   │   │   ├── tabs.md
+│   │   │   │   ├── toolbar-and-headers.md
+│   │   │   │   ├── visual-effects.md
+│   │   │   │   ├── webgpu-three.md
+│   │   │   │   └── zoom-transitions.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-api-routes/
+│   │   │   └── SKILL.md
+│   │   ├── expo-cicd-workflows/
+│   │   │   ├── scripts/
+│   │   │   │   ├── fetch.js
+│   │   │   │   ├── package.json
+│   │   │   │   └── validate.js
+│   │   │   └── SKILL.md
+│   │   ├── expo-deployment/
+│   │   │   ├── references/
+│   │   │   │   ├── app-store-metadata.md
+│   │   │   │   ├── ios-app-store.md
+│   │   │   │   ├── play-store.md
+│   │   │   │   ├── testflight.md
+│   │   │   │   └── workflows.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-dev-client/
+│   │   │   └── SKILL.md
+│   │   ├── expo-module/
+│   │   │   ├── references/
+│   │   │   │   ├── config-plugin.md
+│   │   │   │   ├── lifecycle.md
+│   │   │   │   ├── module-config.md
+│   │   │   │   ├── native-module.md
+│   │   │   │   └── native-view.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-tailwind-setup/
+│   │   │   └── SKILL.md
+│   │   ├── expo-ui-jetpack-compose/
+│   │   │   └── SKILL.md
+│   │   ├── expo-ui-swiftui/
+│   │   │   └── SKILL.md
+│   │   ├── frontend-design/
+│   │   │   ├── LICENSE.txt
+│   │   │   └── SKILL.md
+│   │   ├── gitnexus/
+│   │   │   ├── gitnexus-cli/
+│   │   │   │   └── SKILL.md
+│   │   │   ├── gitnexus-debugging/
+│   │   │   │   └── SKILL.md
+│   │   │   ├── gitnexus-exploring/
+│   │   │   │   └── SKILL.md
+│   │   │   ├── gitnexus-guide/
+│   │   │   │   └── SKILL.md
+│   │   │   ├── gitnexus-impact-analysis/
+│   │   │   │   └── SKILL.md
+│   │   │   └── gitnexus-refactoring/
+│   │   │       └── SKILL.md
+│   │   ├── native-data-fetching/
+│   │   │   ├── references/
+│   │   │   │   └── expo-router-loaders.md
+│   │   │   └── SKILL.md
+│   │   ├── ui-ux-pro-max/
+│   │   │   ├── SKILL.md
+│   │   │   ├── data
+│   │   │   └── scripts
+│   │   ├── upgrading-expo/
+│   │   │   ├── references/
+│   │   │   │   ├── expo-av-to-audio.md
+│   │   │   │   ├── expo-av-to-video.md
+│   │   │   │   ├── native-tabs.md
+│   │   │   │   ├── new-architecture.md
+│   │   │   │   ├── react-19.md
+│   │   │   │   └── react-compiler.md
+│   │   │   └── SKILL.md
+│   │   └── use-dom/
+│   │       └── SKILL.md
+│   ├── settings.json
 │   └── settings.local.json
 ├── .github/
 │   └── workflows/
@@ -25,6 +184,80 @@ chatbasket_backend/
 ├── .gitnexus/
 │   ├── lbug
 │   └── meta.json
+├── .junie/
+│   ├── plans/
+│   └── skills/
+│       ├── building-native-ui/
+│       │   ├── references/
+│       │   │   ├── animations.md
+│       │   │   ├── controls.md
+│       │   │   ├── form-sheet.md
+│       │   │   ├── gradients.md
+│       │   │   ├── icons.md
+│       │   │   ├── media.md
+│       │   │   ├── route-structure.md
+│       │   │   ├── search.md
+│       │   │   ├── storage.md
+│       │   │   ├── tabs.md
+│       │   │   ├── toolbar-and-headers.md
+│       │   │   ├── visual-effects.md
+│       │   │   ├── webgpu-three.md
+│       │   │   └── zoom-transitions.md
+│       │   └── SKILL.md
+│       ├── expo-api-routes/
+│       │   └── SKILL.md
+│       ├── expo-cicd-workflows/
+│       │   ├── scripts/
+│       │   │   ├── fetch.js
+│       │   │   ├── package.json
+│       │   │   └── validate.js
+│       │   └── SKILL.md
+│       ├── expo-deployment/
+│       │   ├── references/
+│       │   │   ├── app-store-metadata.md
+│       │   │   ├── ios-app-store.md
+│       │   │   ├── play-store.md
+│       │   │   ├── testflight.md
+│       │   │   └── workflows.md
+│       │   └── SKILL.md
+│       ├── expo-dev-client/
+│       │   └── SKILL.md
+│       ├── expo-module/
+│       │   ├── references/
+│       │   │   ├── config-plugin.md
+│       │   │   ├── lifecycle.md
+│       │   │   ├── module-config.md
+│       │   │   ├── native-module.md
+│       │   │   └── native-view.md
+│       │   └── SKILL.md
+│       ├── expo-tailwind-setup/
+│       │   └── SKILL.md
+│       ├── expo-ui-jetpack-compose/
+│       │   └── SKILL.md
+│       ├── expo-ui-swiftui/
+│       │   └── SKILL.md
+│       ├── frontend-design/
+│       │   ├── LICENSE.txt
+│       │   └── SKILL.md
+│       ├── native-data-fetching/
+│       │   ├── references/
+│       │   │   └── expo-router-loaders.md
+│       │   └── SKILL.md
+│       ├── ui-ux-pro-max/
+│       │   ├── SKILL.md
+│       │   ├── data
+│       │   └── scripts
+│       ├── upgrading-expo/
+│       │   ├── references/
+│       │   │   ├── expo-av-to-audio.md
+│       │   │   ├── expo-av-to-video.md
+│       │   │   ├── native-tabs.md
+│       │   │   ├── new-architecture.md
+│       │   │   ├── react-19.md
+│       │   │   └── react-compiler.md
+│       │   └── SKILL.md
+│       └── use-dom/
+│           └── SKILL.md
 ├── chatbasket-api/
 │   ├── app/
 │   │   └── main.go
@@ -54,8 +287,7 @@ chatbasket_backend/
 │   │   │   └── queries/
 │   │   │       ├── personal_chat.sql
 │   │   │       ├── personal_contacts.sql
-│   │   │       ├── personal_profile.sql
-│   │   │       └── personal_user.sql
+│   │   │       └── personal_profile.sql
 │   │   └── public/
 │   │       ├── migrations/
 │   │       └── queries/
@@ -343,6 +575,7 @@ chatbasket_backend/
 │   ├── Dockerfile
 │   └── go.mod
 ├── .gitignore
+├── .gitnexusignore
 ├── AGENTS.md
 ├── CLAUDE.md
 └── README.md
@@ -352,24 +585,258 @@ chatbasket_backend/
 
 ```
 chatbasket/
+├── .agents/
+│   ├── rules/
+│   │   └── intelligence.md
+│   ├── skills/
+│   │   ├── building-native-ui/
+│   │   │   ├── references/
+│   │   │   │   ├── animations.md
+│   │   │   │   ├── controls.md
+│   │   │   │   ├── form-sheet.md
+│   │   │   │   ├── gradients.md
+│   │   │   │   ├── icons.md
+│   │   │   │   ├── media.md
+│   │   │   │   ├── route-structure.md
+│   │   │   │   ├── search.md
+│   │   │   │   ├── storage.md
+│   │   │   │   ├── tabs.md
+│   │   │   │   ├── toolbar-and-headers.md
+│   │   │   │   ├── visual-effects.md
+│   │   │   │   ├── webgpu-three.md
+│   │   │   │   └── zoom-transitions.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-api-routes/
+│   │   │   └── SKILL.md
+│   │   ├── expo-cicd-workflows/
+│   │   │   ├── scripts/
+│   │   │   │   ├── fetch.js
+│   │   │   │   ├── package.json
+│   │   │   │   └── validate.js
+│   │   │   └── SKILL.md
+│   │   ├── expo-deployment/
+│   │   │   ├── references/
+│   │   │   │   ├── app-store-metadata.md
+│   │   │   │   ├── ios-app-store.md
+│   │   │   │   ├── play-store.md
+│   │   │   │   ├── testflight.md
+│   │   │   │   └── workflows.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-dev-client/
+│   │   │   └── SKILL.md
+│   │   ├── expo-module/
+│   │   │   ├── references/
+│   │   │   │   ├── config-plugin.md
+│   │   │   │   ├── lifecycle.md
+│   │   │   │   ├── module-config.md
+│   │   │   │   ├── native-module.md
+│   │   │   │   └── native-view.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-tailwind-setup/
+│   │   │   └── SKILL.md
+│   │   ├── expo-ui-jetpack-compose/
+│   │   │   └── SKILL.md
+│   │   ├── expo-ui-swiftui/
+│   │   │   └── SKILL.md
+│   │   ├── frontend-design/
+│   │   │   ├── LICENSE.txt
+│   │   │   └── SKILL.md
+│   │   ├── native-data-fetching/
+│   │   │   ├── references/
+│   │   │   │   └── expo-router-loaders.md
+│   │   │   └── SKILL.md
+│   │   ├── ui-ux-pro-max/
+│   │   │   ├── SKILL.md
+│   │   │   ├── data
+│   │   │   └── scripts
+│   │   ├── upgrading-expo/
+│   │   │   ├── references/
+│   │   │   │   ├── expo-av-to-audio.md
+│   │   │   │   ├── expo-av-to-video.md
+│   │   │   │   ├── native-tabs.md
+│   │   │   │   ├── new-architecture.md
+│   │   │   │   ├── react-19.md
+│   │   │   │   └── react-compiler.md
+│   │   │   └── SKILL.md
+│   │   └── use-dom/
+│   │       └── SKILL.md
+│   └── workflows/
+│       ├── folder-tree-sync.md
+│       ├── gitnexus-backup-cb-docs-references.md
+│       ├── gitnexus-cb.md
+│       ├── gitnexus-chatbasket-backend.md
+│       ├── gitnexus-chatbasket.md
+│       ├── gitnexus-helper-cb-backend.md
+│       ├── gitnexus-wiki-backup-cb-docs-references.md
+│       ├── gitnexus-wiki-chatbasket-backend.md
+│       ├── gitnexus-wiki-chatbasket.md
+│       └── gitnexus-wiki-helper-cb-backend.md
 ├── .claude/
-│   └── skills/
-│       └── gitnexus/
-│           ├── gitnexus-cli/
-│           │   └── SKILL.md
-│           ├── gitnexus-debugging/
-│           │   └── SKILL.md
-│           ├── gitnexus-exploring/
-│           │   └── SKILL.md
-│           ├── gitnexus-guide/
-│           │   └── SKILL.md
-│           ├── gitnexus-impact-analysis/
-│           │   └── SKILL.md
-│           └── gitnexus-refactoring/
-│               └── SKILL.md
+│   ├── agents/
+│   ├── skills/
+│   │   ├── building-native-ui/
+│   │   │   ├── references/
+│   │   │   │   ├── animations.md
+│   │   │   │   ├── controls.md
+│   │   │   │   ├── form-sheet.md
+│   │   │   │   ├── gradients.md
+│   │   │   │   ├── icons.md
+│   │   │   │   ├── media.md
+│   │   │   │   ├── route-structure.md
+│   │   │   │   ├── search.md
+│   │   │   │   ├── storage.md
+│   │   │   │   ├── tabs.md
+│   │   │   │   ├── toolbar-and-headers.md
+│   │   │   │   ├── visual-effects.md
+│   │   │   │   ├── webgpu-three.md
+│   │   │   │   └── zoom-transitions.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-api-routes/
+│   │   │   └── SKILL.md
+│   │   ├── expo-cicd-workflows/
+│   │   │   ├── scripts/
+│   │   │   │   ├── fetch.js
+│   │   │   │   ├── package.json
+│   │   │   │   └── validate.js
+│   │   │   └── SKILL.md
+│   │   ├── expo-deployment/
+│   │   │   ├── references/
+│   │   │   │   ├── app-store-metadata.md
+│   │   │   │   ├── ios-app-store.md
+│   │   │   │   ├── play-store.md
+│   │   │   │   ├── testflight.md
+│   │   │   │   └── workflows.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-dev-client/
+│   │   │   └── SKILL.md
+│   │   ├── expo-module/
+│   │   │   ├── references/
+│   │   │   │   ├── config-plugin.md
+│   │   │   │   ├── lifecycle.md
+│   │   │   │   ├── module-config.md
+│   │   │   │   ├── native-module.md
+│   │   │   │   └── native-view.md
+│   │   │   └── SKILL.md
+│   │   ├── expo-tailwind-setup/
+│   │   │   └── SKILL.md
+│   │   ├── expo-ui-jetpack-compose/
+│   │   │   └── SKILL.md
+│   │   ├── expo-ui-swiftui/
+│   │   │   └── SKILL.md
+│   │   ├── frontend-design/
+│   │   │   ├── LICENSE.txt
+│   │   │   └── SKILL.md
+│   │   ├── gitnexus/
+│   │   │   ├── gitnexus-cli/
+│   │   │   │   └── SKILL.md
+│   │   │   ├── gitnexus-debugging/
+│   │   │   │   └── SKILL.md
+│   │   │   ├── gitnexus-exploring/
+│   │   │   │   └── SKILL.md
+│   │   │   ├── gitnexus-guide/
+│   │   │   │   └── SKILL.md
+│   │   │   ├── gitnexus-impact-analysis/
+│   │   │   │   └── SKILL.md
+│   │   │   └── gitnexus-refactoring/
+│   │   │       └── SKILL.md
+│   │   ├── native-data-fetching/
+│   │   │   ├── references/
+│   │   │   │   └── expo-router-loaders.md
+│   │   │   └── SKILL.md
+│   │   ├── ui-ux-pro-max/
+│   │   │   ├── SKILL.md
+│   │   │   ├── data
+│   │   │   └── scripts
+│   │   ├── upgrading-expo/
+│   │   │   ├── references/
+│   │   │   │   ├── expo-av-to-audio.md
+│   │   │   │   ├── expo-av-to-video.md
+│   │   │   │   ├── native-tabs.md
+│   │   │   │   ├── new-architecture.md
+│   │   │   │   ├── react-19.md
+│   │   │   │   └── react-compiler.md
+│   │   │   └── SKILL.md
+│   │   └── use-dom/
+│   │       └── SKILL.md
+│   ├── settings.json
+│   └── settings.local.json
 ├── .gitnexus/
 │   ├── lbug
 │   └── meta.json
+├── .junie/
+│   ├── plans/
+│   └── skills/
+│       ├── building-native-ui/
+│       │   ├── references/
+│       │   │   ├── animations.md
+│       │   │   ├── controls.md
+│       │   │   ├── form-sheet.md
+│       │   │   ├── gradients.md
+│       │   │   ├── icons.md
+│       │   │   ├── media.md
+│       │   │   ├── route-structure.md
+│       │   │   ├── search.md
+│       │   │   ├── storage.md
+│       │   │   ├── tabs.md
+│       │   │   ├── toolbar-and-headers.md
+│       │   │   ├── visual-effects.md
+│       │   │   ├── webgpu-three.md
+│       │   │   └── zoom-transitions.md
+│       │   └── SKILL.md
+│       ├── expo-api-routes/
+│       │   └── SKILL.md
+│       ├── expo-cicd-workflows/
+│       │   ├── scripts/
+│       │   │   ├── fetch.js
+│       │   │   ├── package.json
+│       │   │   └── validate.js
+│       │   └── SKILL.md
+│       ├── expo-deployment/
+│       │   ├── references/
+│       │   │   ├── app-store-metadata.md
+│       │   │   ├── ios-app-store.md
+│       │   │   ├── play-store.md
+│       │   │   ├── testflight.md
+│       │   │   └── workflows.md
+│       │   └── SKILL.md
+│       ├── expo-dev-client/
+│       │   └── SKILL.md
+│       ├── expo-module/
+│       │   ├── references/
+│       │   │   ├── config-plugin.md
+│       │   │   ├── lifecycle.md
+│       │   │   ├── module-config.md
+│       │   │   ├── native-module.md
+│       │   │   └── native-view.md
+│       │   └── SKILL.md
+│       ├── expo-tailwind-setup/
+│       │   └── SKILL.md
+│       ├── expo-ui-jetpack-compose/
+│       │   └── SKILL.md
+│       ├── expo-ui-swiftui/
+│       │   └── SKILL.md
+│       ├── frontend-design/
+│       │   ├── LICENSE.txt
+│       │   └── SKILL.md
+│       ├── native-data-fetching/
+│       │   ├── references/
+│       │   │   └── expo-router-loaders.md
+│       │   └── SKILL.md
+│       ├── ui-ux-pro-max/
+│       │   ├── SKILL.md
+│       │   ├── data
+│       │   └── scripts
+│       ├── upgrading-expo/
+│       │   ├── references/
+│       │   │   ├── expo-av-to-audio.md
+│       │   │   ├── expo-av-to-video.md
+│       │   │   ├── native-tabs.md
+│       │   │   ├── new-architecture.md
+│       │   │   ├── react-19.md
+│       │   │   └── react-compiler.md
+│       │   └── SKILL.md
+│       └── use-dom/
+│           └── SKILL.md
 ├── .vscode/
 │   ├── extensions.json
 │   └── settings.json
@@ -440,9 +907,12 @@ chatbasket/
 │   │   │           └── chat/
 │   │   └── state/
 │   │       ├── chat/
+│   │       │   ├── ack_race_condition.test.ts
+│   │       │   ├── avatar_caching.test.ts
 │   │       │   └── is_contactable.test.ts
 │   │       └── personalState/
-│   │           └── chat/
+│   │           ├── chat/
+│   │           └── profile_avatar.test.ts
 │   ├── app/
 │   │   ├── (auth)/
 │   │   │   ├── auth-verify.tsx
@@ -556,8 +1026,10 @@ chatbasket/
 │   │   │   ├── AppModal.tsx
 │   │   │   └── README_MODAL_ARCHITECTURE.md
 │   │   ├── personal/
-│   │   │   └── common/
-│   │   │       └── PrivacyAvatar.tsx
+│   │   │   ├── common/
+│   │   │   │   └── PrivacyAvatar.tsx
+│   │   │   └── profile/
+│   │   │       └── ProfileAvatar.tsx
 │   │   ├── personalComponents/
 │   │   │   └── chat/
 │   │   ├── publicComponents/
@@ -646,6 +1118,8 @@ chatbasket/
 │   │   │   │   ├── outbox.queue.ts
 │   │   │   │   ├── personal.api.chat.ts
 │   │   │   │   └── ws.client.ts
+│   │   │   ├── constant/
+│   │   │   │   └── constant.chat.ts
 │   │   │   ├── contactApi/
 │   │   │   │   └── personal.api.contact.ts
 │   │   │   ├── fileSystem/
@@ -682,10 +1156,13 @@ chatbasket/
 │   │   │   │   │   ├── chat.storage.normalize.ts
 │   │   │   │   │   ├── chat.storage.schema.ts
 │   │   │   │   │   ├── chat.storage.ts
-│   │   │   │   │   └── chat.storage.web.ts
+│   │   │   │   │   ├── chat.storage.web.ts
+│   │   │   │   │   └── personal.storage.chat.ts
+│   │   │   │   ├── profile/
+│   │   │   │   │   ├── personal.storage.user.ts
+│   │   │   │   │   └── profile.storage.ts
 │   │   │   │   ├── personal.storage.contacts.ts
-│   │   │   │   ├── personal.storage.device.ts
-│   │   │   │   └── personal.storage.user.ts
+│   │   │   │   └── personal.storage.device.ts
 │   │   │   ├── publicStorage/
 │   │   │   ├── README_STORAGE.md
 │   │   │   ├── storage.init.ts
@@ -759,16 +1236,18 @@ chatbasket/
 │   │   │   ├── personal.util.contacts.ts
 │   │   │   ├── personal.util.device.ts
 │   │   │   ├── personal.util.profile.ts
+│   │   │   ├── util.avatarCache.ts
+│   │   │   ├── util.avatarCommon.ts
 │   │   │   ├── util.chatErrors.ts
 │   │   │   ├── util.chatMedia.ts
 │   │   │   ├── util.chatPreview.ts
-│   │   │   └── util.contactMessages.ts
+│   │   │   ├── util.contactMessages.ts
+│   │   │   └── util.profileAvatar.ts
 │   │   └── publicUtils/
 │   │       └── public.util.profile.ts
 │   └── global.css
 ├── .env
 ├── .gitignore
-├── .npmrc
 ├── AGENTS.md
 ├── CLAUDE.md
 ├── README.md

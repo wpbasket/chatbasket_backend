@@ -32,6 +32,7 @@ type Querier interface {
 	GetContactRequestStatus(ctx context.Context, arg GetContactRequestStatusParams) (string, error)
 	GetPendingContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetPendingContactRequestsLiteRow, error)
 	GetSentContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetSentContactRequestsLiteRow, error)
+	GetSingleUserContactLite(ctx context.Context, arg GetSingleUserContactLiteParams) (GetSingleUserContactLiteRow, error)
 	GetUserContactsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetUserContactsLiteRow, error)
 	GetUsersWhoAddedYouLite(ctx context.Context, ownerUserID uuid.UUID) ([]GetUsersWhoAddedYouLiteRow, error)
 	HasPendingRequest(ctx context.Context, arg HasPendingRequestParams) (bool, error)

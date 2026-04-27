@@ -400,6 +400,42 @@ func (q *Queries) GetSentContactRequestsLite(ctx context.Context, blockerUserID 
 	return items, nil
 }
 
+const getSingleUserContactLite = `-- name: GetSingleUserContactLite :one
+SELECT
+    uc.contact_user_id AS id,
+    uc.nickname,
+    uc.created_at AS contact_created_at,
+    uc.updated_at AS contact_updated_at
+FROM user_contacts uc
+WHERE uc.owner_user_id = $1
+  AND uc.contact_user_id = $2
+LIMIT 1
+`
+
+type GetSingleUserContactLiteParams struct {
+	OwnerUserID   uuid.UUID `json:"owner_user_id"`
+	ContactUserID uuid.UUID `json:"contact_user_id"`
+}
+
+type GetSingleUserContactLiteRow struct {
+	ID               uuid.UUID `json:"id"`
+	Nickname         *string   `json:"nickname"`
+	ContactCreatedAt time.Time `json:"contact_created_at"`
+	ContactUpdatedAt time.Time `json:"contact_updated_at"`
+}
+
+func (q *Queries) GetSingleUserContactLite(ctx context.Context, arg GetSingleUserContactLiteParams) (GetSingleUserContactLiteRow, error) {
+	row := q.db.QueryRow(ctx, getSingleUserContactLite, arg.OwnerUserID, arg.ContactUserID)
+	var i GetSingleUserContactLiteRow
+	err := row.Scan(
+		&i.ID,
+		&i.Nickname,
+		&i.ContactCreatedAt,
+		&i.ContactUpdatedAt,
+	)
+	return i, err
+}
+
 const getUserContactsLite = `-- name: GetUserContactsLite :many
 SELECT
     uc.contact_user_id AS id,

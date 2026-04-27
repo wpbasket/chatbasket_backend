@@ -25,6 +25,12 @@ type CreateContactPayload struct {
 	Nickname      *string `json:"nickname"`
 }
 
+type CreateContactResponse struct {
+	Status  bool     `json:"status"`
+	Message string   `json:"message"`
+	Contact *Contact `json:"contact,omitempty"`
+}
+
 type CheckContactExistancePayload struct {
 	ContactUsername string `json:"contact_username"`
 }
