@@ -1,6 +1,6 @@
 ### Core Principles
 1. **Semantic Preference**: Utilize tools with **semantic embeddings** (e.g., GitNexus `query`) for conceptual discovery whenever the specific task permits.
-2. **Tiered Repository Discovery**: Utilize the root **`cb`** index for global discovery and cross-repo architectural queries. For deep implementation, refactoring, or impact analysis, switch to the specific **sub-repo index** (e.g., `chatbasket_backend`) to ensure maximum precision and local context.
+2. **Tiered Repository Discovery**: Utilize **group-level queries** (e.g., `gitnexus_group_query`) against **`cb-group`** for global discovery and cross-repo architectural queries. For deep implementation, refactoring, or impact analysis, switch to the specific **sub-repo index** (e.g., `chatbasket_backend`) to ensure maximum precision and local context.
 3. **Strategic Documentation**: If Wiki is present, then utilize the **GitNexus Wiki** (located in sub-repo `.gitnexus/wiki/` folders) when the task requires high-level architectural understanding, module mapping, or strategic context before deep-diving into code.
 
 ---
@@ -8,7 +8,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **chatbasket_backend** (2863 symbols, 5353 relationships, 194 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **chatbasket_backend** (2957 symbols, 5791 relationships, 251 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -36,6 +36,10 @@ This project is indexed by GitNexus as **chatbasket_backend** (2863 symbols, 535
 | `gitnexus://repo/chatbasket_backend/processes` | All execution flows |
 | `gitnexus://repo/chatbasket_backend/process/{name}` | Step-by-step execution trace |
 
+## Cross-Repo Groups
+
+This repository is listed under GitNexus **group(s): cb-group** (see `~/.gitnexus/groups/`). For cross-repo analysis, use MCP tools `impact`, `query`, and `context` with `repo` set to `@<groupName>` or `@<groupName>/<memberPath>` (paths match keys in that group’s `group.yaml`). Use `group_list` / `group_sync` for membership and sync. From the terminal: `npx gitnexus group list`, `npx gitnexus group sync <name>`, `npx gitnexus group impact <name> --target <symbol> --repo <group-path>`.
+
 ## CLI
 
 | Task | Read this skill file |
@@ -48,3 +52,9 @@ This project is indexed by GitNexus as **chatbasket_backend** (2863 symbols, 535
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+## Global Playwright Setup
+- Playwright is installed globally on this Windows machine via npm (`playwright@1.59.1`).
+- Prefer using the global `playwright` command instead of creating local temporary Playwright installs.
+- When requiring Playwright from ad-hoc Node scripts, set `NODE_PATH` to the global npm root first in PowerShell: `$env:NODE_PATH = (npm root -g)`.
+- Microsoft Edge is available at: `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`.
