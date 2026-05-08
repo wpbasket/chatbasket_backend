@@ -80,7 +80,6 @@ chatbasket_backend/
 │   └── workflows/
 │       ├── folder-tree-sync.md
 │       ├── gitnexus-backup-cb-docs-references.md
-│       ├── gitnexus-cb.md
 │       ├── gitnexus-chatbasket-backend.md
 │       ├── gitnexus-chatbasket.md
 │       ├── gitnexus-helper-cb-backend.md
@@ -182,6 +181,7 @@ chatbasket_backend/
 │       ├── deploy_relay.yml
 │       └── deploy_web.yml
 ├── .gitnexus/
+│   ├── .gitignore
 │   ├── lbug
 │   └── meta.json
 ├── .junie/
@@ -400,6 +400,8 @@ chatbasket_backend/
 │   ├── go.sum
 │   └── sqlc.yaml
 ├── chatbasket-api-legacy/
+│   ├── .pi-lens/
+│   │   └── cache/
 │   ├── app/
 │   │   ├── README.md
 │   │   └── main.go
@@ -663,7 +665,6 @@ chatbasket/
 │   └── workflows/
 │       ├── folder-tree-sync.md
 │       ├── gitnexus-backup-cb-docs-references.md
-│       ├── gitnexus-cb.md
 │       ├── gitnexus-chatbasket-backend.md
 │       ├── gitnexus-chatbasket.md
 │       ├── gitnexus-helper-cb-backend.md
@@ -672,7 +673,6 @@ chatbasket/
 │       ├── gitnexus-wiki-chatbasket.md
 │       └── gitnexus-wiki-helper-cb-backend.md
 ├── .claude/
-│   ├── agents/
 │   ├── skills/
 │   │   ├── building-native-ui/
 │   │   │   ├── references/
@@ -761,10 +761,10 @@ chatbasket/
 │   ├── settings.json
 │   └── settings.local.json
 ├── .gitnexus/
+│   ├── .gitignore
 │   ├── lbug
 │   └── meta.json
 ├── .junie/
-│   ├── plans/
 │   └── skills/
 │       ├── building-native-ui/
 │       │   ├── references/
@@ -866,6 +866,9 @@ chatbasket/
 │       ├── react-logo@3x.png
 │       └── splash-icon.png
 ├── docs/
+│   ├── .gitnexus/
+│   │   ├── lbug
+│   │   └── lbug.wal
 │   ├── CHANGE_POLICY.md
 │   ├── KEYBOARD_VIEW.md
 │   ├── PROJECT_CONSISTENCY.md
@@ -900,18 +903,16 @@ chatbasket/
 ├── scripts/
 │   └── fix-cloudflare-pages.ts
 ├── src/
+│   ├── .gitnexus/
+│   │   ├── lbug
+│   │   └── lbug.wal
 │   ├── __tests__/
-│   │   ├── lib/
-│   │   │   └── storage/
-│   │   │       └── personalStorage/
-│   │   │           └── chat/
 │   │   └── state/
 │   │       ├── chat/
 │   │       │   ├── ack_race_condition.test.ts
 │   │       │   ├── avatar_caching.test.ts
 │   │       │   └── is_contactable.test.ts
 │   │       └── personalState/
-│   │           ├── chat/
 │   │           └── profile_avatar.test.ts
 │   ├── app/
 │   │   ├── (auth)/
@@ -1030,8 +1031,6 @@ chatbasket/
 │   │   │   │   └── PrivacyAvatar.tsx
 │   │   │   └── profile/
 │   │   │       └── ProfileAvatar.tsx
-│   │   ├── personalComponents/
-│   │   │   └── chat/
 │   │   ├── publicComponents/
 │   │   │   ├── post/
 │   │   │   │   └── Postcard.tsx
@@ -1086,7 +1085,6 @@ chatbasket/
 │   │   │   └── hooks.pressableAnimation.ts
 │   │   ├── personalHooks/
 │   │   │   └── hooks.stableIme.ts
-│   │   ├── publicHooks/
 │   │   └── useIncomingShare.ts
 │   ├── lib/
 │   │   ├── commonLib/
@@ -1112,7 +1110,6 @@ chatbasket/
 │   │   │   └── index.ts
 │   │   ├── personalLib/
 │   │   │   ├── chatApi/
-│   │   │   │   ├── __tests__/
 │   │   │   │   ├── chat.transport.ts
 │   │   │   │   ├── connection.watcher.ts
 │   │   │   │   ├── outbox.queue.ts
@@ -1151,7 +1148,6 @@ chatbasket/
 │   │   │   │   └── storage.preferences.ts
 │   │   │   ├── personalStorage/
 │   │   │   │   ├── chat/
-│   │   │   │   │   ├── __tests__/
 │   │   │   │   │   ├── chat.storage.native.ts
 │   │   │   │   │   ├── chat.storage.normalize.ts
 │   │   │   │   │   ├── chat.storage.schema.ts
@@ -1163,7 +1159,6 @@ chatbasket/
 │   │   │   │   │   └── profile.storage.ts
 │   │   │   │   ├── personal.storage.contacts.ts
 │   │   │   │   └── personal.storage.device.ts
-│   │   │   ├── publicStorage/
 │   │   │   ├── README_STORAGE.md
 │   │   │   ├── storage.init.ts
 │   │   │   └── storage.wrapper.ts
@@ -1233,6 +1228,7 @@ chatbasket/
 │   │   │   │   ├── README.md
 │   │   │   │   ├── logger.config.ts
 │   │   │   │   └── logger.ts
+│   │   │   ├── personal.util.contactActions.ts
 │   │   │   ├── personal.util.contacts.ts
 │   │   │   ├── personal.util.device.ts
 │   │   │   ├── personal.util.profile.ts
