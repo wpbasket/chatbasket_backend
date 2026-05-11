@@ -17,6 +17,18 @@ type AloneUsername struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type AuthRateLimiter struct {
+	AuthUserID          uuid.UUID  `json:"auth_user_id"`
+	OtpHourlyCount      int32      `json:"otp_hourly_count"`
+	OtpDailyCount       int32      `json:"otp_daily_count"`
+	LastOtpSendAt       *time.Time `json:"last_otp_send_at"`
+	DailyResetAt        *time.Time `json:"daily_reset_at"`
+	OtpVerifyErrors     int32      `json:"otp_verify_errors"`
+	LastVerifyAttemptAt *time.Time `json:"last_verify_attempt_at"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+}
+
 type AuthUser struct {
 	ID              uuid.UUID `json:"id"`
 	Name            string    `json:"name"`

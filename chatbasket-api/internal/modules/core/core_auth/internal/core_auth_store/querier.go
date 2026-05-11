@@ -30,6 +30,10 @@ type Querier interface {
 	DeleteSession(ctx context.Context, arg DeleteSessionParams) error
 	DeleteSessionByToken(ctx context.Context, arg DeleteSessionByTokenParams) error
 	DeleteVerificationCode(ctx context.Context, id uuid.UUID) error
+	// ======================================
+	// Rate Limiter Queries
+	// ======================================
+	GetAuthRateLimiter(ctx context.Context, authUserID uuid.UUID) (AuthRateLimiter, error)
 	GetAuthUserByEmail(ctx context.Context, email string) (AuthUser, error)
 	// Returns auth user by ID
 	GetAuthUserByID(ctx context.Context, id uuid.UUID) (AuthUser, error)
@@ -42,6 +46,7 @@ type Querier interface {
 	GetVerificationCode(ctx context.Context, arg GetVerificationCodeParams) (VerificationCode, error)
 	// Sets is_central = false for ALL sessions of this user (Upgrade preparation)
 	ResetCentralSessions(ctx context.Context, authUserID uuid.UUID) error
+	ResetVerifyErrors(ctx context.Context, authUserID uuid.UUID) error
 	// Sets is_central = true for a specific session
 	SetSessionCentral(ctx context.Context, arg SetSessionCentralParams) error
 	// Sets is_central = true for a session identified by token hash
@@ -49,7 +54,11 @@ type Querier interface {
 	UpdateAuthUserEmail(ctx context.Context, arg UpdateAuthUserEmailParams) error
 	UpdateAuthUserEmailVerified(ctx context.Context, arg UpdateAuthUserEmailVerifiedParams) error
 	UpdateAuthUserPassword(ctx context.Context, arg UpdateAuthUserPasswordParams) error
+	// Updates an existing unverified user during signup to reuse the ID and preserve rate limits
+	UpdateAuthUserSignup(ctx context.Context, arg UpdateAuthUserSignupParams) error
 	UpdateSessionDeviceToken(ctx context.Context, arg UpdateSessionDeviceTokenParams) error
+	UpsertAuthRateLimiterSend(ctx context.Context, arg UpsertAuthRateLimiterSendParams) (AuthRateLimiter, error)
+	UpsertAuthRateLimiterVerify(ctx context.Context, arg UpsertAuthRateLimiterVerifyParams) (AuthRateLimiter, error)
 }
 
 var _ Querier = (*Queries)(nil)

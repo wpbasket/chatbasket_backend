@@ -349,6 +349,31 @@ func (q *Queries) DeleteVerificationCode(ctx context.Context, id uuid.UUID) erro
 	return err
 }
 
+const getAuthRateLimiter = `-- name: GetAuthRateLimiter :one
+
+SELECT auth_user_id, otp_hourly_count, otp_daily_count, last_otp_send_at, daily_reset_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at FROM auth_rate_limiters WHERE auth_user_id = $1
+`
+
+// ======================================
+// Rate Limiter Queries
+// ======================================
+func (q *Queries) GetAuthRateLimiter(ctx context.Context, authUserID uuid.UUID) (AuthRateLimiter, error) {
+	row := q.db.QueryRow(ctx, getAuthRateLimiter, authUserID)
+	var i AuthRateLimiter
+	err := row.Scan(
+		&i.AuthUserID,
+		&i.OtpHourlyCount,
+		&i.OtpDailyCount,
+		&i.LastOtpSendAt,
+		&i.DailyResetAt,
+		&i.OtpVerifyErrors,
+		&i.LastVerifyAttemptAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAuthUserByEmail = `-- name: GetAuthUserByEmail :one
 SELECT id, name, email, password_hash, is_email_verified, created_at, updated_at FROM auth_users WHERE email = $1
 `
@@ -513,6 +538,20 @@ func (q *Queries) ResetCentralSessions(ctx context.Context, authUserID uuid.UUID
 	return err
 }
 
+const resetVerifyErrors = `-- name: ResetVerifyErrors :exec
+UPDATE auth_rate_limiters
+SET
+    otp_verify_errors = 0,
+    last_verify_attempt_at = NULL
+WHERE
+    auth_user_id = $1
+`
+
+func (q *Queries) ResetVerifyErrors(ctx context.Context, authUserID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, resetVerifyErrors, authUserID)
+	return err
+}
+
 const setSessionCentral = `-- name: SetSessionCentral :exec
 UPDATE sessions
 SET
@@ -601,6 +640,22 @@ func (q *Queries) UpdateAuthUserPassword(ctx context.Context, arg UpdateAuthUser
 	return err
 }
 
+const updateAuthUserSignup = `-- name: UpdateAuthUserSignup :exec
+UPDATE auth_users SET name = $2, password_hash = $3, updated_at = now() WHERE id = $1
+`
+
+type UpdateAuthUserSignupParams struct {
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	PasswordHash string    `json:"password_hash"`
+}
+
+// Updates an existing unverified user during signup to reuse the ID and preserve rate limits
+func (q *Queries) UpdateAuthUserSignup(ctx context.Context, arg UpdateAuthUserSignupParams) error {
+	_, err := q.db.Exec(ctx, updateAuthUserSignup, arg.ID, arg.Name, arg.PasswordHash)
+	return err
+}
+
 const updateSessionDeviceToken = `-- name: UpdateSessionDeviceToken :exec
 UPDATE sessions
 SET
@@ -630,4 +685,98 @@ func (q *Queries) UpdateSessionDeviceToken(ctx context.Context, arg UpdateSessio
 		arg.AuthUserID,
 	)
 	return err
+}
+
+const upsertAuthRateLimiterSend = `-- name: UpsertAuthRateLimiterSend :one
+INSERT INTO
+    auth_rate_limiters (
+        auth_user_id,
+        otp_hourly_count,
+        otp_daily_count,
+        last_otp_send_at,
+        daily_reset_at
+    )
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (auth_user_id) DO
+UPDATE
+SET
+    otp_hourly_count = EXCLUDED.otp_hourly_count,
+    otp_daily_count = EXCLUDED.otp_daily_count,
+    last_otp_send_at = EXCLUDED.last_otp_send_at,
+    daily_reset_at = EXCLUDED.daily_reset_at,
+    updated_at = now()
+RETURNING
+    auth_user_id, otp_hourly_count, otp_daily_count, last_otp_send_at, daily_reset_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at
+`
+
+type UpsertAuthRateLimiterSendParams struct {
+	AuthUserID     uuid.UUID  `json:"auth_user_id"`
+	OtpHourlyCount int32      `json:"otp_hourly_count"`
+	OtpDailyCount  int32      `json:"otp_daily_count"`
+	LastOtpSendAt  *time.Time `json:"last_otp_send_at"`
+	DailyResetAt   *time.Time `json:"daily_reset_at"`
+}
+
+func (q *Queries) UpsertAuthRateLimiterSend(ctx context.Context, arg UpsertAuthRateLimiterSendParams) (AuthRateLimiter, error) {
+	row := q.db.QueryRow(ctx, upsertAuthRateLimiterSend,
+		arg.AuthUserID,
+		arg.OtpHourlyCount,
+		arg.OtpDailyCount,
+		arg.LastOtpSendAt,
+		arg.DailyResetAt,
+	)
+	var i AuthRateLimiter
+	err := row.Scan(
+		&i.AuthUserID,
+		&i.OtpHourlyCount,
+		&i.OtpDailyCount,
+		&i.LastOtpSendAt,
+		&i.DailyResetAt,
+		&i.OtpVerifyErrors,
+		&i.LastVerifyAttemptAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertAuthRateLimiterVerify = `-- name: UpsertAuthRateLimiterVerify :one
+INSERT INTO
+    auth_rate_limiters (
+        auth_user_id,
+        otp_verify_errors,
+        last_verify_attempt_at
+    )
+VALUES ($1, $2, $3)
+ON CONFLICT (auth_user_id) DO
+UPDATE
+SET
+    otp_verify_errors = EXCLUDED.otp_verify_errors,
+    last_verify_attempt_at = EXCLUDED.last_verify_attempt_at,
+    updated_at = now()
+RETURNING
+    auth_user_id, otp_hourly_count, otp_daily_count, last_otp_send_at, daily_reset_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at
+`
+
+type UpsertAuthRateLimiterVerifyParams struct {
+	AuthUserID          uuid.UUID  `json:"auth_user_id"`
+	OtpVerifyErrors     int32      `json:"otp_verify_errors"`
+	LastVerifyAttemptAt *time.Time `json:"last_verify_attempt_at"`
+}
+
+func (q *Queries) UpsertAuthRateLimiterVerify(ctx context.Context, arg UpsertAuthRateLimiterVerifyParams) (AuthRateLimiter, error) {
+	row := q.db.QueryRow(ctx, upsertAuthRateLimiterVerify, arg.AuthUserID, arg.OtpVerifyErrors, arg.LastVerifyAttemptAt)
+	var i AuthRateLimiter
+	err := row.Scan(
+		&i.AuthUserID,
+		&i.OtpHourlyCount,
+		&i.OtpDailyCount,
+		&i.LastOtpSendAt,
+		&i.DailyResetAt,
+		&i.OtpVerifyErrors,
+		&i.LastVerifyAttemptAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

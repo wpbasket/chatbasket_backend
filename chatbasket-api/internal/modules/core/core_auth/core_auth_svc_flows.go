@@ -1,4 +1,4 @@
-﻿package core_auth
+package core_auth
 
 import (
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
@@ -194,6 +194,11 @@ func htmlEscape(s string) string { return htmlpkg.EscapeString(s) }
 
 // VerifyOTPFlow retrieves code by UserID, checks created_at expiry (3 mins), validates hash, and consumes code.
 func (s *AuthService) VerifyOTPFlow(ctx context.Context, userID uuid.UUID, secret, otpType string) (bool, error) {
+	// 1. Check if blocked due to brute-force protection
+	if err := s.CheckOTPVerifyRateLimit(ctx, userID); err != nil {
+		return false, err
+	}
+
 	record, err := s.PostgresQuerier.GetVerificationCode(ctx, core_auth_store.GetVerificationCodeParams{
 		ID:   userID,
 		Type: otpType,
@@ -219,11 +224,14 @@ func (s *AuthService) VerifyOTPFlow(ctx context.Context, userID uuid.UUID, secre
 	}
 
 	if match {
-		// Consume the code
+		// 2. Success: Reset error counter and consume the code
+		_ = s.ResetVerifyErrors(ctx, userID)
 		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, record.ID)
 		return true, nil
 	}
 
+	// 3. Failure: Record the error and block if threshold reached
+	_ = s.RecordVerifyError(ctx, userID)
 	return false, kit.NewError(http.StatusUnauthorized, "unauthorized", "Invalid OTP")
 }
 

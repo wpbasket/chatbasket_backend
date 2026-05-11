@@ -39,6 +39,10 @@ RETURNING
 -- name: UpdateAuthUserEmailVerified :exec
 UPDATE auth_users SET is_email_verified = $2 WHERE id = $1;
 
+-- name: UpdateAuthUserSignup :exec
+-- Updates an existing unverified user during signup to reuse the ID and preserve rate limits
+UPDATE auth_users SET name = $2, password_hash = $3, updated_at = now() WHERE id = $1;
+
 -- name: DeleteAuthUser :exec
 -- Delete auth user (cascade will automatically delete sessions and verification_codes)
 DELETE FROM auth_users WHERE id = $1;
@@ -200,3 +204,56 @@ WHERE
     AND is_central = TRUE
     AND expires_at > now()
 LIMIT 1;
+
+-- ======================================
+-- Rate Limiter Queries
+-- ======================================
+
+-- name: GetAuthRateLimiter :one
+SELECT * FROM auth_rate_limiters WHERE auth_user_id = $1;
+
+-- name: UpsertAuthRateLimiterSend :one
+INSERT INTO
+    auth_rate_limiters (
+        auth_user_id,
+        otp_hourly_count,
+        otp_daily_count,
+        last_otp_send_at,
+        daily_reset_at
+    )
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (auth_user_id) DO
+UPDATE
+SET
+    otp_hourly_count = EXCLUDED.otp_hourly_count,
+    otp_daily_count = EXCLUDED.otp_daily_count,
+    last_otp_send_at = EXCLUDED.last_otp_send_at,
+    daily_reset_at = EXCLUDED.daily_reset_at,
+    updated_at = now()
+RETURNING
+    *;
+
+-- name: UpsertAuthRateLimiterVerify :one
+INSERT INTO
+    auth_rate_limiters (
+        auth_user_id,
+        otp_verify_errors,
+        last_verify_attempt_at
+    )
+VALUES ($1, $2, $3)
+ON CONFLICT (auth_user_id) DO
+UPDATE
+SET
+    otp_verify_errors = EXCLUDED.otp_verify_errors,
+    last_verify_attempt_at = EXCLUDED.last_verify_attempt_at,
+    updated_at = now()
+RETURNING
+    *;
+
+-- name: ResetVerifyErrors :exec
+UPDATE auth_rate_limiters
+SET
+    otp_verify_errors = 0,
+    last_verify_attempt_at = NULL
+WHERE
+    auth_user_id = $1;

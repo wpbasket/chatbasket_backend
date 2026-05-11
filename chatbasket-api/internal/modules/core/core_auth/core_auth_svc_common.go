@@ -1,4 +1,4 @@
-﻿package core_auth
+package core_auth
 
 import (
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
@@ -127,6 +127,9 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpda
 	}
 
 	// Generate OTP
+	if err := s.CheckOTPSendRateLimit(ctx, userID); err != nil {
+		return nil, err
+	}
 	otp, err := GenerateOTP()
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate OTP: "+err.Error())
@@ -175,12 +178,17 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpda
 // Step 2 of two-step password update flow
 func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *ConfirmPasswordUpdatePayload, userID uuid.UUID) (*kit.StatusOkay, error) {
 	// Parse update_id
-	updateID, err := uuid.Parse(payload.UpdateID)
+	updateID, err := kit.StringToUUID(payload.UpdateID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "Invalid update ID")
 	}
 
-	// Get verification code by user ID
+	// 2. Lockout check
+	if err := s.CheckOTPVerifyRateLimit(ctx, userID); err != nil {
+		return nil, err
+	}
+
+	// 3. Get verification code by user ID
 	record, err := s.PostgresQuerier.GetVerificationCode(ctx, core_auth_store.GetVerificationCodeParams{
 		ID:   userID,
 		Type: "password_update",
@@ -189,28 +197,32 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
 	}
 
-	// Verify update_id matches
+	// 4. Verify update_id matches
 	if record.UpdateID == nil || *record.UpdateID != updateID {
 		return nil, kit.NewError(http.StatusUnauthorized, "flow_error", "Request session invalid")
 	}
 
-	// Check expiry (3 minutes)
+	// 5. Check expiry (3 minutes)
 	if IsExpiredOTP(record.CreatedAt, 3) {
 		// Delete expired code
 		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
 		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")
 	}
 
-	// Verify OTP
+	// 6. Verify OTP
 	match, err := VerifyOTP(payload.Otp, record.CodeHash)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify OTP: "+err.Error())
 	}
 	if !match {
+		_ = s.RecordVerifyError(ctx, userID)
 		return nil, kit.NewError(http.StatusUnauthorized, "invalid_otp", "Invalid OTP")
 	}
 
-	// Hash new password
+	// 7. Reset lockout on success
+	_ = s.ResetVerifyErrors(ctx, userID)
+
+	// 8. Hash new password
 	hashedPassword, err := HashPassword(payload.NewPassword, s.AuthSecret, userID.String())
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to hash password: "+err.Error())
@@ -262,6 +274,9 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEm
 	}
 
 	// Generate OTP
+	if err := s.CheckOTPSendRateLimit(ctx, userID); err != nil {
+		return nil, err
+	}
 	otp, err := GenerateOTP()
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate OTP: "+err.Error())
@@ -309,12 +324,17 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEm
 // Step 2 of two-step email update flow
 func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEmailUpdatePayload, userID uuid.UUID) (*kit.StatusOkay, error) {
 	// Parse update_id
-	updateID, err := uuid.Parse(payload.UpdateID)
+	updateID, err := kit.StringToUUID(payload.UpdateID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "Invalid update ID")
 	}
 
-	// Get verification code by user ID
+	// 2. Lockout check
+	if err := s.CheckOTPVerifyRateLimit(ctx, userID); err != nil {
+		return nil, err
+	}
+
+	// 3. Get verification code by user ID
 	record, err := s.PostgresQuerier.GetVerificationCode(ctx, core_auth_store.GetVerificationCodeParams{
 		ID:   userID,
 		Type: "email_update",
@@ -323,28 +343,32 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
 	}
 
-	// Verify update_id matches
+	// 4. Verify update_id matches
 	if record.UpdateID == nil || *record.UpdateID != updateID {
 		return nil, kit.NewError(http.StatusUnauthorized, "flow_error", "Request session invalid")
 	}
 
-	// Check expiry (3 minutes)
+	// 5. Check expiry (3 minutes)
 	if IsExpiredOTP(record.CreatedAt, 3) {
 		// Delete expired code
 		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
 		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")
 	}
 
-	// Verify OTP
+	// 6. Verify OTP
 	match, err := VerifyOTP(payload.Otp, record.CodeHash)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify OTP: "+err.Error())
 	}
 	if !match {
+		_ = s.RecordVerifyError(ctx, userID)
 		return nil, kit.NewError(http.StatusUnauthorized, "invalid_otp", "Invalid OTP")
 	}
 
-	// Update email (new email is stored in record.Email)
+	// 7. Reset lockout on success
+	_ = s.ResetVerifyErrors(ctx, userID)
+
+	// 8. Update email (new email is stored in record.Email)
 	err = s.PostgresQuerier.UpdateAuthUserEmail(ctx, core_auth_store.UpdateAuthUserEmailParams{
 		ID:              userID,
 		Email:           record.Email, // Use email from verification code
@@ -362,4 +386,123 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 		Message: "Email updated successfully",
 	}, nil
 }
+
+// CheckOTPSendRateLimit enforces cooldowns and caps for sending OTPs.
+func (s *AuthService) CheckOTPSendRateLimit(ctx context.Context, userID uuid.UUID) error {
+	const (
+		maxHourly    = 5
+		maxDaily     = 15
+		cooldown     = 5 * time.Second // 5 seconds (Safety buffer)
+		hourlyWindow = 1 * time.Hour
+		dailyWindow  = 24 * time.Hour
+	)
+
+	limiter, err := s.PostgresQuerier.GetAuthRateLimiter(ctx, userID)
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+
+	now := time.Now()
+
+	// Default values for a new or reset record
+	hourlyCount := int32(1)
+	dailyCount := int32(1)
+	dailyResetAt := now
+
+	if err == nil {
+		lastSend := kit.DerefTime(limiter.LastOtpSendAt)
+
+		// 1. Cooldown check (2 minutes)
+		if !lastSend.IsZero() && now.Sub(lastSend) < cooldown {
+			return kit.NewError(http.StatusTooManyRequests, "cooldown_active", "Please wait 2 minutes before requesting another code.")
+		}
+
+		// 2. Daily check (15 per 24h)
+		dailyReset := kit.DerefTime(limiter.DailyResetAt)
+		if dailyReset.IsZero() || now.Sub(dailyReset) > dailyWindow {
+			// Window expired or never set, reset daily counter
+			dailyCount = 1
+			dailyResetAt = now
+		} else {
+			if limiter.OtpDailyCount >= maxDaily {
+				return kit.NewError(http.StatusTooManyRequests, "daily_limit_exceeded", "Daily OTP limit reached. Please try again tomorrow.")
+			}
+			dailyCount = limiter.OtpDailyCount + 1
+			dailyResetAt = dailyReset
+		}
+
+		// 3. Hourly check (5 per hour)
+		// We use the last send time to determine the hourly window
+		if !lastSend.IsZero() && now.Sub(lastSend) < hourlyWindow {
+			if limiter.OtpHourlyCount >= maxHourly {
+				return kit.NewError(http.StatusTooManyRequests, "hourly_limit_exceeded", "Too many requests. Please try again in an hour.")
+			}
+			hourlyCount = limiter.OtpHourlyCount + 1
+		} else {
+			hourlyCount = 1
+		}
+	}
+
+	_, err = s.PostgresQuerier.UpsertAuthRateLimiterSend(ctx, core_auth_store.UpsertAuthRateLimiterSendParams{
+		AuthUserID:     userID,
+		OtpHourlyCount: hourlyCount,
+		OtpDailyCount:  dailyCount,
+		LastOtpSendAt:  &now,
+		DailyResetAt:   &dailyResetAt,
+	})
+	return err
+}
+
+// CheckOTPVerifyRateLimit prevents brute-force attacks by blocking verification after 3 failures.
+func (s *AuthService) CheckOTPVerifyRateLimit(ctx context.Context, userID uuid.UUID) error {
+	const (
+		maxErrors    = 3
+		lockDuration = 15 * time.Minute
+	)
+
+	limiter, err := s.PostgresQuerier.GetAuthRateLimiter(ctx, userID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil // No record yet, no errors
+		}
+		return err
+	}
+
+	if limiter.OtpVerifyErrors >= maxErrors {
+		lastVerify := kit.DerefTime(limiter.LastVerifyAttemptAt)
+		if !lastVerify.IsZero() && time.Since(lastVerify) < lockDuration {
+			return kit.NewError(http.StatusTooManyRequests, "brute_force_lockout", "Too many failed attempts. Please try again in 15 minutes.")
+		}
+		// If lockout expired, we don't return error here (the next failed attempt will reset it or success will clear it)
+	}
+
+	return nil
+}
+
+// RecordVerifyError increments the error counter after a failed OTP verification.
+func (s *AuthService) RecordVerifyError(ctx context.Context, userID uuid.UUID) error {
+	limiter, err := s.PostgresQuerier.GetAuthRateLimiter(ctx, userID)
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+
+	errors := int32(1)
+	if err == nil {
+		errors = limiter.OtpVerifyErrors + 1
+	}
+
+	now := time.Now()
+	_, err = s.PostgresQuerier.UpsertAuthRateLimiterVerify(ctx, core_auth_store.UpsertAuthRateLimiterVerifyParams{
+		AuthUserID:          userID,
+		OtpVerifyErrors:     errors,
+		LastVerifyAttemptAt: &now,
+	})
+	return err
+}
+
+// ResetVerifyErrors clears the error counter after a successful OTP verification.
+func (s *AuthService) ResetVerifyErrors(ctx context.Context, userID uuid.UUID) error {
+	return s.PostgresQuerier.ResetVerifyErrors(ctx, userID)
+}
+
 
