@@ -94,9 +94,32 @@ func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, 
 	}, nil
 }
 
+// allowedUpdateOTPTypes is the closed set of update_type values accepted by
+// RequestUpdateOTP. It doubles as an allowlist (defends against an attacker
+// pushing a free-form string into payload.UpdateType) and as the lookup key
+// into the shared `otpCopies` wording table in core_auth_svc_flows.go — so a
+// new flow becomes a one-line addition in *both* places, with the compiler
+// catching any drift.
+var allowedUpdateOTPTypes = map[string]struct{}{
+	"password_update": {},
+	"email_update":    {},
+}
+
 // RequestUpdateOTP sends OTP for update operations (password, email, etc.)
-// Step 1 of two-step update flow
+// Step 1 of two-step update flow.
+//
+// The OTP email is rendered through the same `buildOTPEmail` helper used by
+// the login / signup / password-reset flows, so password_update and
+// email_update mails get the same branded, multipart/alternative,
+// spam-hardened layout — not the bare "<h1>OTP</h1>" template that used to
+// land in users' Spam folders.
 func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpdateOTPPayload, userID uuid.UUID) (*kit.StatusOkay, error) {
+	// Validate update_type against the known set before doing anything
+	// expensive (DB writes, OTP generation, mail send).
+	if _, ok := allowedUpdateOTPTypes[payload.UpdateType]; !ok {
+		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "Unsupported update_type")
+	}
+
 	// Get user from database
 	user, err := s.PostgresQuerier.GetAuthUserByID(ctx, userID)
 	if err != nil {
@@ -133,10 +156,12 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpda
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to store verification code: "+err.Error())
 	}
 
-	// Send OTP email
-	subject := "OTP for " + payload.UpdateType
-	body := "<p>Hello,<br>Your OTP for " + payload.UpdateType + " is:<br><h1>" + otp + "</h1></p><p>This code is valid for 3 minutes.<br>ChatBasket</p>"
-	if err := clients.SendEmail([]string{user.Email}, subject, body); err != nil {
+	// Render the branded transactional template and send through the relay
+	// with a stable RefID — used by the relay as X-Entity-Ref-ID, which
+	// helps deliverability and downstream tracing.
+	subject, htmlBody, textBody := buildOTPEmail(payload.UpdateType, otp)
+	refID := "otp-" + payload.UpdateType
+	if err := clients.SendEmailExt([]string{user.Email}, subject, htmlBody, textBody, refID); err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to send email: "+err.Error())
 	}
 
@@ -266,10 +291,11 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEm
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to store verification code: "+err.Error())
 	}
 
-	// Send OTP to new email
-	subject := "OTP for email update"
-	body := "<p>Hello,<br>Your OTP for email update is:<br><h1>" + otp + "</h1></p><p>This code is valid for 3 minutes.<br>ChatBasket</p>"
-	if err := clients.SendEmail([]string{payload.NewEmail}, subject, body); err != nil {
+	// Send OTP to the *new* email through the same branded template used by
+	// every other OTP flow. RefID lets the relay tag the outgoing message,
+	// improving deliverability vs. the previous bare-bones template.
+	subject, htmlBody, textBody := buildOTPEmail("email_update", otp)
+	if err := clients.SendEmailExt([]string{payload.NewEmail}, subject, htmlBody, textBody, "otp-email_update"); err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to send email: "+err.Error())
 	}
 

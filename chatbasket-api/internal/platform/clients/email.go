@@ -12,11 +12,23 @@ import (
 
 var emailWG sync.WaitGroup
 
-// EmailRelayPayload represents the payload sent to the email relay service, ported from utils/emailUtils.go
+// EmailRelayPayload represents the payload sent to the email relay service.
+//
+// `Body`     - HTML body (required).
+// `TextBody` - Optional plain-text alternative. When set, the relay attaches
+// it as the text/plain part of a multipart/alternative message. When empty,
+// the relay derives one automatically from the HTML, but supplying a
+// hand-written version yields better looking plain-text clients and lower
+// spam scores.
+// `RefID`    - Optional per-message reference id, surfaced in the outgoing
+// `X-Entity-Ref-ID` header. Use a category (e.g. "otp-login") to help
+// deliverability and downstream tracing without leaking PII.
 type EmailRelayPayload struct {
-	To      []string `json:"to"`
-	Subject string   `json:"subject"`
-	Body    string   `json:"body"`
+	To       []string `json:"to"`
+	Subject  string   `json:"subject"`
+	Body     string   `json:"body"`
+	TextBody string   `json:"text_body,omitempty"`
+	RefID    string   `json:"ref_id,omitempty"`
 }
 
 // WaitEmails waits for all background email tasks to complete, ported from utils/emailUtils.go
@@ -24,8 +36,18 @@ func WaitEmails() {
 	emailWG.Wait()
 }
 
-// SendEmail sends an email using the Heroku Relay in a "fire and forget" background task, ported from utils/emailUtils.go
+// SendEmail is a convenience wrapper that posts an HTML-only message to the
+// relay. The relay will derive a plain-text alternative on the fly. Prefer
+// SendEmailExt when you can provide a curated plain-text body and a stable
+// RefID — that produces noticeably better deliverability.
 func SendEmail(to []string, subject string, bodyHTML string) error {
+	return SendEmailExt(to, subject, bodyHTML, "", "")
+}
+
+// SendEmailExt sends an email using the Heroku Relay in a "fire and forget"
+// background task. `bodyText` and `refID` are optional and forwarded to the
+// relay verbatim.
+func SendEmailExt(to []string, subject, bodyHTML, bodyText, refID string) error {
 	relayURL := os.Getenv("MAIL_RELAY_URL")
 	relaySecret := os.Getenv("MAIL_RELAY_SECRET")
 
@@ -43,9 +65,11 @@ func SendEmail(to []string, subject string, bodyHTML string) error {
 		}()
 
 		reqBody, _ := json.Marshal(EmailRelayPayload{
-			To:      to,
-			Subject: subject,
-			Body:    bodyHTML,
+			To:       to,
+			Subject:  subject,
+			Body:     bodyHTML,
+			TextBody: bodyText,
+			RefID:    refID,
 		})
 
 		// Use a 30s timeout for the background relay call
