@@ -1,16 +1,25 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
+	"mime"
+	"mime/quotedprintable"
+	"net"
 	"net/http"
 	"net/mail"
 	"net/smtp"
 	"os"
 	"os/signal"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -18,11 +27,22 @@ import (
 	"time"
 )
 
-// EmailRequest represents the incoming JSON structure
+// EmailRequest represents the incoming JSON structure.
+//
+// `Body`     - HTML body (required).
+// `TextBody` - Optional plain-text alternative. If omitted, a plain-text
+// version is automatically derived from the HTML body so every outgoing
+// message is sent as a proper multipart/alternative (text + html). This
+// is critical for inbox placement at Gmail / Outlook / Yahoo.
+// `RefID`    - Optional opaque identifier echoed back via the
+// `X-Entity-Ref-ID` header. Helps with tracking & dedup on the recipient
+// side and lowers hash-similarity spam scoring.
 type EmailRequest struct {
-	To      []string `json:"to"`
-	Subject string   `json:"subject"`
-	Body    string   `json:"body"`
+	To       []string `json:"to"`
+	Subject  string   `json:"subject"`
+	Body     string   `json:"body"`
+	TextBody string   `json:"text_body,omitempty"`
+	RefID    string   `json:"ref_id,omitempty"`
 }
 
 // Config holds the relay configuration
@@ -259,28 +279,259 @@ func emailWorker(ctx context.Context, id int, cfg Config) {
 			log.Printf("Worker %d shutting down...", id)
 			return
 		case req := <-jobQueue:
-			// Sanitize all header fields to prevent injection
-			sanitizedSubject := sanitizeHeader(req.Subject)
-			sanitizedFromName := sanitizeHeader(cfg.SMTPFromName)
+			// Only send to first recipient (as per original logic).
+			// mail.ParseAddress already validated it in the HTTP handler,
+			// but defend-in-depth: sanitize once more to strip CR/LF.
+			toAddr := sanitizeHeader(req.To[0])
 
-			// Only send to first recipient (as per original logic)
-			// Sanitize the To address as well
-			sanitizedTo := sanitizeHeader(req.To[0])
-
-			msg := fmt.Sprintf("From: %s <%s>\r\n"+
-				"To: %s\r\n"+
-				"Subject: %s\r\n"+
-				"MIME-version: 1.0;\r\n"+
-				"Content-Type: text/html; charset=\"UTF-8\";\r\n"+
-				"\r\n"+
-				"%s\r\n", sanitizedFromName, cfg.SMTPFrom, sanitizedTo, sanitizedSubject, req.Body)
-
-			err := smtp.SendMail(addr, auth, cfg.SMTPFrom, []string{req.To[0]}, []byte(msg))
+			msg, err := buildMIMEMessage(cfg, toAddr, req.Subject, req.Body, req.TextBody, req.RefID)
 			if err != nil {
-				log.Printf("Worker %d Error for %v: %v", id, req.To[0], err)
+				log.Printf("Worker %d Build Error for %v: %v", id, toAddr, err)
+				continue
+			}
+
+			if err := sendMail(addr, auth, cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, []string{toAddr}, msg); err != nil {
+				log.Printf("Worker %d Error for %v: %v", id, toAddr, err)
 			} else {
-				log.Printf("Worker %d Success: Email sent to %v (Subject: %s)", id, req.To[0], sanitizedSubject)
+				log.Printf("Worker %d Success: Email sent to %v (Subject: %q)", id, toAddr, sanitizeHeader(req.Subject))
 			}
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// MIME message builder
+// ---------------------------------------------------------------------------
+
+// buildMIMEMessage produces an RFC 5322 / 2045 compliant multipart/alternative
+// message (text + html) ready to be passed to net/smtp. The exact headers and
+// MIME layout are tuned for inbox placement at Gmail, Outlook and Yahoo:
+//
+//   - RFC 5322 mandatory headers: Date, From, To, Message-ID.
+//   - Subject and From-display-name are RFC 2047 encoded.
+//   - Body is multipart/alternative with both text/plain and text/html parts,
+//     each quoted-printable encoded with UTF-8 charset.
+//   - Auto-Submitted: auto-generated marks the mail as transactional, which
+//     suppresses out-of-office replies and avoids list-loops.
+//   - X-Entity-Ref-ID carries a per-message identifier to lower hash-similarity
+//     spam scoring across many recipients receiving structurally similar mail.
+//
+// Note: List-Unsubscribe is intentionally NOT set. This relay is used for
+// transactional security mail (OTPs, verification); users must not be able to
+// "unsubscribe" from password resets. Gmail's bulk-sender unsubscribe rules
+// apply only when sending bulk/promotional mail.
+func buildMIMEMessage(cfg Config, to, subject, htmlBody, textBody, refID string) ([]byte, error) {
+	// Sanitize inbound header content to guarantee no CR/LF injection.
+	subject = sanitizeHeader(subject)
+	fromName := sanitizeHeader(cfg.SMTPFromName)
+	to = sanitizeHeader(to)
+
+	// Parse the From address to ensure validity and to produce a properly
+	// RFC 2047 / 5322 encoded From header (mail.Address.String handles this).
+	fromAddr := mail.Address{Name: fromName, Address: cfg.SMTPFrom}
+
+	// Derive plain-text alternative from HTML if the caller did not provide
+	// one. This is non-negotiable for deliverability: HTML-only messages are
+	// strongly penalised by Gmail and Outlook spam filters.
+	if strings.TrimSpace(textBody) == "" {
+		textBody = htmlToPlainText(htmlBody)
+	}
+
+	// Boundary must be unique per message and is restricted to a small,
+	// MIME-safe charset. crypto/rand keeps it unguessable from the outside.
+	boundary, err := randomBoundary()
+	if err != nil {
+		return nil, fmt.Errorf("generate boundary: %w", err)
+	}
+
+	messageID := fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(), randomHex(8), domainOf(cfg.SMTPFrom))
+
+	var buf bytes.Buffer
+	buf.Grow(len(htmlBody) + len(textBody) + 1024)
+
+	// --- Headers ---------------------------------------------------------
+	writeHeader(&buf, "Date", time.Now().UTC().Format(time.RFC1123Z))
+	writeHeader(&buf, "From", fromAddr.String())
+	writeHeader(&buf, "To", to)
+	writeHeader(&buf, "Subject", mime.QEncoding.Encode("UTF-8", subject))
+	writeHeader(&buf, "Message-ID", messageID)
+	writeHeader(&buf, "MIME-Version", "1.0")
+	writeHeader(&buf, "Auto-Submitted", "auto-generated")
+	writeHeader(&buf, "X-Auto-Response-Suppress", "All")
+	if refID != "" {
+		writeHeader(&buf, "X-Entity-Ref-ID", sanitizeHeader(refID))
+	} else {
+		writeHeader(&buf, "X-Entity-Ref-ID", randomHex(16))
+	}
+	writeHeader(&buf, "Content-Type", fmt.Sprintf(`multipart/alternative; boundary="%s"`, boundary))
+	buf.WriteString("\r\n")
+
+	// Preamble for non-MIME clients (very few left, but harmless and RFC2046).
+	buf.WriteString("This is a multi-part message in MIME format.\r\n")
+
+	// --- text/plain part -------------------------------------------------
+	buf.WriteString("--" + boundary + "\r\n")
+	buf.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	if err := writeQuotedPrintable(&buf, textBody); err != nil {
+		return nil, fmt.Errorf("encode text part: %w", err)
+	}
+	buf.WriteString("\r\n")
+
+	// --- text/html part --------------------------------------------------
+	buf.WriteString("--" + boundary + "\r\n")
+	buf.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n")
+	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
+	if err := writeQuotedPrintable(&buf, htmlBody); err != nil {
+		return nil, fmt.Errorf("encode html part: %w", err)
+	}
+	buf.WriteString("\r\n")
+
+	// Closing boundary.
+	buf.WriteString("--" + boundary + "--\r\n")
+
+	return buf.Bytes(), nil
+}
+
+// writeHeader appends a single header line. Values are assumed sanitized.
+func writeHeader(buf *bytes.Buffer, name, value string) {
+	buf.WriteString(name)
+	buf.WriteString(": ")
+	buf.WriteString(value)
+	buf.WriteString("\r\n")
+}
+
+// writeQuotedPrintable encodes s as quoted-printable into buf.
+func writeQuotedPrintable(buf *bytes.Buffer, s string) error {
+	w := quotedprintable.NewWriter(buf)
+	if _, err := w.Write([]byte(s)); err != nil {
+		return err
+	}
+	return w.Close()
+}
+
+// randomBoundary returns a MIME boundary built from 16 random bytes.
+func randomBoundary() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return "----=_Part_" + hex.EncodeToString(b[:]), nil
+}
+
+// randomHex returns n bytes of crypto-random data, hex-encoded.
+func randomHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to time-based pseudo-random — collisions here are
+		// not a security issue, only a uniqueness concern.
+		return fmt.Sprintf("%016x", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
+// domainOf extracts the domain part of an email address. Used for Message-ID.
+func domainOf(addr string) string {
+	if i := strings.LastIndex(addr, "@"); i >= 0 && i+1 < len(addr) {
+		return addr[i+1:]
+	}
+	return "localhost"
+}
+
+// Pre-compiled regexes used by htmlToPlainText. Compiling once at package
+// init keeps the email build path allocation-free in the hot loop.
+var (
+	// Go's RE2 engine has no backreferences, so we match script and style
+	// blocks with two separate alternations rather than `\1`.
+	reScriptStyle = regexp.MustCompile(`(?is)<script[^>]*>.*?</\s*script\s*>|<style[^>]*>.*?</\s*style\s*>`)
+	reBlockBreak  = regexp.MustCompile(`(?i)</?(p|div|br|li|tr|h[1-6]|hr)[^>]*>`)
+	reTag         = regexp.MustCompile(`<[^>]+>`)
+	reMultiSpace  = regexp.MustCompile(`[ \t]+`)
+	reMultiBlank  = regexp.MustCompile(`\n{3,}`)
+)
+
+// htmlToPlainText produces a readable plain-text rendering of an HTML body.
+// It is intentionally simple — the goal is a sane fallback for clients that
+// prefer plain text and for spam filters that demand a text alternative,
+// not pixel-perfect rendering.
+func htmlToPlainText(s string) string {
+	// Strip script/style content entirely.
+	s = reScriptStyle.ReplaceAllString(s, "")
+	// Convert block-level tags into newlines so structure survives.
+	s = reBlockBreak.ReplaceAllString(s, "\n")
+	// Drop remaining tags.
+	s = reTag.ReplaceAllString(s, "")
+	// Decode HTML entities (&amp;, &nbsp;, &#39; ...).
+	s = html.UnescapeString(s)
+	// Normalise whitespace.
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	s = reMultiSpace.ReplaceAllString(s, " ")
+	s = reMultiBlank.ReplaceAllString(s, "\n\n")
+	return strings.TrimSpace(s)
+}
+
+// ---------------------------------------------------------------------------
+// SMTP transport (STARTTLS on 587, implicit TLS on 465)
+// ---------------------------------------------------------------------------
+
+// sendMail wraps net/smtp.SendMail with explicit handling of implicit TLS
+// (SMTPS on port 465) which the stdlib helper does not support. On port 587
+// (or any other plain port that advertises STARTTLS) the standard helper is
+// used, which already negotiates STARTTLS before authenticating.
+func sendMail(addr string, auth smtp.Auth, host, port, from string, to []string, msg []byte) error {
+	if port == "465" {
+		return sendMailImplicitTLS(addr, auth, host, from, to, msg)
+	}
+	// 587 / 25 path. Go's smtp.SendMail performs STARTTLS automatically
+	// when the server advertises it, and refuses PLAIN auth over an
+	// unencrypted channel — exactly what we want.
+	return smtp.SendMail(addr, auth, from, to, msg)
+}
+
+// sendMailImplicitTLS dials an SMTPS server (TLS from the first byte).
+func sendMailImplicitTLS(addr string, auth smtp.Auth, host, from string, to []string, msg []byte) error {
+	tlsCfg := &tls.Config{
+		ServerName: host,
+		MinVersion: tls.VersionTLS12,
+	}
+	dialer := &net.Dialer{Timeout: 15 * time.Second}
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsCfg)
+	if err != nil {
+		return fmt.Errorf("dial tls: %w", err)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("smtp client: %w", err)
+	}
+	defer client.Close()
+
+	if auth != nil {
+		if ok, _ := client.Extension("AUTH"); ok {
+			if err := client.Auth(auth); err != nil {
+				return fmt.Errorf("auth: %w", err)
+			}
+		}
+	}
+	if err := client.Mail(from); err != nil {
+		return fmt.Errorf("mail from: %w", err)
+	}
+	for _, rcpt := range to {
+		if err := client.Rcpt(rcpt); err != nil {
+			return fmt.Errorf("rcpt to %s: %w", rcpt, err)
+		}
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("data: %w", err)
+	}
+	if _, err := w.Write(msg); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("close data: %w", err)
+	}
+	return client.Quit()
 }
