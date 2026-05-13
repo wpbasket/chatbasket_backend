@@ -351,7 +351,7 @@ func (q *Queries) DeleteVerificationCode(ctx context.Context, id uuid.UUID) erro
 
 const getAuthRateLimiter = `-- name: GetAuthRateLimiter :one
 
-SELECT auth_user_id, otp_hourly_count, otp_daily_count, last_otp_send_at, daily_reset_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at FROM auth_rate_limiters WHERE auth_user_id = $1
+SELECT auth_user_id, otp_hourly_count, otp_24h_count, last_otp_send_at, otp_24h_window_start_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at FROM auth_rate_limiters WHERE auth_user_id = $1
 `
 
 // ======================================
@@ -363,9 +363,9 @@ func (q *Queries) GetAuthRateLimiter(ctx context.Context, authUserID uuid.UUID) 
 	err := row.Scan(
 		&i.AuthUserID,
 		&i.OtpHourlyCount,
-		&i.OtpDailyCount,
+		&i.Otp24hCount,
 		&i.LastOtpSendAt,
-		&i.DailyResetAt,
+		&i.Otp24hWindowStartAt,
 		&i.OtpVerifyErrors,
 		&i.LastVerifyAttemptAt,
 		&i.CreatedAt,
@@ -692,46 +692,46 @@ INSERT INTO
     auth_rate_limiters (
         auth_user_id,
         otp_hourly_count,
-        otp_daily_count,
+        otp_24h_count,
         last_otp_send_at,
-        daily_reset_at
+        otp_24h_window_start_at
     )
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (auth_user_id) DO
 UPDATE
 SET
     otp_hourly_count = EXCLUDED.otp_hourly_count,
-    otp_daily_count = EXCLUDED.otp_daily_count,
+    otp_24h_count = EXCLUDED.otp_24h_count,
     last_otp_send_at = EXCLUDED.last_otp_send_at,
-    daily_reset_at = EXCLUDED.daily_reset_at,
+    otp_24h_window_start_at = EXCLUDED.otp_24h_window_start_at,
     updated_at = now()
 RETURNING
-    auth_user_id, otp_hourly_count, otp_daily_count, last_otp_send_at, daily_reset_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at
+    auth_user_id, otp_hourly_count, otp_24h_count, last_otp_send_at, otp_24h_window_start_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at
 `
 
 type UpsertAuthRateLimiterSendParams struct {
-	AuthUserID     uuid.UUID  `json:"auth_user_id"`
-	OtpHourlyCount int32      `json:"otp_hourly_count"`
-	OtpDailyCount  int32      `json:"otp_daily_count"`
-	LastOtpSendAt  *time.Time `json:"last_otp_send_at"`
-	DailyResetAt   *time.Time `json:"daily_reset_at"`
+	AuthUserID          uuid.UUID  `json:"auth_user_id"`
+	OtpHourlyCount      int32      `json:"otp_hourly_count"`
+	Otp24hCount         int32      `json:"otp_24h_count"`
+	LastOtpSendAt       *time.Time `json:"last_otp_send_at"`
+	Otp24hWindowStartAt *time.Time `json:"otp_24h_window_start_at"`
 }
 
 func (q *Queries) UpsertAuthRateLimiterSend(ctx context.Context, arg UpsertAuthRateLimiterSendParams) (AuthRateLimiter, error) {
 	row := q.db.QueryRow(ctx, upsertAuthRateLimiterSend,
 		arg.AuthUserID,
 		arg.OtpHourlyCount,
-		arg.OtpDailyCount,
+		arg.Otp24hCount,
 		arg.LastOtpSendAt,
-		arg.DailyResetAt,
+		arg.Otp24hWindowStartAt,
 	)
 	var i AuthRateLimiter
 	err := row.Scan(
 		&i.AuthUserID,
 		&i.OtpHourlyCount,
-		&i.OtpDailyCount,
+		&i.Otp24hCount,
 		&i.LastOtpSendAt,
-		&i.DailyResetAt,
+		&i.Otp24hWindowStartAt,
 		&i.OtpVerifyErrors,
 		&i.LastVerifyAttemptAt,
 		&i.CreatedAt,
@@ -755,7 +755,7 @@ SET
     last_verify_attempt_at = EXCLUDED.last_verify_attempt_at,
     updated_at = now()
 RETURNING
-    auth_user_id, otp_hourly_count, otp_daily_count, last_otp_send_at, daily_reset_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at
+    auth_user_id, otp_hourly_count, otp_24h_count, last_otp_send_at, otp_24h_window_start_at, otp_verify_errors, last_verify_attempt_at, created_at, updated_at
 `
 
 type UpsertAuthRateLimiterVerifyParams struct {
@@ -770,9 +770,9 @@ func (q *Queries) UpsertAuthRateLimiterVerify(ctx context.Context, arg UpsertAut
 	err := row.Scan(
 		&i.AuthUserID,
 		&i.OtpHourlyCount,
-		&i.OtpDailyCount,
+		&i.Otp24hCount,
 		&i.LastOtpSendAt,
-		&i.DailyResetAt,
+		&i.Otp24hWindowStartAt,
 		&i.OtpVerifyErrors,
 		&i.LastVerifyAttemptAt,
 		&i.CreatedAt,

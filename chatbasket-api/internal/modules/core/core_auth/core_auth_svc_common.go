@@ -205,7 +205,9 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 	// 5. Check expiry (3 minutes)
 	if IsExpiredOTP(record.CreatedAt, 3) {
 		// Delete expired code
-		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
+		if err := s.PostgresQuerier.DeleteVerificationCode(ctx, userID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete expired verification code")
+		}
 		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")
 	}
 
@@ -215,12 +217,16 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify OTP: "+err.Error())
 	}
 	if !match {
-		_ = s.RecordVerifyError(ctx, userID)
+		if err := s.RecordVerifyError(ctx, userID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to record verification error")
+		}
 		return nil, kit.NewError(http.StatusUnauthorized, "invalid_otp", "Invalid OTP")
 	}
 
 	// 7. Reset lockout on success
-	_ = s.ResetVerifyErrors(ctx, userID)
+	if err := s.ResetVerifyErrors(ctx, userID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to reset verification errors")
+	}
 
 	// 8. Hash new password
 	hashedPassword, err := HashPassword(payload.NewPassword, s.AuthSecret, userID.String())
@@ -238,7 +244,9 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 	}
 
 	// Delete verification code
-	_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
+	if err := s.PostgresQuerier.DeleteVerificationCode(ctx, userID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete verification code")
+	}
 
 	return &kit.StatusOkay{
 		Status:  true,
@@ -351,7 +359,9 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 	// 5. Check expiry (3 minutes)
 	if IsExpiredOTP(record.CreatedAt, 3) {
 		// Delete expired code
-		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
+		if err := s.PostgresQuerier.DeleteVerificationCode(ctx, userID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete expired verification code")
+		}
 		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")
 	}
 
@@ -361,12 +371,16 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify OTP: "+err.Error())
 	}
 	if !match {
-		_ = s.RecordVerifyError(ctx, userID)
+		if err := s.RecordVerifyError(ctx, userID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to record verification error")
+		}
 		return nil, kit.NewError(http.StatusUnauthorized, "invalid_otp", "Invalid OTP")
 	}
 
 	// 7. Reset lockout on success
-	_ = s.ResetVerifyErrors(ctx, userID)
+	if err := s.ResetVerifyErrors(ctx, userID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to reset verification errors")
+	}
 
 	// 8. Update email (new email is stored in record.Email)
 	err = s.PostgresQuerier.UpdateAuthUserEmail(ctx, core_auth_store.UpdateAuthUserEmailParams{
@@ -379,7 +393,9 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 	}
 
 	// Delete verification code
-	_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
+	if err := s.PostgresQuerier.DeleteVerificationCode(ctx, userID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete verification code")
+	}
 
 	return &kit.StatusOkay{
 		Status:  true,
@@ -390,11 +406,11 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 // CheckOTPSendRateLimit enforces cooldowns and caps for sending OTPs.
 func (s *AuthService) CheckOTPSendRateLimit(ctx context.Context, userID uuid.UUID) error {
 	const (
-		maxHourly    = 5
-		maxDaily     = 15
-		cooldown     = 5 * time.Second // 5 seconds (Safety buffer)
-		hourlyWindow = 1 * time.Hour
-		dailyWindow  = 24 * time.Hour
+		maxHourly        = 5
+		maxPer24Hours    = 10
+		cooldown         = 5 * time.Second // 5 seconds (Safety buffer)
+		hourlyWindow     = 1 * time.Hour
+		rolling24hWindow = 24 * time.Hour
 	)
 
 	limiter, err := s.PostgresQuerier.GetAuthRateLimiter(ctx, userID)
@@ -406,29 +422,30 @@ func (s *AuthService) CheckOTPSendRateLimit(ctx context.Context, userID uuid.UUI
 
 	// Default values for a new or reset record
 	hourlyCount := int32(1)
-	dailyCount := int32(1)
-	dailyResetAt := now
+	otp24hCount := int32(1)
+	otp24hWindowStartAt := now
 
 	if err == nil {
 		lastSend := kit.DerefTime(limiter.LastOtpSendAt)
 
-		// 1. Cooldown check (2 minutes)
+		// 1. Cooldown check (5 seconds)
 		if !lastSend.IsZero() && now.Sub(lastSend) < cooldown {
-			return kit.NewError(http.StatusTooManyRequests, "cooldown_active", "Please wait 2 minutes before requesting another code.")
+			return kit.NewError(http.StatusTooManyRequests, "cooldown_active", "Please wait 5 seconds before requesting another code.")
 		}
 
-		// 2. Daily check (15 per 24h)
-		dailyReset := kit.DerefTime(limiter.DailyResetAt)
-		if dailyReset.IsZero() || now.Sub(dailyReset) > dailyWindow {
-			// Window expired or never set, reset daily counter
-			dailyCount = 1
-			dailyResetAt = now
+		// 2. Rolling 24-hour check (10 per 24 hours from first OTP in window)
+		rolling24hWindowStart := kit.DerefTime(limiter.Otp24hWindowStartAt)
+		if rolling24hWindowStart.IsZero() || now.Sub(rolling24hWindowStart) >= rolling24hWindow {
+			// New rolling 24-hour window or never set, reset counter
+			otp24hCount = 1
+			otp24hWindowStartAt = now
 		} else {
-			if limiter.OtpDailyCount >= maxDaily {
-				return kit.NewError(http.StatusTooManyRequests, "daily_limit_exceeded", "Daily OTP limit reached. Please try again tomorrow.")
+			if limiter.Otp24hCount >= maxPer24Hours {
+				retryAt := rolling24hWindowStart.Add(rolling24hWindow).UTC().Format(time.RFC3339)
+				return kit.NewError(http.StatusTooManyRequests, "daily_limit_exceeded", "OTP limit reached. Please try again after "+retryAt+".")
 			}
-			dailyCount = limiter.OtpDailyCount + 1
-			dailyResetAt = dailyReset
+			otp24hCount = limiter.Otp24hCount + 1
+			otp24hWindowStartAt = rolling24hWindowStart
 		}
 
 		// 3. Hourly check (5 per hour)
@@ -444,11 +461,11 @@ func (s *AuthService) CheckOTPSendRateLimit(ctx context.Context, userID uuid.UUI
 	}
 
 	_, err = s.PostgresQuerier.UpsertAuthRateLimiterSend(ctx, core_auth_store.UpsertAuthRateLimiterSendParams{
-		AuthUserID:     userID,
-		OtpHourlyCount: hourlyCount,
-		OtpDailyCount:  dailyCount,
-		LastOtpSendAt:  &now,
-		DailyResetAt:   &dailyResetAt,
+		AuthUserID:          userID,
+		OtpHourlyCount:      hourlyCount,
+		Otp24hCount:         otp24hCount,
+		LastOtpSendAt:       &now,
+		Otp24hWindowStartAt: &otp24hWindowStartAt,
 	})
 	return err
 }
@@ -504,5 +521,3 @@ func (s *AuthService) RecordVerifyError(ctx context.Context, userID uuid.UUID) e
 func (s *AuthService) ResetVerifyErrors(ctx context.Context, userID uuid.UUID) error {
 	return s.PostgresQuerier.ResetVerifyErrors(ctx, userID)
 }
-
-

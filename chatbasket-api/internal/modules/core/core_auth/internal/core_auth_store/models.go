@@ -13,9 +13,9 @@ import (
 type AuthRateLimiter struct {
 	AuthUserID          uuid.UUID  `json:"auth_user_id"`
 	OtpHourlyCount      int32      `json:"otp_hourly_count"`
-	OtpDailyCount       int32      `json:"otp_daily_count"`
+	Otp24hCount         int32      `json:"otp_24h_count"`
 	LastOtpSendAt       *time.Time `json:"last_otp_send_at"`
-	DailyResetAt        *time.Time `json:"daily_reset_at"`
+	Otp24hWindowStartAt *time.Time `json:"otp_24h_window_start_at"`
 	OtpVerifyErrors     int32      `json:"otp_verify_errors"`
 	LastVerifyAttemptAt *time.Time `json:"last_verify_attempt_at"`
 	CreatedAt           time.Time  `json:"created_at"`

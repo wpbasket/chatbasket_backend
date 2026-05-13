@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS auth_rate_limiters (
     
     -- Send Limits
     otp_hourly_count INT NOT NULL DEFAULT 0,
-    otp_daily_count INT NOT NULL DEFAULT 0,
+    otp_24h_count INT NOT NULL DEFAULT 0,
     last_otp_send_at TIMESTAMPTZ,
-    daily_reset_at TIMESTAMPTZ DEFAULT now(),
+    otp_24h_window_start_at TIMESTAMPTZ DEFAULT now(),
     
     -- Verify Limits (Brute Force Protection)
     otp_verify_errors INT NOT NULL DEFAULT 0,
@@ -41,5 +41,5 @@ EXECUTE FUNCTION set_timestamps();
 CREATE INDEX IF NOT EXISTS idx_auth_rate_limiters_active_state
     ON auth_rate_limiters (auth_user_id)
     WHERE otp_hourly_count > 0 
-       OR otp_daily_count > 0 
+       OR otp_24h_count > 0 
        OR otp_verify_errors > 0;

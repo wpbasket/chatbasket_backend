@@ -93,7 +93,7 @@ func (s *AuthService) Signup(ctx context.Context, payload *SignupPayload) (*kit.
 		return nil, err
 	}
 	if err := s.SendVerificationOTPFlow(ctx, userID, payload.Email, "email_verification"); err != nil {
-		log.Printf("Signup OTP Send Warning: %v", err.Error())
+		return nil, err
 	}
 
 	return &kit.StatusOkay{Status: true, Message: "User created, OTP sent to email"}, nil
@@ -174,19 +174,23 @@ func (s *AuthService) Login(ctx context.Context, payload *LoginPayload) (*kit.St
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify password")
 	}
 	if !match {
-		_ = s.RecordVerifyError(ctx, user.ID)
+		if err := s.RecordVerifyError(ctx, user.ID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to record verification error")
+		}
 		return nil, kit.NewError(http.StatusUnauthorized, "unauthorized", "Invalid credentials")
 	}
 
 	// Reset lockout on successful password match
-	_ = s.ResetVerifyErrors(ctx, user.ID)
+	if err := s.ResetVerifyErrors(ctx, user.ID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to reset verification errors")
+	}
 
 	// 4. Send Login OTP via Utils
 	if err := s.CheckOTPSendRateLimit(ctx, user.ID); err != nil {
 		return nil, err
 	}
 	if err := s.SendVerificationOTPFlow(ctx, user.ID, user.Email, "login"); err != nil {
-		log.Printf("Login OTP Send Warning: %v", err.Error())
+		return nil, err
 	}
 
 	return &kit.StatusOkay{Status: true, Message: "Login successful, OTP sent to email"}, nil
@@ -329,7 +333,9 @@ func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotP
 	// 5. Check expiry (3 minutes)
 	if IsExpiredOTP(record.CreatedAt, 3) {
 		// Delete expired code
-		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
+		if err := s.PostgresQuerier.DeleteVerificationCode(ctx, userID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete expired verification code")
+		}
 		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")
 	}
 
@@ -339,12 +345,16 @@ func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotP
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify OTP: "+err.Error())
 	}
 	if !match {
-		_ = s.RecordVerifyError(ctx, userID)
+		if err := s.RecordVerifyError(ctx, userID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to record verification error")
+		}
 		return nil, kit.NewError(http.StatusUnauthorized, "invalid_otp", "Invalid OTP")
 	}
 
 	// 7. Reset lockout on success
-	_ = s.ResetVerifyErrors(ctx, userID)
+	if err := s.ResetVerifyErrors(ctx, userID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to reset verification errors")
+	}
 
 	// 8. Hash new password
 	hashedPassword, err := HashPassword(payload.NewPassword, s.AuthSecret, userID.String())
@@ -362,7 +372,9 @@ func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotP
 	}
 
 	// 8. Delete verification code
-	_ = s.PostgresQuerier.DeleteVerificationCode(ctx, userID)
+	if err := s.PostgresQuerier.DeleteVerificationCode(ctx, userID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete verification code")
+	}
 
 	return &kit.StatusOkay{Status: true, Message: "Password updated successfully"}, nil
 }

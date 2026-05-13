@@ -225,13 +225,19 @@ func (s *AuthService) VerifyOTPFlow(ctx context.Context, userID uuid.UUID, secre
 
 	if match {
 		// 2. Success: Reset error counter and consume the code
-		_ = s.ResetVerifyErrors(ctx, userID)
-		_ = s.PostgresQuerier.DeleteVerificationCode(ctx, record.ID)
+		if err := s.ResetVerifyErrors(ctx, userID); err != nil {
+			return false, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to reset verification errors")
+		}
+		if err := s.PostgresQuerier.DeleteVerificationCode(ctx, record.ID); err != nil {
+			return false, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete verification code")
+		}
 		return true, nil
 	}
 
 	// 3. Failure: Record the error and block if threshold reached
-	_ = s.RecordVerifyError(ctx, userID)
+	if err := s.RecordVerifyError(ctx, userID); err != nil {
+		return false, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to record verification error")
+	}
 	return false, kit.NewError(http.StatusUnauthorized, "unauthorized", "Invalid OTP")
 }
 

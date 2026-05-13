@@ -217,18 +217,18 @@ INSERT INTO
     auth_rate_limiters (
         auth_user_id,
         otp_hourly_count,
-        otp_daily_count,
+        otp_24h_count,
         last_otp_send_at,
-        daily_reset_at
+        otp_24h_window_start_at
     )
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (auth_user_id) DO
 UPDATE
 SET
     otp_hourly_count = EXCLUDED.otp_hourly_count,
-    otp_daily_count = EXCLUDED.otp_daily_count,
+    otp_24h_count = EXCLUDED.otp_24h_count,
     last_otp_send_at = EXCLUDED.last_otp_send_at,
-    daily_reset_at = EXCLUDED.daily_reset_at,
+    otp_24h_window_start_at = EXCLUDED.otp_24h_window_start_at,
     updated_at = now()
 RETURNING
     *;
