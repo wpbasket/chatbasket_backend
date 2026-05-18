@@ -1,14 +1,15 @@
-﻿package core_auth
+package core_auth
 
 import (
 	"chatbasket-api/internal/platform/middleware"
+	"chatbasket-api/internal/platform/websocket"
 
 	"github.com/labstack/echo/v5"
 )
 
 // Register initializes the Auth module dependencies and registers its routes.
-func Register(group *echo.Group, authService *AuthService) {
-	handler := newAuthHandler(authService)
+func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub) {
+	handler := newAuthHandler(authService, hub)
 
 	// Auth Routes (shared across domains)
 	auth := group.Group("/auth")
@@ -22,7 +23,7 @@ func Register(group *echo.Group, authService *AuthService) {
 
 	// Common Auth Routes (logout works for both modes)
 	common := group.Group("/common")
-	common.Use(middleware.AuthSessionMiddleware(authService, true))
+	common.Use(middleware.AuthSessionMiddleware(authService, true, hub))
 	common.POST("/logout", handler.Logout)
 	common.GET("/me", handler.GetUser)
 
@@ -33,4 +34,3 @@ func Register(group *echo.Group, authService *AuthService) {
 	settings.POST("/email/request", handler.RequestEmailUpdate)
 	settings.POST("/email/confirm", handler.ConfirmEmailUpdate)
 }
-

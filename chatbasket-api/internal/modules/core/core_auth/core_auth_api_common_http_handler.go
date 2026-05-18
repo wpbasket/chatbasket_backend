@@ -1,4 +1,4 @@
-﻿package core_auth
+package core_auth
 
 import (
 	"chatbasket-api/internal/platform/kit"
@@ -31,6 +31,14 @@ func (h *authHandler) Logout(c *echo.Context) error {
 	res, err := h.Service.Logout(c.Request().Context(), &payload, uuidUserId, sessionId)
 	if err != nil {
 		return err
+	}
+
+	if h.hub != nil {
+		if payload.AllSessions {
+			h.hub.CloseUserConnections(uuidUserId)
+		} else {
+			h.hub.CloseSessionConnection(uuidUserId, sessionId)
+		}
 	}
 
 	// For web, clear cookies
@@ -172,4 +180,3 @@ func (h *authHandler) ConfirmEmailUpdate(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, res)
 }
-

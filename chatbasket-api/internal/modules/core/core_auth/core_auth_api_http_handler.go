@@ -1,4 +1,4 @@
-﻿package core_auth
+package core_auth
 
 import (
 	"fmt"
@@ -6,17 +6,20 @@ import (
 	"time"
 
 	"chatbasket-api/internal/platform/kit"
+	"chatbasket-api/internal/platform/websocket"
 	"github.com/labstack/echo/v5"
 	"strings"
 )
 
 type authHandler struct {
 	Service *AuthService
+	hub     *websocket.WSHub
 }
 
-func newAuthHandler(authService *AuthService) *authHandler {
+func newAuthHandler(authService *AuthService, hub *websocket.WSHub) *authHandler {
 	return &authHandler{
 		Service: authService,
+		hub:     hub,
 	}
 }
 
@@ -103,7 +106,7 @@ func (h *authHandler) AccountVerification(c *echo.Context) error {
 		c.SetCookie(userCookie)
 
 		// Return SessionResponse with empty sensitive fields for web
-	webResponse := &SessionResponse{
+		webResponse := &SessionResponse{
 			UserId:        "",
 			Name:          user.Name,
 			Email:         user.Email,
@@ -200,7 +203,7 @@ func (h *authHandler) LoginVerification(c *echo.Context) error {
 		c.SetCookie(userCookie)
 
 		// Return SessionResponse with empty sensitive fields for web
-	webResponse := &SessionResponse{
+		webResponse := &SessionResponse{
 			UserId:        "",
 			Name:          user.Name,
 			Email:         user.Email,
@@ -279,4 +282,3 @@ func (h *authHandler) VerifyForgotPassword(c *echo.Context) error {
 
 	return c.JSON(http.StatusOK, response)
 }
-

@@ -1,4 +1,4 @@
-﻿package personal_chat
+package personal_chat
 
 import (
 	"chatbasket-api/internal/platform/middleware"
@@ -13,7 +13,7 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WS
 
 	// Chat Routes
 	chat := personalGroup.Group("/chat")
-	chat.Use(middleware.AuthSessionMiddleware(authProvider, true))
+	chat.Use(middleware.AuthSessionMiddleware(authProvider, true, hub))
 
 	// Chat management
 	chat.POST("/check-eligibility", handler.CheckEligibility)
@@ -42,4 +42,3 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WS
 	// WebSocket
 	chat.GET("/ws", handler.WebSocketUpgrade)
 }
-

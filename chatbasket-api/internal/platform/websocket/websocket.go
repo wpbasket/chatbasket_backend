@@ -277,6 +277,26 @@ func (h *WSHub) CloseUserConnections(userID uuid.UUID) {
 	}
 }
 
+// CloseSessionConnection gracefully closes one active WebSocket connection for a user/session.
+func (h *WSHub) CloseSessionConnection(userID uuid.UUID, sessionID string) {
+	h.mu.RLock()
+	userConns, exists := h.conns[userID]
+	if !exists {
+		h.mu.RUnlock()
+		return
+	}
+
+	wc := userConns[sessionID]
+	h.mu.RUnlock()
+
+	if wc == nil {
+		return
+	}
+
+	log.Printf("[WS] Hub.CloseSessionConnection: closing session=%s (user=%s)", sessionID, userID)
+	wc.Close()
+}
+
 // ConnectionCount returns the total number of active WebSocket connections.
 func (h *WSHub) ConnectionCount() int {
 	h.mu.RLock()

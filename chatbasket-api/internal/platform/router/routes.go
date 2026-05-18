@@ -70,12 +70,12 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 
 	// 1. Auth Module
 	authService := core_auth.NewAuthService(globalService, r.Pool, r.Config.Security.AuthSecret)
-	core_auth.Register(apiGroup, authService)
+	core_auth.Register(apiGroup, authService, wsHub)
 
 	// 2. Personal Category (Group of modules)
 	personalGroup := apiGroup.Group("/personal")
 	profileService := personal_profile.NewProfileService(globalService, r.Pool, r.Config.Security.PersonalUsernameKey, r.AppwriteStorage, r.Config.Appwrite.PersonalProfilePicBucketID)
-	personal_profile.Register(personalGroup, profileService, authService)
+	personal_profile.Register(personalGroup, profileService, authService, wsHub)
 
 	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey, r.Config.Security.PersonalContactKey)
 	personal_contact.Register(personalGroup, contactService, authService)
@@ -90,4 +90,3 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	settingService := personal_setting.NewSettingService(authService)
 	personal_setting.Register(personalGroup, settingService, wsHub)
 }
-

@@ -1,4 +1,4 @@
-﻿package personal_setting
+package personal_setting
 
 import (
 	"chatbasket-api/internal/platform/kit"
@@ -75,4 +75,3 @@ func (h *settingHandler) updateSessionNotificationToken(c *echo.Context) error {
 
 	return c.JSON(http.StatusOK, okResponse)
 }
-

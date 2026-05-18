@@ -1,7 +1,8 @@
-﻿package middleware
+package middleware
 
 import (
 	"chatbasket-api/internal/platform/kit"
+	"chatbasket-api/internal/platform/websocket"
 	"context"
 	"net/http"
 	"strings"
@@ -36,7 +37,13 @@ type AuthSessionProvider interface {
 
 // AuthSessionMiddleware verifies the session token and populates the context.
 // Ported from legacy middleware/session.go with modular adjustments.
-func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified bool) echo.MiddlewareFunc {
+func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified bool, hub *websocket.WSHub) echo.MiddlewareFunc {
+	closeSessionConnection := func(userID uuid.UUID, sessionID string) {
+		if hub != nil && sessionID != "" {
+			hub.CloseSessionConnection(userID, sessionID)
+		}
+	}
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			var sessionId, userId string
@@ -99,6 +106,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			if err != nil {
 				// Distinguish between legitimate auth errors and infrastructure errors
 				if err == pgx.ErrNoRows {
+					closeSessionConnection(uuidVal, sessionId)
 					return kit.NewError(http.StatusUnauthorized, "session_invalid", "Invalid or expired session")
 				}
 				// Database connection error or other infrastructure issue
@@ -106,6 +114,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			}
 
 			if session.ExpiresAt.Before(time.Now()) {
+				closeSessionConnection(uuidVal, sessionId)
 				return kit.NewError(http.StatusUnauthorized, "session_invalid", "Session expired")
 			}
 
@@ -113,6 +122,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			authUser, err := authProvider.GetAuthUserByID(ctx, uuidVal)
 			if err != nil {
 				if err == pgx.ErrNoRows {
+					closeSessionConnection(uuidVal, sessionId)
 					return kit.NewError(http.StatusUnauthorized, "user_not_found", "User not found")
 				}
 				return kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user: "+kit.GetPostgresError(err).Message)
@@ -120,6 +130,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 
 			// 5. Check Verification (if required)
 			if requireVerified && !authUser.IsEmailVerified {
+				closeSessionConnection(uuidVal, sessionId)
 				return kit.NewError(http.StatusForbidden, "unverified_email", "Email must be verified to perform this action")
 			}
 
@@ -135,4 +146,3 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 		}
 	}
 }
-
