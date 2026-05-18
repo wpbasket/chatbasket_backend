@@ -88,6 +88,6 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 
 	// 4. Settings Module
 	settingService := personal_setting.NewSettingService(authService)
-	personal_setting.Register(personalGroup, settingService)
+	personal_setting.Register(personalGroup, settingService, wsHub)
 }
 

@@ -2,6 +2,7 @@
 
 import (
 	"chatbasket-api/internal/platform/kit"
+	"chatbasket-api/internal/platform/websocket"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -10,11 +11,13 @@ import (
 
 type settingHandler struct {
 	service *settingService
+	hub     *websocket.WSHub
 }
 
-func newSettingHandler(service *settingService) *settingHandler {
+func newSettingHandler(service *settingService, hub *websocket.WSHub) *settingHandler {
 	return &settingHandler{
 		service: service,
+		hub:     hub,
 	}
 }
 
@@ -35,6 +38,12 @@ func (h *settingHandler) updateSessionCentral(c *echo.Context) error {
 	okResponse, err := h.service.setCentralDevice(c.Request().Context(), userID, sessionToken)
 	if err != nil {
 		return err // Echo GlobalErrorHandler takes over
+	}
+
+	// 3. Invalidate all active WebSocket connections for this user so they reconnect
+	//    and pick up the updated session.IsCentral state from the auth middleware.
+	if h.hub != nil {
+		h.hub.CloseUserConnections(userID)
 	}
 
 	return c.JSON(http.StatusOK, okResponse)

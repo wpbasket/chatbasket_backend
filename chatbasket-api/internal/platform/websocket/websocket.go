@@ -254,6 +254,29 @@ func (h *WSHub) BroadcastToUserExcept(userID uuid.UUID, excludeSessionID string,
 	}
 }
 
+// CloseUserConnections gracefully closes all active WebSocket connections for a given user.
+// This forces clients to reconnect and re-authenticate, picking up any session state
+// changes (e.g. isPrimary) from the database.
+func (h *WSHub) CloseUserConnections(userID uuid.UUID) {
+	h.mu.RLock()
+	userConns, exists := h.conns[userID]
+	if !exists {
+		h.mu.RUnlock()
+		return
+	}
+
+	connsToClose := make([]*WSConn, 0, len(userConns))
+	for _, wc := range userConns {
+		connsToClose = append(connsToClose, wc)
+	}
+	h.mu.RUnlock()
+
+	for _, wc := range connsToClose {
+		log.Printf("[WS] Hub.CloseUserConnections: closing session=%s (user=%s)", wc.SessionID, userID)
+		wc.Close()
+	}
+}
+
 // ConnectionCount returns the total number of active WebSocket connections.
 func (h *WSHub) ConnectionCount() int {
 	h.mu.RLock()
