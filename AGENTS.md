@@ -4,13 +4,15 @@
 2. **Tiered Repository Discovery**: Utilize **group-level queries** (e.g., `gitnexus_group_query`) against **`cb-group`** for global discovery and cross-repo architectural queries. For deep implementation, refactoring, or impact analysis, switch to the specific **sub-repo index** (e.g., `chatbasket_backend`) to ensure maximum precision and local context.
 3. **Strategic Documentation**: If Wiki is present, then utilize the **GitNexus Wiki** (located in sub-repo `.gitnexus/wiki/` folders) when the task requires high-level architectural understanding, module mapping, or strategic context before deep-diving into code.
 4. **Context-mode MCP Rules**: [MUST READ] (See full rules at the bottom of this file)
+5. **Manual Route Overrides**: Due to GitNexus Go parser limitations (Echo struct method handlers) and custom React Native HTTP client wrappers, automatic API contract linking is skipped. When adding new backend/frontend endpoints, you **MUST** manually add them as overrides in `~/.gitnexus/groups/cb-group/group.yaml` under `links:` and run `npx gitnexus group sync cb-group --allow-stale`.
+
 
 ---
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **chatbasket_backend** (3054 symbols, 9212 relationships, 175 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **chatbasket_backend** (3168 symbols, 9341 relationships, 180 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
