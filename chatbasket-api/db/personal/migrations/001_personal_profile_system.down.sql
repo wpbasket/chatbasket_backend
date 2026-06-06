@@ -18,5 +18,3 @@ DROP INDEX IF EXISTS idx_users_admin_blocked_only;                  -- Admin blo
 DROP INDEX IF EXISTS idx_users_profile_created;                     -- Profile type and creation date index
 DROP TABLE IF EXISTS users CASCADE;                                 -- Also drops PK, UNIQUE constraints and indexes
 
--- Drop timestamp function
-DROP FUNCTION IF EXISTS set_timestamps();                           -- Timestamp management function

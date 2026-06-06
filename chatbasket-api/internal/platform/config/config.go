@@ -13,6 +13,7 @@ import (
 // PostgresConfig holds the database configuration, ported from chatbasket-api/db/config.go
 type PostgresConfig struct {
 	DatabaseURL           string
+	DatabaseURLTesting    string
 	MaxConns              int32
 	MinConns              int32
 	MinIdleConns          int32
@@ -108,6 +109,7 @@ func Load() (*Config, error) {
 
 	pgCfg := &PostgresConfig{
 		DatabaseURL:           dsn,
+		DatabaseURLTesting:    os.Getenv("DATABASE_URL_PG_TESTING"),
 		MaxConns:              30,
 		MinConns:              2,
 		MinIdleConns:          2,
