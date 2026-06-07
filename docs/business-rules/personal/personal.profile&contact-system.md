@@ -622,7 +622,7 @@ Stores user avatar information and access tokens.
 **Columns:**
 - `id` (UUID, Primary Key) - Avatar record identifier
 - `user_id` (UUID, NOT NULL) - User identifier, references users(id)
-- `file_id` (TEXT, NOT NULL) - File identifier for the avatar
+- `file_id` (TEXT) - File identifier for the avatar (nullable)
 - `avatar_type` (TEXT, NOT NULL, DEFAULT 'profile') - Avatar type
 - `token_id` (TEXT) - Access token identifier
 - `token_secret` (TEXT) - Access token secret
@@ -634,7 +634,6 @@ Stores user avatar information and access tokens.
 - Primary key on `id`
 - Unique constraint on `(user_id, file_id)`
 - Foreign key to users(id) with CASCADE delete
-- Check constraint: Profile avatars must use user_id as file_id
 
 **Indexes:**
 - Primary key on `id`
@@ -784,9 +783,11 @@ Stores block relationships between users.
 **Triggers:**
 - `user_blocks_timestamps_trigger` - Automatic timestamp management via set_timestamps()
 - `auto_remove_contact_on_block` - Automatically removes mutual contacts and contact requests when block is created (AFTER INSERT)
+- `cleanup_sync_actions_on_block` - Automatically cleans up pending message sync actions when block is created (AFTER INSERT)
 
 **Functions:**
 - `remove_contact_on_block()` - Deletes both directional contact relationships and both directional contact requests: (blocker → blocked) and (blocked → blocker)
+- `cleanup_sync_actions_on_block()` - Deletes pending message sync actions for both users associated with their shared chat ID if a chat exists between them
 
 **Block Behavior:**
 - Idempotent: Blocking already-blocked user returns success

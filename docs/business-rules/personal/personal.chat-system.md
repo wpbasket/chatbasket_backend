@@ -10,8 +10,8 @@ A sender **can send a message** to a recipient only if all are true:
    - `user_blocks(sender -> recipient)` does not exist
    - `user_blocks(recipient -> sender)` does not exist
 4. **Primary device rules satisfied**
-   - User must have an active primary device (native only)
-   - Web sessions cannot send/receive messages without a primary device
+    - Both the sender and recipient must have an active primary device (native only)
+    - Web sessions cannot send/receive messages if their own account has no active primary device
 5. **Neither user is admin-blocked**
    - `users(id=sender).is_admin_blocked` is FALSE
    - `users(id=recipient).is_admin_blocked` is FALSE
@@ -71,7 +71,7 @@ These are the default policies to implement unless product requirements change:
   - **Strict Scope**: These rules apply **only** to the two specific users involved in the block. It does not affect their interactions with other users in the system.
   - **Hard Barrier**: As soon as a block is created, the system immediately stops all new message attempts between these two users. The sender will receive an error.
   - **Automatic Cleanup**: Creating a block automatically deletes the contact relationship in **both** directions for these two users. They are removed from each other's lists instantly.
-  - **Relay Purge**: Any messages currently sitting in the backend relay (waiting for delivery) between these two specific users are **physically deleted** immediately.
+  - **Relay Purge**: Creating a block immediately clears pending message sync actions. The messages themselves (and any associated files) are physically deleted asynchronously by the background worker cleanup job.
 
 - **Account deletion**
   - Delete all interconnected data (FK cascade)
@@ -275,8 +275,8 @@ Stores 1v1 chat metadata. This table is **never deleted** (unlike messages) and 
 - `p2_last_message_content` (TEXT) — Last message preview for participant 2
 - `p1_last_message_type` (TEXT) — Last message type for participant 1 preview
 - `p2_last_message_type` (TEXT) — Last message type for participant 2 preview
-- `created_at` (TIMESTAMPTZ) — Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) — Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) — Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) — Record last update timestamp
 
 **Constraints:**
 - Unique pair: `(participant_1_id, participant_2_id)`
@@ -321,8 +321,8 @@ Temporary message relay storage. Messages are **ephemeral** — they are deleted
 - `deleted_by_recipient` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Recipient deleted this message for themselves
 - `delivery_attempts` (INTEGER, NOT NULL, DEFAULT 0) — Number of delivery attempts
 - `expires_at` (TIMESTAMPTZ, NOT NULL) — 30-day TTL default
-- `created_at` (TIMESTAMPTZ) — Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) — Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) — Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) — Record last update timestamp
 
 **Constraints:**
 - `sender_id != recipient_id` (no self-messages)
@@ -353,8 +353,8 @@ Relay for cross-device synchronization of unsend and delete-for-me actions. Thes
 - `action_type` (TEXT, NOT NULL) — One of: `unsend`, `delete_for_me`
 - `payload` (JSONB, NOT NULL) — Action-specific data (contains message_ids, chat_id, etc.)
 - `delivered_to_primary` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Whether the Primary device has acknowledged this action
-- `created_at` (TIMESTAMPTZ) — Record creation timestamp
-- `updated_at` (TIMESTAMPTZ) — Record last update timestamp
+- `created_at` (TIMESTAMPTZ, NOT NULL) — Record creation timestamp
+- `updated_at` (TIMESTAMPTZ, NOT NULL) — Record last update timestamp
 
 **Constraints:**
 - `action_type` must be one of: `unsend`, `delete_for_me`
