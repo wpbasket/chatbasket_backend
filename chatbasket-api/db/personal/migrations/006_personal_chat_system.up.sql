@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS messages (
     recipient_id                        UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
 -- Message content (encrypted at device level in future E2EE phase)
-content TEXT NOT NULL CHECK (length(content) <= 5000),
+content TEXT NOT NULL,
 message_type TEXT NOT NULL DEFAULT 'text' CHECK (
     message_type IN (
         'text',

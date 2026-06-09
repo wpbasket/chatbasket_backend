@@ -6,6 +6,8 @@ and 'db/personal/migrations' directories. It supports two operation modes:
 
 1. INTERACTIVE WIZARD MODE (No command-line arguments passed)
    Prompts the user step-by-step to choose a database connection and the action to perform.
+   Actions include: Run all UP, Run all DOWN, Run SELECTIVE (pick specific files),
+   Inspect Database, and Database Summary.
    Usage:
      go run main.go
 
@@ -100,6 +102,7 @@ func main() {
 
 	// Step 1: Select Database URL
 	var dbURL string
+	var dbLabel string
 	for dbURL == "" {
 		fmt.Printf("\n%s%s==================================================%s\n", colorBold, colorOrange, colorReset)
 		fmt.Printf("%s%s            STEP 1: SELECT CONNECTION             %s\n", colorBold, colorOrange, colorReset)
@@ -123,16 +126,19 @@ func main() {
 		switch dbChoice {
 		case "1":
 			dbURL = testingURL
+			dbLabel = "CB Testing"
 			if dbURL == "" {
 				fmt.Printf("%sError: DATABASE_URL_PG_TESTING is empty.%s\n", colorRed, colorReset)
 			}
 		case "2":
 			dbURL = devURL
+			dbLabel = "CB Dev"
 			if dbURL == "" {
 				fmt.Printf("%sError: DATABASE_URL_PG_DEV is empty.%s\n", colorRed, colorReset)
 			}
 		case "3":
 			dbURL = cbURL
+			dbLabel = "CB Production"
 			if dbURL == "" {
 				fmt.Printf("%sError: DATABASE_URL_PG_CB is empty.%s\n", colorRed, colorReset)
 			}
@@ -146,9 +152,12 @@ func main() {
 				}
 				log.Fatalf("%sError reading input: %v%s", colorRed, err, colorReset)
 			}
-			dbURL = resolveURL(strings.TrimSpace(customURL))
+			customInput := strings.TrimSpace(customURL)
+			dbURL = resolveURL(customInput)
+			dbLabel = "Custom: " + customInput
 			if dbURL == "" {
 				fmt.Printf("%sError: Custom URL or Env Var cannot be empty.%s\n", colorRed, colorReset)
+				dbLabel = ""
 			}
 		default:
 			fmt.Printf("%sInvalid selection. Please choose 1, 2, 3, or 4.%s\n", colorRed, colorReset)
@@ -158,14 +167,15 @@ func main() {
 	// Step 2: Select Action
 	for {
 		fmt.Printf("\n\n%s%s==================================================%s\n", colorBold, colorOrange, colorReset)
-		fmt.Printf("%s%s              STEP 2: SELECT ACTION               %s\n", colorBold, colorOrange, colorReset)
+		fmt.Printf("%s%s    STEP 2: SELECT ACTION  [%s%s%s%s]%s\n", colorBold, colorOrange, colorGreen, dbLabel, colorOrange, colorBold, colorReset)
 		fmt.Printf("%s%s==================================================%s\n", colorBold, colorOrange, colorReset)
-		fmt.Printf("  %s1.%s %sRun UP migrations%s\n", colorYellow, colorReset, colorGreen, colorReset)
-		fmt.Printf("  %s2.%s %sRun DOWN migrations%s\n", colorYellow, colorReset, colorPurple, colorReset)
-		fmt.Printf("  3. Inspect Database (Detailed List)\n")
-		fmt.Printf("  4. Database Summary (Object Counts)\n")
-		fmt.Printf("  5. Exit\n")
-		fmt.Printf("\n%s%s❯ Select option (1-5): %s", colorBold, colorOrange, colorReset)
+		fmt.Printf("  %s1.%s %sRun ALL UP migrations%s\n", colorYellow, colorReset, colorGreen, colorReset)
+		fmt.Printf("  %s2.%s %sRun ALL DOWN migrations%s\n", colorYellow, colorReset, colorPurple, colorReset)
+		fmt.Printf("  %s3.%s %sRun SELECTIVE migrations (pick files)%s\n", colorYellow, colorReset, colorBlue, colorReset)
+		fmt.Printf("  4. Inspect Database (Detailed List)\n")
+		fmt.Printf("  5. Database Summary (Object Counts)\n")
+		fmt.Printf("  6. Exit\n")
+		fmt.Printf("\n%s%s❯ Select option (1-6): %s", colorBold, colorOrange, colorReset)
 
 		actionChoice, err := reader.ReadString('\n')
 		if err != nil {
@@ -183,14 +193,16 @@ func main() {
 		case "2":
 			runMigrations(root, dbURL, false)
 		case "3":
-			inspectDatabase(dbURL)
+			runSelectiveMigrations(root, dbURL, reader)
 		case "4":
+			inspectDatabase(dbURL)
+		case "5":
 			printDatabaseSummary(dbURL)
-		case "5", "exit", "q":
+		case "6", "exit", "q":
 			fmt.Printf("%sExiting.%s\n", colorGreen, colorReset)
 			return
 		default:
-			fmt.Printf("%sInvalid selection. Please choose 1, 2, 3, 4, or 5.%s\n", colorRed, colorReset)
+			fmt.Printf("%sInvalid selection. Please choose 1-6.%s\n", colorRed, colorReset)
 		}
 	}
 }
@@ -453,6 +465,165 @@ func inspectDatabase(dbURL string) {
 		}
 	}
 	fmt.Printf("\n%s==================================%s\n", colorBold, colorReset)
+}
+
+func runSelectiveMigrations(root string, dbURL string, reader *bufio.Reader) {
+	dirs := []string{"db/common/migrations", "db/personal/migrations"}
+
+	// Step A: Choose UP or DOWN
+	fmt.Printf("\n%s%s--- Selective Migration Mode ---%s\n", colorBold, colorBlue, colorReset)
+	fmt.Printf("  %s1.%s Run selected %sUP%s files\n", colorYellow, colorReset, colorGreen, colorReset)
+	fmt.Printf("  %s2.%s Run selected %sDOWN%s files\n", colorYellow, colorReset, colorPurple, colorReset)
+	fmt.Printf("\n%s%s❯ Select direction (1-2): %s", colorBold, colorOrange, colorReset)
+
+	dirChoice, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("%sError reading input: %v%s\n", colorRed, err, colorReset)
+		return
+	}
+	dirChoice = strings.TrimSpace(dirChoice)
+
+	var suffix string
+	var isUp bool
+	switch dirChoice {
+	case "1":
+		suffix = "*.up.sql"
+		isUp = true
+	case "2":
+		suffix = "*.down.sql"
+		isUp = false
+	default:
+		fmt.Printf("%sInvalid selection.%s\n", colorRed, colorReset)
+		return
+	}
+
+	// Step B: Collect all migration files from all folders with numbering
+	type migrationFile struct {
+		category string
+		path     string
+		name     string
+	}
+	var allFiles []migrationFile
+
+	for _, dir := range dirs {
+		category := filepath.Base(filepath.Dir(dir))
+		dirPath := filepath.Join(root, dir)
+		files, _ := filepath.Glob(filepath.Join(dirPath, suffix))
+		if len(files) == 0 {
+			continue
+		}
+		if isUp {
+			sort.Strings(files)
+		} else {
+			sort.Slice(files, func(i, j int) bool {
+				return files[i] > files[j]
+			})
+		}
+		for _, f := range files {
+			allFiles = append(allFiles, migrationFile{
+				category: category,
+				path:     f,
+				name:     filepath.Base(f),
+			})
+		}
+	}
+
+	if len(allFiles) == 0 {
+		fmt.Printf("%sNo migration files found.%s\n", colorYellow, colorReset)
+		return
+	}
+
+	// Step C: Display numbered list grouped by folder
+	dirLabel := "UP"
+	dirColor := colorGreen
+	if !isUp {
+		dirLabel = "DOWN"
+		dirColor = colorPurple
+	}
+
+	fmt.Printf("\n%s%s--- Available %s Files ---%s\n", colorBold, dirColor, dirLabel, colorReset)
+	currentCategory := ""
+	for i, mf := range allFiles {
+		if mf.category != currentCategory {
+			currentCategory = mf.category
+			categoryName := strings.ToUpper(currentCategory[:1]) + currentCategory[1:]
+			fmt.Printf("\n  %s%s[%s]%s\n", colorBold, colorCyan, categoryName, colorReset)
+		}
+		fmt.Printf("    %s%d.%s %s\n", colorYellow, i+1, colorReset, mf.name)
+	}
+
+	// Step D: Get user selection
+	fmt.Printf("\n%s%s❯ Enter file numbers (comma-separated, e.g. 1,3,5): %s", colorBold, colorOrange, colorReset)
+	selection, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("%sError reading input: %v%s\n", colorRed, err, colorReset)
+		return
+	}
+	selection = strings.TrimSpace(selection)
+	if selection == "" {
+		fmt.Printf("%sNo files selected. Aborting.%s\n", colorYellow, colorReset)
+		return
+	}
+
+	// Parse selected numbers
+	parts := strings.Split(selection, ",")
+	var selected []migrationFile
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		var num int
+		_, err := fmt.Sscanf(p, "%d", &num)
+		if err != nil || num < 1 || num > len(allFiles) {
+			fmt.Printf("%sInvalid number '%s'. Aborting.%s\n", colorRed, p, colorReset)
+			return
+		}
+		selected = append(selected, allFiles[num-1])
+	}
+
+	// Step E: Confirm
+	fmt.Printf("\n%s%sWill run %d %s file(s):%s\n", colorBold, dirColor, len(selected), dirLabel, colorReset)
+	for _, mf := range selected {
+		categoryName := strings.ToUpper(mf.category[:1]) + mf.category[1:]
+		fmt.Printf("  → %s[%s]%s %s\n", colorCyan, categoryName, colorReset, mf.name)
+	}
+	fmt.Printf("\n%s%s❯ Confirm? (y/n): %s", colorBold, colorOrange, colorReset)
+	confirm, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("%sError reading input: %v%s\n", colorRed, err, colorReset)
+		return
+	}
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+	if confirm != "y" && confirm != "yes" {
+		fmt.Printf("%sAborted.%s\n", colorYellow, colorReset)
+		return
+	}
+
+	// Step F: Execute
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		fmt.Printf("%sError: Failed to connect to database: %v%s\n", colorRed, err, colorReset)
+		return
+	}
+	defer conn.Close(ctx)
+
+	for _, mf := range selected {
+		categoryName := strings.ToUpper(mf.category[:1]) + mf.category[1:]
+		fmt.Printf("%s[%s] Applying: %s...%s\n", dirColor, categoryName, mf.name, colorReset)
+
+		content, err := os.ReadFile(mf.path)
+		if err != nil {
+			log.Printf("%sError: Failed to read file %s: %v%s\n", colorRed, mf.path, err, colorReset)
+			return
+		}
+
+		_, err = conn.Exec(ctx, string(content))
+		if err != nil {
+			log.Printf("%sError: Failed to execute SQL in %s: %v%s\n", colorRed, mf.name, err, colorReset)
+			return
+		}
+		fmt.Printf("%s[%s] Successfully applied: %s%s\n", colorGreen, categoryName, mf.name, colorReset)
+	}
+	fmt.Printf("\n%s%sSelective %s migrations completed successfully.%s\n", colorBold, colorGreen, dirLabel, colorReset)
 }
 
 func runMigrations(root string, dbURL string, isUp bool) {
