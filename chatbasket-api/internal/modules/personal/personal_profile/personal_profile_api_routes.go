@@ -22,5 +22,7 @@ func Register(personalGroup *echo.Group, profileService *profileService, authPro
 	profile.POST("/upload-avatar", handler.UploadProfilePicture)
 	profile.DELETE("/remove-avatar", handler.RemoveProfilePicture)
 	profile.POST("/update-profile", handler.UpdateProfile)
+	profile.POST("/update-e2ee-key", handler.UploadE2EEPublicKey)
+	profile.GET("/get-e2ee-key", handler.GetE2EEPublicKey)
 
 }

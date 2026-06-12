@@ -133,6 +133,11 @@ func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURL
 // validateFileType checks that the uploaded file's MIME type matches the declared message_type.
 func validateFileType(fh *multipart.FileHeader, messageType string) error {
 	mimeType := fh.Header.Get("Content-Type")
+	if mimeType == "application/octet-stream" {
+		// E2EE media uploads are ciphertext; original name/MIME live inside the
+		// encrypted message content envelope, not in Appwrite/backend metadata.
+		return nil
+	}
 	switch messageType {
 	case "image":
 		if !strings.HasPrefix(mimeType, "image/") {
@@ -293,4 +298,3 @@ func (s *chatService) DeleteChatFile(ctx context.Context, fileID string) {
 		log.Printf("[DeleteChatFile] Failed to delete file %s from bucket %s: %v", fileID, ChatFilesBucketID, err)
 	}
 }
-

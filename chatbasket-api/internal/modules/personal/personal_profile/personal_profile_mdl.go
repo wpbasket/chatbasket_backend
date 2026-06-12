@@ -20,6 +20,7 @@ type ContactProfileView struct {
 	Bio           *string   `json:"bio"`
 	AvatarURL     *string   `json:"avatar_url"`
 	AvatarFileId  *string   `json:"avatar_file_id"`
+	E2eePublicKey *string   `json:"e2ee_public_key"`
 }
 
 type ContactLookupResult struct {
@@ -82,3 +83,16 @@ func toPrivateUser(user *personal_profile_store.User, username string, email str
 		UpdatedAt:    user.UpdatedAt,
 	}
 }
+
+type uploadE2EEPublicKeyPayload struct {
+	E2eePublicKey string `json:"e2ee_public_key"`
+}
+
+type getE2EEPublicKeyPayload struct {
+	UserID string `query:"user_id"`
+}
+
+type getE2EEPublicKeyResponse struct {
+	E2eePublicKey *string `json:"e2ee_public_key"`
+}
+

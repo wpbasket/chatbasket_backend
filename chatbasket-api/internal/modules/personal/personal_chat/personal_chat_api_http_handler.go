@@ -265,11 +265,13 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 	}
 
 	viewURL, downloadURL, tokenExpiry, _ := h.Service.GenerateMessageFileURLs(c.Request().Context(), *message, userID)
+	senderE2eePublicKey := h.Service.getSenderE2EEPublicKey(c.Request().Context(), message.SenderID)
 
 	msgInfo := &MessageResponse{
 		MessageID:             message.ID.String(),
 		ChatID:                message.ChatID.String(),
 		RecipientID:           message.RecipientID.String(),
+		SenderE2eePublicKey:   senderE2eePublicKey,
 		Content:               message.Content,
 		MessageType:           message.MessageType,
 		DeliveredToRecipient:  false,
@@ -287,17 +289,18 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 	}
 
 	uploadResponse := &UploadFileResponse{
-		MessageID:    message.ID.String(),
-		FileID:       *message.FileID,
-		MessageType:  message.MessageType,
-		FileMimeType: message.FileMimeType,
-		ViewURL:      viewURL,
-		DownloadURL:  downloadURL,
-		FileName:     message.FileName,
-		FileSize:     message.FileSize,
-		CreatedAt:    message.CreatedAt,
-		ExpiresAt:       message.ExpiresAt,
-		FileTokenExpiry: tokenExpiry,
+		MessageID:           message.ID.String(),
+		SenderE2eePublicKey: senderE2eePublicKey,
+		FileID:              *message.FileID,
+		MessageType:         message.MessageType,
+		FileMimeType:        message.FileMimeType,
+		ViewURL:             viewURL,
+		DownloadURL:         downloadURL,
+		FileName:            message.FileName,
+		FileSize:            message.FileSize,
+		CreatedAt:           message.CreatedAt,
+		ExpiresAt:           message.ExpiresAt,
+		FileTokenExpiry:     tokenExpiry,
 	}
 
 	// ——— WS Broadcast: new_message (File Upload) —————————————————————————————————————————————————
@@ -532,4 +535,3 @@ func (h *chatHandler) AcknowledgeSyncAction(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, kit.StatusOkay{Status: true, Message: "success"})
 }
-

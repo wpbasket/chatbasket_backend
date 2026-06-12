@@ -6,13 +6,13 @@ import (
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/services"
 	"context"
-	"mime/multipart"
-	"net/http"
-	"time"
 	"github.com/appwrite/sdk-for-go/query"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"mime/multipart"
+	"net/http"
+	"time"
 )
 
 type profileService struct {
@@ -287,4 +287,37 @@ func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId k
 	}
 
 	return &kit.StatusOkay{Status: true, Message: "Profile picture removed successfully"}, nil
+}
+
+func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.UserId, publicKey string) (*kit.StatusOkay, error) {
+	// First check if user exists in the users table
+	exists, err := ps.PostgresQueries.IsUserExists(ctx, userID.UuidUserId)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+	if !exists {
+		return nil, kit.NewError(http.StatusNotFound, "not_found", "User profile does not exist. Create profile first.")
+	}
+
+	err = ps.PostgresQueries.UpdateUserE2EEPublicKey(ctx, personal_profile_store.UpdateUserE2EEPublicKeyParams{
+		ID:            userID.UuidUserId,
+		E2eePublicKey: &publicKey,
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to save E2EE public key: "+kit.GetPostgresError(err).Message)
+	}
+
+	return &kit.StatusOkay{Status: true, Message: "E2EE public key saved successfully"}, nil
+}
+
+func (ps *profileService) GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, error) {
+	pubKey, err := ps.PostgresQueries.GetUserE2EEPublicKey(ctx, targetUserID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "User profile not found")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user E2EE public key: "+kit.GetPostgresError(err).Message)
+	}
+
+	return pubKey, nil
 }

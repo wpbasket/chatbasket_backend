@@ -147,6 +147,7 @@ SELECT
     a.token_id,
     a.token_secret,
     a.token_expiry,
+    u.e2ee_public_key,
     COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
     COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
     COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
@@ -181,3 +182,15 @@ FROM users
 WHERE
     hmac_sha256_hex_username = $1
     AND is_admin_blocked IS NOT TRUE;
+
+
+-- name: UpdateUserE2EEPublicKey :exec
+UPDATE users
+SET
+    e2ee_public_key = $2
+WHERE
+    id = $1;
+
+
+-- name: GetUserE2EEPublicKey :one
+SELECT e2ee_public_key FROM users WHERE id = $1;

@@ -259,12 +259,13 @@ func (ps *profileService) GetContactableProfilesForViewer(
 		}
 
 		result[row.ID] = &ContactProfileView{
-			ID:           row.ID,
-			Name:         row.Name,
-			Username:     username,
-			Bio:          row.Bio,
-			AvatarURL:    avatarURL,
-			AvatarFileId: avatarFileID,
+			ID:            row.ID,
+			Name:          row.Name,
+			Username:      username,
+			Bio:           row.Bio,
+			AvatarURL:     avatarURL,
+			AvatarFileId:  avatarFileID,
+			E2eePublicKey: row.E2eePublicKey,
 		}
 	}
 

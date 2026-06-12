@@ -57,26 +57,28 @@ type ChatResponse struct {
 	LastMessageIsUnsent      bool       `json:"last_message_is_unsent"`
 	LastMessageID            *string    `json:"last_message_id"`
 	UnreadCount              int        `json:"unread_count"`
+	OtherUserE2eePublicKey   *string    `json:"other_user_e2ee_public_key"`
 }
 
 type MessageResponse struct {
-	MessageID                   string    `json:"message_id"`
-	ChatID                      string    `json:"chat_id"`
-	RecipientID                 string    `json:"recipient_id"`
-	Content                     string    `json:"content"`
-	MessageType                 string    `json:"message_type"`
-	DeliveredToRecipient        bool      `json:"delivered_to_recipient"`
-	DeliveredToRecipientPrimary bool      `json:"delivered_to_recipient_primary"`
-	SyncedToSenderPrimary       bool      `json:"synced_to_sender_primary"`
-	CreatedAt                   time.Time `json:"created_at"`
-	ExpiresAt                   time.Time `json:"expires_at"`
-	IsFromMe                    bool      `json:"is_from_me"`
-	FileID                      *string   `json:"file_id"`
-	FileName                    *string   `json:"file_name"`
-	FileSize                    *int64    `json:"file_size"`
-	FileMimeType                *string   `json:"file_mime_type"`
-	ViewURL                     string    `json:"view_url,omitempty"`
-	DownloadURL                 string    `json:"download_url,omitempty"`
+	MessageID                   string     `json:"message_id"`
+	ChatID                      string     `json:"chat_id"`
+	RecipientID                 string     `json:"recipient_id"`
+	SenderE2eePublicKey         *string    `json:"sender_e2ee_public_key,omitempty"`
+	Content                     string     `json:"content"`
+	MessageType                 string     `json:"message_type"`
+	DeliveredToRecipient        bool       `json:"delivered_to_recipient"`
+	DeliveredToRecipientPrimary bool       `json:"delivered_to_recipient_primary"`
+	SyncedToSenderPrimary       bool       `json:"synced_to_sender_primary"`
+	CreatedAt                   time.Time  `json:"created_at"`
+	ExpiresAt                   time.Time  `json:"expires_at"`
+	IsFromMe                    bool       `json:"is_from_me"`
+	FileID                      *string    `json:"file_id"`
+	FileName                    *string    `json:"file_name"`
+	FileSize                    *int64     `json:"file_size"`
+	FileMimeType                *string    `json:"file_mime_type"`
+	ViewURL                     string     `json:"view_url,omitempty"`
+	DownloadURL                 string     `json:"download_url,omitempty"`
 	FileTokenExpiry             *time.Time `json:"file_token_expiry,omitempty"`
 }
 
@@ -112,17 +114,18 @@ type GetFileURLResponse struct {
 }
 
 type UploadFileResponse struct {
-	MessageID    string    `json:"message_id"`
-	FileID       string    `json:"file_id"`
-	MessageType  string    `json:"message_type"`
-	FileMimeType *string   `json:"file_mime_type"`
-	ViewURL      string    `json:"view_url,omitempty"`
-	DownloadURL  string    `json:"download_url"`
-	FileName     *string   `json:"file_name"`
-	FileSize     *int64    `json:"file_size"`
-	CreatedAt    time.Time `json:"created_at"`
-	ExpiresAt       time.Time `json:"expires_at"`
-	FileTokenExpiry *time.Time `json:"file_token_expiry,omitempty"`
+	MessageID           string     `json:"message_id"`
+	SenderE2eePublicKey *string    `json:"sender_e2ee_public_key,omitempty"`
+	FileID              string     `json:"file_id"`
+	MessageType         string     `json:"message_type"`
+	FileMimeType        *string    `json:"file_mime_type"`
+	ViewURL             string     `json:"view_url,omitempty"`
+	DownloadURL         string     `json:"download_url"`
+	FileName            *string    `json:"file_name"`
+	FileSize            *int64     `json:"file_size"`
+	CreatedAt           time.Time  `json:"created_at"`
+	ExpiresAt           time.Time  `json:"expires_at"`
+	FileTokenExpiry     *time.Time `json:"file_token_expiry,omitempty"`
 }
 
 type SyncActionResponse struct {

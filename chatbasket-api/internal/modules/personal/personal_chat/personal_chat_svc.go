@@ -35,6 +35,7 @@ type coreAuthChatProvider interface {
 type personalProfilePersonalChatProvider interface {
 	GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
+	GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, error)
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
@@ -44,7 +45,6 @@ type personalContactPersonalChatProvider interface {
 	IsAlreadyContact(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error)
 	GetMessagingBlockStatus(ctx context.Context, user1ID uuid.UUID, user2ID uuid.UUID) (int32, error)
 }
-
 
 // ————————————————————————————————————————————————————————————————————————————————
 // Chat Service
@@ -59,7 +59,6 @@ type chatService struct {
 	ContactProvider personalContactPersonalChatProvider
 	AppwriteStorage *clients.AppwriteStorageService
 }
-
 
 func NewChatService(
 	pool *pgxpool.Pool,
@@ -79,7 +78,6 @@ func NewChatService(
 		AppwriteStorage: appwriteStorage,
 	}
 }
-
 
 // ————————————————————————————————————————————————————————————————————————————————
 // Core Messaging Functions
@@ -133,7 +131,6 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID ki
 	case 2:
 		return EligibilityBlockedByRecipient, nil
 	}
-
 
 	// 6. Admin-block checks (Legacy Priority #5)
 	senderBlocked, err := s.ProfileProvider.IsUserAdminBlocked(ctx, senderID.UuidUserId)
@@ -328,6 +325,15 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 	return &message, nil
 }
 
+func (s *chatService) getSenderE2EEPublicKey(ctx context.Context, senderID uuid.UUID) *string {
+	publicKey, err := s.ProfileProvider.GetE2EEPublicKey(ctx, senderID)
+	if err != nil {
+		log.Printf("[E2EE] Failed to fetch sender public key for user %s: %v", senderID, err)
+		return nil
+	}
+	return publicKey
+}
+
 func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessagePayload, userID kit.UserId, isPrimary bool) (*MessageResponse, error) {
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
@@ -354,6 +360,7 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		MessageID:             message.ID.String(),
 		ChatID:                message.ChatID.String(),
 		RecipientID:           message.RecipientID.String(),
+		SenderE2eePublicKey:   s.getSenderE2EEPublicKey(ctx, message.SenderID),
 		Content:               message.Content,
 		MessageType:           message.MessageType,
 		DeliveredToRecipient:  message.DeliveredToRecipient,
@@ -546,6 +553,7 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 		ChatID:                      msg.ChatID.String(),
 		IsFromMe:                    msg.SenderID == userID.UuidUserId,
 		RecipientID:                 msg.RecipientID.String(),
+		SenderE2eePublicKey:         s.getSenderE2EEPublicKey(ctx, msg.SenderID),
 		Content:                     msg.Content,
 		MessageType:                 msg.MessageType,
 		DeliveredToRecipient:        msg.DeliveredToRecipient,
@@ -666,7 +674,6 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 	}, nil
 }
 
-
 // Chat List
 
 func (s *chatService) GetUserChatsLite(ctx context.Context, userID uuid.UUID) ([]personal_chat_store.GetUserChatsLiteRow, error) {
@@ -719,7 +726,6 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 		otherUserUsername := profile.Username
 		avatarURL := profile.AvatarURL
 
-
 		var lastMessageContent, lastMessageType, lastMessageSenderID, lastMessageID *string
 		var lastMessageCreatedAt *time.Time
 
@@ -762,6 +768,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 			LastMessageIsUnsent:      lastMessageType != nil && *lastMessageType == "unsent",
 			LastMessageID:            lastMessageID,
 			UnreadCount:              int(chat.UnreadCount),
+			OtherUserE2eePublicKey:   profile.E2eePublicKey,
 		})
 	}
 
@@ -1308,6 +1315,3 @@ func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 	log.Printf("[CleanupJob] Cleanup process completed successfully")
 	return nil
 }
-
-
-

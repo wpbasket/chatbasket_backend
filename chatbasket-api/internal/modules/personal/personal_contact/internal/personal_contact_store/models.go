@@ -166,6 +166,8 @@ type User struct {
 	B64CipherChacha20poly1305Username string    `json:"b64_cipher_chacha20poly1305_username"`
 	CreatedAt                         time.Time `json:"created_at"`
 	UpdatedAt                         time.Time `json:"updated_at"`
+	// Base64-encoded X25519 public key for E2EE. NULL = E2EE not set up.
+	E2eePublicKey *string `json:"e2ee_public_key"`
 }
 
 type UserBlock struct {
