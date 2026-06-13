@@ -240,6 +240,8 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send file to yourself")
 	}
 
+	recipientKeyUsed := c.FormValue("recipient_e2ee_public_key_used")
+
 	messageType := c.FormValue("message_type")
 	if messageType == "" {
 		messageType = "file"
@@ -253,12 +255,13 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 	}
 
 	message, svcErr := h.Service.UploadFileForMessage(c.Request().Context(), UploadFileForMessageParams{
-		SenderID:    userID,
-		RecipientID: recipientID,
-		FileHeader:  file,
-		MessageType: messageType,
-		Caption:     caption,
-		IsPrimary:   isPrimary,
+		SenderID:                   userID,
+		RecipientID:                recipientID,
+		FileHeader:                 file,
+		MessageType:                messageType,
+		Caption:                    caption,
+		IsPrimary:                  isPrimary,
+		RecipientE2eePublicKeyUsed: recipientKeyUsed,
 	})
 	if svcErr != nil {
 		return svcErr

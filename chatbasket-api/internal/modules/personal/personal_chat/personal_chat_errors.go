@@ -1,4 +1,4 @@
-﻿package personal_chat
+package personal_chat
 
 import (
 	"chatbasket-api/internal/platform/kit"
@@ -15,6 +15,7 @@ const (
 	EligibilityAdminBlocked       = "admin_blocked"
 	EligibilityNoPrimaryDevice    = "no_primary_device"
 	EligibilityRecipientNotFound  = "recipient_not_found"
+	EligibilityNoE2EE             = "no_e2ee"
 )
 
 func messagingEligibilityError(eligibility string) error {
@@ -34,6 +35,8 @@ func messagingEligibilityError(eligibility string) error {
 		errType = "messaging_not_allowed_no_primary_device"
 	case EligibilityRecipientNotFound:
 		errType = "messaging_not_allowed_recipient_not_found"
+	case EligibilityNoE2EE:
+		errType = "messaging_not_allowed_no_e2ee"
 	}
 
 	return kit.NewError(http.StatusForbidden, errType, eligibility)

@@ -155,9 +155,10 @@ type CreateChatPayload struct {
 }
 
 type SendMessagePayload struct {
-	RecipientID string `json:"recipient_id" validate:"required,uuid"`
-	Content     string `json:"content" validate:"required,max=5000"`
-	MessageType string `json:"message_type" validate:"required,oneof=text image video audio file"`
+	RecipientID                string `json:"recipient_id" validate:"required,uuid"`
+	Content                    string `json:"content" validate:"required,max=5000"`
+	MessageType                string `json:"message_type" validate:"required,oneof=text image video audio file"`
+	RecipientE2eePublicKeyUsed string `json:"recipient_e2ee_public_key_used"`
 }
 
 type AcknowledgeDeliveryPayload struct {
@@ -243,18 +244,20 @@ type SyncActionPayload struct {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type SendMessageParams struct {
-	SenderID    kit.UserId
-	RecipientID uuid.UUID
-	Content     string
-	MessageType string
-	IsPrimary   bool
+	SenderID                   kit.UserId
+	RecipientID                uuid.UUID
+	Content                    string
+	MessageType                string
+	IsPrimary                  bool
+	RecipientE2eePublicKeyUsed string
 }
 
 type UploadFileForMessageParams struct {
-	SenderID    kit.UserId
-	RecipientID uuid.UUID
-	FileHeader  *multipart.FileHeader
-	MessageType string
-	Caption     string
-	IsPrimary   bool
+	SenderID                   kit.UserId
+	RecipientID                uuid.UUID
+	FileHeader                 *multipart.FileHeader
+	MessageType                string
+	Caption                    string
+	IsPrimary                  bool
+	RecipientE2eePublicKeyUsed string
 }
