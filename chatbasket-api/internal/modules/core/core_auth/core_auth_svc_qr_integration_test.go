@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"chatbasket-api/internal/modules/core/core_auth"
@@ -64,8 +65,8 @@ func TestQRLoginFlow_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, appResp.Status)
 
-	// Verify DB status is APPROVED
-	qrUUID := uuid.MustParse(qrTokenStr)
+	// Verify DB status is APPROVED (parse UUID from signed token)
+	qrUUID := uuid.MustParse(strings.Split(qrTokenStr, ".")[0])
 	var approvedStatus string
 	err = pool.QueryRow(ctx, "SELECT status FROM qr_login_requests WHERE id = $1", qrUUID).Scan(&approvedStatus)
 	require.NoError(t, err)

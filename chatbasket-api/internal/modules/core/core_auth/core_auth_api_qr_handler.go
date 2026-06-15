@@ -25,9 +25,9 @@ func (h *authHandler) QRInitiate(c *echo.Context) error {
 // QRWebSocket upgrades the HTTP connection to a WebSocket for real-time signaling.
 func (h *authHandler) QRWebSocket(c *echo.Context) error {
 	tokenStr := c.QueryParam("token")
-	token, err := uuid.Parse(tokenStr)
+	token, err := h.Service.ParseAndVerifyQRToken(tokenStr)
 	if err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid or missing token")
+		return err
 	}
 
 	if _, err := h.Service.PostgresQuerier.GetQRLoginRequest(c.Request().Context(), token); err != nil {

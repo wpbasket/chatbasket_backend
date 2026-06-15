@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,8 +19,6 @@ type QRInitiatePayload struct {
 	QRToken   string `json:"qr_token"`
 	ExpiresIn int    `json:"expires_in"` // seconds
 }
-
-
 
 // QRApproveResponse indicates approval status.
 type QRApproveResponse struct {
@@ -33,9 +32,7 @@ type QRCallbackResponse struct {
 	SessionExpiry string
 }
 
-
-
-// QRInitiate generates a new QR token and saves it in the database.
+// QRInitiate generates a new QR token, saves it in the database, and returns the signed token.
 func (s *AuthService) QRInitiate(ctx context.Context) (*QRInitiatePayload, error) {
 	qrToken, err := uuid.NewV7()
 	if err != nil {
@@ -53,20 +50,51 @@ func (s *AuthService) QRInitiate(ctx context.Context) (*QRInitiatePayload, error
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create QR request")
 	}
 
+	// Compute HMAC signature of the UUID string
+	signature, err := kit.ComputeHMAC(id.String(), s.AuthSecret, false, nil)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to sign token")
+	}
+
 	return &QRInitiatePayload{
-		QRToken:   id.String(),
+		QRToken:   fmt.Sprintf("%s.%s", id.String(), signature),
 		ExpiresIn: 300,
 	}, nil
 }
 
+// ParseAndVerifyQRToken verifies the signature of a token and returns the raw UUID.
+func (s *AuthService) ParseAndVerifyQRToken(tokenStr string) (uuid.UUID, error) {
+	parts := strings.Split(tokenStr, ".")
+	if len(parts) != 2 {
+		return uuid.Nil, kit.NewError(http.StatusBadRequest, "invalid_token", "Malformed QR token")
+	}
+	tokenUUIDStr := parts[0]
+	signature := parts[1]
 
+	// Re-verify signature
+	expectedSig, err := kit.ComputeHMAC(tokenUUIDStr, s.AuthSecret, false, nil)
+	if err != nil {
+		return uuid.Nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify signature")
+	}
 
-// QRApprove links the authenticated user's ID to the QR login request.
+	if expectedSig != signature {
+		return uuid.Nil, kit.NewError(http.StatusUnauthorized, "invalid_token", "Invalid QR token signature")
+	}
+
+	parsedUUID, err := uuid.Parse(tokenUUIDStr)
+	if err != nil {
+		return uuid.Nil, kit.NewError(http.StatusBadRequest, "invalid_token", "Invalid token UUID format")
+	}
+
+	return parsedUUID, nil
+}
+
+// QRApprove verifies the token signature and links the authenticated user's ID to the QR login request.
 // It executes a Postgres NOTIFY upon successful update.
 func (s *AuthService) QRApprove(ctx context.Context, userID uuid.UUID, qrTokenStr string) (*QRApproveResponse, error) {
-	token, err := uuid.Parse(qrTokenStr)
+	token, err := s.ParseAndVerifyQRToken(qrTokenStr)
 	if err != nil {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid QR Token format")
+		return nil, err
 	}
 
 	_, err = s.PostgresQuerier.ApproveQRLogin(ctx, core_auth_store.ApproveQRLoginParams{
@@ -88,11 +116,11 @@ func (s *AuthService) QRApprove(ctx context.Context, userID uuid.UUID, qrTokenSt
 	return &QRApproveResponse{Status: true}, nil
 }
 
-// QRCallback exchanges the APPROVED token for a real session.
+// QRCallback verifies the token signature and exchanges the APPROVED token for a real session.
 func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platform string) (*QRCallbackResponse, error) {
-	token, err := uuid.Parse(qrTokenStr)
+	token, err := s.ParseAndVerifyQRToken(qrTokenStr)
 	if err != nil {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid QR Token format")
+		return nil, err
 	}
 
 	userID, err := s.PostgresQuerier.ExchangeQRLogin(ctx, token)

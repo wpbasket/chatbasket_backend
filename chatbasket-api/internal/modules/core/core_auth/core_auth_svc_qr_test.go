@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
+	"chatbasket-api/internal/platform/kit"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupTestAuthServiceQR(t *testing.T) (*AuthService, pgxmock.PgxPoolIface) {
@@ -24,8 +26,15 @@ func setupTestAuthServiceQR(t *testing.T) (*AuthService, pgxmock.PgxPoolIface) {
 		PostgresQuerier: store,
 		PostgresQueries: store,
 		Pool:            nil,
+		AuthSecret:      []byte("test-secret"),
 	}
 	return svc, mock
+}
+
+func signToken(t *testing.T, id uuid.UUID, secret []byte) string {
+	sig, err := kit.ComputeHMAC(id.String(), secret, false, nil)
+	require.NoError(t, err)
+	return fmt.Sprintf("%s.%s", id.String(), sig)
 }
 
 func TestQRInitiate_Success(t *testing.T) {
@@ -40,7 +49,10 @@ func TestQRInitiate_Success(t *testing.T) {
 	resp, err := svc.QRInitiate(context.Background())
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, id.String(), resp.QRToken)
+	
+	parsedID, err := svc.ParseAndVerifyQRToken(resp.QRToken)
+	assert.NoError(t, err)
+	assert.Equal(t, id, parsedID)
 	assert.Equal(t, 300, resp.ExpiresIn)
 }
 
@@ -70,6 +82,7 @@ func TestQRApprove_Success(t *testing.T) {
 
 	id := uuid.New()
 	userID := uuid.New()
+	signedToken := signToken(t, id, svc.AuthSecret)
 
 	mock.ExpectQuery("UPDATE qr_login_requests").
 		WithArgs(id, &userID).
@@ -79,7 +92,7 @@ func TestQRApprove_Success(t *testing.T) {
 		WithArgs(fmt.Sprintf("%s_approve", id.String())).
 		WillReturnResult(pgxmock.NewResult("SELECT", 1))
 
-	resp, err := svc.QRApprove(context.Background(), userID, id.String())
+	resp, err := svc.QRApprove(context.Background(), userID, signedToken)
 
 	assert.NoError(t, err)
 	assert.True(t, resp.Status)
@@ -91,6 +104,7 @@ func TestQRApprove_NotifyError(t *testing.T) {
 
 	id := uuid.New()
 	userID := uuid.New()
+	signedToken := signToken(t, id, svc.AuthSecret)
 
 	mock.ExpectQuery("UPDATE qr_login_requests").
 		WithArgs(id, &userID).
@@ -100,7 +114,7 @@ func TestQRApprove_NotifyError(t *testing.T) {
 		WithArgs(fmt.Sprintf("%s_approve", id.String())).
 		WillReturnError(errors.New("notify failed"))
 
-	resp, err := svc.QRApprove(context.Background(), userID, id.String())
+	resp, err := svc.QRApprove(context.Background(), userID, signedToken)
 
 	assert.ErrorContains(t, err, "notify")
 	assert.Nil(t, resp)
@@ -112,12 +126,13 @@ func TestQRApprove_DBError(t *testing.T) {
 
 	id := uuid.New()
 	userID := uuid.New()
+	signedToken := signToken(t, id, svc.AuthSecret)
 
 	mock.ExpectQuery("UPDATE qr_login_requests").
 		WithArgs(id, &userID).
 		WillReturnError(errors.New("db error"))
 
-	resp, err := svc.QRApprove(context.Background(), userID, id.String())
+	resp, err := svc.QRApprove(context.Background(), userID, signedToken)
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
@@ -135,12 +150,13 @@ func TestQRCallback_ExpiredOrNotApproved(t *testing.T) {
 	defer mock.Close()
 
 	id := uuid.New()
+	signedToken := signToken(t, id, svc.AuthSecret)
 
 	mock.ExpectQuery("UPDATE qr_login_requests").
 		WithArgs(id).
 		WillReturnError(pgx.ErrNoRows)
 
-	resp, err := svc.QRCallback(context.Background(), id.String(), "web")
+	resp, err := svc.QRCallback(context.Background(), signedToken, "web")
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
@@ -151,13 +167,37 @@ func TestQRCallback_MissingUserID(t *testing.T) {
 	defer mock.Close()
 
 	id := uuid.New()
+	signedToken := signToken(t, id, svc.AuthSecret)
 
 	mock.ExpectQuery("UPDATE qr_login_requests").
 		WithArgs(id).
 		WillReturnRows(pgxmock.NewRows([]string{"auth_user_id"}).AddRow(nil))
 
-	resp, err := svc.QRCallback(context.Background(), id.String(), "web")
+	resp, err := svc.QRCallback(context.Background(), signedToken, "web")
 
 	assert.Error(t, err)
+	assert.Nil(t, resp)
+}
+
+func TestQRApprove_InvalidSignature(t *testing.T) {
+	svc, _ := setupTestAuthServiceQR(t)
+	id := uuid.New()
+	userID := uuid.New()
+	invalidToken := fmt.Sprintf("%s.invalid-signature-value-here", id.String())
+
+	resp, err := svc.QRApprove(context.Background(), userID, invalidToken)
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "signature")
+	assert.Nil(t, resp)
+}
+
+func TestQRCallback_InvalidSignature(t *testing.T) {
+	svc, _ := setupTestAuthServiceQR(t)
+	id := uuid.New()
+	invalidToken := fmt.Sprintf("%s.invalid-signature-value-here", id.String())
+
+	resp, err := svc.QRCallback(context.Background(), invalidToken, "web")
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "signature")
 	assert.Nil(t, resp)
 }
