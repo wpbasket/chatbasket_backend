@@ -12,6 +12,44 @@ import (
 	"github.com/google/uuid"
 )
 
+const addQRLoginBrowserCandidate = `-- name: AddQRLoginBrowserCandidate :one
+UPDATE qr_login_requests
+SET browser_candidates = browser_candidates || jsonb_build_array($2::jsonb), updated_at = NOW()
+WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
+RETURNING id
+`
+
+type AddQRLoginBrowserCandidateParams struct {
+	ID      uuid.UUID `json:"id"`
+	Column2 []byte    `json:"column_2"`
+}
+
+func (q *Queries) AddQRLoginBrowserCandidate(ctx context.Context, arg AddQRLoginBrowserCandidateParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, addQRLoginBrowserCandidate, arg.ID, arg.Column2)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const addQRLoginMobileCandidate = `-- name: AddQRLoginMobileCandidate :one
+UPDATE qr_login_requests
+SET mobile_candidates = mobile_candidates || jsonb_build_array($2::jsonb), updated_at = NOW()
+WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
+RETURNING id
+`
+
+type AddQRLoginMobileCandidateParams struct {
+	ID      uuid.UUID `json:"id"`
+	Column2 []byte    `json:"column_2"`
+}
+
+func (q *Queries) AddQRLoginMobileCandidate(ctx context.Context, arg AddQRLoginMobileCandidateParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, addQRLoginMobileCandidate, arg.ID, arg.Column2)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const approveQRLogin = `-- name: ApproveQRLogin :one
 UPDATE qr_login_requests
 SET status = 'APPROVED', auth_user_id = $2, updated_at = NOW()
@@ -76,18 +114,20 @@ func (q *Queries) ExchangeQRLogin(ctx context.Context, id uuid.UUID) (*uuid.UUID
 }
 
 const getQRLoginRequest = `-- name: GetQRLoginRequest :one
-SELECT id, auth_user_id, signal_offer, signal_answer, status, expires_at
+SELECT id, auth_user_id, signal_offer, signal_answer, browser_candidates, mobile_candidates, status, expires_at
 FROM qr_login_requests
 WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
 `
 
 type GetQRLoginRequestRow struct {
-	ID           uuid.UUID  `json:"id"`
-	AuthUserID   *uuid.UUID `json:"auth_user_id"`
-	SignalOffer  *string    `json:"signal_offer"`
-	SignalAnswer *string    `json:"signal_answer"`
-	Status       string     `json:"status"`
-	ExpiresAt    time.Time  `json:"expires_at"`
+	ID                uuid.UUID  `json:"id"`
+	AuthUserID        *uuid.UUID `json:"auth_user_id"`
+	SignalOffer       *string    `json:"signal_offer"`
+	SignalAnswer      *string    `json:"signal_answer"`
+	BrowserCandidates []byte     `json:"browser_candidates"`
+	MobileCandidates  []byte     `json:"mobile_candidates"`
+	Status            string     `json:"status"`
+	ExpiresAt         time.Time  `json:"expires_at"`
 }
 
 func (q *Queries) GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLoginRequestRow, error) {
@@ -98,6 +138,8 @@ func (q *Queries) GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLog
 		&i.AuthUserID,
 		&i.SignalOffer,
 		&i.SignalAnswer,
+		&i.BrowserCandidates,
+		&i.MobileCandidates,
 		&i.Status,
 		&i.ExpiresAt,
 	)

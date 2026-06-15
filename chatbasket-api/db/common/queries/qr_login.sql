@@ -6,7 +6,7 @@ INSERT INTO qr_login_requests (
 ) RETURNING id;
 
 -- name: GetQRLoginRequest :one
-SELECT id, auth_user_id, signal_offer, signal_answer, status, expires_at
+SELECT id, auth_user_id, signal_offer, signal_answer, browser_candidates, mobile_candidates, status, expires_at
 FROM qr_login_requests
 WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW();
 
@@ -19,6 +19,18 @@ RETURNING id;
 -- name: UpdateQRLoginSignalAnswer :one
 UPDATE qr_login_requests
 SET signal_answer = $2, updated_at = NOW()
+WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
+RETURNING id;
+
+-- name: AddQRLoginBrowserCandidate :one
+UPDATE qr_login_requests
+SET browser_candidates = browser_candidates || jsonb_build_array($2::jsonb), updated_at = NOW()
+WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
+RETURNING id;
+
+-- name: AddQRLoginMobileCandidate :one
+UPDATE qr_login_requests
+SET mobile_candidates = mobile_candidates || jsonb_build_array($2::jsonb), updated_at = NOW()
 WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
 RETURNING id;
 

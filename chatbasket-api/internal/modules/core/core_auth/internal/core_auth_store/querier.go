@@ -11,6 +11,8 @@ import (
 )
 
 type Querier interface {
+	AddQRLoginBrowserCandidate(ctx context.Context, arg AddQRLoginBrowserCandidateParams) (uuid.UUID, error)
+	AddQRLoginMobileCandidate(ctx context.Context, arg AddQRLoginMobileCandidateParams) (uuid.UUID, error)
 	ApproveQRLogin(ctx context.Context, arg ApproveQRLoginParams) (uuid.UUID, error)
 	CheckEmailExists(ctx context.Context, email string) (bool, error)
 	// Checks if the user already has a central device

@@ -155,10 +155,10 @@ func TestQRSignal_BrowserGetAnswer_Success(t *testing.T) {
 	id := uuid.New()
 	sdpAns := "mock-sdp-answer"
 
-	mock.ExpectQuery("SELECT id, auth_user_id, signal_offer, signal_answer, status, expires_at FROM qr_login_requests").
+	mock.ExpectQuery("SELECT id, auth_user_id, signal_offer, signal_answer, browser_candidates, mobile_candidates, status, expires_at FROM qr_login_requests").
 		WithArgs(id).
-		WillReturnRows(pgxmock.NewRows([]string{"id", "auth_user_id", "signal_offer", "signal_answer", "status", "expires_at"}).
-			AddRow(id, nil, nil, &sdpAns, "PENDING", time.Now().Add(time.Minute)))
+		WillReturnRows(pgxmock.NewRows([]string{"id", "auth_user_id", "signal_offer", "signal_answer", "browser_candidates", "mobile_candidates", "status", "expires_at"}).
+			AddRow(id, nil, nil, &sdpAns, []byte(`[]`), []byte(`["{\"candidate\":\"mobile\"}"]`), "PENDING", time.Now().Add(time.Minute)))
 
 	resp, err := svc.QRSignal(context.Background(), &QRSignalPayload{
 		QRToken: id.String(),
@@ -169,6 +169,32 @@ func TestQRSignal_BrowserGetAnswer_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", resp.Status)
 	assert.Equal(t, sdpAns, resp.SDP)
+	assert.Equal(t, []string{"{\"candidate\":\"mobile\"}"}, resp.Candidates)
+}
+
+func TestQRSignal_BrowserCandidate_Success(t *testing.T) {
+	svc, mock := setupTestAuthServiceQR(t)
+	defer mock.Close()
+
+	id := uuid.New()
+	candidate := `{"candidate":"browser"}`
+
+	mock.ExpectQuery("UPDATE qr_login_requests").
+		WithArgs(id, []byte(candidate)).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(id))
+
+	mock.ExpectExec("SELECT pg_notify").
+		WithArgs(fmt.Sprintf("%s_signal", id.String())).
+		WillReturnResult(pgxmock.NewResult("SELECT", 1))
+
+	resp, err := svc.QRSignal(context.Background(), &QRSignalPayload{
+		QRToken:   id.String(),
+		Role:      "browser",
+		Candidate: candidate,
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "CANDIDATE_SAVED", resp.Status)
 }
 
 func TestQRSignal_MobileAnswer_Success(t *testing.T) {
@@ -228,10 +254,10 @@ func TestQRSignal_MobileGetOffer_Success(t *testing.T) {
 	id := uuid.New()
 	sdpOff := "mock-sdp-offer"
 
-	mock.ExpectQuery("SELECT id, auth_user_id, signal_offer, signal_answer, status, expires_at FROM qr_login_requests").
+	mock.ExpectQuery("SELECT id, auth_user_id, signal_offer, signal_answer, browser_candidates, mobile_candidates, status, expires_at FROM qr_login_requests").
 		WithArgs(id).
-		WillReturnRows(pgxmock.NewRows([]string{"id", "auth_user_id", "signal_offer", "signal_answer", "status", "expires_at"}).
-			AddRow(id, nil, &sdpOff, nil, "PENDING", time.Now().Add(time.Minute)))
+		WillReturnRows(pgxmock.NewRows([]string{"id", "auth_user_id", "signal_offer", "signal_answer", "browser_candidates", "mobile_candidates", "status", "expires_at"}).
+			AddRow(id, nil, &sdpOff, nil, []byte(`["{\"candidate\":\"browser\"}"]`), []byte(`[]`), "PENDING", time.Now().Add(time.Minute)))
 
 	resp, err := svc.QRSignal(context.Background(), &QRSignalPayload{
 		QRToken: id.String(),
@@ -242,6 +268,32 @@ func TestQRSignal_MobileGetOffer_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", resp.Status)
 	assert.Equal(t, sdpOff, resp.SDP)
+	assert.Equal(t, []string{"{\"candidate\":\"browser\"}"}, resp.Candidates)
+}
+
+func TestQRSignal_MobileCandidate_Success(t *testing.T) {
+	svc, mock := setupTestAuthServiceQR(t)
+	defer mock.Close()
+
+	id := uuid.New()
+	candidate := `{"candidate":"mobile"}`
+
+	mock.ExpectQuery("UPDATE qr_login_requests").
+		WithArgs(id, []byte(candidate)).
+		WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(id))
+
+	mock.ExpectExec("SELECT pg_notify").
+		WithArgs(fmt.Sprintf("%s_signal", id.String())).
+		WillReturnResult(pgxmock.NewResult("SELECT", 1))
+
+	resp, err := svc.QRSignal(context.Background(), &QRSignalPayload{
+		QRToken:   id.String(),
+		Role:      "mobile",
+		Candidate: candidate,
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "CANDIDATE_SAVED", resp.Status)
 }
 
 func TestQRSignal_GetSignal_NotPending(t *testing.T) {
@@ -250,7 +302,7 @@ func TestQRSignal_GetSignal_NotPending(t *testing.T) {
 
 	id := uuid.New()
 
-	mock.ExpectQuery("SELECT id, auth_user_id, signal_offer, signal_answer, status, expires_at FROM qr_login_requests").
+	mock.ExpectQuery("SELECT id, auth_user_id, signal_offer, signal_answer, browser_candidates, mobile_candidates, status, expires_at FROM qr_login_requests").
 		WithArgs(id).
 		WillReturnError(pgx.ErrNoRows)
 

@@ -4,6 +4,7 @@ import (
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"chatbasket-api/internal/platform/kit"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,15 +22,17 @@ type QRInitiatePayload struct {
 
 // QRSignalPayload represents SDP exchanges for the WebRTC connection.
 type QRSignalPayload struct {
-	QRToken string `json:"qr_token" validate:"required,uuid"`
-	Role    string `json:"role" validate:"required,oneof=browser mobile"`
-	SDP     string `json:"sdp"`
+	QRToken   string `json:"qr_token" validate:"required,uuid"`
+	Role      string `json:"role" validate:"required,oneof=browser mobile"`
+	SDP       string `json:"sdp"`
+	Candidate string `json:"candidate"`
 }
 
 // QRSignalResponse is returned when asking for a signal.
 type QRSignalResponse struct {
-	SDP    string `json:"sdp,omitempty"`
-	Status string `json:"status"`
+	SDP        string   `json:"sdp,omitempty"`
+	Candidates []string `json:"candidates,omitempty"`
+	Status     string   `json:"status"`
 }
 
 // QRApproveResponse indicates approval status.
@@ -42,6 +45,17 @@ type QRCallbackResponse struct {
 	AuthUser      *core_auth_store.AuthUser
 	SessionID     string
 	SessionExpiry string
+}
+
+func parseQRCandidates(raw []byte) ([]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var candidates []string
+	if err := json.Unmarshal(raw, &candidates); err != nil {
+		return nil, err
+	}
+	return candidates, nil
 }
 
 // QRInitiate generates a new QR token and saves it in the database.
@@ -77,6 +91,25 @@ func (s *AuthService) QRSignal(ctx context.Context, payload *QRSignalPayload) (*
 	}
 
 	if payload.Role == "browser" {
+		if payload.Candidate != "" {
+			if !json.Valid([]byte(payload.Candidate)) {
+				return nil, kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid ICE candidate")
+			}
+			_, err := s.PostgresQuerier.AddQRLoginBrowserCandidate(ctx, core_auth_store.AddQRLoginBrowserCandidateParams{
+				ID:      token,
+				Column2: []byte(payload.Candidate),
+			})
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return nil, kit.NewError(http.StatusNotFound, "not_found", "QR request expired or not found")
+				}
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update ICE candidate")
+			}
+			if err := s.PostgresQuerier.NotifyQREvent(ctx, fmt.Sprintf("%s_signal", token.String())); err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to notify QR event")
+			}
+			return &QRSignalResponse{Status: "CANDIDATE_SAVED"}, nil
+		}
 		if payload.SDP != "" {
 			// Browser setting offer
 			_, err := s.PostgresQuerier.UpdateQRLoginSignalOffer(ctx, core_auth_store.UpdateQRLoginSignalOfferParams{
@@ -109,9 +142,32 @@ func (s *AuthService) QRSignal(ctx context.Context, payload *QRSignalPayload) (*
 			if req.SignalAnswer != nil {
 				ans = *req.SignalAnswer
 			}
-			return &QRSignalResponse{SDP: ans, Status: "OK"}, nil
+			candidates, err := parseQRCandidates(req.MobileCandidates)
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to retrieve ICE candidates")
+			}
+			return &QRSignalResponse{SDP: ans, Candidates: candidates, Status: "OK"}, nil
 		}
 	} else if payload.Role == "mobile" {
+		if payload.Candidate != "" {
+			if !json.Valid([]byte(payload.Candidate)) {
+				return nil, kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid ICE candidate")
+			}
+			_, err := s.PostgresQuerier.AddQRLoginMobileCandidate(ctx, core_auth_store.AddQRLoginMobileCandidateParams{
+				ID:      token,
+				Column2: []byte(payload.Candidate),
+			})
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return nil, kit.NewError(http.StatusNotFound, "not_found", "QR request expired or not found")
+				}
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update ICE candidate")
+			}
+			if err := s.PostgresQuerier.NotifyQREvent(ctx, fmt.Sprintf("%s_signal", token.String())); err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to notify QR event")
+			}
+			return &QRSignalResponse{Status: "CANDIDATE_SAVED"}, nil
+		}
 		if payload.SDP != "" {
 			// Mobile setting answer
 			_, err := s.PostgresQuerier.UpdateQRLoginSignalAnswer(ctx, core_auth_store.UpdateQRLoginSignalAnswerParams{
@@ -144,7 +200,11 @@ func (s *AuthService) QRSignal(ctx context.Context, payload *QRSignalPayload) (*
 			if req.SignalOffer != nil {
 				offer = *req.SignalOffer
 			}
-			return &QRSignalResponse{SDP: offer, Status: "OK"}, nil
+			candidates, err := parseQRCandidates(req.BrowserCandidates)
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to retrieve ICE candidates")
+			}
+			return &QRSignalResponse{SDP: offer, Candidates: candidates, Status: "OK"}, nil
 		}
 	}
 
