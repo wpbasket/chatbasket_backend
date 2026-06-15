@@ -116,7 +116,7 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 
 	expiry, err := time.Parse(time.RFC3339, user.SessionExpiry)
 	if err != nil {
-		return kit.NewError(http.StatusInternalServerError, "internal_server_error", "Invalid expiry format")
+		return ErrInvalidExpiryFormat
 	}
 
 	origin := c.Request().Header.Get("Origin")
@@ -143,7 +143,7 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 		Name:     "userId",
 		Value:    user.AuthUser.ID.String(),
 		Path:     "/",
-		HttpOnly: false,
+		HttpOnly: true,
 		Secure:   cookieSecure,
 		Domain:   cookieDomain,
 		SameSite: http.SameSiteLaxMode,
