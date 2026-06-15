@@ -1,6 +1,8 @@
 package core_auth
 
 import (
+	"context"
+	"time"
 	"chatbasket-api/internal/platform/middleware"
 	"chatbasket-api/internal/platform/websocket"
 
@@ -9,10 +11,34 @@ import (
 
 // Register initializes the Auth module dependencies and registers its routes.
 func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub) {
-	handler := newAuthHandler(authService, hub)
+	qrHub := NewQRHub()
+	// Start Postgres listener for QR WebRTC syncing
+	go StartPostgresListener(context.Background(), authService.Pool, qrHub)
+
+	// Start Cleanup Worker
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for range ticker.C {
+			_ = authService.CleanupQRLoginRequests(context.Background())
+		}
+	}()
+
+	handler := newAuthHandler(authService, hub, qrHub)
 
 	// Auth Routes (shared across domains)
 	auth := group.Group("/auth")
+	
+	// QR Login Routes
+	qr := auth.Group("/qr")
+	qr.POST("/initiate", handler.QRInitiate)
+	qr.GET("/ws", handler.QRWebSocket)
+	qr.POST("/signal", handler.QRSignal)
+	qr.POST("/callback", handler.QRCallback)
+	
+	// Mobile (requires auth)
+	qrAuth := qr.Group("")
+	qrAuth.Use(middleware.AuthSessionMiddleware(authService, true, hub))
+	qrAuth.POST("/approve", handler.QRApprove)
 	auth.POST("/signup", handler.Signup)
 	auth.POST("/signup-verification", handler.AccountVerification)
 	auth.POST("/login", handler.Login)

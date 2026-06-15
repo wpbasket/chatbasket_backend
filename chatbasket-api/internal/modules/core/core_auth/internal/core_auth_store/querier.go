@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ApproveQRLogin(ctx context.Context, arg ApproveQRLoginParams) (uuid.UUID, error)
 	CheckEmailExists(ctx context.Context, email string) (bool, error)
 	// Checks if the user already has a central device
 	CheckHasCentralDevice(ctx context.Context, authUserID uuid.UUID) (bool, error)
@@ -19,7 +20,9 @@ type Querier interface {
 	// ======================================
 	// Checks if a session is valid for a specific user and not expired
 	CheckSessionIsValid(ctx context.Context, arg CheckSessionIsValidParams) (bool, error)
+	CleanupExpiredQRLoginRequests(ctx context.Context) error
 	CreateAuthUser(ctx context.Context, arg CreateAuthUserParams) (AuthUser, error)
+	CreateQRLoginRequest(ctx context.Context, arg CreateQRLoginRequestParams) (uuid.UUID, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateVerificationCode(ctx context.Context, arg CreateVerificationCodeParams) (VerificationCode, error)
 	CreateVerificationCodeWithUpdateID(ctx context.Context, arg CreateVerificationCodeWithUpdateIDParams) (VerificationCode, error)
@@ -30,6 +33,7 @@ type Querier interface {
 	DeleteSession(ctx context.Context, arg DeleteSessionParams) error
 	DeleteSessionByToken(ctx context.Context, arg DeleteSessionByTokenParams) error
 	DeleteVerificationCode(ctx context.Context, id uuid.UUID) error
+	ExchangeQRLogin(ctx context.Context, id uuid.UUID) (*uuid.UUID, error)
 	// ======================================
 	// Rate Limiter Queries
 	// ======================================
@@ -39,11 +43,13 @@ type Querier interface {
 	GetAuthUserByID(ctx context.Context, id uuid.UUID) (AuthUser, error)
 	// Returns the details of the central session for a user
 	GetCentralSession(ctx context.Context, authUserID uuid.UUID) (Session, error)
+	GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLoginRequestRow, error)
 	GetSessionByToken(ctx context.Context, arg GetSessionByTokenParams) (Session, error)
 	// Returns user's primary device session (for Phase 6 messaging eligibility)
 	GetUserPrimarySession(ctx context.Context, authUserID uuid.UUID) (Session, error)
 	// Get the verification code by User ID (PK) and Type
 	GetVerificationCode(ctx context.Context, arg GetVerificationCodeParams) (VerificationCode, error)
+	NotifyQREvent(ctx context.Context, dollar_1 string) error
 	// Sets is_central = false for ALL sessions of this user (Upgrade preparation)
 	ResetCentralSessions(ctx context.Context, authUserID uuid.UUID) error
 	ResetVerifyErrors(ctx context.Context, authUserID uuid.UUID) error
@@ -56,6 +62,8 @@ type Querier interface {
 	UpdateAuthUserPassword(ctx context.Context, arg UpdateAuthUserPasswordParams) error
 	// Updates an existing unverified user during signup to reuse the ID and preserve rate limits
 	UpdateAuthUserSignup(ctx context.Context, arg UpdateAuthUserSignupParams) error
+	UpdateQRLoginSignalAnswer(ctx context.Context, arg UpdateQRLoginSignalAnswerParams) (uuid.UUID, error)
+	UpdateQRLoginSignalOffer(ctx context.Context, arg UpdateQRLoginSignalOfferParams) (uuid.UUID, error)
 	UpdateSessionDeviceToken(ctx context.Context, arg UpdateSessionDeviceTokenParams) error
 	UpsertAuthRateLimiterSend(ctx context.Context, arg UpsertAuthRateLimiterSendParams) (AuthRateLimiter, error)
 	UpsertAuthRateLimiterVerify(ctx context.Context, arg UpsertAuthRateLimiterVerifyParams) (AuthRateLimiter, error)

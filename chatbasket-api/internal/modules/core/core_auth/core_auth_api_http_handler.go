@@ -14,12 +14,14 @@ import (
 type authHandler struct {
 	Service *AuthService
 	hub     *websocket.WSHub
+	qrHub   *QRHub
 }
 
-func newAuthHandler(authService *AuthService, hub *websocket.WSHub) *authHandler {
+func newAuthHandler(authService *AuthService, hub *websocket.WSHub, qrHub *QRHub) *authHandler {
 	return &authHandler{
 		Service: authService,
 		hub:     hub,
+		qrHub:   qrHub,
 	}
 }
 

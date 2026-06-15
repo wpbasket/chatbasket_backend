@@ -32,6 +32,17 @@ type AuthUser struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+type QrLoginRequest struct {
+	ID           uuid.UUID  `json:"id"`
+	AuthUserID   *uuid.UUID `json:"auth_user_id"`
+	SignalOffer  *string    `json:"signal_offer"`
+	SignalAnswer *string    `json:"signal_answer"`
+	Status       string     `json:"status"`
+	ExpiresAt    time.Time  `json:"expires_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
 type Session struct {
 	ID          uuid.UUID `json:"id"`
 	AuthUserID  uuid.UUID `json:"auth_user_id"`

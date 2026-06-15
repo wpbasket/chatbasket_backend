@@ -18,6 +18,7 @@ type AuthService struct {
 	GlobalService   *services.GlobalService
 	PostgresQuerier core_auth_store.Querier  // For regular queries (interface)
 	PostgresQueries *core_auth_store.Queries // For transactions (concrete type with WithTx)
+	Pool            *pgxpool.Pool            // For raw DB execution (like NOTIFY)
 	AuthSecret      []byte
 }
 
@@ -28,6 +29,7 @@ func NewAuthService(globalService *services.GlobalService, pool *pgxpool.Pool, a
 		GlobalService:   globalService,
 		PostgresQuerier: store,
 		PostgresQueries: store,
+		Pool:            pool,
 		AuthSecret:      authSecret,
 	}
 }
