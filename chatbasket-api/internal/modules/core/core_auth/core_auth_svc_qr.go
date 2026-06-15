@@ -51,9 +51,16 @@ func parseQRCandidates(raw []byte) ([]string, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
-	var candidates []string
-	if err := json.Unmarshal(raw, &candidates); err != nil {
+	var rawCandidates []json.RawMessage
+	if err := json.Unmarshal(raw, &rawCandidates); err != nil {
 		return nil, err
+	}
+	candidates := make([]string, 0, len(rawCandidates))
+	for _, candidate := range rawCandidates {
+		if len(candidate) == 0 || string(candidate) == "null" {
+			continue
+		}
+		candidates = append(candidates, string(candidate))
 	}
 	return candidates, nil
 }

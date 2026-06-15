@@ -158,7 +158,7 @@ func TestQRSignal_BrowserGetAnswer_Success(t *testing.T) {
 	mock.ExpectQuery("SELECT id, auth_user_id, signal_offer, signal_answer, browser_candidates, mobile_candidates, status, expires_at FROM qr_login_requests").
 		WithArgs(id).
 		WillReturnRows(pgxmock.NewRows([]string{"id", "auth_user_id", "signal_offer", "signal_answer", "browser_candidates", "mobile_candidates", "status", "expires_at"}).
-			AddRow(id, nil, nil, &sdpAns, []byte(`[]`), []byte(`["{\"candidate\":\"mobile\"}"]`), "PENDING", time.Now().Add(time.Minute)))
+			AddRow(id, nil, nil, &sdpAns, []byte(`[]`), []byte(`[{"candidate":"mobile"}]`), "PENDING", time.Now().Add(time.Minute)))
 
 	resp, err := svc.QRSignal(context.Background(), &QRSignalPayload{
 		QRToken: id.String(),
@@ -257,7 +257,7 @@ func TestQRSignal_MobileGetOffer_Success(t *testing.T) {
 	mock.ExpectQuery("SELECT id, auth_user_id, signal_offer, signal_answer, browser_candidates, mobile_candidates, status, expires_at FROM qr_login_requests").
 		WithArgs(id).
 		WillReturnRows(pgxmock.NewRows([]string{"id", "auth_user_id", "signal_offer", "signal_answer", "browser_candidates", "mobile_candidates", "status", "expires_at"}).
-			AddRow(id, nil, &sdpOff, nil, []byte(`["{\"candidate\":\"browser\"}"]`), []byte(`[]`), "PENDING", time.Now().Add(time.Minute)))
+			AddRow(id, nil, &sdpOff, nil, []byte(`[{"candidate":"browser"}]`), []byte(`[]`), "PENDING", time.Now().Add(time.Minute)))
 
 	resp, err := svc.QRSignal(context.Background(), &QRSignalPayload{
 		QRToken: id.String(),
