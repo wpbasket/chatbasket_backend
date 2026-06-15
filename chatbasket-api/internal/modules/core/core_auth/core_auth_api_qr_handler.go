@@ -99,7 +99,7 @@ func (h *authHandler) QRApprove(c *echo.Context) error {
 	}
 
 	// Extract authenticated user
-	userIDVal := c.Get("userId")
+	userIDVal := c.Get("uuidUserId")
 	userID, ok := userIDVal.(uuid.UUID)
 	if !ok {
 		return kit.NewError(http.StatusUnauthorized, "unauthorized", "User ID not found in context")
