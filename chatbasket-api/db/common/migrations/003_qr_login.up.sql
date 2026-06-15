@@ -7,10 +7,6 @@
 CREATE TABLE IF NOT EXISTS qr_login_requests (
     id                  UUID            PRIMARY KEY,  -- UUIDv7 shown in QR code
     auth_user_id        UUID            REFERENCES auth_users (id) ON DELETE CASCADE,  -- NULL while PENDING, set on approve
-    signal_offer        TEXT,           -- Browser's SDP offer (JSON text)
-    signal_answer       TEXT,           -- Mobile's SDP answer (JSON text)
-    browser_candidates  JSONB           NOT NULL DEFAULT '[]'::jsonb, -- Browser ICE candidates
-    mobile_candidates   JSONB           NOT NULL DEFAULT '[]'::jsonb, -- Mobile ICE candidates
     status              TEXT            NOT NULL DEFAULT 'PENDING',
     CONSTRAINT qr_login_requests_status_check CHECK (
         status IN ('PENDING', 'APPROVED', 'EXCHANGED')
@@ -19,13 +15,6 @@ CREATE TABLE IF NOT EXISTS qr_login_requests (
     created_at          TIMESTAMPTZ     NOT NULL,
     updated_at          TIMESTAMPTZ     NOT NULL
 );
-
--- Ensure existing QR tables get ICE candidate columns when migration is rerun
-ALTER TABLE qr_login_requests
-ADD COLUMN IF NOT EXISTS browser_candidates JSONB NOT NULL DEFAULT '[]'::jsonb;
-
-ALTER TABLE qr_login_requests
-ADD COLUMN IF NOT EXISTS mobile_candidates JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Drop existing trigger if already present
 DROP TRIGGER IF EXISTS qr_login_requests_timestamps_trigger ON qr_login_requests;

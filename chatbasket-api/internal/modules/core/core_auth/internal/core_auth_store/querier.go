@@ -11,8 +11,6 @@ import (
 )
 
 type Querier interface {
-	AddQRLoginBrowserCandidate(ctx context.Context, arg AddQRLoginBrowserCandidateParams) (uuid.UUID, error)
-	AddQRLoginMobileCandidate(ctx context.Context, arg AddQRLoginMobileCandidateParams) (uuid.UUID, error)
 	ApproveQRLogin(ctx context.Context, arg ApproveQRLoginParams) (uuid.UUID, error)
 	CheckEmailExists(ctx context.Context, email string) (bool, error)
 	// Checks if the user already has a central device
@@ -64,8 +62,6 @@ type Querier interface {
 	UpdateAuthUserPassword(ctx context.Context, arg UpdateAuthUserPasswordParams) error
 	// Updates an existing unverified user during signup to reuse the ID and preserve rate limits
 	UpdateAuthUserSignup(ctx context.Context, arg UpdateAuthUserSignupParams) error
-	UpdateQRLoginSignalAnswer(ctx context.Context, arg UpdateQRLoginSignalAnswerParams) (uuid.UUID, error)
-	UpdateQRLoginSignalOffer(ctx context.Context, arg UpdateQRLoginSignalOfferParams) (uuid.UUID, error)
 	UpdateSessionDeviceToken(ctx context.Context, arg UpdateSessionDeviceTokenParams) error
 	UpsertAuthRateLimiterSend(ctx context.Context, arg UpsertAuthRateLimiterSendParams) (AuthRateLimiter, error)
 	UpsertAuthRateLimiterVerify(ctx context.Context, arg UpsertAuthRateLimiterVerifyParams) (AuthRateLimiter, error)

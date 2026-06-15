@@ -32,7 +32,6 @@ func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub)
 	qr := auth.Group("/qr")
 	qr.POST("/initiate", handler.QRInitiate)
 	qr.GET("/ws", handler.QRWebSocket)
-	qr.POST("/signal", handler.QRSignal)
 	qr.POST("/callback", handler.QRCallback)
 	
 	// Mobile (requires auth)

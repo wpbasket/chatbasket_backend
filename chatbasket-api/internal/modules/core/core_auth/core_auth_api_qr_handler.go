@@ -62,27 +62,7 @@ func (h *authHandler) QRWebSocket(c *echo.Context) error {
 	return nil
 }
 
-// QRSignal accepts the POST request for SDP signaling and executes a NOTIFY.
-func (h *authHandler) QRSignal(c *echo.Context) error {
-	var payload QRSignalPayload
-	if err := c.Bind(&payload); err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid JSON payload")
-	}
 
-	if _, err := uuid.Parse(payload.QRToken); err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid QR Token format")
-	}
-	if payload.Role != "browser" && payload.Role != "mobile" {
-		return kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid role")
-	}
-
-	resp, err := h.Service.QRSignal(c.Request().Context(), &payload)
-	if err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, resp)
-}
 
 // QRApprove links the user ID from the active session to the QR token.
 func (h *authHandler) QRApprove(c *echo.Context) error {

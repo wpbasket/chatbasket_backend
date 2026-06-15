@@ -12,44 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const addQRLoginBrowserCandidate = `-- name: AddQRLoginBrowserCandidate :one
-UPDATE qr_login_requests
-SET browser_candidates = browser_candidates || jsonb_build_array($2::jsonb), updated_at = NOW()
-WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
-RETURNING id
-`
-
-type AddQRLoginBrowserCandidateParams struct {
-	ID      uuid.UUID `json:"id"`
-	Column2 []byte    `json:"column_2"`
-}
-
-func (q *Queries) AddQRLoginBrowserCandidate(ctx context.Context, arg AddQRLoginBrowserCandidateParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, addQRLoginBrowserCandidate, arg.ID, arg.Column2)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
-const addQRLoginMobileCandidate = `-- name: AddQRLoginMobileCandidate :one
-UPDATE qr_login_requests
-SET mobile_candidates = mobile_candidates || jsonb_build_array($2::jsonb), updated_at = NOW()
-WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
-RETURNING id
-`
-
-type AddQRLoginMobileCandidateParams struct {
-	ID      uuid.UUID `json:"id"`
-	Column2 []byte    `json:"column_2"`
-}
-
-func (q *Queries) AddQRLoginMobileCandidate(ctx context.Context, arg AddQRLoginMobileCandidateParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, addQRLoginMobileCandidate, arg.ID, arg.Column2)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
 const approveQRLogin = `-- name: ApproveQRLogin :one
 UPDATE qr_login_requests
 SET status = 'APPROVED', auth_user_id = $2, updated_at = NOW()
@@ -114,20 +76,16 @@ func (q *Queries) ExchangeQRLogin(ctx context.Context, id uuid.UUID) (*uuid.UUID
 }
 
 const getQRLoginRequest = `-- name: GetQRLoginRequest :one
-SELECT id, auth_user_id, signal_offer, signal_answer, browser_candidates, mobile_candidates, status, expires_at
+SELECT id, auth_user_id, status, expires_at
 FROM qr_login_requests
 WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
 `
 
 type GetQRLoginRequestRow struct {
-	ID                uuid.UUID  `json:"id"`
-	AuthUserID        *uuid.UUID `json:"auth_user_id"`
-	SignalOffer       *string    `json:"signal_offer"`
-	SignalAnswer      *string    `json:"signal_answer"`
-	BrowserCandidates []byte     `json:"browser_candidates"`
-	MobileCandidates  []byte     `json:"mobile_candidates"`
-	Status            string     `json:"status"`
-	ExpiresAt         time.Time  `json:"expires_at"`
+	ID         uuid.UUID  `json:"id"`
+	AuthUserID *uuid.UUID `json:"auth_user_id"`
+	Status     string     `json:"status"`
+	ExpiresAt  time.Time  `json:"expires_at"`
 }
 
 func (q *Queries) GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLoginRequestRow, error) {
@@ -136,10 +94,6 @@ func (q *Queries) GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLog
 	err := row.Scan(
 		&i.ID,
 		&i.AuthUserID,
-		&i.SignalOffer,
-		&i.SignalAnswer,
-		&i.BrowserCandidates,
-		&i.MobileCandidates,
 		&i.Status,
 		&i.ExpiresAt,
 	)
@@ -153,42 +107,4 @@ SELECT pg_notify('qr_login_events', $1::text)
 func (q *Queries) NotifyQREvent(ctx context.Context, dollar_1 string) error {
 	_, err := q.db.Exec(ctx, notifyQREvent, dollar_1)
 	return err
-}
-
-const updateQRLoginSignalAnswer = `-- name: UpdateQRLoginSignalAnswer :one
-UPDATE qr_login_requests
-SET signal_answer = $2, updated_at = NOW()
-WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
-RETURNING id
-`
-
-type UpdateQRLoginSignalAnswerParams struct {
-	ID           uuid.UUID `json:"id"`
-	SignalAnswer *string   `json:"signal_answer"`
-}
-
-func (q *Queries) UpdateQRLoginSignalAnswer(ctx context.Context, arg UpdateQRLoginSignalAnswerParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, updateQRLoginSignalAnswer, arg.ID, arg.SignalAnswer)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
-const updateQRLoginSignalOffer = `-- name: UpdateQRLoginSignalOffer :one
-UPDATE qr_login_requests
-SET signal_offer = $2, updated_at = NOW()
-WHERE id = $1 AND status = 'PENDING' AND expires_at > NOW()
-RETURNING id
-`
-
-type UpdateQRLoginSignalOfferParams struct {
-	ID          uuid.UUID `json:"id"`
-	SignalOffer *string   `json:"signal_offer"`
-}
-
-func (q *Queries) UpdateQRLoginSignalOffer(ctx context.Context, arg UpdateQRLoginSignalOfferParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, updateQRLoginSignalOffer, arg.ID, arg.SignalOffer)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
 }
