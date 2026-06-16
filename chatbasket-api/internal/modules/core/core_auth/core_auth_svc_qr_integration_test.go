@@ -77,7 +77,7 @@ func TestQRLoginFlow_Integration(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, cbResp)
 	assert.NotEmpty(t, cbResp.SessionID)
-	assert.Equal(t, testUserID, cbResp.AuthUser.ID)
+	assert.Equal(t, testUserID.String(), cbResp.UserId)
 
 	// Verify DB status is EXCHANGED
 	var finalStatus string
@@ -126,8 +126,8 @@ func TestQRLoginFlow_Concurrent_Integration(t *testing.T) {
 			if err != nil { errChan <- err; return }
 
 			// CRITICAL: Ensure this specific browser received the exact User ID of its paired mobile app!
-			if cbResp.AuthUser.ID != testUserID {
-				errChan <- fmt.Errorf("CROSSTALK DETECTED: expected user %s but got %s", testUserID, cbResp.AuthUser.ID)
+			if cbResp.UserId != testUserID.String() {
+				errChan <- fmt.Errorf("CROSSTALK DETECTED: expected user %s but got %s", testUserID.String(), cbResp.UserId)
 				return
 			}
 

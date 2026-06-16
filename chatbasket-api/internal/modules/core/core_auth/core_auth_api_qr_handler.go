@@ -141,7 +141,7 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 
 	userCookie := &http.Cookie{
 		Name:     "userId",
-		Value:    user.AuthUser.ID.String(),
+		Value:    user.UserId,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   cookieSecure,
@@ -153,9 +153,16 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 	c.SetCookie(sessionCookie)
 	c.SetCookie(userCookie)
 
-	// Clean out sensitive data
-	user.AuthUser.PasswordHash = ""
-	user.SessionID = ""
+	// Return SessionResponse with empty sensitive fields for web
+	webResponse := &SessionResponse{
+		UserId:            "",
+		Name:              user.Name,
+		Email:             user.Email,
+		SessionID:         "",
+		SessionExpiry:     user.SessionExpiry,
+		IsPrimary:         user.IsPrimary,
+		PrimaryDeviceName: user.PrimaryDeviceName,
+	}
 
-	return c.JSON(http.StatusOK, user)
+	return c.JSON(http.StatusOK, webResponse)
 }

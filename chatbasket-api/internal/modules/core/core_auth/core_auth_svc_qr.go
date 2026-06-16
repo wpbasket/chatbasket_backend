@@ -25,13 +25,6 @@ type QRApproveResponse struct {
 	Status bool `json:"status"`
 }
 
-// QRCallbackResponse returns the user details and session cookie after successful login.
-type QRCallbackResponse struct {
-	AuthUser      *core_auth_store.AuthUser
-	SessionID     string
-	SessionExpiry string
-}
-
 // QRInitiate generates a new QR token, saves it in the database, and returns the signed token.
 func (s *AuthService) QRInitiate(ctx context.Context) (*QRInitiatePayload, error) {
 	qrToken, err := uuid.NewV7()
@@ -117,7 +110,7 @@ func (s *AuthService) QRApprove(ctx context.Context, userID uuid.UUID, qrTokenSt
 }
 
 // QRCallback verifies the token signature and exchanges the APPROVED token for a real session.
-func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platform string) (*QRCallbackResponse, error) {
+func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platform string) (*SessionResponse, error) {
 	token, err := s.ParseAndVerifyQRToken(qrTokenStr)
 	if err != nil {
 		return nil, err
@@ -147,10 +140,14 @@ func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platfor
 		return nil, err
 	}
 
-	return &QRCallbackResponse{
-		AuthUser:      &user,
-		SessionID:     session.Token,
-		SessionExpiry: session.ExpiresAt,
+	return &SessionResponse{
+		UserId:            user.ID.String(),
+		Name:              user.Name,
+		Email:             user.Email,
+		SessionID:         session.Token,
+		SessionExpiry:     session.ExpiresAt,
+		IsPrimary:         session.IsPrimary,
+		PrimaryDeviceName: session.PrimaryDeviceName,
 	}, nil
 }
 
