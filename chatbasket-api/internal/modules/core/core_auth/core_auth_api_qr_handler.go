@@ -74,10 +74,6 @@ func (h *authHandler) QRApprove(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid JSON payload")
 	}
 
-	if _, err := uuid.Parse(payload.QRToken); err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid QR Token format")
-	}
-
 	// Extract authenticated user
 	userIDVal := c.Get("uuidUserId")
 	userID, ok := userIDVal.(uuid.UUID)
@@ -101,10 +97,6 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid JSON payload")
-	}
-
-	if _, err := uuid.Parse(payload.QRToken); err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_payload", "Invalid QR Token format")
 	}
 
 	platform := "web"
