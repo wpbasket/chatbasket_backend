@@ -265,7 +265,8 @@ func (ps *profileService) GetContactableProfilesForViewer(
 			Bio:           row.Bio,
 			AvatarURL:     avatarURL,
 			AvatarFileId:  avatarFileID,
-			E2eePublicKey: row.E2eePublicKey,
+			
+			KeysRevision:  row.KeysRevision,
 		}
 	}
 

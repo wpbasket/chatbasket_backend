@@ -22,6 +22,7 @@ type SessionResponse struct {
 	SessionExpiry     string `json:"sessionExpiry"`
 	IsPrimary         bool   `json:"isPrimary"`
 	PrimaryDeviceName string `json:"primaryDeviceName,omitempty"`
+	KeysRevision      int32  `json:"keys_revision"`
 }
 
 type AuthVerificationPayload struct {

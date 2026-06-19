@@ -7,6 +7,7 @@ import (
 
 	"chatbasket-api/internal/platform/kit"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
 
@@ -155,7 +156,12 @@ func (h *profileHandler) UploadE2EEPublicKey(c *echo.Context) error {
 		return ErrInvalidUserContext
 	}
 
-	res, err := h.Service.SaveE2EEPublicKey(c.Request().Context(), userID, payload.E2eePublicKey)
+	sessionID, ok := c.Get("sessionUUID").(uuid.UUID)
+	if !ok {
+		return ErrInvalidSessionContext
+	}
+
+	res, err := h.Service.SaveE2EEPublicKey(c.Request().Context(), userID, sessionID, payload.E2eePublicKey)
 	if err != nil {
 		return err
 	}
@@ -178,12 +184,19 @@ func (h *profileHandler) GetE2EEPublicKey(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid user_id format")
 	}
 
-	pubKey, err := h.Service.GetE2EEPublicKey(c.Request().Context(), uuidVal)
+	// Extract caller's session ID to filter out their own key when querying self.
+	var callerSessionID *uuid.UUID
+	if sid, ok := c.Get("sessionUUID").(uuid.UUID); ok {
+		callerSessionID = &sid
+	}
+
+	keys, revision, err := h.Service.GetE2EEKeySet(c.Request().Context(), uuidVal, callerSessionID)
 	if err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, &getE2EEPublicKeyResponse{
-		E2eePublicKey: pubKey,
+		E2eePublicKeys: keys,
+		KeysRevision:   revision,
 	})
 }

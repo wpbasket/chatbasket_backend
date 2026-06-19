@@ -80,7 +80,7 @@ INSERT INTO
     )
 VALUES ($1, $2, $3, $4, $5)
 RETURNING
-    id, name, email, password_hash, is_email_verified, created_at, updated_at
+    id, name, email, password_hash, is_email_verified, created_at, updated_at, keys_revision
 `
 
 type CreateAuthUserParams struct {
@@ -108,6 +108,7 @@ func (q *Queries) CreateAuthUser(ctx context.Context, arg CreateAuthUserParams) 
 		&i.IsEmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeysRevision,
 	)
 	return i, err
 }
@@ -139,7 +140,7 @@ VALUES (
         $10
     )
 RETURNING
-    id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at
+    id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at, e2ee_public_key
 `
 
 type CreateSessionParams struct {
@@ -182,6 +183,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.E2eePublicKey,
 	)
 	return i, err
 }
@@ -375,7 +377,7 @@ func (q *Queries) GetAuthRateLimiter(ctx context.Context, authUserID uuid.UUID) 
 }
 
 const getAuthUserByEmail = `-- name: GetAuthUserByEmail :one
-SELECT id, name, email, password_hash, is_email_verified, created_at, updated_at FROM auth_users WHERE email = $1
+SELECT id, name, email, password_hash, is_email_verified, created_at, updated_at, keys_revision FROM auth_users WHERE email = $1
 `
 
 func (q *Queries) GetAuthUserByEmail(ctx context.Context, email string) (AuthUser, error) {
@@ -389,12 +391,13 @@ func (q *Queries) GetAuthUserByEmail(ctx context.Context, email string) (AuthUse
 		&i.IsEmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeysRevision,
 	)
 	return i, err
 }
 
 const getAuthUserByID = `-- name: GetAuthUserByID :one
-SELECT id, name, email, password_hash, is_email_verified, created_at, updated_at FROM auth_users WHERE id = $1
+SELECT id, name, email, password_hash, is_email_verified, created_at, updated_at, keys_revision FROM auth_users WHERE id = $1
 `
 
 // Returns auth user by ID
@@ -409,12 +412,13 @@ func (q *Queries) GetAuthUserByID(ctx context.Context, id uuid.UUID) (AuthUser, 
 		&i.IsEmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeysRevision,
 	)
 	return i, err
 }
 
 const getCentralSession = `-- name: GetCentralSession :one
-SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at
+SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at, e2ee_public_key
 FROM sessions
 WHERE
     auth_user_id = $1
@@ -439,12 +443,13 @@ func (q *Queries) GetCentralSession(ctx context.Context, authUserID uuid.UUID) (
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.E2eePublicKey,
 	)
 	return i, err
 }
 
 const getSessionByToken = `-- name: GetSessionByToken :one
-SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at FROM sessions WHERE token_hash = $1 AND auth_user_id = $2
+SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at, e2ee_public_key FROM sessions WHERE token_hash = $1 AND auth_user_id = $2
 `
 
 type GetSessionByTokenParams struct {
@@ -468,12 +473,13 @@ func (q *Queries) GetSessionByToken(ctx context.Context, arg GetSessionByTokenPa
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.E2eePublicKey,
 	)
 	return i, err
 }
 
 const getUserPrimarySession = `-- name: GetUserPrimarySession :one
-SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at
+SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at, e2ee_public_key
 FROM sessions
 WHERE
     auth_user_id = $1
@@ -499,6 +505,7 @@ func (q *Queries) GetUserPrimarySession(ctx context.Context, authUserID uuid.UUI
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.E2eePublicKey,
 	)
 	return i, err
 }

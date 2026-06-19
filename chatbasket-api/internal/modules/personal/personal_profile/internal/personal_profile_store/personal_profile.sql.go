@@ -101,7 +101,7 @@ INSERT INTO
     )
 VALUES ($1, $2, $3, $4, $5)
 RETURNING
-    id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at, e2ee_public_key
+    id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -136,7 +136,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.B64CipherChacha20poly1305Username,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.E2eePublicKey,
 	)
 	return i, err
 }
@@ -173,7 +172,7 @@ SELECT
     a.token_id,
     a.token_secret,
     a.token_expiry,
-    u.e2ee_public_key,
+    au.keys_revision,
     COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
     COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
     COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
@@ -182,6 +181,7 @@ SELECT
     COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
 FROM
     users u
+    INNER JOIN auth_users au ON u.id = au.id
     LEFT JOIN avatars a ON u.id = a.user_id
     AND a.avatar_type = 'profile'
     LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
@@ -217,7 +217,7 @@ type GetContactableProfilesForViewerRow struct {
 	TokenID                *string    `json:"token_id"`
 	TokenSecret            *string    `json:"token_secret"`
 	TokenExpiry            *time.Time `json:"token_expiry"`
-	E2eePublicKey          *string    `json:"e2ee_public_key"`
+	KeysRevision           int32      `json:"keys_revision"`
 	GlobalRestrictProfile  bool       `json:"global_restrict_profile"`
 	GlobalRestrictAvatar   bool       `json:"global_restrict_avatar"`
 	ExceptionGlobalProfile bool       `json:"exception_global_profile"`
@@ -245,7 +245,7 @@ func (q *Queries) GetContactableProfilesForViewer(ctx context.Context, arg GetCo
 			&i.TokenID,
 			&i.TokenSecret,
 			&i.TokenExpiry,
-			&i.E2eePublicKey,
+			&i.KeysRevision,
 			&i.GlobalRestrictProfile,
 			&i.GlobalRestrictAvatar,
 			&i.ExceptionGlobalProfile,
@@ -264,7 +264,7 @@ func (q *Queries) GetContactableProfilesForViewer(ctx context.Context, arg GetCo
 }
 
 const getUserByHashedUsernameForContact = `-- name: GetUserByHashedUsernameForContact :one
-SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at, e2ee_public_key
+SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 FROM users
 WHERE
     hmac_sha256_hex_username = $1
@@ -285,13 +285,12 @@ func (q *Queries) GetUserByHashedUsernameForContact(ctx context.Context, hmacSha
 		&i.B64CipherChacha20poly1305Username,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.E2eePublicKey,
 	)
 	return i, err
 }
 
 const getUserCoreProfile = `-- name: GetUserCoreProfile :one
-SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at, e2ee_public_key FROM users WHERE id = $1
+SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at FROM users WHERE id = $1
 `
 
 // Minimal user profile without avatar join
@@ -309,24 +308,12 @@ func (q *Queries) GetUserCoreProfile(ctx context.Context, id uuid.UUID) (User, e
 		&i.B64CipherChacha20poly1305Username,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.E2eePublicKey,
 	)
 	return i, err
 }
 
-const getUserE2EEPublicKey = `-- name: GetUserE2EEPublicKey :one
-SELECT e2ee_public_key FROM users WHERE id = $1
-`
-
-func (q *Queries) GetUserE2EEPublicKey(ctx context.Context, id uuid.UUID) (*string, error) {
-	row := q.db.QueryRow(ctx, getUserE2EEPublicKey, id)
-	var e2ee_public_key *string
-	err := row.Scan(&e2ee_public_key)
-	return e2ee_public_key, err
-}
-
 const getUserProfile = `-- name: GetUserProfile :one
-SELECT u.id, u.name, u.bio, u.profile_type, u.is_admin_blocked, u.admin_block_reason, u.hmac_sha256_hex_username, u.b64_cipher_chacha20poly1305_username, u.created_at, u.updated_at, u.e2ee_public_key, a.file_id, a.token_id, a.token_secret, a.token_expiry
+SELECT u.id, u.name, u.bio, u.profile_type, u.is_admin_blocked, u.admin_block_reason, u.hmac_sha256_hex_username, u.b64_cipher_chacha20poly1305_username, u.created_at, u.updated_at, a.file_id, a.token_id, a.token_secret, a.token_expiry
 FROM users u
     LEFT JOIN avatars a ON a.user_id = u.id
     AND a.avatar_type = 'profile'
@@ -345,7 +332,6 @@ type GetUserProfileRow struct {
 	B64CipherChacha20poly1305Username string     `json:"b64_cipher_chacha20poly1305_username"`
 	CreatedAt                         time.Time  `json:"created_at"`
 	UpdatedAt                         time.Time  `json:"updated_at"`
-	E2eePublicKey                     *string    `json:"e2ee_public_key"`
 	FileID                            *string    `json:"file_id"`
 	TokenID                           *string    `json:"token_id"`
 	TokenSecret                       *string    `json:"token_secret"`
@@ -367,7 +353,6 @@ func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProf
 		&i.B64CipherChacha20poly1305Username,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.E2eePublicKey,
 		&i.FileID,
 		&i.TokenID,
 		&i.TokenSecret,
@@ -425,7 +410,7 @@ func (q *Queries) IsUserProfilePicExists(ctx context.Context, id uuid.UUID) (boo
 }
 
 const listUsersAfter = `-- name: ListUsersAfter :many
-SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at, e2ee_public_key
+SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 FROM users
 WHERE
     created_at < $1
@@ -459,7 +444,6 @@ func (q *Queries) ListUsersAfter(ctx context.Context, arg ListUsersAfterParams) 
 			&i.B64CipherChacha20poly1305Username,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.E2eePublicKey,
 		); err != nil {
 			return nil, err
 		}
@@ -560,24 +544,6 @@ func (q *Queries) UpdateAvatarTokens(ctx context.Context, arg UpdateAvatarTokens
 	return i, err
 }
 
-const updateUserE2EEPublicKey = `-- name: UpdateUserE2EEPublicKey :exec
-UPDATE users
-SET
-    e2ee_public_key = $2
-WHERE
-    id = $1
-`
-
-type UpdateUserE2EEPublicKeyParams struct {
-	ID            uuid.UUID `json:"id"`
-	E2eePublicKey *string   `json:"e2ee_public_key"`
-}
-
-func (q *Queries) UpdateUserE2EEPublicKey(ctx context.Context, arg UpdateUserE2EEPublicKeyParams) error {
-	_, err := q.db.Exec(ctx, updateUserE2EEPublicKey, arg.ID, arg.E2eePublicKey)
-	return err
-}
-
 const updateUserProfile = `-- name: UpdateUserProfile :one
 UPDATE users
 SET
@@ -590,7 +556,7 @@ SET
 WHERE
     id = $1
 RETURNING
-    id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at, e2ee_public_key
+    id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 `
 
 type UpdateUserProfileParams struct {
@@ -620,7 +586,6 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.B64CipherChacha20poly1305Username,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.E2eePublicKey,
 	)
 	return i, err
 }

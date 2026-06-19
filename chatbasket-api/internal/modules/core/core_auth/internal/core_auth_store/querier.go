@@ -21,6 +21,8 @@ type Querier interface {
 	// Checks if a session is valid for a specific user and not expired
 	CheckSessionIsValid(ctx context.Context, arg CheckSessionIsValidParams) (bool, error)
 	CleanupExpiredQRLoginRequests(ctx context.Context) error
+	// Count active sessions that have a key for a user
+	CountActiveKeyedSessionsForUser(ctx context.Context, authUserID uuid.UUID) (int64, error)
 	CreateAuthUser(ctx context.Context, arg CreateAuthUserParams) (AuthUser, error)
 	CreateQRLoginRequest(ctx context.Context, arg CreateQRLoginRequestParams) (uuid.UUID, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
@@ -34,6 +36,10 @@ type Querier interface {
 	DeleteSessionByToken(ctx context.Context, arg DeleteSessionByTokenParams) error
 	DeleteVerificationCode(ctx context.Context, id uuid.UUID) error
 	ExchangeQRLogin(ctx context.Context, id uuid.UUID) (*uuid.UUID, error)
+	// Fetch all active (unexpired, non-null key) public keys for a user
+	GetActiveSessionKeysForUser(ctx context.Context, authUserID uuid.UUID) ([]GetActiveSessionKeysForUserRow, error)
+	// Fetch all active (unexpired, non-null key) public keys for a user, excluding one session
+	GetActiveSessionKeysForUserExcluding(ctx context.Context, arg GetActiveSessionKeysForUserExcludingParams) ([]GetActiveSessionKeysForUserExcludingRow, error)
 	// ======================================
 	// Rate Limiter Queries
 	// ======================================
@@ -43,16 +49,30 @@ type Querier interface {
 	GetAuthUserByID(ctx context.Context, id uuid.UUID) (AuthUser, error)
 	// Returns the details of the central session for a user
 	GetCentralSession(ctx context.Context, authUserID uuid.UUID) (Session, error)
+	// ======================================
+	// Keys Revision Queries
+	// ======================================
+	// Get the current keys_revision for a user (atomic read)
+	GetKeysRevision(ctx context.Context, id uuid.UUID) (int32, error)
 	GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLoginRequestRow, error)
 	GetSessionByToken(ctx context.Context, arg GetSessionByTokenParams) (Session, error)
 	// Returns user's primary device session (for Phase 6 messaging eligibility)
 	GetUserPrimarySession(ctx context.Context, authUserID uuid.UUID) (Session, error)
 	// Get the verification code by User ID (PK) and Type
 	GetVerificationCode(ctx context.Context, arg GetVerificationCodeParams) (VerificationCode, error)
+	// Increment keys_revision by one (atomic)
+	IncrementKeysRevision(ctx context.Context, id uuid.UUID) error
 	NotifyQREvent(ctx context.Context, dollar_1 string) error
 	// Sets is_central = false for ALL sessions of this user (Upgrade preparation)
 	ResetCentralSessions(ctx context.Context, authUserID uuid.UUID) error
+	// Reset keys_revision to zero
+	ResetKeysRevision(ctx context.Context, id uuid.UUID) error
 	ResetVerifyErrors(ctx context.Context, authUserID uuid.UUID) error
+	// ======================================
+	// E2EE Session Key Queries
+	// ======================================
+	// Save or update the E2EE public key for a specific session (must be active)
+	SaveSessionE2EEPublicKey(ctx context.Context, arg SaveSessionE2EEPublicKeyParams) (uuid.UUID, error)
 	// Sets is_central = true for a specific session
 	SetSessionCentral(ctx context.Context, arg SetSessionCentralParams) error
 	// Sets is_central = true for a session identified by token hash

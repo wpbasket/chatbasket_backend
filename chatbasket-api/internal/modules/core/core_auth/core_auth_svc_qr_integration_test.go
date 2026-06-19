@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+
 func setupIntegrationDB(t *testing.T) (*pgxpool.Pool, *core_auth.AuthService) {
 	_ = godotenv.Load("../../../../.env")
 	_ = godotenv.Load("../../../../../.env")
@@ -32,6 +33,12 @@ func setupIntegrationDB(t *testing.T) (*pgxpool.Pool, *core_auth.AuthService) {
 	require.NoError(t, err, "failed to connect testing db")
 	t.Cleanup(func() { pool.Close() })
 
+	_, err = pool.Exec(context.Background(), "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS e2ee_public_key CHAR(44)")
+	require.NoError(t, err, "failed to ensure sessions.e2ee_public_key exists in testing db")
+
+	_, err = pool.Exec(context.Background(), "ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS keys_revision INT NOT NULL DEFAULT 0")
+	require.NoError(t, err, "failed to ensure auth_users.keys_revision exists in testing db")
+
 	globalSvc := services.NewGlobalService()
 	authSvc := core_auth.NewAuthService(globalSvc, pool, []byte("test-secret"))
 
@@ -41,8 +48,8 @@ func setupIntegrationDB(t *testing.T) (*pgxpool.Pool, *core_auth.AuthService) {
 func createTestUser(t *testing.T, pool *pgxpool.Pool) uuid.UUID {
 	id := uuid.New()
 	email := id.String() + "@test.com"
-	_, err := pool.Exec(context.Background(), 
-		"INSERT INTO auth_users (id, email, password_hash, name, is_email_verified) VALUES ($1, $2, 'hash', 'Test User', true)", 
+	_, err := pool.Exec(context.Background(),
+		"INSERT INTO auth_users (id, email, password_hash, name, is_email_verified) VALUES ($1, $2, 'hash', 'Test User', true)",
 		id, email)
 	require.NoError(t, err)
 	return id
@@ -114,16 +121,25 @@ func TestQRLoginFlow_Concurrent_Integration(t *testing.T) {
 
 			// 1. Initiate
 			initResp, err := svc.QRInitiate(ctx)
-			if err != nil { errChan <- err; return }
+			if err != nil {
+				errChan <- err
+				return
+			}
 			qrToken := initResp.QRToken
 
 			// 2. Mobile Approve
 			_, err = svc.QRApprove(ctx, testUserID, qrToken)
-			if err != nil { errChan <- err; return }
+			if err != nil {
+				errChan <- err
+				return
+			}
 
 			// 3. Browser Callback
 			cbResp, err := svc.QRCallback(ctx, qrToken, "web")
-			if err != nil { errChan <- err; return }
+			if err != nil {
+				errChan <- err
+				return
+			}
 
 			// CRITICAL: Ensure this specific browser received the exact User ID of its paired mobile app!
 			if cbResp.UserId != testUserID.String() {

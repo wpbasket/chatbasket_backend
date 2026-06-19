@@ -37,6 +37,8 @@ type AuthUser struct {
 	IsEmailVerified bool      `json:"is_email_verified"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+	// Monotonically increasing version number tracking changes to the user's active session keys.
+	KeysRevision int32 `json:"keys_revision"`
 }
 
 type Avatar struct {
@@ -151,6 +153,8 @@ type Session struct {
 	ExpiresAt   time.Time `json:"expires_at"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	// Base64-encoded X25519 public key associated with the active session. NULL = E2EE not initialized on this device.
+	E2eePublicKey *string `json:"e2ee_public_key"`
 }
 
 type Token struct {
@@ -175,8 +179,6 @@ type User struct {
 	B64CipherChacha20poly1305Username string    `json:"b64_cipher_chacha20poly1305_username"`
 	CreatedAt                         time.Time `json:"created_at"`
 	UpdatedAt                         time.Time `json:"updated_at"`
-	// Base64-encoded X25519 public key for E2EE. NULL = E2EE not set up.
-	E2eePublicKey *string `json:"e2ee_public_key"`
 }
 
 type UserBlock struct {

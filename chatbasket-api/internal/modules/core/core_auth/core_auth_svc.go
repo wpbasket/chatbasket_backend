@@ -14,25 +14,29 @@ import (
 )
 
 // AuthService handles the business logic for the Auth module.
+
+// AuthService handles the business logic for the Auth module.
 type AuthService struct {
-	GlobalService   *services.GlobalService
-	PostgresQuerier core_auth_store.Querier  // For regular queries (interface)
-	PostgresQueries *core_auth_store.Queries // For transactions (concrete type with WithTx)
-	Pool            *pgxpool.Pool            // For raw DB execution (like NOTIFY)
-	AuthSecret      []byte
+	GlobalService       *services.GlobalService
+	PostgresQuerier     core_auth_store.Querier  // For regular queries (interface)
+	PostgresQueries     *core_auth_store.Queries // For transactions (concrete type with WithTx)
+	Pool                *pgxpool.Pool            // For raw DB execution (like NOTIFY)
+	AuthSecret []byte
 }
 
 // NewAuthService creates a new AuthService instance.
 func NewAuthService(globalService *services.GlobalService, pool *pgxpool.Pool, authSecret []byte) *AuthService {
 	store := core_auth_store.New(pool)
 	return &AuthService{
-		GlobalService:   globalService,
-		PostgresQuerier: store,
-		PostgresQueries: store,
-		Pool:            pool,
-		AuthSecret:      authSecret,
+		GlobalService:       globalService,
+		PostgresQuerier:     store,
+		PostgresQueries:     store,
+		Pool:                pool,
+		AuthSecret: authSecret,
 	}
 }
+
+
 
 // Signup handles user registration: Validates email, creates user (unverified), sends verification OTP.
 func (s *AuthService) Signup(ctx context.Context, payload *SignupPayload) (*kit.StatusOkay, error) {
@@ -137,6 +141,12 @@ func (s *AuthService) AccountVerification(ctx context.Context, payload *AuthVeri
 		return nil, err
 	}
 
+	// 5. Fetch keys revision (new user will have revision 0)
+	keysRevision, err := s.GetKeysRevision(ctx, user.ID)
+	if err != nil {
+		keysRevision = 0
+	}
+
 	return &SessionResponse{
 		UserId:            user.ID.String(),
 		Name:              user.Name,
@@ -145,6 +155,7 @@ func (s *AuthService) AccountVerification(ctx context.Context, payload *AuthVeri
 		SessionExpiry:     sessionRes.ExpiresAt,
 		IsPrimary:         sessionRes.IsPrimary,
 		PrimaryDeviceName: sessionRes.PrimaryDeviceName,
+		KeysRevision:      keysRevision,
 	}, nil
 }
 
@@ -223,6 +234,12 @@ func (s *AuthService) LoginVerification(ctx context.Context, payload *AuthVerifi
 		return nil, err
 	}
 
+	// 4. Fetch keys revision
+	keysRevision, err := s.GetKeysRevision(ctx, user.ID)
+	if err != nil {
+		keysRevision = 0
+	}
+
 	return &SessionResponse{
 		UserId:            user.ID.String(),
 		Name:              user.Name,
@@ -231,6 +248,7 @@ func (s *AuthService) LoginVerification(ctx context.Context, payload *AuthVerifi
 		SessionExpiry:     sessionRes.ExpiresAt,
 		IsPrimary:         sessionRes.IsPrimary,
 		PrimaryDeviceName: sessionRes.PrimaryDeviceName,
+		KeysRevision:      keysRevision,
 	}, nil
 }
 

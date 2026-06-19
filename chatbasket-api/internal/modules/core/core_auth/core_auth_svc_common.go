@@ -1,6 +1,7 @@
 package core_auth
 
 import (
+	"log"
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
@@ -15,26 +16,58 @@ import (
 // Logout handles logout from single or all sessions
 // Works for both public and personal modes
 func (s *AuthService) Logout(ctx context.Context, payload *LogoutPayload, userID uuid.UUID, sessionToken string) (*kit.StatusOkay, error) {
-	if payload.AllSessions {
-		// Logout from all sessions - delete from PostgreSQL
-		err := s.PostgresQuerier.DeleteAllUserSessions(ctx, userID)
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to logout from all sessions: "+err.Error())
-		}
-	} else {
-		// Logout from single session - delete from PostgreSQL using token hash
-		tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret, true, new(userID.String()))
+	var tokenHash string
+	if !payload.AllSessions {
+		var err error
+		tokenHash, err = kit.ComputeHMAC(sessionToken, s.AuthSecret, true, new(userID.String()))
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to hash session token: "+err.Error())
 		}
+	}
 
-		err = s.PostgresQuerier.DeleteSessionByToken(ctx, core_auth_store.DeleteSessionByTokenParams{
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to start logout transaction: "+err.Error())
+	}
+	defer tx.Rollback(ctx)
+
+	queries := s.PostgresQueries.WithTx(tx)
+
+	if payload.AllSessions {
+		if err := queries.DeleteAllUserSessions(ctx, userID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to logout from all sessions: "+err.Error())
+		}
+		if err := queries.IncrementKeysRevision(ctx, userID); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to increment keys revision: "+err.Error())
+		}
+		log.Printf("[E2EE] Logout(all sessions): user %s keys_revision incremented (old keys invalidated)", userID)
+	} else {
+		if err := queries.DeleteSessionByToken(ctx, core_auth_store.DeleteSessionByTokenParams{
 			TokenHash:  tokenHash,
 			AuthUserID: userID,
-		})
-		if err != nil {
+		}); err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to logout from session: "+err.Error())
 		}
+
+		count, err := queries.CountActiveKeyedSessionsForUser(ctx, userID)
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to count active keyed sessions: "+err.Error())
+		}
+		if count > 0 {
+			if err := queries.IncrementKeysRevision(ctx, userID); err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to increment keys revision: "+err.Error())
+			}
+			log.Printf("[E2EE] Logout(single): user %s — %d keyed session(s) remain, keys_revision incremented", userID, count)
+		} else {
+			if err := queries.IncrementKeysRevision(ctx, userID); err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to increment keys revision: "+err.Error())
+			}
+			log.Printf("[E2EE] Logout(single): user %s — no keyed sessions remain, keys_revision incremented (old keys invalidated)", userID)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to commit logout transaction: "+err.Error())
 	}
 
 	return &kit.StatusOkay{Status: true, Message: "Logged out successfully"}, nil
@@ -82,7 +115,16 @@ func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, 
 		}
 	}
 
-	// 5. Construct Response
+	// 5. Fetch keys revision
+	keysRevision, err := s.GetKeysRevision(ctx, userID)
+	if err != nil {
+		// If error fetching revision, default to 0 (shouldn't happen in normal flow)
+		log.Printf("[E2EE] GetUserWithSession: failed to fetch keys_revision for user %s, defaulting to 0: %v", userID, err)
+		keysRevision = 0
+	}
+	log.Printf("[E2EE] GetUserWithSession: user %s session issued with keys_revision=%d", userID, keysRevision)
+
+	// 6. Construct Response
 	return &SessionResponse{
 		UserId:            user.ID.String(),
 		Name:              user.Name,
@@ -91,6 +133,7 @@ func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, 
 		SessionExpiry:     session.ExpiresAt.Format(time.RFC3339),
 		IsPrimary:         session.IsCentral,
 		PrimaryDeviceName: centralDeviceName,
+		KeysRevision:      keysRevision,
 	}, nil
 }
 

@@ -140,6 +140,12 @@ func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platfor
 		return nil, err
 	}
 
+	// Fetch keys revision
+	keysRevision, err := s.GetKeysRevision(ctx, *userID)
+	if err != nil {
+		keysRevision = 0
+	}
+
 	return &SessionResponse{
 		UserId:            user.ID.String(),
 		Name:              user.Name,
@@ -148,6 +154,7 @@ func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platfor
 		SessionExpiry:     session.ExpiresAt,
 		IsPrimary:         session.IsPrimary,
 		PrimaryDeviceName: session.PrimaryDeviceName,
+		KeysRevision:      keysRevision,
 	}, nil
 }
 

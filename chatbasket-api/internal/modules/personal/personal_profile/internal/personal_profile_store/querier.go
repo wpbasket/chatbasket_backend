@@ -28,7 +28,6 @@ type Querier interface {
 	GetUserByHashedUsernameForContact(ctx context.Context, hmacSha256HexUsername string) (User, error)
 	// Minimal user profile without avatar join
 	GetUserCoreProfile(ctx context.Context, id uuid.UUID) (User, error)
-	GetUserE2EEPublicKey(ctx context.Context, id uuid.UUID) (*string, error)
 	// Returns full user record along with its profile avatar tokens and file_id
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
 	// Returns true if the user is admin-blocked
@@ -42,7 +41,6 @@ type Querier interface {
 	UpdateAvatarFull(ctx context.Context, arg UpdateAvatarFullParams) (Avatar, error)
 	// Updates token_id, token_secret, and token_expiry for the main profile avatar
 	UpdateAvatarTokens(ctx context.Context, arg UpdateAvatarTokensParams) (Avatar, error)
-	UpdateUserE2EEPublicKey(ctx context.Context, arg UpdateUserE2EEPublicKeyParams) error
 	// Updates user profile fields conditionally based on provided values (NULL values are ignored)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 }

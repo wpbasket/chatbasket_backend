@@ -20,7 +20,7 @@ type ContactProfileView struct {
 	Bio           *string   `json:"bio"`
 	AvatarURL     *string   `json:"avatar_url"`
 	AvatarFileId  *string   `json:"avatar_file_id"`
-	E2eePublicKey *string   `json:"e2ee_public_key"`
+	KeysRevision  int32     `json:"keys_revision"`
 }
 
 type ContactLookupResult struct {
@@ -44,6 +44,7 @@ type privateUser struct {
 	AvatarUrl    *string   `json:"avatar_url"`
 	AvatarFileId *string   `json:"avatar_file_id"`
 	ProfileType  string    `json:"profile_type"` // User profile type: private/public/personal
+	KeysRevision int32     `json:"keys_revision"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
@@ -54,7 +55,7 @@ type updateUserProfilePayload struct {
 	ProfileType *string `json:"profile_type,omitempty" validate:"omitempty,oneof=public private personal"`
 }
 
-func toPrivateUserWithAvatar(user *personal_profile_store.GetUserProfileRow, username string, email string, avatarUrl *string) *privateUser {
+func toPrivateUserWithAvatar(user *personal_profile_store.GetUserProfileRow, username string, email string, avatarUrl *string, keysRevision int32) *privateUser {
 	return &privateUser{
 		Id:           user.ID.String(),
 		Username:     username,
@@ -64,12 +65,13 @@ func toPrivateUserWithAvatar(user *personal_profile_store.GetUserProfileRow, use
 		AvatarFileId: user.FileID,
 		Bio:          user.Bio,
 		ProfileType:  user.ProfileType,
+		KeysRevision: keysRevision,
 		CreatedAt:    user.CreatedAt,
 		UpdatedAt:    user.UpdatedAt,
 	}
 }
 
-func toPrivateUser(user *personal_profile_store.User, username string, email string) *privateUser {
+func toPrivateUser(user *personal_profile_store.User, username string, email string, keysRevision int32) *privateUser {
 	return &privateUser{
 		Id:           user.ID.String(),
 		Username:     username,
@@ -78,6 +80,7 @@ func toPrivateUser(user *personal_profile_store.User, username string, email str
 		Bio:          user.Bio,
 		AvatarUrl:    nil,
 		AvatarFileId: nil,
+		KeysRevision: keysRevision,
 		ProfileType:  user.ProfileType,
 		CreatedAt:    user.CreatedAt,
 		UpdatedAt:    user.UpdatedAt,
@@ -88,11 +91,17 @@ type uploadE2EEPublicKeyPayload struct {
 	E2eePublicKey string `json:"e2ee_public_key"`
 }
 
+type updateE2EEKeyResponse struct {
+	Status       bool   `json:"status"`
+	Message      string `json:"message"`
+	KeysRevision int32  `json:"keys_revision"`
+}
+
 type getE2EEPublicKeyPayload struct {
 	UserID string `query:"user_id"`
 }
 
 type getE2EEPublicKeyResponse struct {
-	E2eePublicKey *string `json:"e2ee_public_key"`
+	E2eePublicKeys []string `json:"e2ee_public_keys"`
+	KeysRevision   int32    `json:"keys_revision"`
 }
-

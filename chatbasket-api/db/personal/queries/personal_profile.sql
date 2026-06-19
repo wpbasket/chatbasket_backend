@@ -147,7 +147,7 @@ SELECT
     a.token_id,
     a.token_secret,
     a.token_expiry,
-    u.e2ee_public_key,
+    au.keys_revision,
     COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
     COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
     COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
@@ -156,6 +156,7 @@ SELECT
     COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
 FROM
     users u
+    INNER JOIN auth_users au ON u.id = au.id
     LEFT JOIN avatars a ON u.id = a.user_id
     AND a.avatar_type = 'profile'
     LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
@@ -182,15 +183,3 @@ FROM users
 WHERE
     hmac_sha256_hex_username = $1
     AND is_admin_blocked IS NOT TRUE;
-
-
--- name: UpdateUserE2EEPublicKey :exec
-UPDATE users
-SET
-    e2ee_public_key = $2
-WHERE
-    id = $1;
-
-
--- name: GetUserE2EEPublicKey :one
-SELECT e2ee_public_key FROM users WHERE id = $1;

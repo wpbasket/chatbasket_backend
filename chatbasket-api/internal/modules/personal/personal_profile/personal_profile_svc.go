@@ -1,6 +1,7 @@
 package personal_profile
 
 import (
+	"log"
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
@@ -15,22 +16,34 @@ import (
 	"time"
 )
 
+type coreAuthProfileProvider interface {
+	SaveSessionE2EEPublicKey(ctx context.Context, tx pgx.Tx, userID uuid.UUID, sessionID uuid.UUID, publicKey string) error
+	GetActiveSessionKeysForUser(ctx context.Context, userID uuid.UUID) ([]string, error)
+	GetActiveSessionKeysForUserExcluding(ctx context.Context, userID uuid.UUID, excludeSessionID uuid.UUID) ([]string, error)
+	GetKeysRevision(ctx context.Context, userID uuid.UUID) (int32, error)
+	IncrementKeysRevision(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error
+}
+
 type profileService struct {
 	GlobalService              *services.GlobalService
 	PostgresQuerier            personal_profile_store.Querier
 	PostgresQueries            *personal_profile_store.Queries
+	Pool                       *pgxpool.Pool
+	AuthProvider               coreAuthProfileProvider
 	PersonalUsernameKey        []byte
 	AppwriteStorage            *clients.AppwriteStorageService
 	PersonalProfilePicBucketID string
 }
 
 // NewProfileService creates a new ProfileService instance.
-func NewProfileService(globalService *services.GlobalService, pool *pgxpool.Pool, personalUsernameKey []byte, appwriteStorage *clients.AppwriteStorageService, personalProfilePicBucketID string) *profileService {
+func NewProfileService(globalService *services.GlobalService, pool *pgxpool.Pool, authProvider coreAuthProfileProvider, personalUsernameKey []byte, appwriteStorage *clients.AppwriteStorageService, personalProfilePicBucketID string) *profileService {
 	store := personal_profile_store.New(pool)
 	return &profileService{
 		GlobalService:              globalService,
 		PostgresQuerier:            store,
 		PostgresQueries:            store,
+		Pool:                       pool,
+		AuthProvider:               authProvider,
 		PersonalUsernameKey:        personalUsernameKey,
 		AppwriteStorage:            appwriteStorage,
 		PersonalProfilePicBucketID: personalProfilePicBucketID,
@@ -96,7 +109,7 @@ func (ps *profileService) CreateUserProfile(ctx context.Context, payload *create
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create alone username")
 	}
 
-	return toPrivateUser(&responseUser, generatedUsername, email), nil
+	return toPrivateUser(&responseUser, generatedUsername, email, 0), nil
 }
 
 func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, email string) (*privateUser, error) {
@@ -120,7 +133,17 @@ func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, em
 		return nil, err
 	}
 
-	return toPrivateUserWithAvatar(&profile, decodeUsername, email, finalAvatarUrl), nil
+	// Fetch keys_revision from auth_users (not in the profile query).
+	keysRevision, err := ps.AuthProvider.GetKeysRevision(ctx, userId.UuidUserId)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			keysRevision = 0
+		} else {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to read keys revision: "+kit.GetPostgresError(err).Message)
+		}
+	}
+
+	return toPrivateUserWithAvatar(&profile, decodeUsername, email, finalAvatarUrl, keysRevision), nil
 }
 
 func (ps *profileService) UpdateUserProfile(ctx context.Context, payload *updateUserProfilePayload, userId kit.UserId) (*kit.StatusOkay, error) {
@@ -289,8 +312,7 @@ func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId k
 	return &kit.StatusOkay{Status: true, Message: "Profile picture removed successfully"}, nil
 }
 
-func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.UserId, publicKey string) (*kit.StatusOkay, error) {
-	// First check if user exists in the users table
+func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.UserId, sessionID uuid.UUID, publicKey string) (*updateE2EEKeyResponse, error) {
 	exists, err := ps.PostgresQueries.IsUserExists(ctx, userID.UuidUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -299,25 +321,74 @@ func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.User
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "User profile does not exist. Create profile first.")
 	}
 
-	err = ps.PostgresQueries.UpdateUserE2EEPublicKey(ctx, personal_profile_store.UpdateUserE2EEPublicKeyParams{
-		ID:            userID.UuidUserId,
-		E2eePublicKey: &publicKey,
-	})
+	tx, err := ps.Pool.Begin(ctx)
 	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to start key transaction: "+err.Error())
+	}
+	defer tx.Rollback(ctx)
+
+	if err := ps.AuthProvider.SaveSessionE2EEPublicKey(ctx, tx, userID.UuidUserId, sessionID, publicKey); err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to save E2EE public key: "+kit.GetPostgresError(err).Message)
 	}
-
-	return &kit.StatusOkay{Status: true, Message: "E2EE public key saved successfully"}, nil
-}
-
-func (ps *profileService) GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, error) {
-	pubKey, err := ps.PostgresQueries.GetUserE2EEPublicKey(ctx, targetUserID)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, kit.NewError(http.StatusNotFound, "not_found", "User profile not found")
-		}
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user E2EE public key: "+kit.GetPostgresError(err).Message)
+	log.Printf("[E2EE] SaveE2EEPublicKey: key saved for user %s session %s", userID.UuidUserId, sessionID)
+	if err := ps.AuthProvider.IncrementKeysRevision(ctx, tx, userID.UuidUserId); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update keys revision: "+kit.GetPostgresError(err).Message)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to commit key transaction: "+err.Error())
 	}
 
-	return pubKey, nil
+	// Read the new revision after commit (incremented atomically in the tx above).
+	revision, err := ps.AuthProvider.GetKeysRevision(ctx, userID.UuidUserId)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to read keys revision: "+kit.GetPostgresError(err).Message)
+	}
+	log.Printf("[E2EE] SaveE2EEPublicKey: user %s new keys_revision=%d", userID.UuidUserId, revision)
+
+	return &updateE2EEKeyResponse{
+		Status:       true,
+		Message:      "E2EE public key saved successfully",
+		KeysRevision: revision,
+	}, nil
 }
+
+func (ps *profileService) GetE2EEKeySet(ctx context.Context, targetUserID uuid.UUID, callerSessionID *uuid.UUID) ([]string, int32, error) {
+	revision, err := ps.AuthProvider.GetKeysRevision(ctx, targetUserID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, 0, kit.NewError(http.StatusNotFound, "not_found", "User profile not found")
+		}
+		return nil, 0, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user keys revision: "+kit.GetPostgresError(err).Message)
+	}
+
+	var keys []string
+	// When querying own keys (caller == target), exclude the caller's own session key.
+	// The caller already has their own key in SecureStore — no need to return it.
+	if callerSessionID != nil {
+		keys, err = ps.AuthProvider.GetActiveSessionKeysForUserExcluding(ctx, targetUserID, *callerSessionID)
+	} else {
+		keys, err = ps.AuthProvider.GetActiveSessionKeysForUser(ctx, targetUserID)
+	}
+	if err != nil {
+		return nil, 0, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch active E2EE keys: "+kit.GetPostgresError(err).Message)
+	}
+	log.Printf("[E2EE] GetE2EEKeySet: target user %s → %d key(s), revision=%d (callerSessionExcluded=%v)", targetUserID, len(keys), revision, callerSessionID != nil)
+	return keys, revision, nil
+}
+
+func (ps *profileService) GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, int32, error) {
+	keys, revision, err := ps.GetE2EEKeySet(ctx, targetUserID, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(keys) == 0 {
+		return nil, revision, nil
+	}
+	return &keys[0], revision, nil
+}
+
+
+func (ps *profileService) GetActiveSessionKeysForUser(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	return ps.AuthProvider.GetActiveSessionKeysForUser(ctx, userID)
+}
+

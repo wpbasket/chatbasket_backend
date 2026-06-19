@@ -35,7 +35,8 @@ type coreAuthChatProvider interface {
 type personalProfilePersonalChatProvider interface {
 	GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
-	GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, error)
+	GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, int32, error)
+	GetActiveSessionKeysForUser(ctx context.Context, userID uuid.UUID) ([]string, error)
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
@@ -83,22 +84,22 @@ func NewChatService(
 // Core Messaging Functions
 // ————————————————————————————————————————————————————————————————————————————————
 
-func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID kit.UserId, recipientID uuid.UUID) (string, *string, error) {
+func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID kit.UserId, recipientID uuid.UUID) (string, *string, int32, error) {
 	// 1. Self-check (Legacy feature)
 	if senderID.UuidUserId == recipientID {
-		return "", nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot check eligibility with yourself")
+		return "", nil, 0, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot check eligibility with yourself")
 	}
 
 	// 2. Fetch recipient exists + profile stats (Required for all subsequent checks)
 	coreProfile, err := s.ProfileProvider.GetUserCoreProfile(ctx, recipientID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return EligibilityRecipientNotFound, nil, nil
+			return EligibilityRecipientNotFound, nil, 0, nil
 		}
 		if pe, ok := err.(kit.ProcessedError); ok && pe.Status() == http.StatusNotFound {
-			return EligibilityRecipientNotFound, nil, nil
+			return EligibilityRecipientNotFound, nil, 0, nil
 		}
-		return "", nil, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to fetch recipient profile: "+err.Error())
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to fetch recipient profile: "+err.Error())
 	}
 
 	// 3. Contact check (Legacy Priority #2 + DB boundary check)
@@ -106,79 +107,79 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID ki
 	// This prevents leaking private status to non-contacts.
 	isContact, err := s.ContactProvider.IsAlreadyContact(ctx, senderID.UuidUserId, recipientID)
 	if err != nil {
-		return "", nil, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to verify contact relationship: "+err.Error())
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to verify contact relationship: "+err.Error())
 	}
 
 	if !isContact {
-		return EligibilityNotInContacts, nil, nil
+		return EligibilityNotInContacts, nil, 0, nil
 	}
 
 	// 4. Recipient Private check (Legacy Priority #3)
 	if coreProfile.ProfileType == "private" {
-		return EligibilityRecipientPrivate, nil, nil
+		return EligibilityRecipientPrivate, nil, 0, nil
 	}
 
 	// 5. Block checks (Legacy Priority #4 + DB boundary check)
 	// Returns 0: none, 1: sender blocked recipient, 2: recipient blocked sender
 	blockStatus, err := s.ContactProvider.GetMessagingBlockStatus(ctx, senderID.UuidUserId, recipientID)
 	if err != nil {
-		return "", nil, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to verify block status: "+err.Error())
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to verify block status: "+err.Error())
 	}
 
 	switch blockStatus {
 	case 1:
-		return EligibilityBlockedByMe, nil, nil
+		return EligibilityBlockedByMe, nil, 0, nil
 	case 2:
-		return EligibilityBlockedByRecipient, nil, nil
+		return EligibilityBlockedByRecipient, nil, 0, nil
 	}
 
 	// 6. Admin-block checks (Legacy Priority #5)
 	senderBlocked, err := s.ProfileProvider.IsUserAdminBlocked(ctx, senderID.UuidUserId)
 	if err != nil {
-		return "", nil, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to check sender admin status")
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to check sender admin status")
 	}
 	if senderBlocked {
-		return EligibilityAdminBlocked, nil, nil
+		return EligibilityAdminBlocked, nil, 0, nil
 	}
 
 	recipientBlocked, err := s.ProfileProvider.IsUserAdminBlocked(ctx, recipientID)
 	if err != nil {
-		return "", nil, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to check recipient admin status")
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to check recipient admin status")
 	}
 	if recipientBlocked {
-		return EligibilityAdminBlocked, nil, nil
+		return EligibilityAdminBlocked, nil, 0, nil
 	}
 
 	// 7. Primary-device check (Legacy Priority #6)
 	senderPrimaryID, err := s.AuthProvider.GetUserPrimarySessionID(ctx, senderID.UuidUserId)
 	if err != nil {
 		if pe, ok := err.(kit.ProcessedError); ok && pe.Status() == http.StatusNotFound {
-			return EligibilityNoPrimaryDevice, nil, nil
+			return EligibilityNoPrimaryDevice, nil, 0, nil
 		}
-		return "", nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to check sender primary device")
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to check sender primary device")
 	}
 	if senderPrimaryID == uuid.Nil {
-		return EligibilityNoPrimaryDevice, nil, nil
+		return EligibilityNoPrimaryDevice, nil, 0, nil
 	}
 
 	recipientPrimaryID, err := s.AuthProvider.GetUserPrimarySessionID(ctx, recipientID)
 	if err != nil {
 		if pe, ok := err.(kit.ProcessedError); ok && pe.Status() == http.StatusNotFound {
-			return EligibilityNoPrimaryDevice, nil, nil
+			return EligibilityNoPrimaryDevice, nil, 0, nil
 		}
-		return "", nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to check recipient primary device")
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to check recipient primary device")
 	}
 	if recipientPrimaryID == uuid.Nil {
-		return EligibilityNoPrimaryDevice, nil, nil
+		return EligibilityNoPrimaryDevice, nil, 0, nil
 	}
 
 	// 8. E2EE key check — recipient must have a public key to receive encrypted messages
-	recipientKey, keyErr := s.ProfileProvider.GetE2EEPublicKey(ctx, recipientID)
-	if keyErr != nil || recipientKey == nil {
-		return EligibilityNoE2EE, nil, nil
+	recipientKey, recipientKeysRevision, keyErr := s.ProfileProvider.GetE2EEPublicKey(ctx, recipientID)
+	if keyErr != nil || recipientKeysRevision == 0 {
+		return EligibilityNoE2EE, nil, 0, nil
 	}
 
-	return EligibilityAllowed, recipientKey, nil
+	return EligibilityAllowed, recipientKey, recipientKeysRevision, nil
 }
 
 func (s *chatService) CheckEligibilityHandler(ctx context.Context, payload *CheckEligibilityPayload, userID kit.UserId) (*MessagingEligibilityResponse, error) {
@@ -187,7 +188,7 @@ func (s *chatService) CheckEligibilityHandler(ctx context.Context, payload *Chec
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
 	}
 
-	eligibility, _, eligErr := s.CheckMessagingEligibility(ctx, userID, recipientID)
+	eligibility, _, _, eligErr := s.CheckMessagingEligibility(ctx, userID, recipientID)
 	if eligErr != nil {
 		return nil, eligErr
 	}
@@ -229,7 +230,7 @@ func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChat
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot create chat with yourself")
 	}
 
-	eligibility, _, eligErr := s.CheckMessagingEligibility(ctx, userID, recipientID)
+	eligibility, _, _, eligErr := s.CheckMessagingEligibility(ctx, userID, recipientID)
 	if eligErr != nil {
 		return nil, eligErr
 	}
@@ -279,26 +280,71 @@ func (s *chatService) GetChatByParticipants(ctx context.Context, user1ID, user2I
 	return &chat, nil
 }
 
+
+// checkRevisionStaleness checks if sender or recipient keys_revision is stale.
+// Returns a *StaleKeysError if either is stale, nil otherwise.
+func (s *chatService) checkRevisionStaleness(ctx context.Context, senderID kit.UserId, recipientID uuid.UUID, senderKeysRevision, recipientKeysRevision, recipientActualRevision int32) error {
+	// Fetch sender's actual revision to compare
+	senderActualRevision := s.getSenderKeysRevision(ctx, senderID.UuidUserId)
+	senderStale := senderKeysRevision != 0 && senderKeysRevision != senderActualRevision
+	recipientStale := recipientKeysRevision != 0 && recipientKeysRevision != recipientActualRevision
+
+	if !senderStale && !recipientStale {
+		return nil
+	}
+
+	// Determine which side is stale
+	var side StaleSide
+	if senderStale && recipientStale {
+		side = StaleSideBoth
+	} else if senderStale {
+		side = StaleSideSender
+	} else {
+		side = StaleSideRecipient
+	}
+
+	details := StaleKeysErrorDetails{
+		StaleSide: side,
+	}
+
+	// Fetch active keys for stale sides
+	if senderStale {
+		details.SenderKeysRevision = senderActualRevision
+		senderKeys, _ := s.ProfileProvider.GetActiveSessionKeysForUser(ctx, senderID.UuidUserId)
+		details.SenderActiveKeys = senderKeys
+		log.Printf("[E2EE] ⚠️ Sender keys revision MISMATCH for user %s — client used %d, DB has %d", senderID.UuidUserId, senderKeysRevision, senderActualRevision)
+	}
+	if recipientStale {
+		details.RecipientKeysRevision = recipientActualRevision
+		recipientKeys, _ := s.ProfileProvider.GetActiveSessionKeysForUser(ctx, recipientID)
+		details.RecipientActiveKeys = recipientKeys
+		log.Printf("[E2EE] ⚠️ Recipient keys revision MISMATCH for user %s — client used %d, DB has %d", recipientID, recipientKeysRevision, recipientActualRevision)
+	}
+
+	return NewStaleKeysError(details)
+}
+
 func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams) (*personal_chat_store.Message, error) {
-	eligibility, recipientKey, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
+	eligibility, _, recipientKeysRevision, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
 	if err != nil {
 		return nil, err
 	}
 
 	if eligibility != EligibilityAllowed {
+		log.Printf("[E2EE] SendMessage: BLOCKED — eligibility=%s for sender %s → recipient %s", eligibility, params.SenderID.UuidUserId, params.RecipientID)
 		return nil, messagingEligibilityError(eligibility)
 	}
 
-	// E2EE key staleness check — compare key used for encryption vs current DB key (already fetched above)
-	if params.RecipientE2eePublicKeyUsed != "" && recipientKey != nil && *recipientKey != params.RecipientE2eePublicKeyUsed {
-		log.Printf("[E2EE] ⚠️ Recipient key MISMATCH for user %s — client used key starting with %s..., DB has key starting with %s...",
-			params.RecipientID, params.RecipientE2eePublicKeyUsed[:min(8, len(params.RecipientE2eePublicKeyUsed))], (*recipientKey)[:min(8, len(*recipientKey))])
-		return nil, kit.NewError(http.StatusConflict, "recipient_key_changed", *recipientKey)
+	log.Printf("[E2EE] SendMessage: eligibility OK — sender %s → recipient %s, client senderRev=%d recipientRev=%d, DB recipientRev=%d",
+		params.SenderID.UuidUserId, params.RecipientID, params.SenderKeysRevision, params.RecipientKeysRevision, recipientKeysRevision)
+
+	// E2EE revision staleness check — check both sender and recipient
+	if staleErr := s.checkRevisionStaleness(ctx, params.SenderID, params.RecipientID, params.SenderKeysRevision, params.RecipientKeysRevision, recipientKeysRevision); staleErr != nil {
+		log.Printf("[E2EE] SendMessage: STALE KEYS — sender %s recipient %s: %v", params.SenderID.UuidUserId, params.RecipientID, staleErr)
+		return nil, staleErr
 	}
-	if params.RecipientE2eePublicKeyUsed != "" && recipientKey != nil {
-		log.Printf("[E2EE] ✅ Recipient key MATCH for user %s — key starting with %s...",
-			params.RecipientID, params.RecipientE2eePublicKeyUsed[:min(8, len(params.RecipientE2eePublicKeyUsed))])
-	}
+
+	log.Printf("[E2EE] SendMessage: revision check PASSED — storing message from %s → %s", params.SenderID.UuidUserId, params.RecipientID)
 
 	// Content Length check (matched with DB constraint)
 	if utf8.RuneCountInString(params.Content) > 5000 {
@@ -342,13 +388,13 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 	return &message, nil
 }
 
-func (s *chatService) getSenderE2EEPublicKey(ctx context.Context, senderID uuid.UUID) *string {
-	publicKey, err := s.ProfileProvider.GetE2EEPublicKey(ctx, senderID)
+func (s *chatService) getSenderKeysRevision(ctx context.Context, senderID uuid.UUID) int32 {
+	_, revision, err := s.ProfileProvider.GetE2EEPublicKey(ctx, senderID)
 	if err != nil {
-		log.Printf("[E2EE] Failed to fetch sender public key for user %s: %v", senderID, err)
-		return nil
+		log.Printf("[E2EE] Failed to fetch sender keys revision for user %s: %v", senderID, err)
+		return 0
 	}
-	return publicKey
+	return revision
 }
 
 func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessagePayload, userID kit.UserId, isPrimary bool) (*MessageResponse, error) {
@@ -367,7 +413,7 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		Content:                    payload.Content,
 		MessageType:                payload.MessageType,
 		IsPrimary:                  isPrimary,
-		RecipientE2eePublicKeyUsed: payload.RecipientE2eePublicKeyUsed,
+		RecipientKeysRevision: payload.RecipientKeysRevision,
 	})
 
 	if sendErr != nil {
@@ -378,7 +424,7 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		MessageID:             message.ID.String(),
 		ChatID:                message.ChatID.String(),
 		RecipientID:           message.RecipientID.String(),
-		SenderE2eePublicKey:   s.getSenderE2EEPublicKey(ctx, message.SenderID),
+		SenderKeysRevision:    s.getSenderKeysRevision(ctx, message.SenderID),
 		Content:               message.Content,
 		MessageType:           message.MessageType,
 		DeliveredToRecipient:  message.DeliveredToRecipient,
@@ -571,7 +617,7 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 		ChatID:                      msg.ChatID.String(),
 		IsFromMe:                    msg.SenderID == userID.UuidUserId,
 		RecipientID:                 msg.RecipientID.String(),
-		SenderE2eePublicKey:         s.getSenderE2EEPublicKey(ctx, msg.SenderID),
+		SenderKeysRevision:          s.getSenderKeysRevision(ctx, msg.SenderID),
 		Content:                     msg.Content,
 		MessageType:                 msg.MessageType,
 		DeliveredToRecipient:        msg.DeliveredToRecipient,
@@ -786,7 +832,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 			LastMessageIsUnsent:      lastMessageType != nil && *lastMessageType == "unsent",
 			LastMessageID:            lastMessageID,
 			UnreadCount:              int(chat.UnreadCount),
-			OtherUserE2eePublicKey:   profile.E2eePublicKey,
+			OtherUserKeysRevision:    profile.KeysRevision,
 		})
 	}
 

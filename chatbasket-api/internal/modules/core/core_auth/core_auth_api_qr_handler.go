@@ -154,6 +154,7 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 		SessionExpiry:     user.SessionExpiry,
 		IsPrimary:         user.IsPrimary,
 		PrimaryDeviceName: user.PrimaryDeviceName,
+		KeysRevision:      user.KeysRevision,
 	}
 
 	return c.JSON(http.StatusOK, webResponse)

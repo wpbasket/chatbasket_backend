@@ -5,6 +5,7 @@ import (
 	"chatbasket-api/internal/platform/websocket"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -240,7 +241,7 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send file to yourself")
 	}
 
-	recipientKeyUsed := c.FormValue("recipient_e2ee_public_key_used")
+	recipientKeysRevisionStr := c.FormValue("recipient_keys_revision"); recipientKeysRevision := 0; if recipientKeysRevisionStr != "" { if v, parseErr := strconv.Atoi(recipientKeysRevisionStr); parseErr == nil { recipientKeysRevision = v } }
 
 	messageType := c.FormValue("message_type")
 	if messageType == "" {
@@ -261,20 +262,20 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 		MessageType:                messageType,
 		Caption:                    caption,
 		IsPrimary:                  isPrimary,
-		RecipientE2eePublicKeyUsed: recipientKeyUsed,
+		RecipientKeysRevision: int32(recipientKeysRevision),
 	})
 	if svcErr != nil {
 		return svcErr
 	}
 
 	viewURL, downloadURL, tokenExpiry, _ := h.Service.GenerateMessageFileURLs(c.Request().Context(), *message, userID)
-	senderE2eePublicKey := h.Service.getSenderE2EEPublicKey(c.Request().Context(), message.SenderID)
+	senderKeysRevision := h.Service.getSenderKeysRevision(c.Request().Context(), message.SenderID)
 
 	msgInfo := &MessageResponse{
 		MessageID:             message.ID.String(),
 		ChatID:                message.ChatID.String(),
 		RecipientID:           message.RecipientID.String(),
-		SenderE2eePublicKey:   senderE2eePublicKey,
+		SenderKeysRevision:    senderKeysRevision,
 		Content:               message.Content,
 		MessageType:           message.MessageType,
 		DeliveredToRecipient:  false,
@@ -293,7 +294,7 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 
 	uploadResponse := &UploadFileResponse{
 		MessageID:           message.ID.String(),
-		SenderE2eePublicKey: senderE2eePublicKey,
+		SenderKeysRevision:  senderKeysRevision,
 		FileID:              *message.FileID,
 		MessageType:         message.MessageType,
 		FileMimeType:        message.FileMimeType,

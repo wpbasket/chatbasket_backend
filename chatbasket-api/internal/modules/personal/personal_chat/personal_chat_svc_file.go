@@ -160,7 +160,7 @@ func validateFileType(fh *multipart.FileHeader, messageType string) error {
 }
 
 func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFileForMessageParams) (*personal_chat_store.Message, error) {
-	eligibility, recipientKey, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
+	eligibility, _, recipientKeysRevision, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,15 +170,9 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	}
 
 
-	// E2EE key staleness check — use key already fetched from eligibility check
-	if params.RecipientE2eePublicKeyUsed != "" && recipientKey != nil && *recipientKey != params.RecipientE2eePublicKeyUsed {
-		log.Printf("[E2EE] ⚠️ Recipient key MISMATCH for user %s — client used key starting with %s..., DB has key starting with %s...",
-			params.RecipientID, params.RecipientE2eePublicKeyUsed[:min(8, len(params.RecipientE2eePublicKeyUsed))], (*recipientKey)[:min(8, len(*recipientKey))])
-		return nil, kit.NewError(http.StatusConflict, "recipient_key_changed", *recipientKey)
-	}
-	if params.RecipientE2eePublicKeyUsed != "" && recipientKey != nil {
-		log.Printf("[E2EE] ✅ Recipient key MATCH for user %s — key starting with %s...",
-			params.RecipientID, params.RecipientE2eePublicKeyUsed[:min(8, len(params.RecipientE2eePublicKeyUsed))])
+	// E2EE revision staleness check — check both sender and recipient
+	if staleErr := s.checkRevisionStaleness(ctx, params.SenderID, params.RecipientID, params.SenderKeysRevision, params.RecipientKeysRevision, recipientKeysRevision); staleErr != nil {
+		return nil, staleErr
 	}
 	// File size validation â€” matches legacy (100 MB limit)
 	if params.FileHeader.Size > MaxFileSize {

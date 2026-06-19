@@ -138,6 +138,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			c.Set("uuidUserId", authUser.ID)
 			c.Set("userId", authUser.ID.String())
 			c.Set("sessionId", sessionId)
+			c.Set("sessionUUID", session.ID)
 			c.Set("platform", platform)
 			c.Set("email", authUser.Email)
 			c.Set("isPrimary", session.IsCentral)

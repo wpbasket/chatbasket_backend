@@ -1,6 +1,7 @@
 package personal_chat
 
 import (
+	"fmt"
 	"chatbasket-api/internal/platform/kit"
 	"mime/multipart"
 	"time"
@@ -57,14 +58,14 @@ type ChatResponse struct {
 	LastMessageIsUnsent      bool       `json:"last_message_is_unsent"`
 	LastMessageID            *string    `json:"last_message_id"`
 	UnreadCount              int        `json:"unread_count"`
-	OtherUserE2eePublicKey   *string    `json:"other_user_e2ee_public_key"`
+	OtherUserKeysRevision    int32      `json:"other_user_keys_revision"`
 }
 
 type MessageResponse struct {
 	MessageID                   string     `json:"message_id"`
 	ChatID                      string     `json:"chat_id"`
 	RecipientID                 string     `json:"recipient_id"`
-	SenderE2eePublicKey         *string    `json:"sender_e2ee_public_key,omitempty"`
+	SenderKeysRevision          int32      `json:"sender_keys_revision"`
 	Content                     string     `json:"content"`
 	MessageType                 string     `json:"message_type"`
 	DeliveredToRecipient        bool       `json:"delivered_to_recipient"`
@@ -114,18 +115,18 @@ type GetFileURLResponse struct {
 }
 
 type UploadFileResponse struct {
-	MessageID           string     `json:"message_id"`
-	SenderE2eePublicKey *string    `json:"sender_e2ee_public_key,omitempty"`
-	FileID              string     `json:"file_id"`
-	MessageType         string     `json:"message_type"`
-	FileMimeType        *string    `json:"file_mime_type"`
-	ViewURL             string     `json:"view_url,omitempty"`
-	DownloadURL         string     `json:"download_url"`
-	FileName            *string    `json:"file_name"`
-	FileSize            *int64     `json:"file_size"`
-	CreatedAt           time.Time  `json:"created_at"`
-	ExpiresAt           time.Time  `json:"expires_at"`
-	FileTokenExpiry     *time.Time `json:"file_token_expiry,omitempty"`
+	MessageID          string     `json:"message_id"`
+	SenderKeysRevision int32      `json:"sender_keys_revision"`
+	FileID             string     `json:"file_id"`
+	MessageType        string     `json:"message_type"`
+	FileMimeType       *string    `json:"file_mime_type"`
+	ViewURL            string     `json:"view_url,omitempty"`
+	DownloadURL        string     `json:"download_url"`
+	FileName           *string    `json:"file_name"`
+	FileSize           *int64     `json:"file_size"`
+	CreatedAt          time.Time  `json:"created_at"`
+	ExpiresAt          time.Time  `json:"expires_at"`
+	FileTokenExpiry    *time.Time `json:"file_token_expiry,omitempty"`
 }
 
 type SyncActionResponse struct {
@@ -142,6 +143,55 @@ type GetSyncActionsResponse struct {
 	Count   int                  `json:"count"`
 }
 
+
+// ──────────────────────────────────────────────────────────────────────────────
+// StaleKeysError — returned when client's keys_revision is out of date
+// ──────────────────────────────────────────────────────────────────────────────
+
+// StaleSide indicates which side has stale keys
+type StaleSide string
+
+const (
+	StaleSideSender    StaleSide = "sender"
+	StaleSideRecipient StaleSide = "recipient"
+	StaleSideBoth      StaleSide = "both"
+)
+
+// StaleKeysErrorDetails carries the fresh keys and revisions for the stale side(s)
+type StaleKeysErrorDetails struct {
+	StaleSide              StaleSide `json:"stale_side"`
+	SenderKeysRevision     int32     `json:"sender_keys_revision,omitempty"`
+	RecipientKeysRevision  int32     `json:"recipient_keys_revision,omitempty"`
+	SenderActiveKeys       []string  `json:"sender_active_keys,omitempty"`
+	RecipientActiveKeys    []string  `json:"recipient_active_keys,omitempty"`
+}
+
+// StaleKeysError is a conflict error that carries structured data about which keys are stale.
+// Implements kit.DetailedProcessedError so the global error handler includes the details in the JSON response.
+type StaleKeysError struct {
+	details StaleKeysErrorDetails
+}
+
+func NewStaleKeysError(details StaleKeysErrorDetails) *StaleKeysError {
+	return &StaleKeysError{details: details}
+}
+
+func (e *StaleKeysError) Error() string {
+	return fmt.Sprintf("keys_revision is stale (side: %s)", e.details.StaleSide)
+}
+
+func (e *StaleKeysError) Status() int {
+	return 409 // Conflict
+}
+
+func (e *StaleKeysError) Kind() string {
+	return "keys_stale"
+}
+
+func (e *StaleKeysError) Details() interface{} {
+	return e.details
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Request Payloads
 // ──────────────────────────────────────────────────────────────────────────────
@@ -155,10 +205,11 @@ type CreateChatPayload struct {
 }
 
 type SendMessagePayload struct {
-	RecipientID                string `json:"recipient_id" validate:"required,uuid"`
-	Content                    string `json:"content" validate:"required,max=5000"`
-	MessageType                string `json:"message_type" validate:"required,oneof=text image video audio file"`
-	RecipientE2eePublicKeyUsed string `json:"recipient_e2ee_public_key_used"`
+	RecipientID           string `json:"recipient_id" validate:"required,uuid"`
+	Content               string `json:"content" validate:"required,max=5000"`
+	MessageType           string `json:"message_type" validate:"required,oneof=text image video audio file"`
+	RecipientKeysRevision int32  `json:"recipient_keys_revision"`
+	SenderKeysRevision    int32  `json:"sender_keys_revision"`
 }
 
 type AcknowledgeDeliveryPayload struct {
@@ -244,20 +295,22 @@ type SyncActionPayload struct {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type SendMessageParams struct {
-	SenderID                   kit.UserId
-	RecipientID                uuid.UUID
-	Content                    string
-	MessageType                string
-	IsPrimary                  bool
-	RecipientE2eePublicKeyUsed string
+	SenderID              kit.UserId
+	RecipientID           uuid.UUID
+	Content               string
+	MessageType           string
+	IsPrimary             bool
+	RecipientKeysRevision int32
+	SenderKeysRevision    int32
 }
 
 type UploadFileForMessageParams struct {
-	SenderID                   kit.UserId
-	RecipientID                uuid.UUID
-	FileHeader                 *multipart.FileHeader
-	MessageType                string
-	Caption                    string
-	IsPrimary                  bool
-	RecipientE2eePublicKeyUsed string
+	SenderID              kit.UserId
+	RecipientID           uuid.UUID
+	FileHeader            *multipart.FileHeader
+	MessageType           string
+	Caption               string
+	IsPrimary             bool
+	RecipientKeysRevision int32
+	SenderKeysRevision    int32
 }

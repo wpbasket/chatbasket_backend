@@ -91,7 +91,12 @@ func (r *chatWSRouter) handleMessage(ctx context.Context, conn *websocket.WSConn
 func toWSError(err error) *websocket.WSError {
 	var pe kit.ProcessedError
 	if errors.As(err, &pe) {
-		return &websocket.WSError{Code: pe.Status(), Type: pe.Kind(), Message: pe.Error()}
+		wsErr := &websocket.WSError{Code: pe.Status(), Type: pe.Kind(), Message: pe.Error()}
+		// Check if error has structured details (e.g., StaleKeysError)
+		if dpe, ok := pe.(kit.DetailedProcessedError); ok {
+			wsErr.Details = dpe.Details()
+		}
+		return wsErr
 	}
 	return &websocket.WSError{Code: 500, Type: "internal_error", Message: err.Error()}
 }

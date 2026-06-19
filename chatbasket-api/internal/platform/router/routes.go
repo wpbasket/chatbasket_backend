@@ -74,7 +74,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 
 	// 2. Personal Category (Group of modules)
 	personalGroup := apiGroup.Group("/personal")
-	profileService := personal_profile.NewProfileService(globalService, r.Pool, r.Config.Security.PersonalUsernameKey, r.AppwriteStorage, r.Config.Appwrite.PersonalProfilePicBucketID)
+	profileService := personal_profile.NewProfileService(globalService, r.Pool, authService, r.Config.Security.PersonalUsernameKey, r.AppwriteStorage, r.Config.Appwrite.PersonalProfilePicBucketID)
 	personal_profile.Register(personalGroup, profileService, authService, wsHub)
 
 	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey, r.Config.Security.PersonalContactKey)

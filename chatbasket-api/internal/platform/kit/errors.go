@@ -19,13 +19,21 @@ type ProcessedError interface {
 	Kind() string // e.g., "NOT_FOUND", "FORBIDDEN" (matches ApiError.Type)
 }
 
+// DetailedProcessedError extends ProcessedError with structured details.
+// Used for errors that need to return additional data to the client (e.g., StaleKeysError).
+type DetailedProcessedError interface {
+	ProcessedError
+	Details() interface{} // Structured data included in the error response
+}
+
 // --- Standard Error Models (DTOs) ---
 
 // ApiError is the standard JSON error response, ported from chatbasket-api/model/error.go
 type ApiError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Type    string `json:"type"`
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Type    string      `json:"type"`
+	Details interface{} `json:"details,omitempty"`
 }
 
 // Error implements the standard Go error interface.
@@ -82,11 +90,16 @@ func GlobalErrorHandler(c *echo.Context, err error) {
 	// 1. Check if it's a ProcessedError (or a compatible ApiError)
 	var pe ProcessedError
 	if errors.As(err, &pe) {
-		_ = c.JSON(pe.Status(), ApiError{
+		apiErr := ApiError{
 			Code:    pe.Status(),
 			Type:    pe.Kind(),
 			Message: pe.Error(),
-		})
+		}
+		// Check if error has structured details
+		if dpe, ok := pe.(DetailedProcessedError); ok {
+			apiErr.Details = dpe.Details()
+		}
+		_ = c.JSON(pe.Status(), apiErr)
 		return
 	}
 
