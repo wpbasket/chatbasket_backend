@@ -242,6 +242,7 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 	}
 
 	recipientKeysRevisionStr := c.FormValue("recipient_keys_revision"); recipientKeysRevision := 0; if recipientKeysRevisionStr != "" { if v, parseErr := strconv.Atoi(recipientKeysRevisionStr); parseErr == nil { recipientKeysRevision = v } }
+	senderKeysRevisionStr := c.FormValue("sender_keys_revision"); senderKeysRevisionParam := 0; if senderKeysRevisionStr != "" { if v, parseErr := strconv.Atoi(senderKeysRevisionStr); parseErr == nil { senderKeysRevisionParam = v } }
 
 	messageType := c.FormValue("message_type")
 	if messageType == "" {
@@ -256,13 +257,14 @@ func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
 	}
 
 	message, svcErr := h.Service.UploadFileForMessage(c.Request().Context(), UploadFileForMessageParams{
-		SenderID:                   userID,
-		RecipientID:                recipientID,
-		FileHeader:                 file,
-		MessageType:                messageType,
-		Caption:                    caption,
-		IsPrimary:                  isPrimary,
+		SenderID:              userID,
+		RecipientID:           recipientID,
+		FileHeader:            file,
+		MessageType:           messageType,
+		Caption:               caption,
+		IsPrimary:             isPrimary,
 		RecipientKeysRevision: int32(recipientKeysRevision),
+		SenderKeysRevision:    int32(senderKeysRevisionParam),
 	})
 	if svcErr != nil {
 		return svcErr

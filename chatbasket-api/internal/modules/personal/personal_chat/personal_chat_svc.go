@@ -408,12 +408,13 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 	}
 
 	message, sendErr := s.SendMessage(ctx, SendMessageParams{
-		SenderID:                   userID,
-		RecipientID:                recipientID,
-		Content:                    payload.Content,
-		MessageType:                payload.MessageType,
-		IsPrimary:                  isPrimary,
+		SenderID:              userID,
+		RecipientID:           recipientID,
+		Content:               payload.Content,
+		MessageType:           payload.MessageType,
+		IsPrimary:             isPrimary,
 		RecipientKeysRevision: payload.RecipientKeysRevision,
+		SenderKeysRevision:    payload.SenderKeysRevision,
 	})
 
 	if sendErr != nil {
