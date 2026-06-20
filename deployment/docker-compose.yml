@@ -4,15 +4,15 @@ services:
     container_name: chatbasket-api
     restart: always
 
-    # 🔥 Hard container memory limit
-    mem_limit: 200m
+    # 🔥 Hard container memory limit (2GB Oracle VM)
+    mem_limit: 1800m
 
     env_file:
       - .env
 
     # Go internal memory control
     environment:
-      - GOMEMLIMIT=150MiB
+      - GOMEMLIMIT=1600MiB
 
     expose:
       - "8080"
@@ -37,8 +37,8 @@ services:
     container_name: chatbasket-nginx
     restart: always
 
-    # Nginx does not need much RAM
-    mem_limit: 100m
+    # Nginx reverse proxy memory limit (production standard: 1.5-2x peak usage)
+    mem_limit: 256m
 
     ports:
       - "80:80"

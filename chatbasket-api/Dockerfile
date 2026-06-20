@@ -55,8 +55,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the Go binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+# Build the Go binary (Removed hardcoded GOARCH so it builds correctly for ARM/AMD)
+RUN CGO_ENABLED=0 GOOS=linux \
     go build -o app ./app
 
 
@@ -66,11 +66,17 @@ FROM alpine:latest
 # Install CA certificates for HTTPS
 RUN apk --no-cache add ca-certificates
 
-# Set working directory
-WORKDIR /root/
+# Create a secure, non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Copy binary from build stage
-COPY --from=build_base /app/app .
+# Set working directory
+WORKDIR /home/appuser/
+
+# Copy binary from build stage and grant ownership in a single step (highly efficient)
+COPY --chown=appuser:appgroup --from=build_base /app/app .
+
+# Switch to the non-root user for security
+USER appuser
 
 # Document the port the app listens on
 EXPOSE 8080
