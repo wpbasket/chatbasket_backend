@@ -40,7 +40,7 @@
 
 
 # -------- Build stage --------
-FROM golang:1.26.3-alpine AS build_base
+FROM --platform=$BUILDPLATFORM golang:1.26.3-alpine AS build_base
 
 # Install required packages
 RUN apk add --no-cache git ca-certificates
@@ -55,8 +55,12 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the Go binary (Removed hardcoded GOARCH so it builds correctly for ARM/AMD)
-RUN CGO_ENABLED=0 GOOS=linux \
+# Declare Buildx automatic platform arguments
+ARG TARGETOS
+ARG TARGETARCH
+
+# Build the Go binary using native cross-compilation (highly efficient)
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -o app ./app
 
 
