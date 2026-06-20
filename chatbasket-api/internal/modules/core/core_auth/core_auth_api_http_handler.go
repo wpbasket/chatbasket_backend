@@ -107,9 +107,9 @@ func (h *authHandler) AccountVerification(c *echo.Context) error {
 		c.SetCookie(sessionCookie)
 		c.SetCookie(userCookie)
 
-		// Return SessionResponse with empty sensitive fields for web
+		// Return SessionResponse with empty sensitive fields for web (except UserId for E2EE mapping)
 		webResponse := &SessionResponse{
-			UserId:        "",
+			UserId:        user.UserId,
 			Name:          user.Name,
 			Email:         user.Email,
 			SessionID:     "",
@@ -205,9 +205,9 @@ func (h *authHandler) LoginVerification(c *echo.Context) error {
 		c.SetCookie(sessionCookie)
 		c.SetCookie(userCookie)
 
-		// Return SessionResponse with empty sensitive fields for web
+		// Return SessionResponse with empty sensitive fields for web (except UserId for E2EE mapping)
 		webResponse := &SessionResponse{
-			UserId:        "",
+			UserId:        user.UserId,
 			Name:          user.Name,
 			Email:         user.Email,
 			SessionID:     "",
