@@ -28,6 +28,11 @@ func (h *authHandler) Logout(c *echo.Context) error {
 		return ErrInvalidSessionContext
 	}
 
+	// Primary device always logs out ALL sessions (force), regardless of the flag.
+	if isPrimary, _ := c.Get("isPrimary").(bool); isPrimary {
+		payload.AllSessions = true
+	}
+
 	res, err := h.Service.Logout(c.Request().Context(), &payload, uuidUserId, sessionId)
 	if err != nil {
 		return err
