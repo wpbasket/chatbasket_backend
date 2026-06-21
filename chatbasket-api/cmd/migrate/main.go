@@ -14,17 +14,16 @@ and 'db/personal/migrations' directories. It supports two operation modes:
 2. NON-INTERACTIVE CLI FLAG MODE (Command-line arguments passed)
    Runs instantly using flags. In this mode, all options are required and must be explicitly specified:
    - The '-url' flag is mandatory (can be a raw connection string or the name of an environment variable).
-   - Exactly one action ('-up' or '-down') must be set to true (no default action).
+   - The '-folder' and '-file' flags must be provided to run a specific migration.
 
    Flags:
-     -url string   Connection string or env var name (e.g. DATABASE_URL_PG_TESTING). (Required)
-     -up           Run all UP migrations. (Required if -down is false)
-     -down         Run all DOWN migrations in reverse order. (Required if -up is false)
+     -url string    Connection string or env var name (e.g. DATABASE_URL_PG_TESTING). (Required)
+     -folder string Folder category ('common' or 'personal'). (Required)
+     -file string   Specific migration file name to run. (Required)
 
    Usage Examples:
-     go run main.go -url="DATABASE_URL_PG_TESTING" -up
-     go run main.go -url="postgres://user:pass@host:port/dbname" -up
-     go run main.go -down -url="DATABASE_URL_PG_DEV"
+     go run main.go -url="DATABASE_URL_PG_TESTING" -folder="common" -file="001_init.up.sql"
+     go run main.go -url="DATABASE_URL_PG_DEV" -folder="personal" -file="002_users.down.sql"
 
    Note: The order of command-line flags does not matter.
 */
@@ -68,8 +67,8 @@ func main() {
 	// Determine if running in non-interactive CLI mode based on command-line arguments
 	if len(os.Args) > 1 {
 		dbURLFlag := flag.String("url", "", "Database URL connection string or env variable name (Required)")
-		runUpFlag := flag.Bool("up", false, "Run UP migrations")
-		runDownFlag := flag.Bool("down", false, "Run DOWN migrations")
+		folderFlag := flag.String("folder", "", "Folder category ('common' or 'personal') (Required)")
+		fileFlag := flag.String("file", "", "Specific migration file name to run (Required)")
 		flag.Parse()
 
 		if *dbURLFlag == "" {
@@ -78,15 +77,15 @@ func main() {
 
 		dbURL := resolveURL(*dbURLFlag)
 
-		if !*runUpFlag && !*runDownFlag {
-			log.Fatalf("%sError: either -up or -down flag must be specified in CLI mode%s", colorRed, colorReset)
+		if *fileFlag == "" || *folderFlag == "" {
+			log.Fatalf("%sError: both -folder and -file flags are required in CLI mode%s", colorRed, colorReset)
 		}
 
-		if *runUpFlag && *runDownFlag {
-			log.Fatalf("%sError: cannot specify both -up and -down flags in CLI mode%s", colorRed, colorReset)
+		if *folderFlag != "common" && *folderFlag != "personal" {
+			log.Fatalf("%sError: -folder must be 'common' or 'personal'%s", colorRed, colorReset)
 		}
 
-		runMigrations(root, dbURL, *runUpFlag)
+		runSpecificMigration(root, dbURL, *folderFlag, *fileFlag)
 		return
 	}
 
@@ -107,9 +106,9 @@ func main() {
 		fmt.Printf("\n%s%s==================================================%s\n", colorBold, colorOrange, colorReset)
 		fmt.Printf("%s%s            STEP 1: SELECT CONNECTION             %s\n", colorBold, colorOrange, colorReset)
 		fmt.Printf("%s%s==================================================%s\n", colorBold, colorOrange, colorReset)
-		fmt.Printf("  1. DATABASE_URL_PG_TESTING\n")
-		fmt.Printf("  2. DATABASE_URL_PG_DEV\n")
-		fmt.Printf("  3. DATABASE_URL_PG_CB\n")
+		fmt.Printf("  1. DATABASE_URL_PG_TESTING  (Neon)\n")
+		fmt.Printf("  2. DATABASE_URL_PG_DEV      (Oracle Dev Tunnel)\n")
+		fmt.Printf("  3. DATABASE_URL_PG_CB       (Oracle Prod Tunnel)\n")
 		fmt.Printf("  4. Enter Custom URL or Env Var Name\n")
 		fmt.Printf("\n%s%s❯ Select option (1-4): %s", colorBold, colorOrange, colorReset)
 
@@ -126,19 +125,19 @@ func main() {
 		switch dbChoice {
 		case "1":
 			dbURL = testingURL
-			dbLabel = "CB Testing"
+			dbLabel = "Neon Testing"
 			if dbURL == "" {
 				fmt.Printf("%sError: DATABASE_URL_PG_TESTING is empty.%s\n", colorRed, colorReset)
 			}
 		case "2":
 			dbURL = devURL
-			dbLabel = "CB Dev"
+			dbLabel = "Oracle Dev"
 			if dbURL == "" {
 				fmt.Printf("%sError: DATABASE_URL_PG_DEV is empty.%s\n", colorRed, colorReset)
 			}
 		case "3":
 			dbURL = cbURL
-			dbLabel = "CB Production"
+			dbLabel = "Oracle Production"
 			if dbURL == "" {
 				fmt.Printf("%sError: DATABASE_URL_PG_CB is empty.%s\n", colorRed, colorReset)
 			}
@@ -160,7 +159,7 @@ func main() {
 				dbLabel = ""
 			}
 		default:
-			fmt.Printf("%sInvalid selection. Please choose 1, 2, 3, or 4.%s\n", colorRed, colorReset)
+			fmt.Printf("%sInvalid selection. Please choose 1-6.%s\n", colorRed, colorReset)
 		}
 	}
 
@@ -702,4 +701,37 @@ func runMigrations(root string, dbURL string, isUp bool) {
 		}
 		fmt.Printf("\n%s%sDOWN migrations completed successfully.%s\n", colorBold, colorGreen, colorReset)
 	}
+}
+
+// runSpecificMigration executes a single, specified SQL migration file
+func runSpecificMigration(root string, dbURL string, folder string, filename string) {
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		fmt.Printf("%sError: Failed to connect to database: %v%s\n", colorRed, err, colorReset)
+		return
+	}
+	defer conn.Close(ctx)
+
+	dirPath := filepath.Join(root, "db", folder, "migrations")
+	filePath := filepath.Join(dirPath, filename)
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		log.Fatalf("%sError: Migration file does not exist: %s%s\n", colorRed, filePath, colorReset)
+	}
+
+	categoryName := strings.ToUpper(folder[:1]) + folder[1:]
+	fmt.Printf("%s[%s] Applying specific migration: %s...%s\n", colorCyan, categoryName, filename, colorReset)
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Fatalf("%sError: Failed to read file %s: %v%s\n", colorRed, filePath, err, colorReset)
+	}
+
+	_, err = conn.Exec(ctx, string(content))
+	if err != nil {
+		log.Fatalf("%sError: Failed to execute SQL in %s: %v%s\n", colorRed, filename, err, colorReset)
+	}
+
+	fmt.Printf("%s[%s] Successfully applied: %s%s\n", colorGreen, categoryName, filename, colorReset)
 }
