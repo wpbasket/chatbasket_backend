@@ -27,7 +27,6 @@ const (
 // ──────────────────────────────────────────────────────────────────────────────
 
 const (
-	ChatFilesBucketID   = "6995c8f4002e4d744b3b"
 	MaxFileSize         = 100 * 1024 * 1024
 	DefaultMessageTTL   = 30 * 24 * time.Hour
 	StorageFullTTL      = 7 * 24 * time.Hour

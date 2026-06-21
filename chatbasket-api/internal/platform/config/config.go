@@ -43,24 +43,11 @@ type SecurityConfig struct {
 
 // AppwriteConfig holds Appwrite specific configuration, ported from routes/config.go and appwriteinternal/service.go
 type AppwriteConfig struct {
-	Endpoint                          string
-	ProjectID                         string
-	ApiKey                            string
-	DatabaseID                        string
-	UsersCollectionID                 string
-	PostsCollectionID                 string
-	CommentsCollectionID              string
-	BlockCollectionID                 string
-	LikesCollectionID                 string
-	FollowCollectionID                string
-	RefreshTokensCollectionID         string
-	FollowRequestsCollectionID        string
-	TempOtpCollectionID               string
-	FileUserProfilePicBucketID        string
-	PersonalUsersCollectionID         string
-	PersonalAloneUsernameCollectionID string
-	PersonalDatabaseID                string
-	PersonalProfilePicBucketID        string
+	Endpoint                   string
+	ProjectID                  string
+	ApiKey                     string
+	PersonalProfilePicBucketID string
+	PersonalChatFilesBucketID  string
 }
 
 // CosmosConfig holds Cosmos DB configuration, ported from db/cosmos_config.go
@@ -131,49 +118,10 @@ func Load() (*Config, error) {
 	if awCfg.ApiKey, awErr = kit.LoadKeyFromEnv("APPWRITE_API_KEY"); awErr != nil {
 		return nil, awErr
 	}
-	if awCfg.DatabaseID, awErr = kit.LoadKeyFromEnv("APPWRITE_DATABASE_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.UsersCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_USERS_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.PostsCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_POSTS_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.CommentsCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_COMMENTS_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.BlockCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_BLOCK_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.LikesCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_LIKES_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.FollowCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_FOLLOW_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.RefreshTokensCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_REFRESH_TOKENS_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.FollowRequestsCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_FOLLOW_REQUESTS_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.TempOtpCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_TEMP_OTP_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.FileUserProfilePicBucketID, awErr = kit.LoadKeyFromEnv("APPWRITE_FILE_USERPROFILEPIC_BUCKET_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.PersonalUsersCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_PERSONAL_USERS_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.PersonalAloneUsernameCollectionID, awErr = kit.LoadKeyFromEnv("APPWRITE_PERSONAL_ALONE_USERNAME_COLLECTION_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.PersonalDatabaseID, awErr = kit.LoadKeyFromEnv("APPWRITE_PERSONAL_DATABASE_ID"); awErr != nil {
-		return nil, awErr
-	}
 	if awCfg.PersonalProfilePicBucketID, awErr = kit.LoadKeyFromEnv("APPWRITE_FILE_PERSONAL_USERPROFILEPIC_BUCKET_ID"); awErr != nil {
+		return nil, awErr
+	}
+	if awCfg.PersonalChatFilesBucketID, awErr = kit.LoadKeyFromEnv("APPWRITE_PERSONAL_CHAT_FILES_BUCKET_ID"); awErr != nil {
 		return nil, awErr
 	}
 

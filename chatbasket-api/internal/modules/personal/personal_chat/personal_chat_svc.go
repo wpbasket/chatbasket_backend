@@ -59,6 +59,7 @@ type chatService struct {
 	ProfileProvider personalProfilePersonalChatProvider
 	ContactProvider personalContactPersonalChatProvider
 	AppwriteStorage *clients.AppwriteStorageService
+	ChatFilesBucketID string
 }
 
 func NewChatService(
@@ -67,6 +68,7 @@ func NewChatService(
 	profileProvider personalProfilePersonalChatProvider,
 	contactProvider personalContactPersonalChatProvider,
 	appwriteStorage *clients.AppwriteStorageService,
+	chatFilesBucketID string,
 ) *chatService {
 	store := personal_chat_store.New(pool)
 	return &chatService{
@@ -77,6 +79,7 @@ func NewChatService(
 		ProfileProvider: profileProvider,
 		ContactProvider: contactProvider,
 		AppwriteStorage: appwriteStorage,
+		ChatFilesBucketID: chatFilesBucketID,
 	}
 }
 

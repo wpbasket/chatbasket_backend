@@ -81,7 +81,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	personal_contact.Register(personalGroup, contactService, authService)
 
 	// 3. Chat Module
-	chatService := personal_chat.NewChatService(r.Pool, authService, profileService, contactService, r.AppwriteStorage)
+	chatService := personal_chat.NewChatService(r.Pool, authService, profileService, contactService, r.AppwriteStorage, r.Config.Appwrite.PersonalChatFilesBucketID)
 	personal_chat.Register(personalGroup, chatService, wsHub, authService)
 
 	personal_chat.StartMessageCleanupJob(chatService, 1*time.Hour)

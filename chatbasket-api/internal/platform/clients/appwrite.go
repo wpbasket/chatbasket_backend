@@ -1,4 +1,4 @@
-﻿package clients
+package clients
 
 import (
 	"chatbasket-api/internal/platform/config"
@@ -49,21 +49,6 @@ type AppwriteService struct {
 	Message                    *messaging.Messaging
 	Endpoint                   string
 	ProjectID                  string
-	DatabaseID                 string
-	UsersCollectionID          string
-	PostsCollectionID          string
-	CommentsCollectionID       string
-	BlockCollectionID          string
-	LikesCollectionID          string
-	FollowCollectionID         string
-	RefreshTokensCollectionID  string
-	FollowRequestsCollectionID string
-	TempOtpCollectionID        string
-	ProfilePicBucketID         string
-	PersonalUsersCollectionID  string
-	AloneUsernameCollectionID  string
-	PersonalDatabaseID         string
-	PersonalProfilePicBucketID string
 }
 
 // NewAppwriteService creates a new Appwrite client and initializes all services, ported from appwriteinternal/service.go
@@ -84,21 +69,6 @@ func NewAppwriteService(cfg *config.AppwriteConfig) *AppwriteService {
 		Message:                    appwrite.NewMessaging(c),
 		Endpoint:                   cfg.Endpoint,
 		ProjectID:                  cfg.ProjectID,
-		DatabaseID:                 cfg.DatabaseID,
-		UsersCollectionID:          cfg.UsersCollectionID,
-		PostsCollectionID:          cfg.PostsCollectionID,
-		CommentsCollectionID:       cfg.CommentsCollectionID,
-		BlockCollectionID:          cfg.BlockCollectionID,
-		LikesCollectionID:          cfg.LikesCollectionID,
-		FollowCollectionID:         cfg.FollowCollectionID,
-		RefreshTokensCollectionID:  cfg.RefreshTokensCollectionID,
-		FollowRequestsCollectionID: cfg.FollowRequestsCollectionID,
-		TempOtpCollectionID:        cfg.TempOtpCollectionID,
-		ProfilePicBucketID:         cfg.FileUserProfilePicBucketID,
-		PersonalUsersCollectionID:  cfg.PersonalUsersCollectionID,
-		AloneUsernameCollectionID:  cfg.PersonalAloneUsernameCollectionID,
-		PersonalDatabaseID:         cfg.PersonalDatabaseID,
-		PersonalProfilePicBucketID: cfg.PersonalProfilePicBucketID,
 	}
 }
 

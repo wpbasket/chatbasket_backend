@@ -93,6 +93,7 @@ jobs:
           echo "DATABASE_URL_PG_CB=${{ secrets.DATABASE_URL_PG_CB }}" >> .env
           echo "DATABASE_URL_PG_DEV=${{ secrets.DATABASE_URL_PG_DEV }}" >> .env
           echo "APPWRITE_FILE_PERSONAL_USERPROFILEPIC_BUCKET_ID=${{ secrets.APPWRITE_FILE_PERSONAL_USERPROFILEPIC_BUCKET_ID }}" >> .env
+          echo "APPWRITE_PERSONAL_CHAT_FILES_BUCKET_ID=${{ secrets.APPWRITE_PERSONAL_CHAT_FILES_BUCKET_ID }}" >> .env
           echo "COSMOS_CONNECTION_STRING=${{ secrets.COSMOS_CONNECTION_STRING }}" >> .env
           echo "COSMOS_DATABASE=${{ secrets.COSMOS_DATABASE }}" >> .env
           echo "COSMOS_CONTAINER=${{ secrets.COSMOS_CONTAINER }}" >> .env

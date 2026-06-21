@@ -34,7 +34,7 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 		return "", "", nil, nil
 	}
 
-	bucketID := ChatFilesBucketID
+	bucketID := s.ChatFilesBucketID
 
 	// Check and refresh tokens if expired
 	tokenID := msg.FileTokenID
@@ -196,7 +196,7 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 	// Upload file to Appwrite Storage
 	uploadResult, err := services.UploadFileFromMultipart(
 		s.AppwriteStorage,
-		ChatFilesBucketID,
+		s.ChatFilesBucketID,
 		fileID,
 		params.FileHeader,
 		services.UploadOptions{
@@ -286,7 +286,7 @@ func (s *chatService) DeleteChatFile(ctx context.Context, fileID string) {
 	}
 
 	// Delete all tokens for this file
-	tokenList, err := s.AppwriteStorage.Tokens.List(ChatFilesBucketID, fileID)
+	tokenList, err := s.AppwriteStorage.Tokens.List(s.ChatFilesBucketID, fileID)
 	if err != nil {
 		log.Printf("[DeleteChatFile] Failed to list tokens for file %s: %v", fileID, err)
 	} else if tokenList.Total > 0 {
@@ -298,8 +298,8 @@ func (s *chatService) DeleteChatFile(ctx context.Context, fileID string) {
 	}
 
 	// Delete the file
-	_, err = s.AppwriteStorage.Storage.DeleteFile(ChatFilesBucketID, fileID)
+	_, err = s.AppwriteStorage.Storage.DeleteFile(s.ChatFilesBucketID, fileID)
 	if err != nil {
-		log.Printf("[DeleteChatFile] Failed to delete file %s from bucket %s: %v", fileID, ChatFilesBucketID, err)
+		log.Printf("[DeleteChatFile] Failed to delete file %s from bucket %s: %v", fileID, s.ChatFilesBucketID, err)
 	}
 }
