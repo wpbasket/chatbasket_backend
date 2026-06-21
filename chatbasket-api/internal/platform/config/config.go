@@ -97,14 +97,12 @@ func Load() (*Config, error) {
 	}
 
 	// Load Postgres config, ported from chatbasket-api/db/config.go:LoadPostgresConfig
-	dsn := os.Getenv("DATABASE_URL_PG_DEV")
-	if dsn == "" {
-		// Fallback to DATABASE_URL if PG_DEV is not set
-		dsn = os.Getenv("DATABASE_URL")
-	}
+	// TOGGLE HERE: Swap comments below to easily switch between Production and Development locally
+	dsn := os.Getenv("DATABASE_URL_PG_CB")
+	// dsn := os.Getenv("DATABASE_URL_PG_DEV")
 
 	if dsn == "" {
-		return nil, fmt.Errorf("DATABASE_URL_PG_DEV or DATABASE_URL is required")
+		return nil, fmt.Errorf("DATABASE_URL_PG_CB is required")
 	}
 
 	pgCfg := &PostgresConfig{
