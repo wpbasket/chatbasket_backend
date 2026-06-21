@@ -2,7 +2,7 @@
 Database Migration Tool
 
 This tool executes PostgreSQL migrations located in the 'db/common/migrations'
-and 'db/personal/migrations' directories. It supports two operation modes:
+and 'db/personal/migrations' directories. It supports two operation modes :
 
 1. INTERACTIVE WIZARD MODE (No command-line arguments passed)
    Prompts the user step-by-step to choose a database connection and the action to perform.
