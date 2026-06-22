@@ -43,6 +43,15 @@ func (h *QRHub) Unregister(token uuid.UUID, conn *websocket.Conn) {
 	}
 }
 
+func (h *QRHub) Close(token uuid.UUID) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if conn, ok := h.conns[token]; ok {
+		delete(h.conns, token)
+		_ = conn.Close(websocket.StatusNormalClosure, "qr login completed")
+	}
+}
+
 func (h *QRHub) Broadcast(token uuid.UUID, eventType string, payload interface{}) {
 	h.mu.RLock()
 	conn, ok := h.conns[token]

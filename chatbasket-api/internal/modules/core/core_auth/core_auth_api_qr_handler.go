@@ -1,6 +1,7 @@
 package core_auth
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -30,7 +31,8 @@ func (h *authHandler) QRWebSocket(c *echo.Context) error {
 		return err
 	}
 
-	if _, err := h.Service.PostgresQuerier.GetQRLoginRequest(c.Request().Context(), token); err != nil {
+	req, err := h.Service.PostgresQuerier.GetQRLoginRequest(c.Request().Context(), token)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return kit.NewError(http.StatusNotFound, "not_found", "QR request expired or not found")
 		}
@@ -48,13 +50,17 @@ func (h *authHandler) QRWebSocket(c *echo.Context) error {
 	// Register in QRHub
 	h.qrHub.Register(token, wsConn)
 	defer h.qrHub.Unregister(token, wsConn)
+	defer wsConn.Close(websocket.StatusNormalClosure, "")
+
+	// Close the connection when the QR request expires
+	ctx, cancel := context.WithDeadline(c.Request().Context(), req.ExpiresAt)
+	defer cancel()
 
 	// Keep connection open and read messages (though mostly we use this to push)
-	ctx := c.Request().Context()
 	for {
 		_, _, err := wsConn.Read(ctx)
 		if err != nil {
-			// Connection closed or error
+			// Connection closed, expired, or error
 			break
 		}
 	}
@@ -101,10 +107,18 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 
 	platform := "web"
 
+	token, err := h.Service.ParseAndVerifyQRToken(payload.QRToken)
+	if err != nil {
+		return err
+	}
+
 	user, err := h.Service.QRCallback(c.Request().Context(), payload.QRToken, platform)
 	if err != nil {
 		return err
 	}
+
+	// Close the waiting QR WebSocket now that login is complete
+	h.qrHub.Close(token)
 
 	expiry, err := time.Parse(time.RFC3339, user.SessionExpiry)
 	if err != nil {

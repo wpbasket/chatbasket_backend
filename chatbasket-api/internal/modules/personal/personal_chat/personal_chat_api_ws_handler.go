@@ -50,7 +50,8 @@ func (h *chatHandler) WebSocketUpgrade(c *echo.Context) error {
 
 	// â”€â”€ 3. Accept the WebSocket upgrade â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 	wsConn, err := ws.Accept(c.Response(), c.Request(), &ws.AcceptOptions{
-		InsecureSkipVerify: true,
+		OriginPatterns: []string{"https://chatbasket.live"},
+		// OriginPatterns: []string{"http://localhost:8081"},
 	})
 	if err != nil {
 		log.Printf("[WS] WebSocketUpgrade: Accept failed for user %s: %v", uuidUserId, err)
