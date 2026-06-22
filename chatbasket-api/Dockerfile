@@ -40,7 +40,7 @@
 
 
 # -------- Build stage --------
-FROM --platform=$BUILDPLATFORM golang:1.26.3-alpine AS build_base
+FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS build_base
 
 # Install required packages
 RUN apk add --no-cache git ca-certificates
