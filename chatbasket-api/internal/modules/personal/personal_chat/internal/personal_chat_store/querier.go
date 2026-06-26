@@ -29,6 +29,7 @@ type Querier interface {
 	// Clears the last message preview for a specific participant only (used by Delete for Me).
 	// Only fires if the deleted message is the current preview message.
 	ClearLastMessageForParticipant(ctx context.Context, arg ClearLastMessageForParticipantParams) error
+	ClearMessageFileFields(ctx context.Context, id uuid.UUID) error
 	ConsumeSyncAction(ctx context.Context, id uuid.UUID) error
 	// ===========================================
 	// Chat Queries for sqlc
@@ -46,7 +47,19 @@ type Querier interface {
 	// Sync Action Operations
 	// ===========================================
 	CreateSyncAction(ctx context.Context, arg CreateSyncActionParams) (MessageSyncAction, error)
-	DeleteExpiredMessages(ctx context.Context) error
+	// Bulk-deletes messages for blocked-user chats that have no attached file_id (safe — no R2 orphans).
+	// Messages WITH files are handled by the batched cleanup loop.
+	DeleteBlockedUserMessagesWithoutFiles(ctx context.Context) error
+	// Bulk-deletes EXPIRED messages that have no attached file_id (safe — no R2 orphans possible).
+	// Messages WITH files are handled by the batched cleanup loop (file deleted first, then DB row).
+	DeleteExpiredMessagesWithoutFiles(ctx context.Context) error
+	// Bulk-deletes messages where BOTH primary devices have acknowledged (delivered to
+	// recipient primary AND synced to sender primary) AND the message has NO file_id.
+	// Safe bulk delete — no R2 orphan possible.
+	// For text-only messages, both devices already have a local copy, so the server
+	// copy is redundant and can be removed immediately.
+	// File-having messages are handled by the batched loop (R2 first, then DB).
+	DeleteFullyAcknowledgedMessagesWithoutFiles(ctx context.Context) error
 	DeleteMessage(ctx context.Context, id uuid.UUID) error
 	DeleteOldSyncActions(ctx context.Context) error
 	GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error)

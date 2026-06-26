@@ -131,6 +131,15 @@ type MessageSyncAction struct {
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 
+type PendingUpload struct {
+	FileID     string    `json:"file_id"`
+	BucketName string    `json:"bucket_name"`
+	R2Key      string    `json:"r2_key"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 type QrLoginRequest struct {
 	ID         uuid.UUID  `json:"id"`
 	AuthUserID *uuid.UUID `json:"auth_user_id"`

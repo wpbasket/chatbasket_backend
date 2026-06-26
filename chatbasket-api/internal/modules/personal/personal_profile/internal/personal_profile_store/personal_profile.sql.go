@@ -144,10 +144,27 @@ const deleteAvatar = `-- name: DeleteAvatar :exec
 DELETE FROM avatars WHERE user_id = $1 AND avatar_type = 'profile'
 `
 
-// Deletes the main profile avatar for a user
+// Deletes the main profile avatar for a user (called from ConfirmAvatarUpload tx when replacing)
 func (q *Queries) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteAvatar, userID)
 	return err
+}
+
+const getActiveAvatar = `-- name: GetActiveAvatar :one
+SELECT id, file_id FROM avatars WHERE user_id = $1 AND avatar_type = 'profile'
+`
+
+type GetActiveAvatarRow struct {
+	ID     uuid.UUID `json:"id"`
+	FileID *string   `json:"file_id"`
+}
+
+// Fetches the id and file_id for the main profile avatar
+func (q *Queries) GetActiveAvatar(ctx context.Context, userID uuid.UUID) (GetActiveAvatarRow, error) {
+	row := q.db.QueryRow(ctx, getActiveAvatar, userID)
+	var i GetActiveAvatarRow
+	err := row.Scan(&i.ID, &i.FileID)
+	return i, err
 }
 
 const getAvatarFileID = `-- name: GetAvatarFileID :one
@@ -290,25 +307,22 @@ func (q *Queries) GetUserByHashedUsernameForContact(ctx context.Context, hmacSha
 }
 
 const getUserCoreProfile = `-- name: GetUserCoreProfile :one
-SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at FROM users WHERE id = $1
+SELECT id, is_admin_blocked, profile_type
+FROM users
+WHERE id = $1
 `
 
-// Minimal user profile without avatar join
-func (q *Queries) GetUserCoreProfile(ctx context.Context, id uuid.UUID) (User, error) {
+type GetUserCoreProfileRow struct {
+	ID             uuid.UUID `json:"id"`
+	IsAdminBlocked bool      `json:"is_admin_blocked"`
+	ProfileType    string    `json:"profile_type"`
+}
+
+// Fetches minimal user info for eligibility checks
+func (q *Queries) GetUserCoreProfile(ctx context.Context, id uuid.UUID) (GetUserCoreProfileRow, error) {
 	row := q.db.QueryRow(ctx, getUserCoreProfile, id)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Bio,
-		&i.ProfileType,
-		&i.IsAdminBlocked,
-		&i.AdminBlockReason,
-		&i.HmacSha256HexUsername,
-		&i.B64CipherChacha20poly1305Username,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
+	var i GetUserCoreProfileRow
+	err := row.Scan(&i.ID, &i.IsAdminBlocked, &i.ProfileType)
 	return i, err
 }
 
@@ -338,7 +352,7 @@ type GetUserProfileRow struct {
 	TokenExpiry                       *time.Time `json:"token_expiry"`
 }
 
-// Returns full user record along with its profile avatar tokens and file_id
+// Returns full user record along with its profile avatar file_id
 func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error) {
 	row := q.db.QueryRow(ctx, getUserProfile, id)
 	var i GetUserProfileRow
@@ -390,173 +404,31 @@ func (q *Queries) IsUserExists(ctx context.Context, id uuid.UUID) (bool, error) 
 	return exists, err
 }
 
-const isUserProfilePicExists = `-- name: IsUserProfilePicExists :one
-SELECT EXISTS (
-        SELECT 1
-        FROM users u
-            JOIN avatars a ON a.user_id = u.id
-        WHERE
-            u.id = $1
-            AND a.avatar_type = 'profile'
-    )
-`
-
-// Checks if the user exists and has a main profile picture
-func (q *Queries) IsUserProfilePicExists(ctx context.Context, id uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, isUserProfilePicExists, id)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const listUsersAfter = `-- name: ListUsersAfter :many
-SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
-FROM users
-WHERE
-    created_at < $1
-ORDER BY created_at DESC
-LIMIT $2
-`
-
-type ListUsersAfterParams struct {
-	CreatedAt time.Time `json:"created_at"`
-	Limit     int32     `json:"limit"`
-}
-
-// Returns users created before a certain timestamp (keyset pagination)
-func (q *Queries) ListUsersAfter(ctx context.Context, arg ListUsersAfterParams) ([]User, error) {
-	rows, err := q.db.Query(ctx, listUsersAfter, arg.CreatedAt, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []User
-	for rows.Next() {
-		var i User
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Bio,
-			&i.ProfileType,
-			&i.IsAdminBlocked,
-			&i.AdminBlockReason,
-			&i.HmacSha256HexUsername,
-			&i.B64CipherChacha20poly1305Username,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const updateAvatarFull = `-- name: UpdateAvatarFull :one
+const updateAvatarFileID = `-- name: UpdateAvatarFileID :exec
 UPDATE avatars
-SET
-    file_id = $2,
-    token_id = $3,
-    token_secret = $4,
-    token_expiry = $5
-WHERE
-    user_id = $1
-    AND avatar_type = 'profile'
-RETURNING
-    id, user_id, file_id, avatar_type, token_id, token_secret, token_expiry, created_at, updated_at
+SET file_id = $2
+WHERE user_id = $1 AND avatar_type = 'profile'
 `
 
-type UpdateAvatarFullParams struct {
-	UserID      uuid.UUID  `json:"user_id"`
-	FileID      *string    `json:"file_id"`
-	TokenID     *string    `json:"token_id"`
-	TokenSecret *string    `json:"token_secret"`
-	TokenExpiry *time.Time `json:"token_expiry"`
+type UpdateAvatarFileIDParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	FileID *string   `json:"file_id"`
 }
 
-// Updates all avatar fields (file_id, tokens) for the main profile avatar
-func (q *Queries) UpdateAvatarFull(ctx context.Context, arg UpdateAvatarFullParams) (Avatar, error) {
-	row := q.db.QueryRow(ctx, updateAvatarFull,
-		arg.UserID,
-		arg.FileID,
-		arg.TokenID,
-		arg.TokenSecret,
-		arg.TokenExpiry,
-	)
-	var i Avatar
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.FileID,
-		&i.AvatarType,
-		&i.TokenID,
-		&i.TokenSecret,
-		&i.TokenExpiry,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+// Updates only the file_id for the main profile avatar (token columns unused per spec §3.C).
+func (q *Queries) UpdateAvatarFileID(ctx context.Context, arg UpdateAvatarFileIDParams) error {
+	_, err := q.db.Exec(ctx, updateAvatarFileID, arg.UserID, arg.FileID)
+	return err
 }
 
-const updateAvatarTokens = `-- name: UpdateAvatarTokens :one
-UPDATE avatars
-SET
-    token_id = $2,
-    token_secret = $3,
-    token_expiry = $4
-WHERE
-    user_id = $1
-    AND avatar_type = 'profile'
-RETURNING
-    id, user_id, file_id, avatar_type, token_id, token_secret, token_expiry, created_at, updated_at
-`
-
-type UpdateAvatarTokensParams struct {
-	UserID      uuid.UUID  `json:"user_id"`
-	TokenID     *string    `json:"token_id"`
-	TokenSecret *string    `json:"token_secret"`
-	TokenExpiry *time.Time `json:"token_expiry"`
-}
-
-// Updates token_id, token_secret, and token_expiry for the main profile avatar
-func (q *Queries) UpdateAvatarTokens(ctx context.Context, arg UpdateAvatarTokensParams) (Avatar, error) {
-	row := q.db.QueryRow(ctx, updateAvatarTokens,
-		arg.UserID,
-		arg.TokenID,
-		arg.TokenSecret,
-		arg.TokenExpiry,
-	)
-	var i Avatar
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.FileID,
-		&i.AvatarType,
-		&i.TokenID,
-		&i.TokenSecret,
-		&i.TokenExpiry,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateUserProfile = `-- name: UpdateUserProfile :one
+const updateUserProfile = `-- name: UpdateUserProfile :exec
 UPDATE users
 SET
     name = COALESCE($2, name),
     bio = COALESCE($3, bio),
-    profile_type = COALESCE(
-        $4,
-        profile_type
-    )
+    profile_type = COALESCE($4, profile_type)
 WHERE
     id = $1
-RETURNING
-    id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 `
 
 type UpdateUserProfileParams struct {
@@ -566,26 +438,13 @@ type UpdateUserProfileParams struct {
 	ProfileType *string   `json:"profile_type"`
 }
 
-// Updates user profile fields conditionally based on provided values (NULL values are ignored)
-func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUserProfile,
+// Updates user profile fields
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) error {
+	_, err := q.db.Exec(ctx, updateUserProfile,
 		arg.ID,
 		arg.Name,
 		arg.Bio,
 		arg.ProfileType,
 	)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Bio,
-		&i.ProfileType,
-		&i.IsAdminBlocked,
-		&i.AdminBlockReason,
-		&i.HmacSha256HexUsername,
-		&i.B64CipherChacha20poly1305Username,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+	return err
 }

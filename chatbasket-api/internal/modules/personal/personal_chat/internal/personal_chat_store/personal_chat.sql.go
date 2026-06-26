@@ -116,6 +116,26 @@ func (q *Queries) ClearLastMessageForParticipant(ctx context.Context, arg ClearL
 	return err
 }
 
+const clearMessageFileFields = `-- name: ClearMessageFileFields :exec
+UPDATE messages
+SET
+    file_id = NULL,
+    file_name = NULL,
+    file_size = NULL,
+    file_mime_type = NULL,
+    file_token_id = NULL,
+    file_token_secret = NULL,
+    file_token_expiry = NULL,
+    updated_at = now()
+WHERE
+    id = $1
+`
+
+func (q *Queries) ClearMessageFileFields(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearMessageFileFields, id)
+	return err
+}
+
 const consumeSyncAction = `-- name: ConsumeSyncAction :exec
 DELETE FROM message_sync_actions WHERE id = $1
 `
@@ -431,18 +451,53 @@ func (q *Queries) CreateSyncAction(ctx context.Context, arg CreateSyncActionPara
 	return i, err
 }
 
-const deleteExpiredMessages = `-- name: DeleteExpiredMessages :exec
-DELETE FROM messages
-WHERE
-    expires_at < now()
-    OR (
-        delivered_to_recipient_primary = TRUE
-        AND synced_to_sender_primary = TRUE
-    )
+const deleteBlockedUserMessagesWithoutFiles = `-- name: DeleteBlockedUserMessagesWithoutFiles :exec
+DELETE FROM messages m
+USING chats c, user_blocks ub
+WHERE m.chat_id = c.id
+  AND m.file_id IS NULL
+  AND (
+      (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+      OR
+      (c.participant_2_id = ub.blocker_user_id AND c.participant_1_id = ub.blocked_user_id)
+  )
 `
 
-func (q *Queries) DeleteExpiredMessages(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredMessages)
+// Bulk-deletes messages for blocked-user chats that have no attached file_id (safe — no R2 orphans).
+// Messages WITH files are handled by the batched cleanup loop.
+func (q *Queries) DeleteBlockedUserMessagesWithoutFiles(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteBlockedUserMessagesWithoutFiles)
+	return err
+}
+
+const deleteExpiredMessagesWithoutFiles = `-- name: DeleteExpiredMessagesWithoutFiles :exec
+DELETE FROM messages
+WHERE expires_at < now()
+  AND file_id IS NULL
+`
+
+// Bulk-deletes EXPIRED messages that have no attached file_id (safe — no R2 orphans possible).
+// Messages WITH files are handled by the batched cleanup loop (file deleted first, then DB row).
+func (q *Queries) DeleteExpiredMessagesWithoutFiles(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredMessagesWithoutFiles)
+	return err
+}
+
+const deleteFullyAcknowledgedMessagesWithoutFiles = `-- name: DeleteFullyAcknowledgedMessagesWithoutFiles :exec
+DELETE FROM messages
+WHERE delivered_to_recipient_primary = TRUE
+  AND synced_to_sender_primary = TRUE
+  AND file_id IS NULL
+`
+
+// Bulk-deletes messages where BOTH primary devices have acknowledged (delivered to
+// recipient primary AND synced to sender primary) AND the message has NO file_id.
+// Safe bulk delete — no R2 orphan possible.
+// For text-only messages, both devices already have a local copy, so the server
+// copy is redundant and can be removed immediately.
+// File-having messages are handled by the batched loop (R2 first, then DB).
+func (q *Queries) DeleteFullyAcknowledgedMessagesWithoutFiles(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteFullyAcknowledgedMessagesWithoutFiles)
 	return err
 }
 
@@ -905,7 +960,7 @@ INNER JOIN user_blocks ub ON (
     OR
     (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
 )
-WHERE (m.file_id IS NOT NULL OR m.thumbnail_file_id IS NOT NULL)
+WHERE m.file_id IS NOT NULL
 AND m.id > $1
 ORDER BY m.id ASC
 LIMIT $2
@@ -1696,13 +1751,6 @@ UPDATE messages
 SET
     content = 'Message unsent',
     message_type = 'unsent',
-    file_id = NULL,
-    file_name = NULL,
-    file_size = NULL,
-    file_mime_type = NULL,
-    file_token_id = NULL,
-    file_token_secret = NULL,
-    file_token_expiry = NULL,
     updated_at = now()
 WHERE
     id = $1

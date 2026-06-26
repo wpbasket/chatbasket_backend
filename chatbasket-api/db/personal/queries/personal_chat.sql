@@ -223,6 +223,13 @@ UPDATE messages
 SET
     content = 'Message unsent',
     message_type = 'unsent',
+    updated_at = now()
+WHERE
+    id = $1;
+
+-- name: ClearMessageFileFields :exec
+UPDATE messages
+SET
     file_id = NULL,
     file_name = NULL,
     file_size = NULL,
@@ -233,6 +240,7 @@ SET
     updated_at = now()
 WHERE
     id = $1;
+
 
 -- name: MarkMessageDeletedBySender :exec
 UPDATE messages
@@ -275,14 +283,6 @@ WHERE
     AND recipient_id = $2
     AND delivered_to_recipient_primary = FALSE;
 
--- name: DeleteExpiredMessages :exec
-DELETE FROM messages
-WHERE
-    expires_at < now()
-    OR (
-        delivered_to_recipient_primary = TRUE
-        AND synced_to_sender_primary = TRUE
-    );
 
 -- name: CleanupOlderFullyAcknowledgedMessages :exec
 -- Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
@@ -656,7 +656,38 @@ INNER JOIN user_blocks ub ON (
     OR
     (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
 )
-WHERE (m.file_id IS NOT NULL OR m.thumbnail_file_id IS NOT NULL)
+WHERE m.file_id IS NOT NULL
 AND m.id > sqlc.arg('last_id')
 ORDER BY m.id ASC
 LIMIT sqlc.arg('limit');
+-- name: DeleteExpiredMessagesWithoutFiles :exec
+-- Bulk-deletes EXPIRED messages that have no attached file_id (safe — no R2 orphans possible).
+-- Messages WITH files are handled by the batched cleanup loop (file deleted first, then DB row).
+DELETE FROM messages
+WHERE expires_at < now()
+  AND file_id IS NULL;
+
+-- name: DeleteBlockedUserMessagesWithoutFiles :exec
+-- Bulk-deletes messages for blocked-user chats that have no attached file_id (safe — no R2 orphans).
+-- Messages WITH files are handled by the batched cleanup loop.
+DELETE FROM messages m
+USING chats c, user_blocks ub
+WHERE m.chat_id = c.id
+  AND m.file_id IS NULL
+  AND (
+      (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+      OR
+      (c.participant_2_id = ub.blocker_user_id AND c.participant_1_id = ub.blocked_user_id)
+  );
+
+-- name: DeleteFullyAcknowledgedMessagesWithoutFiles :exec
+-- Bulk-deletes messages where BOTH primary devices have acknowledged (delivered to
+-- recipient primary AND synced to sender primary) AND the message has NO file_id.
+-- Safe bulk delete — no R2 orphan possible.
+-- For text-only messages, both devices already have a local copy, so the server
+-- copy is redundant and can be removed immediately.
+-- File-having messages are handled by the batched loop (R2 first, then DB).
+DELETE FROM messages
+WHERE delivered_to_recipient_primary = TRUE
+  AND synced_to_sender_primary = TRUE
+  AND file_id IS NULL;

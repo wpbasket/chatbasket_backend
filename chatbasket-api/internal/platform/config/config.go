@@ -3,6 +3,7 @@ package config
 import (
 	"chatbasket-api/internal/platform/kit"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// PostgresConfig holds the database configuration, ported from chatbasket-api/db/config.go
+// PostgresConfig holds the database configuration.
 type PostgresConfig struct {
 	DatabaseURL           string
 	DatabaseURLTesting    string
@@ -23,59 +24,63 @@ type PostgresConfig struct {
 	MaxConnLifetimeJitter time.Duration
 }
 
-// Config holds the application-wide configuration
+// Config holds the application-wide configuration.
 type Config struct {
 	Port     string
 	Postgres *PostgresConfig
-	Appwrite *AppwriteConfig
 	Cosmos   *CosmosConfig
 	Email    *EmailConfig
 	Security *SecurityConfig
 	Firebase *FirebaseConfig
+	R2       *R2PoolConfig
 }
 
-// SecurityConfig holds domain-level security keys
+// R2AccountConfig holds credentials for a single Cloudflare R2 account.
+type R2AccountConfig struct {
+	Name             string `json:"name"`
+	AccountID        string `json:"account_id"`
+	AccessKeyID      string `json:"access_key_id"`
+	SecretAccessKey  string `json:"secret_access_key"`
+	ChatFilesBucket  string `json:"chat_files_bucket"`
+	ProfilePicBucket string `json:"profile_pic_bucket"`
+}
+
+// R2PoolConfig holds the R2 client pool configuration.
+type R2PoolConfig struct {
+	Accounts              []R2AccountConfig
+	PrimaryChatAccount    string
+	PrimaryProfileAccount string
+}
+
+// SecurityConfig holds domain-level security keys.
 type SecurityConfig struct {
 	AuthSecret          []byte
 	PersonalUsernameKey []byte
 	PersonalContactKey  []byte
 }
 
-// AppwriteConfig holds Appwrite specific configuration, ported from routes/config.go and appwriteinternal/service.go
-type AppwriteConfig struct {
-	Endpoint                   string
-	ProjectID                  string
-	ApiKey                     string
-	PersonalProfilePicBucketID string
-	PersonalChatFilesBucketID  string
-}
-
-// CosmosConfig holds Cosmos DB configuration, ported from db/cosmos_config.go
+// CosmosConfig holds Cosmos DB configuration.
 type CosmosConfig struct {
 	ConnectionString string
 	Database         string
 	Container        string
 }
 
-// EmailConfig holds email relay configuration, ported from utils/emailUtils.go
+// EmailConfig holds email relay configuration.
 type EmailConfig struct {
 	RelayURL    string
 	RelaySecret string
 }
 
-// FirebaseConfig holds Firebase specific configuration
+// FirebaseConfig holds Firebase configuration.
 type FirebaseConfig struct {
 	CredentialsJSON []byte
 }
 
-// Load loads the configuration from environment variables and .env files, following the logic in chatbasket-api/app/main.go
+// Load loads configuration from environment variables and .env files.
 func Load() (*Config, error) {
-	// Try loading .env files, but don't fail if missing (production uses real env vars)
-	// Ported from chatbasket-api/app/main.go
 	if err := godotenv.Load(".env"); err != nil {
-		if err := godotenv.Load("../.env"); err != nil {
-			// Not a fatal error, will use system environment variables
-		}
+		_ = godotenv.Load("../.env")
 	}
 
 	port := os.Getenv("PORT")
@@ -83,8 +88,6 @@ func Load() (*Config, error) {
 		port = "8080"
 	}
 
-	// Load Postgres config, ported from chatbasket-api/db/config.go:LoadPostgresConfig
-	// TOGGLE HERE: Swap comments below to easily switch between Production and Development locally
 	dsn := os.Getenv("DATABASE_URL_PG_CB")
 	// dsn := os.Getenv("DATABASE_URL_PG_DEV")
 
@@ -99,39 +102,18 @@ func Load() (*Config, error) {
 		MinConns:              2,
 		MinIdleConns:          2,
 		MaxConnLifetime:       kit.DefaultPostgresMaxConnLifetime,
-
 		MaxConnIdleTime:       2 * time.Minute,
 		HealthCheckPeriod:     1 * time.Minute,
 		MaxConnLifetimeJitter: 5 * time.Minute,
 	}
 
-	// Load Appwrite config, following the logic in chatbasket-api/routes/config.go:loadAppwriteConfig
-	awCfg := &AppwriteConfig{}
-	var awErr error
-
-	if awCfg.Endpoint, awErr = kit.LoadKeyFromEnv("APPWRITE_ENDPOINT"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.ProjectID, awErr = kit.LoadKeyFromEnv("APPWRITE_PROJECT_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.ApiKey, awErr = kit.LoadKeyFromEnv("APPWRITE_API_KEY"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.PersonalProfilePicBucketID, awErr = kit.LoadKeyFromEnv("APPWRITE_FILE_PERSONAL_USERPROFILEPIC_BUCKET_ID"); awErr != nil {
-		return nil, awErr
-	}
-	if awCfg.PersonalChatFilesBucketID, awErr = kit.LoadKeyFromEnv("APPWRITE_PERSONAL_CHAT_FILES_BUCKET_ID"); awErr != nil {
-		return nil, awErr
-	}
-
-	// Load Security config
 	secCfg := &SecurityConfig{}
-	if secCfg.PersonalUsernameKey, awErr = kit.LoadKeyFromEnvInByte("PERSONAL_USERNAME_KEY"); awErr != nil {
-		return nil, awErr
+	var secErr error
+	if secCfg.PersonalUsernameKey, secErr = kit.LoadKeyFromEnvInByte("PERSONAL_USERNAME_KEY"); secErr != nil {
+		return nil, secErr
 	}
-	if secCfg.PersonalContactKey, awErr = kit.LoadKeyFromEnvInByte("PERSONAL_CONTACT_KEY"); awErr != nil {
-		return nil, awErr
+	if secCfg.PersonalContactKey, secErr = kit.LoadKeyFromEnvInByte("PERSONAL_CONTACT_KEY"); secErr != nil {
+		return nil, secErr
 	}
 	if secret := os.Getenv("AUTH_SECRET"); secret != "" {
 		if decoded, err := base64.StdEncoding.DecodeString(secret); err == nil {
@@ -139,33 +121,90 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Load Cosmos config
 	cosmosCfg := &CosmosConfig{
 		ConnectionString: os.Getenv("COSMOS_CONNECTION_STRING"),
 		Database:         os.Getenv("COSMOS_DATABASE"),
 		Container:        os.Getenv("COSMOS_CONTAINER"),
 	}
 
-	// Load Email config
 	emailCfg := &EmailConfig{
 		RelayURL:    os.Getenv("MAIL_RELAY_URL"),
 		RelaySecret: os.Getenv("MAIL_RELAY_SECRET"),
 	}
 
-	// Load Firebase config from environment variable only
 	fbCfg := &FirebaseConfig{}
 	if fbCredsJSON := os.Getenv("FIREBASE_CREDENTIALS_JSON"); fbCredsJSON != "" {
 		fbCfg.CredentialsJSON = []byte(fbCredsJSON)
 	}
 
+	r2Cfg, err := loadR2PoolConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		Port:     port,
 		Postgres: pgCfg,
-		Appwrite: awCfg,
 		Cosmos:   cosmosCfg,
 		Email:    emailCfg,
 		Security: secCfg,
 		Firebase: fbCfg,
+		R2:       r2Cfg,
 	}, nil
 }
 
+// loadR2PoolConfig loads R2 accounts from R2_ACCOUNTS_JSON (JSON array).
+func loadR2PoolConfig() (*R2PoolConfig, error) {
+	jsonStr := os.Getenv("R2_ACCOUNTS_JSON")
+	if jsonStr == "" {
+		return nil, fmt.Errorf("R2_ACCOUNTS_JSON is required (must be a JSON array of R2 account configs)")
+	}
+
+	var accounts []R2AccountConfig
+	if err := json.Unmarshal([]byte(jsonStr), &accounts); err != nil {
+		return nil, fmt.Errorf("failed to parse R2_ACCOUNTS_JSON: %w", err)
+	}
+
+	if len(accounts) == 0 {
+		return nil, fmt.Errorf("R2_ACCOUNTS_JSON must contain at least one account")
+	}
+
+	seen := make(map[string]bool, len(accounts))
+	for i := range accounts {
+		acc := &accounts[i]
+		if acc.Name == "" {
+			return nil, fmt.Errorf("R2_ACCOUNTS_JSON[%d]: 'name' is required", i)
+		}
+		if seen[acc.Name] {
+			return nil, fmt.Errorf("R2_ACCOUNTS_JSON: duplicate account name '%s'", acc.Name)
+		}
+		seen[acc.Name] = true
+
+		if acc.AccountID == "" || acc.AccessKeyID == "" || acc.SecretAccessKey == "" {
+			return nil, fmt.Errorf("R2_ACCOUNTS_JSON[%d] (%s): account_id, access_key_id, and secret_access_key are required", i, acc.Name)
+		}
+		if acc.ChatFilesBucket == "" && acc.ProfilePicBucket == "" {
+			return nil, fmt.Errorf("R2_ACCOUNTS_JSON[%d] (%s): at least one of chat_files_bucket or profile_pic_bucket is required", i, acc.Name)
+		}
+	}
+
+	primaryChat := os.Getenv("R2_PRIMARY_CHAT_ACCOUNT")
+	if primaryChat == "" {
+		primaryChat = accounts[0].Name
+	} else if !seen[primaryChat] {
+		return nil, fmt.Errorf("R2_PRIMARY_CHAT_ACCOUNT='%s' not found in R2_ACCOUNTS_JSON", primaryChat)
+	}
+
+	primaryProfile := os.Getenv("R2_PRIMARY_PROFILE_ACCOUNT")
+	if primaryProfile == "" {
+		primaryProfile = accounts[0].Name
+	} else if !seen[primaryProfile] {
+		return nil, fmt.Errorf("R2_PRIMARY_PROFILE_ACCOUNT='%s' not found in R2_ACCOUNTS_JSON", primaryProfile)
+	}
+
+	return &R2PoolConfig{
+		Accounts:              accounts,
+		PrimaryChatAccount:    primaryChat,
+		PrimaryProfileAccount: primaryProfile,
+	}, nil
+}

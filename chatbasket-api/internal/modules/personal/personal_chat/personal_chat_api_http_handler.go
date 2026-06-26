@@ -5,7 +5,6 @@ import (
 	"chatbasket-api/internal/platform/websocket"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -220,124 +219,6 @@ func (h *chatHandler) GetPendingMessages(c *echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *chatHandler) UploadFileForMessage(c *echo.Context) error {
-	userID, err := kit.ExtractUserID(c)
-	if err != nil {
-		return err
-	}
-	isPrimary := extractIsPrimary(c)
-
-	recipientIDStr := c.FormValue("recipient_id")
-	if recipientIDStr == "" {
-		return kit.NewError(http.StatusBadRequest, "invalid_request", "recipient_id is required")
-	}
-
-	recipientID, err := uuid.Parse(recipientIDStr)
-	if err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
-	}
-
-	if userID.UuidUserId == recipientID {
-		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send file to yourself")
-	}
-
-	recipientKeysRevisionStr := c.FormValue("recipient_keys_revision"); recipientKeysRevision := 0; if recipientKeysRevisionStr != "" { if v, parseErr := strconv.Atoi(recipientKeysRevisionStr); parseErr == nil { recipientKeysRevision = v } }
-	senderKeysRevisionStr := c.FormValue("sender_keys_revision"); senderKeysRevisionParam := 0; if senderKeysRevisionStr != "" { if v, parseErr := strconv.Atoi(senderKeysRevisionStr); parseErr == nil { senderKeysRevisionParam = v } }
-
-	messageType := c.FormValue("message_type")
-	if messageType == "" {
-		messageType = "file"
-	}
-
-	caption := c.FormValue("caption")
-
-	file, err := c.FormFile("file")
-	if err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_request", "No file provided")
-	}
-
-	message, svcErr := h.Service.UploadFileForMessage(c.Request().Context(), UploadFileForMessageParams{
-		SenderID:              userID,
-		RecipientID:           recipientID,
-		FileHeader:            file,
-		MessageType:           messageType,
-		Caption:               caption,
-		IsPrimary:             isPrimary,
-		RecipientKeysRevision: int32(recipientKeysRevision),
-		SenderKeysRevision:    int32(senderKeysRevisionParam),
-	})
-	if svcErr != nil {
-		return svcErr
-	}
-
-	viewURL, downloadURL, tokenExpiry, _ := h.Service.GenerateMessageFileURLs(c.Request().Context(), *message, userID)
-	senderKeysRevision := h.Service.getSenderKeysRevision(c.Request().Context(), message.SenderID)
-
-	msgInfo := &MessageResponse{
-		MessageID:             message.ID.String(),
-		ChatID:                message.ChatID.String(),
-		RecipientID:           message.RecipientID.String(),
-		SenderKeysRevision:    senderKeysRevision,
-		Content:               message.Content,
-		MessageType:           message.MessageType,
-		DeliveredToRecipient:  false,
-		SyncedToSenderPrimary: message.SyncedToSenderPrimary,
-		CreatedAt:             message.CreatedAt,
-		ExpiresAt:             message.ExpiresAt,
-		IsFromMe:              true,
-		FileID:                message.FileID,
-		FileName:              message.FileName,
-		FileSize:              message.FileSize,
-		FileMimeType:          message.FileMimeType,
-		ViewURL:               viewURL,
-		DownloadURL:           downloadURL,
-		FileTokenExpiry:       tokenExpiry,
-	}
-
-	uploadResponse := &UploadFileResponse{
-		MessageID:           message.ID.String(),
-		SenderKeysRevision:  senderKeysRevision,
-		FileID:              *message.FileID,
-		MessageType:         message.MessageType,
-		FileMimeType:        message.FileMimeType,
-		ViewURL:             viewURL,
-		DownloadURL:         downloadURL,
-		FileName:            message.FileName,
-		FileSize:            message.FileSize,
-		CreatedAt:           message.CreatedAt,
-		ExpiresAt:           message.ExpiresAt,
-		FileTokenExpiry:     tokenExpiry,
-	}
-
-	// ——— WS Broadcast: new_message (File Upload) —————————————————————————————————————————————————
-	if h.hub != nil {
-		sessionId := extractSessionId(c)
-		recipientUUID, _ := uuid.Parse(msgInfo.RecipientID)
-
-		log.Printf("[WS Broadcast] UploadFileForMessage: msgID=%s chatID=%s sender=%s recipient=%s sessionId=%s",
-			msgInfo.MessageID, msgInfo.ChatID, userID.StringUserId, msgInfo.RecipientID, sessionId)
-
-		// For recipient: is_from_me = false
-		recipientPayload := *msgInfo
-		recipientPayload.IsFromMe = false
-		log.Printf("[WS Broadcast] UploadFileForMessage: pushing new_message to RECIPIENT=%s", recipientUUID)
-		go h.hub.BroadcastToUser(recipientUUID, websocket.WSEvent{
-			Type:    WSEventNewMessage,
-			Payload: recipientPayload,
-		})
-
-		// For sender's OTHER devices: is_from_me = true
-		log.Printf("[WS Broadcast] UploadFileForMessage: pushing new_message to SENDER=%s other devices", userID.StringUserId)
-		go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, websocket.WSEvent{
-			Type:    WSEventNewMessage,
-			Payload: msgInfo,
-		})
-	} else {
-		log.Printf("[WS Broadcast] UploadFileForMessage: WSHub is NIL or msgInfo missing, skipping broadcast")
-	}
-
-	return c.JSON(http.StatusOK, uploadResponse)
-}
 
 func (h *chatHandler) GetFileURL(c *echo.Context) error {
 	userID, err := kit.ExtractUserID(c)
@@ -541,3 +422,108 @@ func (h *chatHandler) AcknowledgeSyncAction(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, kit.StatusOkay{Status: true, Message: "success"})
 }
+func (h *chatHandler) PresignUpload(c *echo.Context) error {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+	var payload struct {
+		RecipientID           string `json:"recipient_id"`
+		MessageType           string `json:"message_type"`
+		RecipientKeysRevision int32  `json:"recipient_keys_revision"`
+		SenderKeysRevision    int32  `json:"sender_keys_revision"`
+	}
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(http.StatusBadRequest, "bad_request", "Invalid presign payload: "+err.Error())
+	}
+	recipientID, err := uuid.Parse(payload.RecipientID)
+	if err != nil {
+		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
+	}
+	res, svcErr := h.Service.PresignChatUpload(c.Request().Context(), PresignChatUploadParams{
+		SenderID:              userID,
+		RecipientID:           recipientID,
+		MessageType:           payload.MessageType,
+		RecipientKeysRevision: payload.RecipientKeysRevision,
+		SenderKeysRevision:    payload.SenderKeysRevision,
+	})
+	if svcErr != nil {
+		return svcErr
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
+func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+	isPrimary := extractIsPrimary(c)
+	var payload ConfirmChatUploadPayload
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(http.StatusBadRequest, "bad_request", "Invalid confirm payload")
+	}
+	recipientID, err := uuid.Parse(payload.RecipientID)
+	if err != nil {
+		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
+	}
+	if userID.UuidUserId == recipientID {
+		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send file to yourself")
+	}
+	message, svcErr := h.Service.ConfirmChatUpload(c.Request().Context(), ConfirmChatUploadParams{
+		SenderID:              userID,
+		RecipientID:           recipientID,
+		FileID:                payload.FileID,
+		Content:               payload.Content,
+		MessageType:           payload.MessageType,
+		IsPrimary:             isPrimary,
+		RecipientKeysRevision: payload.RecipientKeysRevision,
+		SenderKeysRevision:    payload.SenderKeysRevision,
+	})
+	if svcErr != nil {
+		return svcErr
+	}
+	viewURL, downloadURL, _ := h.Service.GenerateMessageFileURLs(c.Request().Context(), *message, userID)
+	senderKeysRevision := h.Service.getSenderKeysRevision(c.Request().Context(), message.SenderID)
+	msgInfo := &MessageResponse{
+		MessageID:             message.ID.String(),
+		ChatID:                message.ChatID.String(),
+		RecipientID:           message.RecipientID.String(),
+		SenderKeysRevision:    senderKeysRevision,
+		Content:               message.Content,
+		MessageType:           message.MessageType,
+		DeliveredToRecipient:  false,
+		SyncedToSenderPrimary: message.SyncedToSenderPrimary,
+		CreatedAt:             message.CreatedAt,
+		ExpiresAt:             message.ExpiresAt,
+		IsFromMe:              true,
+		FileID:                message.FileID,
+		FileName:              message.FileName,
+		FileSize:              message.FileSize,
+		FileMimeType:          message.FileMimeType,
+		ViewURL:               viewURL,
+		DownloadURL:           downloadURL,
+	}
+	confirmResponse := &ConfirmChatUploadResponse{
+		MessageID:          message.ID.String(),
+		ChatID:             message.ChatID.String(),
+		RecipientID:        message.RecipientID.String(),
+		SenderKeysRevision: senderKeysRevision,
+		FileID:             *message.FileID,
+		MessageType:        message.MessageType,
+		ViewURL:            viewURL,
+		DownloadURL:        downloadURL,
+		CreatedAt:          message.CreatedAt,
+		ExpiresAt:          message.ExpiresAt,
+	}
+	if h.hub != nil {
+		sessionId := extractSessionId(c)
+		recipientUUID, _ := uuid.Parse(msgInfo.RecipientID)
+		recipientPayload := *msgInfo
+		recipientPayload.IsFromMe = false
+		go h.hub.BroadcastToUser(recipientUUID, websocket.WSEvent{Type: WSEventNewMessage, Payload: recipientPayload})
+		go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, websocket.WSEvent{Type: WSEventNewMessage, Payload: msgInfo})
+	}
+	return c.JSON(http.StatusOK, confirmResponse)
+}
+

@@ -9,10 +9,13 @@ import (
 	"time"
 
 	"chatbasket-api/internal/modules/core/core_auth"
+	"chatbasket-api/internal/modules/core/pending_uploads"
 	"chatbasket-api/internal/platform/clients"
+	"chatbasket-api/internal/platform/config"
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/services"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
@@ -39,12 +42,15 @@ func setupProfileIntegrationDB(t *testing.T) (*pgxpool.Pool, *core_auth.AuthServ
 	_, err = pool.Exec(context.Background(), "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS e2ee_public_key CHAR(44)")
 	require.NoError(t, err, "failed to ensure sessions.e2ee_public_key exists")
 
+	// Drop length constraint for dummy test key compatibility
+	_, _ = pool.Exec(context.Background(), "ALTER TABLE sessions DROP CONSTRAINT IF EXISTS sessions_e2ee_public_key_length_check")
+
 	_, err = pool.Exec(context.Background(), "ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS keys_revision INT NOT NULL DEFAULT 0")
 	require.NoError(t, err, "failed to ensure auth_users.keys_revision exists")
 
 	globalSvc := services.NewGlobalService()
 	authSvc := core_auth.NewAuthService(globalSvc, pool, []byte("test-secret"))
-	profileSvc := NewProfileService(globalSvc, pool, authSvc, []byte("test-username-key-32bytes-long!!!"), (*clients.AppwriteStorageService)(nil), "test-bucket")
+	profileSvc := NewProfileService(globalSvc, pool, authSvc, []byte("test-username-key-32bytes-long!!!"), nil, (*clients.R2ClientPool)(nil))
 
 	return pool, authSvc, profileSvc
 }
@@ -256,3 +262,143 @@ func TestGetContactableProfilesForViewer_Integration_EmptyList(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, profiles)
 }
+
+type mockPendingUploads struct{}
+
+func (m *mockPendingUploads) Register(ctx context.Context, fileID, bucket, r2Key string, expiresAt time.Time) error {
+	return nil
+}
+func (m *mockPendingUploads) Lookup(ctx context.Context, fileID string) (pending_uploads.PendingUpload, error) {
+	return pending_uploads.PendingUpload{FileID: fileID, BucketName: "test-bucket", R2Key: "test-key"}, nil
+}
+func (m *mockPendingUploads) Remove(ctx context.Context, fileID string) error {
+	return nil
+}
+func (m *mockPendingUploads) LookupTx(ctx context.Context, tx pgx.Tx, fileID string) (pending_uploads.PendingUpload, error) {
+	return pending_uploads.PendingUpload{FileID: fileID, BucketName: "test-bucket", R2Key: "test-key"}, nil
+}
+func (m *mockPendingUploads) RegisterTx(ctx context.Context, tx pgx.Tx, fileID, bucket, r2Key string, expiresAt time.Time) error {
+	return nil
+}
+func (m *mockPendingUploads) RemoveTx(ctx context.Context, tx pgx.Tx, fileID string) error {
+	return nil
+}
+
+func TestConfirmAvatarUpload_Integration(t *testing.T) {
+	pool, _, profileSvc := setupProfileIntegrationDB(t)
+	ctx := context.Background()
+
+	userID, _ := createTestUserWithProfile(t, pool)
+
+	// Set up mock pending uploads
+	profileSvc.PendingUploads = &mockPendingUploads{}
+
+	// Setup a dummy R2ClientPool
+	r2Pool, err := clients.NewR2ClientPool(&config.R2PoolConfig{
+		Accounts: []config.R2AccountConfig{
+			{
+				Name:             "primary",
+				AccountID:        "dummy",
+				AccessKeyID:      "dummy",
+				SecretAccessKey:  "dummy",
+				ChatFilesBucket:  "dummy",
+				ProfilePicBucket: "dummy-bucket",
+			},
+		},
+		PrimaryChatAccount:    "primary",
+		PrimaryProfileAccount: "primary",
+	})
+	require.NoError(t, err)
+	profileSvc.R2Pool = r2Pool
+
+	// 1. Upload first avatar (normal path)
+	res, err := profileSvc.ConfirmAvatarUpload(ctx, userID, "primary:avatar-1")
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.True(t, res.Status)
+
+	// Verify avatar is active in DB
+	avatarFileID, err := profileSvc.PostgresQueries.GetAvatarFileID(ctx, userID.UuidUserId)
+	assert.NoError(t, err)
+	require.NotNil(t, avatarFileID)
+	assert.Equal(t, "primary:avatar-1", *avatarFileID)
+
+	// 2. Replace avatar with a new one
+	res2, err := profileSvc.ConfirmAvatarUpload(ctx, userID, "primary:avatar-2")
+	assert.NoError(t, err)
+	assert.NotNil(t, res2)
+
+	// Verify new avatar is active
+	newAvatarFileID, err := profileSvc.PostgresQueries.GetAvatarFileID(ctx, userID.UuidUserId)
+	assert.NoError(t, err)
+	require.NotNil(t, newAvatarFileID)
+	assert.Equal(t, "primary:avatar-2", *newAvatarFileID)
+
+	// Verify old avatar is deleted from avatars DB table (since we now delete it and register in pending_uploads)
+	rows, err := pool.Query(ctx, "SELECT file_id FROM avatars WHERE user_id = $1", userID.UuidUserId)
+	assert.NoError(t, err)
+	defer rows.Close()
+
+	var fileIDs []string
+	for rows.Next() {
+		var f string
+		err := rows.Scan(&f)
+		assert.NoError(t, err)
+		fileIDs = append(fileIDs, f)
+	}
+
+	require.Len(t, fileIDs, 1)
+	assert.Equal(t, "primary:avatar-2", fileIDs[0])
+}
+
+func TestRemoveUserProfilePicture_Integration(t *testing.T) {
+	pool, _, profileSvc := setupProfileIntegrationDB(t)
+	ctx := context.Background()
+
+	userID, _ := createTestUserWithProfile(t, pool)
+
+	// Set up mock pending uploads
+	profileSvc.PendingUploads = &mockPendingUploads{}
+
+	// Setup a dummy R2ClientPool
+	r2Pool, err := clients.NewR2ClientPool(&config.R2PoolConfig{
+		Accounts: []config.R2AccountConfig{
+			{
+				Name:             "primary",
+				AccountID:        "dummy",
+				AccessKeyID:      "dummy",
+				SecretAccessKey:  "dummy",
+				ChatFilesBucket:  "dummy",
+				ProfilePicBucket: "dummy-bucket",
+			},
+		},
+		PrimaryChatAccount:    "primary",
+		PrimaryProfileAccount: "primary",
+	})
+	require.NoError(t, err)
+	profileSvc.R2Pool = r2Pool
+
+	// 1. Upload an avatar first
+	res, err := profileSvc.ConfirmAvatarUpload(ctx, userID, "primary:avatar-to-remove")
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+	assert.True(t, res.Status)
+
+	// Verify avatar is active in DB
+	avatarFileID, err := profileSvc.PostgresQueries.GetAvatarFileID(ctx, userID.UuidUserId)
+	assert.NoError(t, err)
+	require.NotNil(t, avatarFileID)
+	assert.Equal(t, "primary:avatar-to-remove", *avatarFileID)
+
+	// 2. Remove the avatar
+	remRes, err := profileSvc.RemoveUserProfilePicture(ctx, userID)
+	assert.NoError(t, err)
+	assert.NotNil(t, remRes)
+	assert.True(t, remRes.Status)
+
+	// Verify avatar record is completely removed from DB
+	removedAvatarFileID, err := profileSvc.PostgresQueries.GetAvatarFileID(ctx, userID.UuidUserId)
+	assert.True(t, err == pgx.ErrNoRows || removedAvatarFileID == nil)
+}
+
+

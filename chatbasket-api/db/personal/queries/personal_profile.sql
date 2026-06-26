@@ -17,22 +17,13 @@ RETURNING
     *;
 
 -- name: GetUserProfile :one
--- Returns full user record along with its profile avatar tokens and file_id
+-- Returns full user record along with its profile avatar file_id
 SELECT u.*, a.file_id, a.token_id, a.token_secret, a.token_expiry
 FROM users u
     LEFT JOIN avatars a ON a.user_id = u.id
     AND a.avatar_type = 'profile'
 WHERE
     u.id = $1;
-
--- name: ListUsersAfter :many
--- Returns users created before a certain timestamp (keyset pagination)
-SELECT *
-FROM users
-WHERE
-    created_at < $1
-ORDER BY created_at DESC
-LIMIT $2;
 
 -- name: IsUserExists :one
 SELECT EXISTS ( SELECT 1 FROM users WHERE id = $1 );
@@ -44,16 +35,9 @@ VALUES ($1, $2)
 RETURNING
     *;
 
--- name: IsUserProfilePicExists :one
--- Checks if the user exists and has a main profile picture
-SELECT EXISTS (
-        SELECT 1
-        FROM users u
-            JOIN avatars a ON a.user_id = u.id
-        WHERE
-            u.id = $1
-            AND a.avatar_type = 'profile'
-    );
+-- name: GetActiveAvatar :one
+-- Fetches the id and file_id for the main profile avatar
+SELECT id, file_id FROM avatars WHERE user_id = $1 AND avatar_type = 'profile';
 
 -- name: CreateAvatar :one
 -- Inserts a new avatar and returns all columns
@@ -71,54 +55,28 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING
     *;
 
--- name: UpdateAvatarFull :one
--- Updates all avatar fields (file_id, tokens) for the main profile avatar
+-- name: UpdateAvatarFileID :exec
+-- Updates only the file_id for the main profile avatar (token columns unused per spec §3.C).
 UPDATE avatars
-SET
-    file_id = $2,
-    token_id = $3,
-    token_secret = $4,
-    token_expiry = $5
-WHERE
-    user_id = $1
-    AND avatar_type = 'profile'
-RETURNING
-    *;
-
--- name: UpdateAvatarTokens :one
--- Updates token_id, token_secret, and token_expiry for the main profile avatar
-UPDATE avatars
-SET
-    token_id = $2,
-    token_secret = $3,
-    token_expiry = $4
-WHERE
-    user_id = $1
-    AND avatar_type = 'profile'
-RETURNING
-    *;
+SET file_id = $2
+WHERE user_id = $1 AND avatar_type = 'profile';
 
 -- name: GetAvatarFileID :one
 -- Fetches the storage file_id for the main profile avatar
 SELECT file_id FROM avatars WHERE user_id = $1 AND avatar_type = 'profile';
 
--- name: UpdateUserProfile :one
--- Updates user profile fields conditionally based on provided values (NULL values are ignored)
+-- name: UpdateUserProfile :exec
+-- Updates user profile fields
 UPDATE users
 SET
-    name = COALESCE(sqlc.narg ('name'), name),
-    bio = COALESCE(sqlc.narg ('bio'), bio),
-    profile_type = COALESCE(
-        sqlc.narg ('profile_type'),
-        profile_type
-    )
+    name = COALESCE(sqlc.narg (name), name),
+    bio = COALESCE(sqlc.narg (bio), bio),
+    profile_type = COALESCE(sqlc.narg (profile_type), profile_type)
 WHERE
-    id = $1
-RETURNING
-    *;
+    id = $1;
 
 -- name: DeleteAvatar :exec
--- Deletes the main profile avatar for a user
+-- Deletes the main profile avatar for a user (called from ConfirmAvatarUpload tx when replacing)
 DELETE FROM avatars WHERE user_id = $1 AND avatar_type = 'profile';
 
 -- name: IsUserAdminBlocked :one
@@ -132,8 +90,10 @@ SELECT EXISTS (
     );
 
 -- name: GetUserCoreProfile :one
--- Minimal user profile without avatar join
-SELECT * FROM users WHERE id = $1;
+-- Fetches minimal user info for eligibility checks
+SELECT id, is_admin_blocked, profile_type
+FROM users
+WHERE id = $1;
 
 
 -- name: GetContactableProfilesForViewer :many

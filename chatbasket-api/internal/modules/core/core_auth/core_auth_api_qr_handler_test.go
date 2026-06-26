@@ -45,7 +45,7 @@ func buildQRWSURL(server *httptest.Server, token string) string {
 
 func originHeader() http.Header {
 	h := make(http.Header)
-	h.Set("Origin", "http://localhost:8081")
+	h.Set("Origin", "https://chatbasket.live")
 	return h
 }
 

@@ -19,30 +19,26 @@ type Querier interface {
 	// ======================================
 	// Inserts a new user and returns all columns
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	// Deletes the main profile avatar for a user
+	// Deletes the main profile avatar for a user (called from ConfirmAvatarUpload tx when replacing)
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
+	// Fetches the id and file_id for the main profile avatar
+	GetActiveAvatar(ctx context.Context, userID uuid.UUID) (GetActiveAvatarRow, error)
 	// Fetches the storage file_id for the main profile avatar
 	GetAvatarFileID(ctx context.Context, userID uuid.UUID) (*string, error)
 	// GetContactableProfilesForViewer fetches profiles for contact enrichment with privacy filtering.
 	GetContactableProfilesForViewer(ctx context.Context, arg GetContactableProfilesForViewerParams) ([]GetContactableProfilesForViewerRow, error)
 	GetUserByHashedUsernameForContact(ctx context.Context, hmacSha256HexUsername string) (User, error)
-	// Minimal user profile without avatar join
-	GetUserCoreProfile(ctx context.Context, id uuid.UUID) (User, error)
-	// Returns full user record along with its profile avatar tokens and file_id
+	// Fetches minimal user info for eligibility checks
+	GetUserCoreProfile(ctx context.Context, id uuid.UUID) (GetUserCoreProfileRow, error)
+	// Returns full user record along with its profile avatar file_id
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
 	// Returns true if the user is admin-blocked
 	IsUserAdminBlocked(ctx context.Context, id uuid.UUID) (bool, error)
 	IsUserExists(ctx context.Context, id uuid.UUID) (bool, error)
-	// Checks if the user exists and has a main profile picture
-	IsUserProfilePicExists(ctx context.Context, id uuid.UUID) (bool, error)
-	// Returns users created before a certain timestamp (keyset pagination)
-	ListUsersAfter(ctx context.Context, arg ListUsersAfterParams) ([]User, error)
-	// Updates all avatar fields (file_id, tokens) for the main profile avatar
-	UpdateAvatarFull(ctx context.Context, arg UpdateAvatarFullParams) (Avatar, error)
-	// Updates token_id, token_secret, and token_expiry for the main profile avatar
-	UpdateAvatarTokens(ctx context.Context, arg UpdateAvatarTokensParams) (Avatar, error)
-	// Updates user profile fields conditionally based on provided values (NULL values are ignored)
-	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
+	// Updates only the file_id for the main profile avatar (token columns unused per spec §3.C).
+	UpdateAvatarFileID(ctx context.Context, arg UpdateAvatarFileIDParams) error
+	// Updates user profile fields
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) error
 }
 
 var _ Querier = (*Queries)(nil)

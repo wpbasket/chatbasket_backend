@@ -37,8 +37,12 @@ Notes:
 - Use `WithArgs(...)` for critical args.
 - Use `pgxmock.AnyArg()` for generated UUID/time args.
 - Use `pgxmock.NewRows([]string{...}).AddRow(...)` for query results.
-- Use `ExpectExec(...).WillReturnResult(pgxmock.NewResult("UPDATE", 1))` for `Exec`.
 - Always call `ExpectationsWereMet()`.
+- **Limitation with Concrete `*pgxpool.Pool`**:
+  - `pgxmock` implements a `PgxPoolIface` interface, which cannot be cast or assigned to fields of concrete type `*pgxpool.Pool`.
+  - To respect production types, we use a **Split Testing Strategy**:
+    - **Unit Tests**: Test non-transaction methods using `pgxmock` by setting `Pool: nil` / `(*pgxpool.Pool)(nil)` on the service.
+    - **Integration Tests**: Test transaction-heavy methods (calling `Pool.Begin(ctx)`) against a real testing database pool.
 
 ## 2. Integration tests: use testing DB URL
 

@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.31.1
 
-package personal_contact_store
+package pending_uploads_store
 
 import (
 	"time"

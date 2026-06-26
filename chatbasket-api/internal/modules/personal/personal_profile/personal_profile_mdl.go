@@ -105,3 +105,18 @@ type getE2EEPublicKeyResponse struct {
 	E2eePublicKeys []string `json:"e2ee_public_keys"`
 	KeysRevision   int32    `json:"keys_revision"`
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// R2 avatar presign/confirm types (added for R2 migration)
+// ──────────────────────────────────────────────────────────────────────────────
+
+// PresignAvatarResponse is returned by POST /profile/presign-avatar.
+type PresignAvatarResponse struct {
+	FileID       string `json:"file_id"`
+	PresignedURL string `json:"presigned_url"`
+}
+
+// ConfirmAvatarPayload is the request body for POST /profile/confirm-avatar.
+type ConfirmAvatarPayload struct {
+	FileID string `json:"file_id" validate:"required"`
+}

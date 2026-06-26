@@ -40,8 +40,8 @@ func (h *authHandler) QRWebSocket(c *echo.Context) error {
 	}
 
 	wsConn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{
-		OriginPatterns: []string{"https://chatbasket.live"},
 		// OriginPatterns: []string{"http://localhost:8081"},
+		OriginPatterns: []string{"https://chatbasket.live"},
 	})
 	if err != nil {
 		return err // Upgrader handles writing error response

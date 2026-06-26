@@ -27,7 +27,8 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WS
 	chat.POST("/ack", handler.AcknowledgeDelivery)
 
 	// File messaging
-	chat.POST("/upload", handler.UploadFileForMessage)
+	chat.POST("/presign", handler.PresignUpload)
+	chat.POST("/confirm", handler.ConfirmUpload)
 	chat.GET("/file-url", handler.GetFileURL)
 
 	// Read / Unsend / Delete

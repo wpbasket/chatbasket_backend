@@ -3,7 +3,6 @@ package personal_profile
 import (
 	"encoding/base64"
 	"net/http"
-	"strings"
 
 	"chatbasket-api/internal/platform/kit"
 
@@ -56,48 +55,35 @@ func (h *profileHandler) GetProfile(c *echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func (h *profileHandler) UploadProfilePicture(c *echo.Context) error {
-	err := c.Request().ParseMultipartForm(5 << 20) // 5MB
-	if err != nil {
-		return kit.NewError(400, "bad_request", "Failed to parse multipart form: "+err.Error())
-	}
-
-	if c.Request().MultipartForm == nil {
-		return ErrMultipartFormMissing
-	}
-
-	fh, err := c.FormFile("avatar")
-	if err != nil {
-		availableFields := []string{}
-		if c.Request().MultipartForm != nil && c.Request().MultipartForm.File != nil {
-			for field := range c.Request().MultipartForm.File {
-				availableFields = append(availableFields, field)
-			}
-		}
-
-		message := "Avatar file not found in request: " + err.Error()
-		if len(availableFields) > 0 {
-			message += ". Available file fields: " + strings.Join(availableFields, ", ")
-		}
-
-		return kit.NewError(400, "bad_request", message)
-	}
-
-	if fh.Size > 5<<20 {
-		return ErrFileSizeExceeded
-	}
-
+func (h *profileHandler) PresignAvatar(c *echo.Context) error {
 	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return ErrInvalidUserContext
 	}
-	user, err := h.Service.UploadUserProfilePicture(c.Request().Context(), fh, userID)
-
+	res, err := h.Service.PresignAvatarUpload(c.Request().Context(), userID)
 	if err != nil {
 		return err
 	}
+	return c.JSON(http.StatusOK, res)
+}
 
-	return c.JSON(http.StatusOK, user)
+func (h *profileHandler) ConfirmAvatar(c *echo.Context) error {
+	var payload ConfirmAvatarPayload
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(400, "bad_request", "Invalid confirm-avatar payload")
+	}
+	if payload.FileID == "" {
+		return kit.NewError(400, "bad_request", "file_id is required")
+	}
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return ErrInvalidUserContext
+	}
+	res, err := h.Service.ConfirmAvatarUpload(c.Request().Context(), userID, payload.FileID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, res)
 }
 
 func (h *profileHandler) RemoveProfilePicture(c *echo.Context) error {

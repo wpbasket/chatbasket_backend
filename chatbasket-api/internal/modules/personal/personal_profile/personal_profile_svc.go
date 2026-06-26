@@ -1,17 +1,16 @@
 package personal_profile
 
 import (
-	"log"
+	"chatbasket-api/internal/modules/core/pending_uploads"
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/services"
 	"context"
-	"github.com/appwrite/sdk-for-go/query"
+	"log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"mime/multipart"
 	"net/http"
 	"time"
 )
@@ -24,29 +23,41 @@ type coreAuthProfileProvider interface {
 	IncrementKeysRevision(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error
 }
 
-type profileService struct {
-	GlobalService              *services.GlobalService
-	PostgresQuerier            personal_profile_store.Querier
-	PostgresQueries            *personal_profile_store.Queries
-	Pool                       *pgxpool.Pool
-	AuthProvider               coreAuthProfileProvider
-	PersonalUsernameKey        []byte
-	AppwriteStorage            *clients.AppwriteStorageService
-	PersonalProfilePicBucketID string
+// pendingUploadsProfileProvider defines the minimal set of methods required from
+// the pending_uploads module. *pending_uploads.Service satisfies this interface.
+// Tx-aware variants accept pgx.Tx for cross-module transactions (same pattern as
+// core_auth.SaveSessionE2EEPublicKey).
+type pendingUploadsProfileProvider interface {
+	Register(ctx context.Context, fileID, bucket, r2Key string, expiresAt time.Time) error
+	Lookup(ctx context.Context, fileID string) (pending_uploads.PendingUpload, error)
+	Remove(ctx context.Context, fileID string) error
+	LookupTx(ctx context.Context, tx pgx.Tx, fileID string) (pending_uploads.PendingUpload, error)
+	RemoveTx(ctx context.Context, tx pgx.Tx, fileID string) error
+	RegisterTx(ctx context.Context, tx pgx.Tx, fileID, bucket, r2Key string, expiresAt time.Time) error
 }
 
-// NewProfileService creates a new ProfileService instance.
-func NewProfileService(globalService *services.GlobalService, pool *pgxpool.Pool, authProvider coreAuthProfileProvider, personalUsernameKey []byte, appwriteStorage *clients.AppwriteStorageService, personalProfilePicBucketID string) *profileService {
+type profileService struct {
+	GlobalService       *services.GlobalService
+	PostgresQuerier     personal_profile_store.Querier
+	PostgresQueries     *personal_profile_store.Queries
+	Pool                *pgxpool.Pool
+	AuthProvider        coreAuthProfileProvider
+	PersonalUsernameKey []byte
+	R2Pool              *clients.R2ClientPool
+	PendingUploads      pendingUploadsProfileProvider
+}
+
+func NewProfileService(globalService *services.GlobalService, pool *pgxpool.Pool, authProvider coreAuthProfileProvider, personalUsernameKey []byte, pendingUploads pendingUploadsProfileProvider, r2Pool *clients.R2ClientPool) *profileService {
 	store := personal_profile_store.New(pool)
 	return &profileService{
-		GlobalService:              globalService,
-		PostgresQuerier:            store,
-		PostgresQueries:            store,
-		Pool:                       pool,
-		AuthProvider:               authProvider,
-		PersonalUsernameKey:        personalUsernameKey,
-		AppwriteStorage:            appwriteStorage,
-		PersonalProfilePicBucketID: personalProfilePicBucketID,
+		GlobalService:       globalService,
+		PostgresQuerier:     store,
+		PostgresQueries:     store,
+		Pool:                pool,
+		AuthProvider:        authProvider,
+		PersonalUsernameKey: personalUsernameKey,
+		R2Pool:              r2Pool,
+		PendingUploads:      pendingUploads,
 	}
 }
 
@@ -57,7 +68,6 @@ func (ps *profileService) CreateUserProfile(ctx context.Context, payload *create
 	if userId == nil {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid user id")
 	}
-	// check if user profile already exists
 	res, err := ps.PostgresQueries.IsUserExists(ctx, userId.UuidUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -65,24 +75,18 @@ func (ps *profileService) CreateUserProfile(ctx context.Context, payload *create
 	if res {
 		return nil, kit.NewError(http.StatusConflict, "conflict", "User profile already exists")
 	}
-
-	// generate username
 	generatedUsername, err := generateRandomUsername()
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Username generation failed")
 	}
-	// hash username
 	sha256Username, err := kit.ComputeHMAC(generatedUsername, ps.PersonalUsernameKey, false, nil)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Username hashing failed")
 	}
-	// encrypt username
 	b64CipherChacha20Poly1305Username, err := EncryptUsername(generatedUsername, ps.PersonalUsernameKey, userId.StringUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Username encryption failed")
 	}
-
-	// create user profile in db separate
 	dbPayload := personal_profile_store.CreateUserParams{
 		ID:                                userId.UuidUserId,
 		HmacSha256HexUsername:             sha256Username,
@@ -94,8 +98,6 @@ func (ps *profileService) CreateUserProfile(ctx context.Context, payload *create
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
-
-	// create alone username in db separate from main user profile for plaintext username lookup
 	rdmUUID, err := uuid.NewV7()
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate uuid")
@@ -108,12 +110,10 @@ func (ps *profileService) CreateUserProfile(ctx context.Context, payload *create
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create alone username")
 	}
-
 	return toPrivateUser(&responseUser, generatedUsername, email, 0), nil
 }
 
 func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, email string) (*privateUser, error) {
-	// get user profile from db
 	profile, err := ps.PostgresQueries.GetUserProfile(ctx, userId.UuidUserId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -121,19 +121,14 @@ func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, em
 		}
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
-
-	// decrypt username
 	decodeUsername, err := DecryptUsername(profile.B64CipherChacha20poly1305Username, ps.PersonalUsernameKey)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "personal GetProfile failed")
 	}
-
-	finalAvatarUrl, err := ps.GetRefreshedAvatarURL(ctx, userId.UuidUserId, profile.FileID, profile.TokenID, profile.TokenSecret, profile.TokenExpiry)
+	finalAvatarUrl, err := ps.GetAvatarURL(ctx, profile.FileID)
 	if err != nil {
 		return nil, err
 	}
-
-	// Fetch keys_revision from auth_users (not in the profile query).
 	keysRevision, err := ps.AuthProvider.GetKeysRevision(ctx, userId.UuidUserId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -142,12 +137,11 @@ func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, em
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to read keys revision: "+kit.GetPostgresError(err).Message)
 		}
 	}
-
 	return toPrivateUserWithAvatar(&profile, decodeUsername, email, finalAvatarUrl, keysRevision), nil
 }
 
 func (ps *profileService) UpdateUserProfile(ctx context.Context, payload *updateUserProfilePayload, userId kit.UserId) (*kit.StatusOkay, error) {
-	_, err := ps.PostgresQueries.UpdateUserProfile(ctx, personal_profile_store.UpdateUserProfileParams{
+	err := ps.PostgresQueries.UpdateUserProfile(ctx, personal_profile_store.UpdateUserProfileParams{
 		ID:          userId.UuidUserId,
 		Name:        payload.Name,
 		Bio:         payload.Bio,
@@ -156,161 +150,180 @@ func (ps *profileService) UpdateUserProfile(ctx context.Context, payload *update
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update user profile: "+kit.GetPostgresError(err).Message)
 	}
-
 	return &kit.StatusOkay{Status: true, Message: "Profile updated successfully"}, nil
 }
 
-func (ps *profileService) UploadUserProfilePicture(ctx context.Context, fh *multipart.FileHeader, userId kit.UserId) (*kit.StatusOkay, error) {
-	if fh == nil {
-		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "no file provided")
+// PresignAvatarUpload selects the next R2 account via round-robin, generates a
+// unique prefixed file ID, registers the upload in pending_uploads with a
+// 2-hour TTL, and returns a presigned R2 PUT URL.
+func (ps *profileService) PresignAvatarUpload(ctx context.Context, userId kit.UserId) (*PresignAvatarResponse, error) {
+	accountName := ps.R2Pool.NextProfileAccount()
+	client := ps.R2Pool.GetClientByAccount(accountName)
+	objectID := uuid.New().String()
+	fileID := clients.BuildFileID(accountName, objectID)
+	expiresAt := time.Now().UTC().Add(pendingAvatarUploadTTL)
+	bucket := client.ProfileBucket()
+	r2Key := objectID
+	if err := ps.PendingUploads.Register(ctx, fileID, bucket, r2Key, expiresAt); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "pending_upload_failed", "Failed to register pending avatar upload: "+err.Error())
+	}
+	presignedURL, err := client.GenerateUploadURL(ctx, bucket, r2Key, r2PresignedURLLifetime)
+	if err != nil {
+		_ = ps.PendingUploads.Remove(ctx, fileID)
+		return nil, kit.NewError(http.StatusInternalServerError, "presign_failed", "Failed to generate presigned URL: "+err.Error())
+	}
+	return &PresignAvatarResponse{
+		FileID:       fileID,
+		PresignedURL: presignedURL,
+	}, nil
+}
+
+// ConfirmAvatarUpload verifies the pending avatar upload and updates the user's
+// avatar record with the new file_id — all in a single transaction.
+//
+// Unified cleanup pattern via pending_uploads:
+//   1. In tx: verify pending upload exists, capture old file_id
+//   2. Register the old file_id in pending_uploads with an expired status (for sweeper backup)
+//   3. Delete the old avatar row and insert the new avatar row (enforcing unique active constraint)
+//   4. Delete the new avatar file_id from pending_uploads and commit
+//   5. Post-commit (best-effort, inline): try R2 delete of the old avatar file
+//   6. On success: remove the old avatar file_id from pending_uploads
+//   7. If inline R2 delete fails: background sweeper (CleanupExpiredPendingUploads) retries R2 delete + row removal.
+//
+// Why this pattern:
+//   - Fast path: immediate inline cleanup without blocking the DB transaction.
+//   - Recovery path: no orphans created if R2 is down; background sweeper automatically cleans up later.
+func (ps *profileService) ConfirmAvatarUpload(ctx context.Context, userId kit.UserId, fileID string) (*kit.StatusOkay, error) {
+	// 1. Tx: verify pending, register old avatar in pending_uploads, delete old avatar, insert new avatar, delete new avatar from pending_uploads
+	tx, err := ps.Pool.Begin(ctx)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to start confirm transaction")
+	}
+	defer tx.Rollback(ctx)
+	qtx := ps.PostgresQueries.WithTx(tx)
+
+	if _, err := ps.PendingUploads.LookupTx(ctx, tx, fileID); err != nil {
+		return nil, kit.NewError(http.StatusNotFound, "pending_upload_not_found", "No pending avatar upload found. Please restart the upload process.")
 	}
 
-	// 1. Get current avatar metadata to find the existing file_id
-	existingFileID, err := ps.PostgresQueries.GetAvatarFileID(ctx, userId.UuidUserId)
-	hasExisting := err == nil && existingFileID != nil
+	// Fetch old active avatar within the transaction
+	oldAvatar, err := qtx.GetActiveAvatar(ctx, userId.UuidUserId)
+	hasExisting := err == nil && oldAvatar.FileID != nil
 
+	var oldFileID string
 	if hasExisting {
-		// 2. Safety check: List file in Appwrite to confirm existence before purging
-		checkFiles, err := ps.AppwriteStorage.Storage.ListFiles(
-			ps.PersonalProfilePicBucketID,
-			ps.AppwriteStorage.Storage.WithListFilesQueries([]string{
-				query.Equal("$id", *existingFileID),
-			}),
-		)
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to verify existing avatar in storage: "+err.Error())
-		}
+		oldFileID = *oldAvatar.FileID
+	}
 
-		if checkFiles.Total > 0 {
-			// Clear tokens
-			toks, err := ps.AppwriteStorage.Tokens.List(ps.PersonalProfilePicBucketID, *existingFileID)
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to list tokens for old avatar: "+err.Error())
+	// If old avatar exists and is different from the new one, register it in pending_uploads and delete its row
+	if hasExisting && oldFileID != fileID {
+		_, objectKey := clients.ParseFilePrefix(oldFileID)
+		bucket := ps.R2Pool.GetClient(oldFileID).ProfileBucket()
+		if err := ps.PendingUploads.RegisterTx(ctx, tx, oldFileID, bucket, objectKey, time.Now().UTC()); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to register old avatar for deletion: "+err.Error())
+		}
+		if err := qtx.DeleteAvatar(ctx, userId.UuidUserId); err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete old avatar: "+kit.GetPostgresError(err).Message)
+		}
+	}
+
+	// Insert new normal avatar row
+	rdmUUID, err := uuid.NewV7()
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate uuid")
+	}
+	if _, err := qtx.CreateAvatar(ctx, personal_profile_store.CreateAvatarParams{
+		ID:          rdmUUID,
+		UserID:      userId.UuidUserId,
+		FileID:      &fileID,
+		AvatarType:  "profile",
+		TokenID:     nil,
+		TokenSecret: nil,
+		TokenExpiry: nil,
+	}); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create avatar: "+kit.GetPostgresError(err).Message)
+	}
+
+	if err := ps.PendingUploads.RemoveTx(ctx, tx, fileID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "pending_remove_failed", "Failed to remove pending upload: "+err.Error())
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to commit confirm transaction: "+err.Error())
+	}
+
+	// 2. Post-commit: try inline R2 delete of OLD avatar (best-effort).
+	if hasExisting && oldFileID != fileID {
+		if r2Err := ps.deleteAvatarFromR2(ctx, oldFileID); r2Err == nil {
+			if err := ps.PendingUploads.Remove(ctx, oldFileID); err != nil {
+				log.Printf("[ConfirmAvatarUpload] WARNING: Failed to remove old avatar %s from pending_uploads: %v", oldFileID, err)
+			} else {
+				log.Printf("[ConfirmAvatarUpload] Inline R2 delete + pending_uploads removal succeeded for old avatar %s", oldFileID)
 			}
-			if toks.Total > 0 {
-				for _, t := range toks.Tokens {
-					_, _ = ps.AppwriteStorage.Tokens.Delete(t.Id)
-				}
-			}
-
-			// Delete file
-			_, _ = ps.AppwriteStorage.Storage.DeleteFile(ps.PersonalProfilePicBucketID, *existingFileID)
-		}
-	}
-
-	// 3. Generate a NEW unique File ID (using UUID v7 for sequential/sorting benefits)
-	newFileId, err := uuid.NewV7()
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to generate unique file id")
-	}
-	stringFileId := newFileId.String()
-
-	// 4. Upload fresh file
-	result, err := services.UploadFileFromMultipart(
-		ps.AppwriteStorage,
-		ps.PersonalProfilePicBucketID,
-		stringFileId,
-		fh,
-		services.UploadOptions{DeleteExisting: false, GenerateTokens: true}, // Manual deletion handled above
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(result.TokenIDs) == 0 || len(result.TokenSecrets) == 0 {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "missing file access tokens")
-	}
-
-	expireTime, err := time.Parse(time.RFC3339, result.Expire)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to parse expire time")
-	}
-
-	if !hasExisting {
-		rdmUUID, err := uuid.NewV7()
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate uuid")
-		}
-		_, err = ps.PostgresQueries.CreateAvatar(ctx, personal_profile_store.CreateAvatarParams{
-			ID:          rdmUUID,
-			UserID:      userId.UuidUserId,
-			FileID:      &stringFileId,
-			AvatarType:  "profile",
-			TokenID:     new(result.TokenIDs[0]),
-			TokenSecret: new(result.TokenSecrets[0]),
-			TokenExpiry: &expireTime,
-		})
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create avatar: "+kit.GetPostgresError(err).Message)
-		}
-	} else {
-		_, err := ps.PostgresQueries.UpdateAvatarFull(ctx, personal_profile_store.UpdateAvatarFullParams{
-			UserID:      userId.UuidUserId,
-			FileID:      &stringFileId,
-			TokenID:     new(result.TokenIDs[0]),
-			TokenSecret: new(result.TokenSecrets[0]),
-			TokenExpiry: &expireTime,
-		})
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update avatar record: "+kit.GetPostgresError(err).Message)
+		} else {
+			log.Printf("[ConfirmAvatarUpload] WARNING: Inline R2 delete failed for old avatar %s: %v (sweeper will retry)", oldFileID, r2Err)
 		}
 	}
 
 	return &kit.StatusOkay{Status: true, Message: "Avatar uploaded successfully"}, nil
 }
 
+// RemoveUserProfilePicture removes the user's avatar.
+//
+// New unified pattern:
+//   1. In tx: fetch avatar file_id, register it in pending_uploads, delete avatar row.
+//   2. Post-commit: try inline R2 delete of the file (best-effort).
+//   3. On success: remove from pending_uploads.
+//   4. Background sweeper (CleanupExpiredPendingUploads) will clean it up if R2 fails.
 func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId kit.UserId) (*kit.StatusOkay, error) {
-	// 1. Get the current avatar to find the stored file_id
-	fileIDPtr, err := ps.PostgresQueries.GetAvatarFileID(ctx, userId.UuidUserId)
+	// 1. Tx: fetch file_id, register in pending_uploads, delete row
+	tx, err := ps.Pool.Begin(ctx)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to start remove transaction")
+	}
+	defer tx.Rollback(ctx)
+	qtx := ps.PostgresQueries.WithTx(tx)
+
+	fileIDPtr, err := qtx.GetAvatarFileID(ctx, userId.UuidUserId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, kit.NewError(http.StatusNotFound, "not_found", "Profile picture record not found")
 		}
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch avatar record: "+kit.GetPostgresError(err).Message)
 	}
-
 	if fileIDPtr == nil {
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "Profile picture file ID not found")
 	}
-
 	fileID := *fileIDPtr
 
-	// 2. Safety check: List file in Appwrite
-	checkFiles, err := ps.AppwriteStorage.Storage.ListFiles(
-		ps.PersonalProfilePicBucketID,
-		ps.AppwriteStorage.Storage.WithListFilesQueries([]string{
-			query.Equal("$id", fileID),
-		}),
-	)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to verify avatar existence: "+err.Error())
+	_, objectKey := clients.ParseFilePrefix(fileID)
+	bucket := ps.R2Pool.GetClient(fileID).ProfileBucket()
+	if err := ps.PendingUploads.RegisterTx(ctx, tx, fileID, bucket, objectKey, time.Now().UTC()); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to register avatar for deletion: "+err.Error())
 	}
 
-	if checkFiles.Total > 0 {
-		// 3. Delete access tokens from Appwrite
-		tok, err := ps.AppwriteStorage.Tokens.List(ps.PersonalProfilePicBucketID, fileID)
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to list tokens for avatar removal: "+err.Error())
+	if err := qtx.DeleteAvatar(ctx, userId.UuidUserId); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete avatar: "+kit.GetPostgresError(err).Message)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to commit remove transaction: "+err.Error())
+	}
+
+	// 2. Post-commit: try inline R2 delete (best-effort)
+	if r2Err := ps.deleteAvatarFromR2(ctx, fileID); r2Err == nil {
+		if err := ps.PendingUploads.Remove(ctx, fileID); err != nil {
+			log.Printf("[RemoveUserProfilePicture] WARNING: Failed to remove avatar %s from pending_uploads: %v", fileID, err)
+		} else {
+			log.Printf("[RemoveUserProfilePicture] Inline R2 delete + pending_uploads removal succeeded for avatar %s", fileID)
 		}
-
-		if tok.Total > 0 {
-			for _, tokens := range tok.Tokens {
-				_, _ = ps.AppwriteStorage.Tokens.Delete(tokens.Id)
-			}
-		}
-
-		// 4. Delete the file from Appwrite storage
-		_, _ = ps.AppwriteStorage.Storage.DeleteFile(ps.PersonalProfilePicBucketID, fileID)
+	} else {
+		log.Printf("[RemoveUserProfilePicture] WARNING: Inline R2 delete failed for avatar %s: %v (sweeper will retry)", fileID, r2Err)
 	}
 
-	// 5. Delete the avatar record from the database
-	err = ps.PostgresQueries.DeleteAvatar(ctx, userId.UuidUserId)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete avatar from database: "+kit.GetPostgresError(err).Message)
-	}
-
-	return &kit.StatusOkay{Status: true, Message: "Profile picture removed successfully"}, nil
+	return &kit.StatusOkay{Status: true, Message: "Avatar removed successfully"}, nil
 }
+
 
 func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.UserId, sessionID uuid.UUID, publicKey string) (*updateE2EEKeyResponse, error) {
 	exists, err := ps.PostgresQueries.IsUserExists(ctx, userID.UuidUserId)
@@ -320,13 +333,11 @@ func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.User
 	if !exists {
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "User profile does not exist. Create profile first.")
 	}
-
 	tx, err := ps.Pool.Begin(ctx)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to start key transaction: "+err.Error())
 	}
 	defer tx.Rollback(ctx)
-
 	if err := ps.AuthProvider.SaveSessionE2EEPublicKey(ctx, tx, userID.UuidUserId, sessionID, publicKey); err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to save E2EE public key: "+kit.GetPostgresError(err).Message)
 	}
@@ -387,8 +398,28 @@ func (ps *profileService) GetE2EEPublicKey(ctx context.Context, targetUserID uui
 	return &keys[0], revision, nil
 }
 
-
 func (ps *profileService) GetActiveSessionKeysForUser(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	return ps.AuthProvider.GetActiveSessionKeysForUser(ctx, userID)
+}
+
+// deleteAvatarFromR2 deletes an avatar file from R2 (idempotent).
+// Returns nil if file was already gone (NoSuchKey) — safe to proceed with DB delete.
+// Mirrors chatService.DeleteChatFile structure.
+func (ps *profileService) deleteAvatarFromR2(ctx context.Context, fileID string) error {
+	if fileID == "" {
+		return nil
+	}
+	accountName, objectKey := clients.ParseFilePrefix(fileID)
+	if accountName == "" {
+		// Legacy unprefixed file_id
+		return ps.R2Pool.PrimaryProfileClient().DeleteFile(ctx, ps.R2Pool.PrimaryProfileClient().ProfileBucket(), fileID)
+	}
+	if !ps.R2Pool.HasClient(accountName) {
+		// Per spec §3.E: account retired, skip R2 delete (safe — DB delete will follow)
+		log.Printf("[Avatar Cleanup] WARNING: Account '%s' not in pool, skipping R2 delete for stale avatar %s", accountName, fileID)
+		return nil
+	}
+	client := ps.R2Pool.GetClient(fileID)
+	return client.DeleteFile(ctx, client.ProfileBucket(), objectKey)
 }
 

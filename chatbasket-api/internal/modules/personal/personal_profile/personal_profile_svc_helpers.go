@@ -2,6 +2,7 @@ package personal_profile
 
 import (
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
+	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
 	"context"
 	"crypto/rand"
@@ -9,7 +10,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -116,48 +116,19 @@ func ShouldExposeAvatar(globalRestrictProfile, exceptionGlobalProfile, globalRes
 	return true
 }
 
-// GetRefreshedAvatarURL refreshes avatar tokens if needed and returns the avatar URL
-func (ps *profileService) GetRefreshedAvatarURL(ctx context.Context, userID uuid.UUID, fileID, tokenID, tokenSecret *string, tokenExpiry *time.Time) (*string, error) {
-	effectiveExpiry := time.Time{}
-	if tokenExpiry != nil {
-		effectiveExpiry = *tokenExpiry
+// GetAvatarURL generates a 15-minute R2 presigned GET URL for the avatar file.
+// Returns nil if fileID is nil/empty. Routes to the correct R2 account via prefix parsing.
+func (ps *profileService) GetAvatarURL(ctx context.Context, fileID *string) (*string, error) {
+	if fileID == nil || *fileID == "" {
+		return nil, nil
 	}
-
-	refreshed, needsUpdate, err := kit.EnsureFreshFileTokens(
-		fileID,
-		tokenID,
-		tokenSecret,
-		effectiveExpiry,
-		ps.AppwriteStorage.Tokens,
-		ps.PersonalProfilePicBucketID,
-	)
+	client := ps.R2Pool.GetClient(*fileID)
+	_, objectKey := clients.ParseFilePrefix(*fileID)
+	url, err := client.GenerateDownloadURL(ctx, client.ProfileBucket(), objectKey, r2PresignedURLLifetime)
 	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to refresh avatar tokens: "+err.Error())
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to generate avatar URL: "+err.Error())
 	}
-
-	if needsUpdate && refreshed != nil {
-		_, err := ps.PostgresQueries.UpdateAvatarTokens(ctx, personal_profile_store.UpdateAvatarTokensParams{
-			UserID:      userID,
-			TokenID:     &refreshed.TokenID,
-			TokenSecret: &refreshed.TokenSecret,
-			TokenExpiry: &refreshed.TokenExpiry,
-		})
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to update refreshed tokens in DB: "+kit.GetPostgresError(err).Message)
-		}
-
-		return kit.BuildFileDownloadURL(ps.AppwriteStorage.Endpoint, ps.AppwriteStorage.Project, ps.PersonalProfilePicBucketID, &kit.AppwriteFileData{
-			FileId:     fileID,
-			FileToken:  &refreshed.TokenID,
-			FileSecret: &refreshed.TokenSecret,
-		}), nil
-	}
-
-	return kit.BuildFileDownloadURL(ps.AppwriteStorage.Endpoint, ps.AppwriteStorage.Project, ps.PersonalProfilePicBucketID, &kit.AppwriteFileData{
-		FileId:     fileID,
-		FileToken:  tokenID,
-		FileSecret: tokenSecret,
-	}), nil
+	return &url, nil
 }
 
 // FindContactableUserByUsername looks up a user by username for contact operations
@@ -250,7 +221,7 @@ func (ps *profileService) GetContactableProfilesForViewer(
 			row.UserRestrictProfile,
 			row.UserRestrictAvatar,
 		) {
-			url, err := ps.GetRefreshedAvatarURL(ctx, row.ID, row.FileID, row.TokenID, row.TokenSecret, row.TokenExpiry)
+			url, err := ps.GetAvatarURL(ctx, row.FileID)
 			if err != nil {
 				return nil, err
 			}

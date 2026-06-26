@@ -2,86 +2,46 @@ package personal_chat
 
 import (
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
+	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/services"
 	"context"
+	"errors"
 	"fmt"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// File URL Generation
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// R2 Presigned URL lifetime (per spec §3.D — 15 minutes)
+const r2PresignedURLLifetime = 15 * time.Minute
 
-func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_chat_store.Message, viewerID kit.UserId) (string, string, *time.Time, error) {
-	// Ownership guard — matches legacy GenerateMessageFileURLs
+// Pending upload TTL (per spec §4.A — 2 hours)
+const pendingUploadTTL = 2 * time.Hour
+
+// ──────────────────────────────────────────────────────────────────────────────
+// File URL Generation (R2 presigned GET — 15 min lifetime)
+// ──────────────────────────────────────────────────────────────────────────────
+
+func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_chat_store.Message, viewerID kit.UserId) (string, string, error) {
 	if msg.SenderID != viewerID.UuidUserId && msg.RecipientID != viewerID.UuidUserId {
-		return "", "", nil, kit.NewError(http.StatusForbidden, "forbidden", "not authorized to access this file")
+		return "", "", kit.NewError(http.StatusForbidden, "forbidden", "not authorized to access this file")
 	}
-
-	// Soft-delete guard — treat as no file if user deleted this message
 	if (msg.SenderID == viewerID.UuidUserId && msg.DeletedBySender) || (msg.RecipientID == viewerID.UuidUserId && msg.DeletedByRecipient) {
-		return "", "", nil, nil
+		return "", "", nil
 	}
-
 	if msg.FileID == nil || *msg.FileID == "" {
-		return "", "", nil, nil
+		return "", "", nil
 	}
-
-	bucketID := s.ChatFilesBucketID
-
-	// Check and refresh tokens if expired
-	tokenID := msg.FileTokenID
-	tokenSecret := msg.FileTokenSecret
-	tokenExpiry := kit.DerefTime(msg.FileTokenExpiry)
-
-	refreshData, refreshed, err := kit.EnsureFreshFileTokens(
-		msg.FileID, tokenID, tokenSecret, tokenExpiry,
-		s.AppwriteStorage.Tokens,
-		bucketID,
-	)
+	client := s.R2Pool.GetClient(*msg.FileID)
+	_, objectKey := clients.ParseFilePrefix(*msg.FileID)
+	downloadURL, err := client.GenerateDownloadURL(ctx, client.ChatBucket(), objectKey, r2PresignedURLLifetime)
 	if err != nil {
-		log.Printf("[GenerateMessageFileURLs] Token refresh failed for message %s: %v", msg.ID, err)
-		
-		// Map Appwrite 404s (file not found) to http.StatusNotFound so frontend can mark message as error.
-		// Appwrite SDK errors typically contain "404" or "not found" in the error string.
-		errStr := strings.ToLower(err.Error())
-		if strings.Contains(errStr, "404") || strings.Contains(errStr, "not found") {
-			return "", "", nil, kit.NewError(http.StatusNotFound, "file_not_found", "Media file not found in storage")
-		}
-		
-		return "", "", nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to refresh file token")
+		return "", "", kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate download URL: "+err.Error())
 	}
-
-	if refreshed && refreshData != nil {
-		newTokenID := refreshData.TokenID
-		newTokenSecret := refreshData.TokenSecret
-		tokenID = &newTokenID
-		tokenSecret = &newTokenSecret
-		tokenExpiry = refreshData.TokenExpiry
-
-		// Persist the new tokens
-		_ = s.PostgresQueries.UpdateMessageFileToken(ctx, personal_chat_store.UpdateMessageFileTokenParams{
-			ID:              msg.ID,
-			FileTokenID:     tokenID,
-			FileTokenSecret: tokenSecret,
-			FileTokenExpiry: &tokenExpiry,
-		})
-	}
-
-	fileData := &kit.AppwriteFileData{
-		FileId:     msg.FileID,
-		FileToken:  tokenID,
-		FileSecret: tokenSecret,
-	}
-
-	// viewURL is only generated for media types (image/video/audio) â€” matches legacy
 	viewURL := ""
 	isMedia := msg.MessageType == "image" || msg.MessageType == "video" || msg.MessageType == "audio"
 	if !isMedia && msg.FileMimeType != nil {
@@ -89,18 +49,9 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 		isMedia = strings.HasPrefix(mime, "image/") || strings.HasPrefix(mime, "video/") || strings.HasPrefix(mime, "audio/")
 	}
 	if isMedia {
-		if viewURLPtr := kit.BuildFileViewURL(s.AppwriteStorage.Endpoint, s.AppwriteStorage.Project, bucketID, fileData); viewURLPtr != nil {
-			viewURL = *viewURLPtr
-		}
+		viewURL = downloadURL
 	}
-
-	// downloadURL is generated for all file types
-	downloadURL := ""
-	if downloadURLPtr := kit.BuildFileDownloadURL(s.AppwriteStorage.Endpoint, s.AppwriteStorage.Project, bucketID, fileData); downloadURLPtr != nil {
-		downloadURL = *downloadURLPtr
-	}
-
-	return viewURL, downloadURL, &tokenExpiry, nil
+	return viewURL, downloadURL, nil
 }
 
 func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURLPayload, userID kit.UserId) (*GetFileURLResponse, error) {
@@ -108,137 +59,102 @@ func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURL
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_request", "Invalid message ID")
 	}
-
 	message, err := s.PostgresQueries.GetMessageByID(ctx, messageID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "Message not found")
 	}
-
-	viewURL, downloadURL, tokenExpiry, fileErr := s.GenerateMessageFileURLs(ctx, message, userID)
+	viewURL, downloadURL, fileErr := s.GenerateMessageFileURLs(ctx, message, userID)
 	if fileErr != nil {
 		return nil, fileErr
 	}
-
 	return &GetFileURLResponse{
-		ViewURL:         viewURL,
-		DownloadURL:     downloadURL,
-		FileTokenExpiry: tokenExpiry,
+		ViewURL:     viewURL,
+		DownloadURL: downloadURL,
 	}, nil
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// File Upload
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ──────────────────────────────────────────────────────────────────────────────
+// File Upload — Presign + Confirm (R2 direct upload from client)
+// ──────────────────────────────────────────────────────────────────────────────
 
-// validateFileType checks that the uploaded file's MIME type matches the declared message_type.
-func validateFileType(fh *multipart.FileHeader, messageType string) error {
-	mimeType := fh.Header.Get("Content-Type")
-	if mimeType == "application/octet-stream" {
-		// E2EE media uploads are ciphertext; original name/MIME live inside the
-		// encrypted message content envelope, not in Appwrite/backend metadata.
-		return nil
-	}
+func validateChatMessageType(messageType string) error {
 	switch messageType {
-	case "image":
-		if !strings.HasPrefix(mimeType, "image/") {
-			return fmt.Errorf("invalid file type for image message")
-		}
-	case "video":
-		if !strings.HasPrefix(mimeType, "video/") {
-			return fmt.Errorf("invalid file type for video message")
-		}
-	case "audio":
-		if !strings.HasPrefix(mimeType, "audio/") {
-			return fmt.Errorf("invalid file type for audio message")
-		}
-	case "file":
-		// any MIME type allowed for generic file
+	case "image", "video", "audio", "file":
+		return nil
 	default:
-		return fmt.Errorf("invalid message type")
+		return fmt.Errorf("invalid message type for file upload: %s", messageType)
 	}
-	return nil
 }
 
-func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFileForMessageParams) (*personal_chat_store.Message, error) {
-	eligibility, _, recipientKeysRevision, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
+// PresignChatUpload picks the next R2 account (round-robin), generates a unique
+// file ID with account prefix, registers the upload in pending_uploads with a
+// 2-hour TTL, and returns a presigned R2 PUT URL with a 15-minute lifetime.
+func (s *chatService) PresignChatUpload(ctx context.Context, params PresignChatUploadParams) (*PresignChatUploadResponse, error) {
+	if err := validateChatMessageType(params.MessageType); err != nil {
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_request", err.Error())
+	}
+	eligibility, _, _, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
 	if err != nil {
 		return nil, err
 	}
-
 	if eligibility != EligibilityAllowed {
 		return nil, messagingEligibilityError(eligibility)
 	}
-
-
-	// E2EE revision staleness check — check both sender and recipient
-	if staleErr := s.checkRevisionStaleness(ctx, params.SenderID, params.RecipientID, params.SenderKeysRevision, params.RecipientKeysRevision, recipientKeysRevision); staleErr != nil {
-		return nil, staleErr
+	accountName := s.R2Pool.NextChatAccount()
+	client := s.accountClient(accountName)
+	objectID := uuid.New().String()
+	fileID := clients.BuildFileID(accountName, objectID)
+	expiresAt := time.Now().UTC().Add(pendingUploadTTL)
+	bucket := client.ChatBucket()
+	r2Key := objectID
+	if err := s.PendingUploads.Register(ctx, fileID, bucket, r2Key, expiresAt); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "pending_upload_failed", "Failed to register pending upload: "+err.Error())
 	}
-	// File size validation â€” matches legacy (100 MB limit)
-	if params.FileHeader.Size > MaxFileSize {
-		return nil, kit.NewError(http.StatusBadRequest, "file_too_large", "file size exceeds 100MB limit. 100MB allowed.")
+	presignedURL, err := client.GenerateUploadURL(ctx, bucket, r2Key, r2PresignedURLLifetime)
+	if err != nil {
+		_ = s.PendingUploads.Remove(ctx, fileID)
+		return nil, kit.NewError(http.StatusInternalServerError, "presign_failed", "Failed to generate presigned URL: "+err.Error())
+	}
+	return &PresignChatUploadResponse{
+		FileID:       fileID,
+		PresignedURL: presignedURL,
+		ExpiresAt:    time.Now().UTC().Add(r2PresignedURLLifetime),
+	}, nil
+}
+
+// ConfirmChatUpload verifies the pending upload, creates the message record,
+// deletes the pending_uploads row, and updates chat status — all in a single
+// transaction. Per spec §6.A.3.
+func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatUploadParams) (*personal_chat_store.Message, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to start confirm transaction")
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.PostgresQueries.WithTx(tx)
+
+	// 1. Verify pending upload exists (in tx)
+	pending, err := s.PendingUploads.LookupTx(ctx, tx, params.FileID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusNotFound, "pending_upload_not_found", "No pending upload found. Please restart the upload process.")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "pending_lookup_failed", "Failed to lookup pending upload: "+err.Error())
 	}
 
-	// File type validation â€” MIME must match declared message_type
-	if err := validateFileType(params.FileHeader, params.MessageType); err != nil {
-		return nil, kit.NewError(http.StatusBadRequest, "invalid_file_type", err.Error())
-	}
-
-	chat, chatErr := s.CreateOrGetChat(ctx, params.SenderID.UuidUserId, params.RecipientID)
+	// 2. Create or get chat (in tx)
+	chat, chatErr := s.createOrGetChatTx(ctx, qtx, params.SenderID.UuidUserId, params.RecipientID)
 	if chatErr != nil {
 		return nil, chatErr
 	}
 
+	// 3. Create the message record (in tx)
 	messageID := uuid.New()
-	fileID := messageID.String()
 	expiresAt := time.Now().Add(DefaultMessageTTL)
+	fileID := pending.FileID
+	content := params.Content
 
-	// Upload file to Appwrite Storage
-	uploadResult, err := services.UploadFileFromMultipart(
-		s.AppwriteStorage,
-		s.ChatFilesBucketID,
-		fileID,
-		params.FileHeader,
-		services.UploadOptions{
-			DeleteExisting: false,
-			GenerateTokens: true,
-		},
-	)
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "upload_failed", "Failed to upload file: "+err.Error())
-	}
-
-	// Guard 1: verify Appwrite actually generated tokens (matches legacy)
-	if len(uploadResult.TokenIDs) == 0 || len(uploadResult.TokenSecrets) == 0 {
-		go s.DeleteChatFile(context.Background(), fileID)
-		return nil, kit.NewError(http.StatusInternalServerError, "file_token_generation_failed", "token generation returned no tokens")
-	}
-
-	// Guard 2: parse Appwrite's actual expiry string (matches legacy)
-	tokenExpiry, err := time.Parse(time.RFC3339, uploadResult.Expire)
-	if err != nil {
-		go s.DeleteChatFile(context.Background(), fileID)
-		return nil, kit.NewError(http.StatusInternalServerError, "token_expiry_parse_failed", "failed to parse token expiry from Appwrite")
-	}
-
-	tokenID := &uploadResult.TokenIDs[0]
-	tokenSecret := &uploadResult.TokenSecrets[0]
-
-	// Content field should only contain user-provided caption, not auto-filled filename
-	// Frontend will display filename from file_name field
-	content := params.Caption
-
-	// Chat list preview should fallback to filename if caption is empty (legacy behavior)
-	previewContent := content
-	if previewContent == "" {
-		previewContent = params.FileHeader.Filename
-	}
-
-	fileName := params.FileHeader.Filename
-	fileSize := params.FileHeader.Size
-	fileMimeType := params.FileHeader.Header.Get("Content-Type")
-
-	message, dbErr := s.PostgresQueries.CreateMessageWithFile(ctx, personal_chat_store.CreateMessageWithFileParams{
+	message, dbErr := qtx.CreateMessageWithFile(ctx, personal_chat_store.CreateMessageWithFileParams{
 		ID:                          messageID,
 		ChatID:                      chat.ID,
 		SenderID:                    params.SenderID.UuidUserId,
@@ -246,60 +162,86 @@ func (s *chatService) UploadFileForMessage(ctx context.Context, params UploadFil
 		Content:                     content,
 		MessageType:                 params.MessageType,
 		FileID:                      &fileID,
-		FileName:                    &fileName,
-		FileSize:                    &fileSize,
-		FileMimeType:                &fileMimeType,
-		FileTokenID:                 tokenID,
-		FileTokenSecret:             tokenSecret,
-		FileTokenExpiry:             &tokenExpiry,
+		// E2EE media uploads are ciphertext; original name/MIME/size live inside the
+		// encrypted message content envelope, not in backend metadata.
+		FileName:                    nil,
+		FileSize:                    nil,
+		FileMimeType:                nil,
+		FileTokenID:                 nil,
+		FileTokenSecret:             nil,
+		FileTokenExpiry:             nil,
 		ExpiresAt:                   expiresAt,
 		SyncedToSenderPrimary:       params.IsPrimary,
 		DeliveredToRecipientPrimary: new(bool),
 	})
-
 	if dbErr != nil {
-		// Cleanup uploaded file on DB failure
-		go s.DeleteChatFile(context.Background(), fileID)
-		return nil, kit.NewError(http.StatusInternalServerError, "message_send_failed", kit.GetPostgresError(dbErr).Message)
+		return nil, kit.NewError(http.StatusInternalServerError, "message_create_failed", kit.GetPostgresError(dbErr).Message)
 	}
 
-	// Update chat status
-	_ = s.PostgresQueries.UpdateChatStatus(ctx, personal_chat_store.UpdateChatStatusParams{
+	// 4. Update chat status (in tx)
+	_ = qtx.UpdateChatStatus(ctx, personal_chat_store.UpdateChatStatusParams{
 		ID:                   chat.ID,
-		P1LastMessageContent: &previewContent,
+		P1LastMessageContent: &content,
 		LastMessageCreatedAt: &message.CreatedAt,
 		P1LastMessageType:    &message.MessageType,
 		LastMessageSenderID:  &message.SenderID,
 		LastMessageID:        &message.ID,
 	})
 
+	// 5. Delete the pending_uploads row (in tx) — atomic with the insert
+	if err := s.PendingUploads.RemoveTx(ctx, tx, params.FileID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "pending_remove_failed", "Failed to remove pending upload: "+err.Error())
+	}
+
+	// 6. Commit — all 4 ops are now atomic
+	if err := tx.Commit(ctx); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to commit confirm transaction")
+	}
 	return &message, nil
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// File Deletion
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ──────────────────────────────────────────────────────────────────────────────
+// File Deletion (R2 — idempotent via DeleteFile wrapper)
+// ──────────────────────────────────────────────────────────────────────────────
 
-func (s *chatService) DeleteChatFile(ctx context.Context, fileID string) {
+// DeleteChatFile removes a file from R2. Idempotent (handles NoSuchKey internally).
+// If account prefix references a missing account (retired per spec §3.E), falls
+// back to primary client.
+func (s *chatService) DeleteChatFile(ctx context.Context, fileID string) error {
 	if fileID == "" {
-		return
+		return nil
 	}
+	accountName, objectKey := clients.ParseFilePrefix(fileID)
+	if accountName == "" {
+		return s.R2Pool.PrimaryChatClient().DeleteFile(ctx, s.R2Pool.PrimaryChatClient().ChatBucket(), fileID)
+	}
+	if !s.R2Pool.HasClient(accountName) {
+		log.Printf("[DeleteChatFile] WARNING: Account '%s' not in pool, skipping R2 delete for %s", accountName, fileID)
+		return nil
+	}
+	client := s.R2Pool.GetClient(fileID)
+	return client.DeleteFile(ctx, client.ChatBucket(), objectKey)
+}
 
-	// Delete all tokens for this file
-	tokenList, err := s.AppwriteStorage.Tokens.List(s.ChatFilesBucketID, fileID)
-	if err != nil {
-		log.Printf("[DeleteChatFile] Failed to list tokens for file %s: %v", fileID, err)
-	} else if tokenList.Total > 0 {
-		for _, tok := range tokenList.Tokens {
-			if _, delErr := s.AppwriteStorage.Tokens.Delete(tok.Id); delErr != nil {
-				log.Printf("[DeleteChatFile] Failed to delete token %s for file %s: %v", tok.Id, fileID, delErr)
-			}
-		}
-	}
+// ──────────────────────────────────────────────────────────────────────────────
+// Param Structs
+// ──────────────────────────────────────────────────────────────────────────────
 
-	// Delete the file
-	_, err = s.AppwriteStorage.Storage.DeleteFile(s.ChatFilesBucketID, fileID)
-	if err != nil {
-		log.Printf("[DeleteChatFile] Failed to delete file %s from bucket %s: %v", fileID, s.ChatFilesBucketID, err)
-	}
+type PresignChatUploadParams struct {
+	SenderID              kit.UserId
+	RecipientID           uuid.UUID
+	MessageType           string
+	RecipientKeysRevision int32
+	SenderKeysRevision    int32
+}
+
+type ConfirmChatUploadParams struct {
+	SenderID              kit.UserId
+	RecipientID           uuid.UUID
+	FileID                string
+	Content               string
+	MessageType           string
+	IsPrimary             bool
+	RecipientKeysRevision int32
+	SenderKeysRevision    int32
 }

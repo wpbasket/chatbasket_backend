@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"chatbasket-api/internal/platform/clients"
@@ -56,13 +56,13 @@ func main() {
 	secretClient := clients.NewSecretClient(cfg.Security)
 	_ = secretClient // satisfy compiler for now
 
-	// Initialize Appwrite Services
-	appwriteService := clients.NewAppwriteService(cfg.Appwrite)
-	appwriteStorageService := clients.NewAppwriteStorageService(cfg.Appwrite)
-	slog.Info("Appwrite Services initialized", "endpoint", appwriteService.Endpoint)
-	
-	_ = appwriteService        // satisfy compiler for now
-	_ = appwriteStorageService // satisfy compiler for now
+	// Initialize R2 Client Pool (mandatory — fatal if no accounts configured)
+	r2Pool, err := clients.NewR2ClientPool(cfg.R2)
+	if err != nil {
+		slog.Error("failed to initialize R2 client pool", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("R2 client pool initialized", "accounts", len(cfg.R2.Accounts), "primaryChat", cfg.R2.PrimaryChatAccount, "primaryProfile", cfg.R2.PrimaryProfileAccount)
 
 	// Initialize Cosmos DB Client
 	cosmosClient, err := clients.ConnectCosmos(cfg.Cosmos)
@@ -83,7 +83,7 @@ func main() {
 	slog.Info("Postgres client initialized successfully")
 
 	// --- Route Registration ---
-	router.Register(e, pool, cfg, appwriteStorageService)
+	router.Register(e, pool, cfg, r2Pool)
 
 	// Graceful shutdown context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

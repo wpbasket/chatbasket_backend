@@ -3,7 +3,6 @@ package personal_chat
 import (
 	"fmt"
 	"chatbasket-api/internal/platform/kit"
-	"mime/multipart"
 	"time"
 
 	"github.com/google/uuid"
@@ -79,7 +78,6 @@ type MessageResponse struct {
 	FileMimeType                *string    `json:"file_mime_type"`
 	ViewURL                     string     `json:"view_url,omitempty"`
 	DownloadURL                 string     `json:"download_url,omitempty"`
-	FileTokenExpiry             *time.Time `json:"file_token_expiry,omitempty"`
 }
 
 type MessagingEligibilityResponse struct {
@@ -108,24 +106,39 @@ type AckDeliveryBatchResponse struct {
 }
 
 type GetFileURLResponse struct {
-	ViewURL         string     `json:"view_url,omitempty"`
-	DownloadURL     string     `json:"download_url"`
-	FileTokenExpiry *time.Time `json:"file_token_expiry,omitempty"`
+	ViewURL     string `json:"view_url,omitempty"`
+	DownloadURL string `json:"download_url"`
 }
 
-type UploadFileResponse struct {
-	MessageID          string     `json:"message_id"`
-	SenderKeysRevision int32      `json:"sender_keys_revision"`
-	FileID             string     `json:"file_id"`
-	MessageType        string     `json:"message_type"`
-	FileMimeType       *string    `json:"file_mime_type"`
-	ViewURL            string     `json:"view_url,omitempty"`
-	DownloadURL        string     `json:"download_url"`
-	FileName           *string    `json:"file_name"`
-	FileSize           *int64     `json:"file_size"`
-	CreatedAt          time.Time  `json:"created_at"`
-	ExpiresAt          time.Time  `json:"expires_at"`
-	FileTokenExpiry    *time.Time `json:"file_token_expiry,omitempty"`
+// PresignChatUploadResponse is returned by POST /chat/presign.
+type PresignChatUploadResponse struct {
+	FileID       string    `json:"file_id"`
+	PresignedURL string    `json:"presigned_url"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+// ConfirmChatUploadPayload is the request body for POST /chat/confirm.
+type ConfirmChatUploadPayload struct {
+	FileID                string `json:"file_id" validate:"required"`
+	RecipientID           string `json:"recipient_id" validate:"required,uuid"`
+	Content               string `json:"content" validate:"required,max=5000"`
+	MessageType           string `json:"message_type" validate:"required,oneof=image video audio file"`
+	RecipientKeysRevision int32  `json:"recipient_keys_revision"`
+	SenderKeysRevision    int32  `json:"sender_keys_revision"`
+}
+
+// ConfirmChatUploadResponse is returned by POST /chat/confirm.
+type ConfirmChatUploadResponse struct {
+	MessageID          string    `json:"message_id"`
+	ChatID             string    `json:"chat_id"`
+	RecipientID        string    `json:"recipient_id"`
+	SenderKeysRevision int32     `json:"sender_keys_revision"`
+	FileID             string    `json:"file_id"`
+	MessageType        string    `json:"message_type"`
+	ViewURL            string    `json:"view_url,omitempty"`
+	DownloadURL        string    `json:"download_url"`
+	CreatedAt          time.Time `json:"created_at"`
+	ExpiresAt          time.Time `json:"expires_at"`
 }
 
 type SyncActionResponse struct {
@@ -303,13 +316,3 @@ type SendMessageParams struct {
 	SenderKeysRevision    int32
 }
 
-type UploadFileForMessageParams struct {
-	SenderID              kit.UserId
-	RecipientID           uuid.UUID
-	FileHeader            *multipart.FileHeader
-	MessageType           string
-	Caption               string
-	IsPrimary             bool
-	RecipientKeysRevision int32
-	SenderKeysRevision    int32
-}
