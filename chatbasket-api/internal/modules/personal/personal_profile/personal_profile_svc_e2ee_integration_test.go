@@ -48,7 +48,7 @@ func setupProfileIntegrationDB(t *testing.T) (*pgxpool.Pool, *core_auth.AuthServ
 	_, err = pool.Exec(context.Background(), "ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS keys_revision INT NOT NULL DEFAULT 0")
 	require.NoError(t, err, "failed to ensure auth_users.keys_revision exists")
 
-	globalSvc := services.NewGlobalService()
+	globalSvc := services.NewGlobalService("https://chatbasket.live")
 	authSvc := core_auth.NewAuthService(globalSvc, pool, []byte("test-secret"))
 	profileSvc := NewProfileService(globalSvc, pool, authSvc, []byte("test-username-key-32bytes-long!!!"), nil, (*clients.R2ClientPool)(nil))
 

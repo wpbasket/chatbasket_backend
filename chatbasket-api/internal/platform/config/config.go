@@ -26,13 +26,14 @@ type PostgresConfig struct {
 
 // Config holds the application-wide configuration.
 type Config struct {
-	Port     string
-	Postgres *PostgresConfig
-	Cosmos   *CosmosConfig
-	Email    *EmailConfig
-	Security *SecurityConfig
-	Firebase *FirebaseConfig
-	R2       *R2PoolConfig
+	Port       string
+	CORSOrigin string
+	Postgres   *PostgresConfig
+	Cosmos     *CosmosConfig
+	Email      *EmailConfig
+	Security   *SecurityConfig
+	Firebase   *FirebaseConfig
+	R2         *R2PoolConfig
 }
 
 // R2AccountConfig holds credentials for a single Cloudflare R2 account.
@@ -88,11 +89,21 @@ func Load() (*Config, error) {
 		port = "8080"
 	}
 
-	dsn := os.Getenv("DATABASE_URL_PG_CB")
-	// dsn := os.Getenv("DATABASE_URL_PG_DEV")
+	corsOrigin := os.Getenv("CORS_ORIGIN")
+	if corsOrigin == "" {
+		corsOrigin = "https://chatbasket.live"
+	}
+
+	dbSelector := os.Getenv("DB_SELECTOR")
+	if dbSelector == "" {
+		dbSelector = "cb"
+	}
+
+	dbEnvName := "DATABASE_URL_PG_" + dbSelector
+	dsn := os.Getenv(dbEnvName)
 
 	if dsn == "" {
-		return nil, fmt.Errorf("DATABASE_URL_PG_CB is required")
+		return nil, fmt.Errorf("%s is required", dbEnvName)
 	}
 
 	pgCfg := &PostgresConfig{
@@ -143,13 +154,14 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		Port:     port,
-		Postgres: pgCfg,
-		Cosmos:   cosmosCfg,
-		Email:    emailCfg,
-		Security: secCfg,
-		Firebase: fbCfg,
-		R2:       r2Cfg,
+		Port:       port,
+		CORSOrigin: corsOrigin,
+		Postgres:   pgCfg,
+		Cosmos:     cosmosCfg,
+		Email:      emailCfg,
+		Security:   secCfg,
+		Firebase:   fbCfg,
+		R2:         r2Cfg,
 	}, nil
 }
 

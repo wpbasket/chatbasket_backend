@@ -61,7 +61,7 @@ func (r *Router) RegisterGlobalRoutes() *echo.Group {
 
 // RegisterModuleRoutes orchestrates registration of all domain modules.
 func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
-	globalService := services.NewGlobalService()
+	globalService := services.NewGlobalService(r.Config.CORSOrigin)
 	wsHub := websocket.NewWSHub()
 
 	// Instantiate shared pending_uploads service (used by chat + profile).
@@ -88,6 +88,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 
 	// 3. Chat Module
 	chatService := personal_chat.NewChatService(
+		globalService,
 		r.Pool, authService, profileService, contactService,
 		pendingUploadsSvc, r.R2Pool,
 	)

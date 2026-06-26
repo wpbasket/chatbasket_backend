@@ -9,7 +9,7 @@ import (
 )
 
 // Register applies common middlewares to the Echo instance, ported directly from chatbasket-api/app/main.go
-func Register(e *echo.Echo) {
+func Register(e *echo.Echo, corsOrigin string) {
 	e.Pre(middleware.RemoveTrailingSlash())
 	e.Use(middleware.RequestLogger()) // Most efficient v5 way: uses e.Logger + slog.LogAttrs
 	e.Use(middleware.Recover())
@@ -38,10 +38,8 @@ func Register(e *echo.Echo) {
 	}))
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		// AllowOrigins: []string{"http://localhost:8081"},
-		AllowOrigins: []string{"https://chatbasket.live"},
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
-		// AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowOrigins:     []string{corsOrigin},
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "x-api-key"},
 		AllowCredentials: true,
 	}))

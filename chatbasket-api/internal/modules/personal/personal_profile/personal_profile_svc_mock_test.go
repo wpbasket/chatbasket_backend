@@ -106,7 +106,7 @@ func TestCreateUserProfile_Mock_Success(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	globalSvc := services.NewGlobalService()
+	globalSvc := services.NewGlobalService("https://chatbasket.live")
 	authSvc := &mockAuthProviderProfile{}
 	pendingUploads := &mockPendingUploadsProfile{}
 	store := personal_profile_store.New(mock)
@@ -170,7 +170,7 @@ func TestCreateUserProfile_Mock_AlreadyExists(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	globalSvc := services.NewGlobalService()
+	globalSvc := services.NewGlobalService("https://chatbasket.live")
 	authSvc := &mockAuthProviderProfile{}
 	pendingUploads := &mockPendingUploadsProfile{}
 	store := personal_profile_store.New(mock)
@@ -214,7 +214,7 @@ func TestGetProfile_Mock_Success(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	globalSvc := services.NewGlobalService()
+	globalSvc := services.NewGlobalService("https://chatbasket.live")
 	authSvc := &mockAuthProviderProfile{keysRevision: 4}
 	pendingUploads := &mockPendingUploadsProfile{}
 	store := personal_profile_store.New(mock)
@@ -266,7 +266,7 @@ func TestUpdateUserProfile_Mock_Success(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 
-	globalSvc := services.NewGlobalService()
+	globalSvc := services.NewGlobalService("https://chatbasket.live")
 	store := personal_profile_store.New(mock)
 
 	svc := &profileService{

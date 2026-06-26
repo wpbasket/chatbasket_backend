@@ -37,7 +37,7 @@ func main() {
 	}
 
 	// Register common middlewares
-	middleware.Register(e)
+	middleware.Register(e, cfg.CORSOrigin)
 
 	// Initialize Firebase
 	firebaseCtx, firebaseCancel := context.WithTimeout(context.Background(), 10*time.Second)

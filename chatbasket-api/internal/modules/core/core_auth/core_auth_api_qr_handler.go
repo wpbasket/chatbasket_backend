@@ -39,9 +39,10 @@ func (h *authHandler) QRWebSocket(c *echo.Context) error {
 		return kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to validate QR request")
 	}
 
+	corsOrigin := h.Service.GlobalService.CORSOrigin
+
 	wsConn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{
-		// OriginPatterns: []string{"http://localhost:8081"},
-		OriginPatterns: []string{"https://chatbasket.live"},
+		OriginPatterns: []string{corsOrigin},
 	})
 	if err != nil {
 		return err // Upgrader handles writing error response
@@ -67,8 +68,6 @@ func (h *authHandler) QRWebSocket(c *echo.Context) error {
 
 	return nil
 }
-
-
 
 // QRApprove links the user ID from the active session to the QR token.
 func (h *authHandler) QRApprove(c *echo.Context) error {

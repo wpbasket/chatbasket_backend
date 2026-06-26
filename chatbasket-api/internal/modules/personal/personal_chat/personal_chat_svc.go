@@ -6,6 +6,7 @@ import (
 	"chatbasket-api/internal/modules/personal/personal_profile"
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
+	"chatbasket-api/internal/platform/services"
 	"context"
 	"encoding/json"
 	"errors"
@@ -55,6 +56,7 @@ type personalContactPersonalChatProvider interface {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type chatService struct {
+	GlobalService    *services.GlobalService
 	Pool            *pgxpool.Pool
 	PostgresQuerier personal_chat_store.Querier
 	PostgresQueries *personal_chat_store.Queries
@@ -66,6 +68,7 @@ type chatService struct {
 }
 
 func NewChatService(
+	globalService *services.GlobalService,
 	pool *pgxpool.Pool,
 	authProvider coreAuthChatProvider,
 	profileProvider personalProfilePersonalChatProvider,
@@ -75,6 +78,7 @@ func NewChatService(
 ) *chatService {
 	store := personal_chat_store.New(pool)
 	return &chatService{
+		GlobalService:    globalService,
 		Pool:            pool,
 		PostgresQuerier: store,
 		PostgresQueries: store,
