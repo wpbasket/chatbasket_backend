@@ -22,7 +22,7 @@ import (
 func main() {
 	e := echo.New()
 
-	// Configure structured logging with slog(Source of Truth)
+	// Configure structured logging with slog( Source of Truth )
 	slog.SetDefault(logger.New())
 	e.Logger = slog.Default()
 
