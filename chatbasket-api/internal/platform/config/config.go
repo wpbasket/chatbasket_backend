@@ -96,14 +96,12 @@ func Load() (*Config, error) {
 
 	dbSelector := os.Getenv("DB_SELECTOR")
 	if dbSelector == "" {
-		dbSelector = "cb"
+		return nil, fmt.Errorf("DB_SELECTOR is required (e.g. DATABASE_URL_PG_CB or DATABASE_URL_PG_DEV)")
 	}
 
-	dbEnvName := "DATABASE_URL_PG_" + dbSelector
-	dsn := os.Getenv(dbEnvName)
-
+	dsn := os.Getenv(dbSelector)
 	if dsn == "" {
-		return nil, fmt.Errorf("%s is required", dbEnvName)
+		return nil, fmt.Errorf("%s is required", dbSelector)
 	}
 
 	pgCfg := &PostgresConfig{
