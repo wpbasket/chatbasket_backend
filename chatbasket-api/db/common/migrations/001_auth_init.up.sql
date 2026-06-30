@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS auth_users (
     email TEXT NOT NULL CHECK (email = lower(email)),
     password_hash TEXT NOT NULL,
     is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    keys_revision INT NOT NULL DEFAULT 0, -- Monotonically increasing version number tracking changes to the user's active session keys.
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     platform TEXT,
     device_name TEXT, -- Human readable name
     is_central BOOLEAN NOT NULL DEFAULT FALSE,
+    e2ee_public_key CHAR(44), -- Base64-encoded X25519 public key associated with the active session. NULL = E2EE not initialized on this device.
     user_agent TEXT,
     ip_address TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -70,6 +72,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     CONSTRAINT sessions_token_hash_unique UNIQUE (token_hash),
     CONSTRAINT sessions_platform_check CHECK (
         platform IN ('ios', 'android', 'web')
+    ),
+    CONSTRAINT sessions_e2ee_public_key_length_check CHECK (
+        e2ee_public_key IS NULL OR length(e2ee_public_key) = 44
     )
 );
 
