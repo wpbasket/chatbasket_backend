@@ -8,6 +8,7 @@ import (
 
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"chatbasket-api/internal/platform/kit"
+	"chatbasket-api/internal/platform/services"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v5"
@@ -23,6 +24,7 @@ func setupTestAuthServiceQR(t *testing.T) (*AuthService, pgxmock.PgxPoolIface) {
 
 	store := core_auth_store.New(mock)
 	svc := &AuthService{
+		GlobalService:   services.NewGlobalService("https://chatbasket.live"),
 		PostgresQuerier: store,
 		PostgresQueries: store,
 		Pool:            nil,

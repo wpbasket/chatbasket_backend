@@ -246,6 +246,7 @@ type SessionResult struct {
 	ExpiresAt         string
 	IsPrimary         bool
 	PrimaryDeviceName string
+	PrimaryKey        string
 }
 
 // CreateSessionFlow generates token, hashes, stores session, returns token + expiry string.
@@ -263,6 +264,7 @@ func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, p
 	// Logic: If user has NO primary device, and this is a native platform, make this the primary device.
 	isPrimary := false
 	primaryDeviceName := ""
+	primaryKey := ""
 
 	// Check for existing primary device
 	existingPrimary, err := s.PostgresQuerier.GetCentralSession(ctx, userID)
@@ -270,6 +272,9 @@ func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, p
 		// Existing primary device found
 		if existingPrimary.DeviceName != nil {
 			primaryDeviceName = *existingPrimary.DeviceName
+		}
+		if existingPrimary.E2eePublicKey != nil {
+			primaryKey = *existingPrimary.E2eePublicKey
 		}
 	} else {
 		// No primary device found, auto-promote ANY platform for now (Temporary Fix for Web Messaging)
@@ -295,5 +300,6 @@ func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, p
 		ExpiresAt:         expiresAt.Format(time.RFC3339),
 		IsPrimary:         isPrimary,
 		PrimaryDeviceName: primaryDeviceName,
+		PrimaryKey:        primaryKey,
 	}, nil
 }

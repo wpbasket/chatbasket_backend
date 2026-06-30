@@ -19,11 +19,17 @@ const (
 	WSEventUnsend      = "unsend"
 	WSEventDeleteForMe = "delete_for_me"
 	WSEventSyncAction  = "sync_action"
+	WSEventHistorySyncRequested = "history_sync_requested"
+	WSEventHistorySyncReady     = "history_sync_ready"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Service Constants
 // ──────────────────────────────────────────────────────────────────────────────
+
+const (
+	HistorySyncTTL = 10 * time.Minute
+)
 
 const (
 	MaxFileSize         = 100 * 1024 * 1024

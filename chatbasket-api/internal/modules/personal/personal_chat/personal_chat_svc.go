@@ -27,6 +27,7 @@ import (
 type coreAuthChatProvider interface {
 	IsSessionCentral(ctx context.Context, userID uuid.UUID, sessionToken string) (bool, error)
 	GetUserPrimarySessionID(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
+	GetSessionE2EEPublicKey(ctx context.Context, sessionID uuid.UUID) (*string, error)
 }
 
 type pendingUploadsChatProvider interface {
@@ -1198,6 +1199,12 @@ func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 		log.Printf("[CleanupJob] ERROR: Failed to bulk delete blocked-user sync actions: %v", err)
 	}
 	_ = s.PostgresQueries.DeleteOldSyncActions(ctx)
+
+	// Clean up expired history sync requests (lazy expiry 410 enforces TTL instantly, sweep reclaims space)
+	if err := s.PostgresQueries.DeleteExpiredHistorySync(ctx); err != nil {
+		log.Printf("[CleanupJob] ERROR: Failed to delete expired history syncs: %v", err)
+	}
+
 	log.Printf("[CleanupJob] Cleanup process completed successfully")
 	return nil
 }

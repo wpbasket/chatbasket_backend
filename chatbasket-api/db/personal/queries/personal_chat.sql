@@ -691,3 +691,39 @@ DELETE FROM messages
 WHERE delivered_to_recipient_primary = TRUE
   AND synced_to_sender_primary = TRUE
   AND file_id IS NULL;
+-- name: UpsertHistorySync :one
+INSERT INTO history_sync (
+    id, user_id, session_id, chats_json, expires_at, created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5, now(), now()
+)
+ON CONFLICT (session_id) DO UPDATE SET
+    id = EXCLUDED.id,
+    chats_json = EXCLUDED.chats_json,
+    payload = NULL,
+    expires_at = EXCLUDED.expires_at,
+    updated_at = now()
+RETURNING id;
+
+-- name: UploadHistorySyncPayload :execrows
+UPDATE history_sync 
+SET payload = $1, updated_at = now() 
+WHERE id = $2 AND user_id = $3 AND expires_at > now();
+
+-- name: GetHistorySyncForDownload :one
+SELECT payload 
+FROM history_sync 
+WHERE id = $1 AND session_id = $2;
+
+-- name: GetPendingHistorySyncForUser :many
+SELECT id, session_id, chats_json 
+FROM history_sync 
+WHERE user_id = $1 AND payload IS NULL AND expires_at > now();
+
+-- name: DeleteExpiredHistorySync :exec
+DELETE FROM history_sync WHERE expires_at < now();
+
+-- name: GetHistorySyncMeta :one
+SELECT user_id, session_id, expires_at 
+FROM history_sync 
+WHERE id = $1;

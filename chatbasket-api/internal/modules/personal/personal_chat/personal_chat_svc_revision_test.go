@@ -83,6 +83,10 @@ func (m *mockAuthProvider) GetUserPrimarySessionID(ctx context.Context, userID u
 	return uuid.New(), nil
 }
 
+func (m *mockAuthProvider) GetSessionE2EEPublicKey(ctx context.Context, sessionID uuid.UUID) (*string, error) {
+	key := "mock_public_key"
+	return &key, nil
+}
 
 func (m *mockContactProvider) IsAlreadyContact(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error) {
 	if m.isAlreadyContactFunc != nil {

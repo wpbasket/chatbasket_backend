@@ -56,22 +56,24 @@ const (
 
 // WSConn wraps a single WebSocket connection with metadata.
 type WSConn struct {
-	Conn      *websocket.Conn
-	UserID    kit.UserId
-	SessionID string
-	IsPrimary bool
-	Send      chan []byte // buffered outbound queue
-	closeOnce sync.Once
+	Conn        *websocket.Conn
+	UserID      kit.UserId
+	SessionID   string
+	SessionUUID uuid.UUID
+	IsPrimary   bool
+	Send        chan []byte // buffered outbound queue
+	closeOnce   sync.Once
 }
 
 // NewWSConn creates a new WSConn with a buffered send channel.
-func NewWSConn(conn *websocket.Conn, userID kit.UserId, sessionID string, isPrimary bool) *WSConn {
+func NewWSConn(conn *websocket.Conn, userID kit.UserId, sessionID string, sessionUUID uuid.UUID, isPrimary bool) *WSConn {
 	return &WSConn{
-		Conn:      conn,
-		UserID:    userID,
-		SessionID: sessionID,
-		IsPrimary: isPrimary,
-		Send:      make(chan []byte, wsSendBufferSize),
+		Conn:        conn,
+		UserID:      userID,
+		SessionID:   sessionID,
+		SessionUUID: sessionUUID,
+		IsPrimary:   isPrimary,
+		Send:        make(chan []byte, wsSendBufferSize),
 	}
 }
 
@@ -252,6 +254,47 @@ func (h *WSHub) BroadcastToUserExcept(userID uuid.UUID, excludeSessionID string,
 		default:
 			log.Printf("[WS] Hub.BroadcastToUserExcept: BUFFER FULL for session=%s (user=%s), event DROPPED", sid, userID)
 		}
+	}
+}
+
+// BroadcastToUserSession sends a WSEvent ONLY to the specified session of a user.
+func (h *WSHub) BroadcastToUserSession(userID uuid.UUID, targetSessionID string, event WSEvent) {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return
+	}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	userConns, exists := h.conns[userID]
+	if !exists {
+		return
+	}
+
+	var wc *WSConn
+	if conn, ok := userConns[targetSessionID]; ok {
+		wc = conn
+	} else {
+		// Fallback: search by SessionUUID
+		for _, conn := range userConns {
+			if conn.SessionUUID.String() == targetSessionID {
+				wc = conn
+				break
+			}
+		}
+	}
+
+	if wc == nil {
+		log.Printf("[WS] Hub.BroadcastToUserSession: TARGET SESSION NOT ACTIVE session=%s", targetSessionID)
+		return
+	}
+
+	select {
+	case wc.Send <- data:
+		log.Printf("[WS] Hub.BroadcastToUserSession: QUEUED event=%s to session=%s (user=%s)", event.Type, targetSessionID, userID)
+	default:
+		log.Printf("[WS] Hub.BroadcastToUserSession: BUFFER FULL for session=%s (user=%s), event DROPPED", targetSessionID, userID)
 	}
 }
 

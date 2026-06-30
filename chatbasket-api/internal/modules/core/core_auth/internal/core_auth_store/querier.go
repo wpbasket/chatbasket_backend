@@ -55,6 +55,7 @@ type Querier interface {
 	// Get the current keys_revision for a user (atomic read)
 	GetKeysRevision(ctx context.Context, id uuid.UUID) (int32, error)
 	GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLoginRequestRow, error)
+	GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByToken(ctx context.Context, arg GetSessionByTokenParams) (Session, error)
 	// Returns user's primary device session (for Phase 6 messaging eligibility)
 	GetUserPrimarySession(ctx context.Context, authUserID uuid.UUID) (Session, error)

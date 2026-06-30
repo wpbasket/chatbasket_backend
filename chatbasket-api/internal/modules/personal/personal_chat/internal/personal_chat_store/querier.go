@@ -50,6 +50,7 @@ type Querier interface {
 	// Bulk-deletes messages for blocked-user chats that have no attached file_id (safe — no R2 orphans).
 	// Messages WITH files are handled by the batched cleanup loop.
 	DeleteBlockedUserMessagesWithoutFiles(ctx context.Context) error
+	DeleteExpiredHistorySync(ctx context.Context) error
 	// Bulk-deletes EXPIRED messages that have no attached file_id (safe — no R2 orphans possible).
 	// Messages WITH files are handled by the batched cleanup loop (file deleted first, then DB row).
 	DeleteExpiredMessagesWithoutFiles(ctx context.Context) error
@@ -68,10 +69,13 @@ type Querier interface {
 	GetChatsByUserID(ctx context.Context, participant1ID uuid.UUID) ([]Chat, error)
 	GetDeliveredMessagesByChat(ctx context.Context, arg GetDeliveredMessagesByChatParams) ([]Message, error)
 	GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpiredMessagesWithFilesParams) ([]Message, error)
+	GetHistorySyncForDownload(ctx context.Context, arg GetHistorySyncForDownloadParams) ([]byte, error)
+	GetHistorySyncMeta(ctx context.Context, id uuid.UUID) (GetHistorySyncMetaRow, error)
 	GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error)
 	GetMessagesWithExpiredFileTokens(ctx context.Context, limit int32) ([]Message, error)
 	// Fetches messages with files for chats between blocked users for cleanup.
 	GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg GetMessagesWithFilesForBlockedUsersParams) ([]Message, error)
+	GetPendingHistorySyncForUser(ctx context.Context, userID uuid.UUID) ([]GetPendingHistorySyncForUserRow, error)
 	GetPendingMessagesForRecipient(ctx context.Context, arg GetPendingMessagesForRecipientParams) ([]Message, error)
 	GetPendingSenderSyncMessages(ctx context.Context, arg GetPendingSenderSyncMessagesParams) ([]Message, error)
 	GetPendingSyncActions(ctx context.Context, arg GetPendingSyncActionsParams) ([]MessageSyncAction, error)
@@ -107,6 +111,8 @@ type Querier interface {
 	UpdateChatUnsendPreview(ctx context.Context, arg UpdateChatUnsendPreviewParams) error
 	UpdateMessageFileToken(ctx context.Context, arg UpdateMessageFileTokenParams) error
 	UpdateMessageToUnsent(ctx context.Context, id uuid.UUID) error
+	UploadHistorySyncPayload(ctx context.Context, arg UploadHistorySyncPayloadParams) (int64, error)
+	UpsertHistorySync(ctx context.Context, arg UpsertHistorySyncParams) (uuid.UUID, error)
 }
 
 var _ Querier = (*Queries)(nil)

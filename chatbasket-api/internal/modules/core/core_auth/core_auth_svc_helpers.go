@@ -1,4 +1,4 @@
-﻿package core_auth
+package core_auth
 
 import (
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
@@ -57,6 +57,21 @@ func (s *AuthService) GetUserPrimarySessionID(ctx context.Context, userID uuid.U
 		return uuid.Nil, err
 	}
 	return session.ID, nil
+}
+
+// GetSessionE2EEPublicKey returns the E2EE public key of a specific session.
+func (s *AuthService) GetSessionE2EEPublicKey(ctx context.Context, sessionID uuid.UUID) (*string, error) {
+	session, err := s.PostgresQuerier.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "Session not found")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_error", "Database error: "+err.Error())
+	}
+	if session.E2eePublicKey == nil {
+		return nil, kit.NewError(http.StatusNotFound, "not_found", "Public key not found")
+	}
+	return session.E2eePublicKey, nil
 }
 
 // SetCentralDevice promotes a specific session (by token) to be the Central Device.

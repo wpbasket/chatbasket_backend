@@ -154,6 +154,7 @@ func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platfor
 		SessionExpiry:     session.ExpiresAt,
 		IsPrimary:         session.IsPrimary,
 		PrimaryDeviceName: session.PrimaryDeviceName,
+		PrimaryKey:        session.PrimaryKey,
 		KeysRevision:      keysRevision,
 	}, nil
 }

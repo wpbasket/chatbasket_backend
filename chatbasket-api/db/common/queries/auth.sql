@@ -13,6 +13,9 @@ SELECT EXISTS (
             AND expires_at > now()
     );
 
+-- name: GetSessionByID :one
+SELECT * FROM sessions WHERE id = $1;
+
 -- name: GetAuthUserByID :one
 -- Returns auth user by ID
 SELECT * FROM auth_users WHERE id = $1;

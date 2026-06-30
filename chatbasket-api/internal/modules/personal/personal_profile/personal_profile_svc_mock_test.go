@@ -307,7 +307,7 @@ func TestPresignAvatarUpload_Mock_Success(t *testing.T) {
 				AccessKeyID:      "dummy",
 				SecretAccessKey:  "dummy",
 				ChatFilesBucket:  "dummy",
-				ProfilePicBucket: "dummy",
+				ProfilePicBucket: "dummy-bucket",
 			},
 		},
 		PrimaryChatAccount:    "primary",

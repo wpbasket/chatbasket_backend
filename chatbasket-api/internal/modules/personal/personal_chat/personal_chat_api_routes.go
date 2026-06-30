@@ -40,6 +40,11 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WS
 	chat.GET("/sync-actions", handler.GetSyncActions)
 	chat.POST("/sync-actions/ack", handler.AcknowledgeSyncAction)
 
+	// History Sync
+	chat.POST("/history-sync/request", handler.RequestHistorySync)
+	chat.POST("/history-sync/upload", handler.UploadHistorySync)
+	chat.GET("/history-sync", handler.DownloadHistorySync)
+
 	// WebSocket
 	chat.GET("/ws", handler.WebSocketUpgrade)
 }

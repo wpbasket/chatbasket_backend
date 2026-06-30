@@ -102,16 +102,25 @@ func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, 
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_error", "Database error: "+err.Error())
 	}
 
-	// 4. Determine Central Device Name
+	// 4. Determine Central Device Name and Primary Key
 	centralDeviceName := ""
+	primaryKey := ""
 	if session.IsCentral {
 		if session.DeviceName != nil {
 			centralDeviceName = *session.DeviceName
 		}
+		if session.E2eePublicKey != nil {
+			primaryKey = *session.E2eePublicKey
+		}
 	} else {
 		centralSession, err := s.PostgresQuerier.GetCentralSession(ctx, userID)
-		if err == nil && centralSession.DeviceName != nil {
-			centralDeviceName = *centralSession.DeviceName
+		if err == nil {
+			if centralSession.DeviceName != nil {
+				centralDeviceName = *centralSession.DeviceName
+			}
+			if centralSession.E2eePublicKey != nil {
+				primaryKey = *centralSession.E2eePublicKey
+			}
 		}
 	}
 
@@ -133,6 +142,7 @@ func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, 
 		SessionExpiry:     session.ExpiresAt.Format(time.RFC3339),
 		IsPrimary:         session.IsCentral,
 		PrimaryDeviceName: centralDeviceName,
+		PrimaryKey:        primaryKey,
 		KeysRevision:      keysRevision,
 	}, nil
 }

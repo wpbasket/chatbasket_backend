@@ -470,6 +470,15 @@ func (q *Queries) DeleteBlockedUserMessagesWithoutFiles(ctx context.Context) err
 	return err
 }
 
+const deleteExpiredHistorySync = `-- name: DeleteExpiredHistorySync :exec
+DELETE FROM history_sync WHERE expires_at < now()
+`
+
+func (q *Queries) DeleteExpiredHistorySync(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredHistorySync)
+	return err
+}
+
 const deleteExpiredMessagesWithoutFiles = `-- name: DeleteExpiredMessagesWithoutFiles :exec
 DELETE FROM messages
 WHERE expires_at < now()
@@ -856,6 +865,43 @@ func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpire
 	return items, nil
 }
 
+const getHistorySyncForDownload = `-- name: GetHistorySyncForDownload :one
+SELECT payload 
+FROM history_sync 
+WHERE id = $1 AND session_id = $2
+`
+
+type GetHistorySyncForDownloadParams struct {
+	ID        uuid.UUID `json:"id"`
+	SessionID uuid.UUID `json:"session_id"`
+}
+
+func (q *Queries) GetHistorySyncForDownload(ctx context.Context, arg GetHistorySyncForDownloadParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getHistorySyncForDownload, arg.ID, arg.SessionID)
+	var payload []byte
+	err := row.Scan(&payload)
+	return payload, err
+}
+
+const getHistorySyncMeta = `-- name: GetHistorySyncMeta :one
+SELECT user_id, session_id, expires_at 
+FROM history_sync 
+WHERE id = $1
+`
+
+type GetHistorySyncMetaRow struct {
+	UserID    uuid.UUID `json:"user_id"`
+	SessionID uuid.UUID `json:"session_id"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (q *Queries) GetHistorySyncMeta(ctx context.Context, id uuid.UUID) (GetHistorySyncMetaRow, error) {
+	row := q.db.QueryRow(ctx, getHistorySyncMeta, id)
+	var i GetHistorySyncMetaRow
+	err := row.Scan(&i.UserID, &i.SessionID, &i.ExpiresAt)
+	return i, err
+}
+
 const getMessageByID = `-- name: GetMessageByID :one
 SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at FROM messages WHERE id = $1 LIMIT 1
 `
@@ -1008,6 +1054,38 @@ func (q *Queries) GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg G
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPendingHistorySyncForUser = `-- name: GetPendingHistorySyncForUser :many
+SELECT id, session_id, chats_json 
+FROM history_sync 
+WHERE user_id = $1 AND payload IS NULL AND expires_at > now()
+`
+
+type GetPendingHistorySyncForUserRow struct {
+	ID        uuid.UUID `json:"id"`
+	SessionID uuid.UUID `json:"session_id"`
+	ChatsJson []byte    `json:"chats_json"`
+}
+
+func (q *Queries) GetPendingHistorySyncForUser(ctx context.Context, userID uuid.UUID) ([]GetPendingHistorySyncForUserRow, error) {
+	rows, err := q.db.Query(ctx, getPendingHistorySyncForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPendingHistorySyncForUserRow
+	for rows.Next() {
+		var i GetPendingHistorySyncForUserRow
+		if err := rows.Scan(&i.ID, &i.SessionID, &i.ChatsJson); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1759,4 +1837,60 @@ WHERE
 func (q *Queries) UpdateMessageToUnsent(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, updateMessageToUnsent, id)
 	return err
+}
+
+const uploadHistorySyncPayload = `-- name: UploadHistorySyncPayload :execrows
+UPDATE history_sync 
+SET payload = $1, updated_at = now() 
+WHERE id = $2 AND user_id = $3 AND expires_at > now()
+`
+
+type UploadHistorySyncPayloadParams struct {
+	Payload []byte    `json:"payload"`
+	ID      uuid.UUID `json:"id"`
+	UserID  uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) UploadHistorySyncPayload(ctx context.Context, arg UploadHistorySyncPayloadParams) (int64, error) {
+	result, err := q.db.Exec(ctx, uploadHistorySyncPayload, arg.Payload, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const upsertHistorySync = `-- name: UpsertHistorySync :one
+INSERT INTO history_sync (
+    id, user_id, session_id, chats_json, expires_at, created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5, now(), now()
+)
+ON CONFLICT (session_id) DO UPDATE SET
+    id = EXCLUDED.id,
+    chats_json = EXCLUDED.chats_json,
+    payload = NULL,
+    expires_at = EXCLUDED.expires_at,
+    updated_at = now()
+RETURNING id
+`
+
+type UpsertHistorySyncParams struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	SessionID uuid.UUID `json:"session_id"`
+	ChatsJson []byte    `json:"chats_json"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (q *Queries) UpsertHistorySync(ctx context.Context, arg UpsertHistorySyncParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, upsertHistorySync,
+		arg.ID,
+		arg.UserID,
+		arg.SessionID,
+		arg.ChatsJson,
+		arg.ExpiresAt,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }

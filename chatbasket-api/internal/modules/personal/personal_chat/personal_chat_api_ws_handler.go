@@ -60,15 +60,36 @@ func (h *chatHandler) WebSocketUpgrade(c *echo.Context) error {
 		return nil
 	}
 
+	sessionUUIDVal, ok := c.Get("sessionUUID").(uuid.UUID)
+	if !ok {
+		return c.JSON(http.StatusUnauthorized, &kit.ApiError{
+			Code:    http.StatusUnauthorized,
+			Message: "Session is invalid",
+			Type:    "unauthorized",
+		})
+	}
+
 	// ──── 4. Create WSConn and register with hub ────────────────────────────
 	wc := websocket.NewWSConn(wsConn, kit.UserId{
 		StringUserId: userId,
 		UuidUserId:   uuidUserId,
-	}, sessionId, isPrimary)
+	}, sessionId, sessionUUIDVal, isPrimary)
 
 	if !h.hub.Register(wc) {
 		wsConn.Close(ws.StatusTryAgainLater, "too many connections")
 		return nil
+	}
+
+	if isPrimary {
+		go func() {
+			payloads, _ := h.Service.ReplayPendingForPrimary(context.Background(), uuidUserId, sessionUUIDVal)
+			for _, payload := range payloads {
+				h.hub.BroadcastToUserSession(uuidUserId, sessionId, websocket.WSEvent{
+					Type:    WSEventHistorySyncRequested,
+					Payload: payload,
+				})
+			}
+		}()
 	}
 
 	// ── 5. Create WS router for handling client→server messages ─────────────

@@ -448,6 +448,31 @@ func (q *Queries) GetCentralSession(ctx context.Context, authUserID uuid.UUID) (
 	return i, err
 }
 
+const getSessionByID = `-- name: GetSessionByID :one
+SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at, e2ee_public_key FROM sessions WHERE id = $1
+`
+
+func (q *Queries) GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, getSessionByID, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AuthUserID,
+		&i.TokenHash,
+		&i.DeviceToken,
+		&i.Platform,
+		&i.DeviceName,
+		&i.IsCentral,
+		&i.UserAgent,
+		&i.IpAddress,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.E2eePublicKey,
+	)
+	return i, err
+}
+
 const getSessionByToken = `-- name: GetSessionByToken :one
 SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, user_agent, ip_address, expires_at, created_at, updated_at, e2ee_public_key FROM sessions WHERE token_hash = $1 AND auth_user_id = $2
 `

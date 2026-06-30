@@ -93,6 +93,17 @@ type ContactRequest struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+type HistorySync struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	SessionID uuid.UUID `json:"session_id"`
+	ChatsJson []byte    `json:"chats_json"`
+	Payload   []byte    `json:"payload"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type Message struct {
 	ID                          uuid.UUID  `json:"id"`
 	ChatID                      uuid.UUID  `json:"chat_id"`

@@ -37,9 +37,6 @@ func setupE2EEIntegrationDB(t *testing.T) (*pgxpool.Pool, *core_auth.AuthService
 	_, err = pool.Exec(context.Background(), "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS e2ee_public_key CHAR(44)")
 	require.NoError(t, err, "failed to ensure sessions.e2ee_public_key exists")
 
-	// Drop length constraint for dummy test key compatibility
-	_, _ = pool.Exec(context.Background(), "ALTER TABLE sessions DROP CONSTRAINT IF EXISTS sessions_e2ee_public_key_length_check")
-
 	_, err = pool.Exec(context.Background(), "ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS keys_revision INT NOT NULL DEFAULT 0")
 	require.NoError(t, err, "failed to ensure auth_users.keys_revision exists")
 
@@ -575,7 +572,7 @@ func TestSaveSessionE2EEPublicKey_Integration_ConcurrentSameSession(t *testing.T
 
 	for i := 0; i < concurrency; i++ {
 		go func(idx int) {
-			key := fmt.Sprintf("concurrent-key-%d-44-chars-base64-encode", idx)
+			key := fmt.Sprintf("concurrent-key-%d-44-chars-base64-encoded!!", idx)
 			errChan <- authSvc.SaveSessionE2EEPublicKey(ctx, nil, userID, sessionID, key)
 		}(i)
 	}

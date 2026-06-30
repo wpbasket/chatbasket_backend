@@ -115,6 +115,7 @@ func (h *authHandler) AccountVerification(c *echo.Context) error {
 			SessionID:     "",
 			SessionExpiry: user.SessionExpiry,
 			IsPrimary:     user.IsPrimary,
+			PrimaryKey:    user.PrimaryKey,
 			KeysRevision:  user.KeysRevision,
 		}
 		return c.JSON(http.StatusOK, webResponse)
@@ -213,6 +214,7 @@ func (h *authHandler) LoginVerification(c *echo.Context) error {
 			SessionID:     "",
 			SessionExpiry: user.SessionExpiry,
 			IsPrimary:     user.IsPrimary,
+			PrimaryKey:    user.PrimaryKey,
 			KeysRevision:  user.KeysRevision,
 		}
 		return c.JSON(http.StatusOK, webResponse)

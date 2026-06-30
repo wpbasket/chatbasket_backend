@@ -155,6 +155,7 @@ func (s *AuthService) AccountVerification(ctx context.Context, payload *AuthVeri
 		SessionExpiry:     sessionRes.ExpiresAt,
 		IsPrimary:         sessionRes.IsPrimary,
 		PrimaryDeviceName: sessionRes.PrimaryDeviceName,
+		PrimaryKey:        sessionRes.PrimaryKey,
 		KeysRevision:      keysRevision,
 	}, nil
 }
@@ -248,6 +249,7 @@ func (s *AuthService) LoginVerification(ctx context.Context, payload *AuthVerifi
 		SessionExpiry:     sessionRes.ExpiresAt,
 		IsPrimary:         sessionRes.IsPrimary,
 		PrimaryDeviceName: sessionRes.PrimaryDeviceName,
+		PrimaryKey:        sessionRes.PrimaryKey,
 		KeysRevision:      keysRevision,
 	}, nil
 }
