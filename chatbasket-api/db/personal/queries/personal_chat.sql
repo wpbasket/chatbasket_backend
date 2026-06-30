@@ -159,6 +159,7 @@ WHERE
     recipient_id = $1
     AND deleted_by_recipient = FALSE
     AND expires_at > now()
+    AND created_at >= sqlc.arg('session_created_at')
 ORDER BY created_at ASC
 LIMIT $2;
 
@@ -309,6 +310,7 @@ FROM messages
 WHERE
     chat_id = $1
     AND expires_at > now()
+    AND created_at >= sqlc.arg('session_created_at')
     AND (
         (
             sender_id = $4

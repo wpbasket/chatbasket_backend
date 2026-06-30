@@ -60,3 +60,11 @@ func ExtractUserID(c *echo.Context) (UserId, error) {
 		UuidUserId:   uuidUserId,
 	}, nil
 }
+
+func ExtractSessionCreatedAt(c *echo.Context) (time.Time, error) {
+	sessionCreatedAt, ok := (*c).Get("sessionCreatedAt").(time.Time)
+	if !ok {
+		return time.Time{}, NewError(http.StatusUnauthorized, "unauthorized", "Session creation time is missing")
+	}
+	return sessionCreatedAt, nil
+}

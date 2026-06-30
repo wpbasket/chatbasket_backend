@@ -1,4 +1,4 @@
-﻿package core_auth
+package core_auth
 
 import (
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
@@ -19,6 +19,7 @@ func (s *AuthService) GetSessionByToken(ctx context.Context, tokenHash string, u
 	}
 	return &middleware.SessionInfo{
 		ID:        row.ID,
+		CreatedAt: row.CreatedAt,
 		ExpiresAt: row.ExpiresAt,
 		IsCentral: row.IsCentral,
 	}, nil

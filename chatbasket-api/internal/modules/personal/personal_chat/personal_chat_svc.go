@@ -484,12 +484,13 @@ func (s *chatService) AcknowledgeDeliveryHandler(ctx context.Context, payload *A
 // Message Queries
 // ──────────────────────────────────────────────────────────────────────────────
 
-func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, userID kit.UserId, limit, offset int32) ([]personal_chat_store.Message, error) {
+func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, userID kit.UserId, limit, offset int32, sessionCreatedAt time.Time) ([]personal_chat_store.Message, error) {
 	messages, err := s.PostgresQueries.GetChatMessages(ctx, personal_chat_store.GetChatMessagesParams{
-		ChatID:   chatID,
-		Limit:    limit,
-		Offset:   offset,
-		SenderID: userID.UuidUserId,
+		ChatID:           chatID,
+		Limit:            limit,
+		Offset:           offset,
+		SenderID:         userID.UuidUserId,
+		SessionCreatedAt: sessionCreatedAt,
 	})
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
@@ -532,7 +533,7 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 	}
 }
 
-func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessagesPayload, userID kit.UserId) (*GetMessagesResponse, error) {
+func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time) (*GetMessagesResponse, error) {
 	chatID, err := uuid.Parse(payload.ChatID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_chat_id", "Invalid chat ID")
@@ -544,7 +545,7 @@ func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessag
 	if !isParticipant {
 		return nil, kit.NewError(http.StatusForbidden, "forbidden", "You are not a participant in this chat")
 	}
-	messages, err := s.GetChatMessages(ctx, chatID, userID, payload.Limit, payload.Offset)
+	messages, err := s.GetChatMessages(ctx, chatID, userID, payload.Limit, payload.Offset, sessionCreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -580,7 +581,7 @@ func (s *chatService) GetUserChatsLite(ctx context.Context, userID uuid.UUID) ([
 	return s.PostgresQueries.GetUserChatsLite(ctx, userID)
 }
 
-func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId) (*GetUserChatsResponse, error) {
+func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId, sessionCreatedAt time.Time) (*GetUserChatsResponse, error) {
 	chats, err := s.GetUserChatsLite(ctx, userID.UuidUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
@@ -641,6 +642,12 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 		if cp, ok := contactProfile[otherUserID]; ok && cp != nil {
 			otherUserKeysRevision = cp.KeysRevision
 		}
+
+		if lastMessageCreatedAt != nil && lastMessageCreatedAt.Before(sessionCreatedAt) {
+			lastMessageContent = nil
+			lastMessageType = nil
+		}
+
 		lastMessageIsUnsent := false
 		lastMessageStatus := "sent"
 		chatResponses = append(chatResponses, ChatResponse{
@@ -989,14 +996,15 @@ func (s *chatService) AcknowledgeSyncActionHandler(ctx context.Context, payload 
 // Pending Messages
 // ──────────────────────────────────────────────────────────────────────────────
 
-func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *GetPendingMessagesPayload, userID kit.UserId) (*GetMessagesResponse, error) {
+func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *GetPendingMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time) (*GetMessagesResponse, error) {
 	limit := payload.Limit
 	if limit <= 0 {
 		limit = 100
 	}
 	messages, err := s.PostgresQueries.GetPendingMessagesForRecipient(ctx, personal_chat_store.GetPendingMessagesForRecipientParams{
-		RecipientID: userID.UuidUserId,
-		Limit:       limit,
+		RecipientID:      userID.UuidUserId,
+		Limit:            limit,
+		SessionCreatedAt: sessionCreatedAt,
 	})
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)

@@ -133,7 +133,12 @@ func (h *chatHandler) GetMessages(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request params")
 	}
 
-	res, svcErr := h.Service.GetMessagesHandler(c.Request().Context(), &payload, userID)
+	sessionCreatedAt, err := kit.ExtractSessionCreatedAt(c)
+	if err != nil {
+		return err
+	}
+
+	res, svcErr := h.Service.GetMessagesHandler(c.Request().Context(), &payload, userID, sessionCreatedAt)
 	if svcErr != nil {
 		return svcErr
 	}
@@ -194,7 +199,12 @@ func (h *chatHandler) GetUserChats(c *echo.Context) error {
 		return err
 	}
 
-	res, svcErr := h.Service.GetUserChatsHandler(c.Request().Context(), userID)
+	sessionCreatedAt, err := kit.ExtractSessionCreatedAt(c)
+	if err != nil {
+		return err
+	}
+
+	res, svcErr := h.Service.GetUserChatsHandler(c.Request().Context(), userID, sessionCreatedAt)
 	if svcErr != nil {
 		return svcErr
 	}
@@ -212,7 +222,12 @@ func (h *chatHandler) GetPendingMessages(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	res, svcErr := h.Service.GetPendingMessagesHandler(c.Request().Context(), &payload, userID)
+	sessionCreatedAt, err := kit.ExtractSessionCreatedAt(c)
+	if err != nil {
+		return err
+	}
+
+	res, svcErr := h.Service.GetPendingMessagesHandler(c.Request().Context(), &payload, userID, sessionCreatedAt)
 	if svcErr != nil {
 		return svcErr
 	}

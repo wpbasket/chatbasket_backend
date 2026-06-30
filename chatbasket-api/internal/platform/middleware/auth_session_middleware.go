@@ -16,6 +16,7 @@ import (
 // SessionInfo represents generic session data for the middleware.
 type SessionInfo struct {
 	ID        uuid.UUID
+	CreatedAt time.Time
 	ExpiresAt time.Time
 	IsCentral bool
 }
@@ -139,6 +140,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			c.Set("userId", authUser.ID.String())
 			c.Set("sessionId", sessionId)
 			c.Set("sessionUUID", session.ID)
+			c.Set("sessionCreatedAt", session.CreatedAt)
 			c.Set("platform", platform)
 			c.Set("email", authUser.Email)
 			c.Set("isPrimary", session.IsCentral)

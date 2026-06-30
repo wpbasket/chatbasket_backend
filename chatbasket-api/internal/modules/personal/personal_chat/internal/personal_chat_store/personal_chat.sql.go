@@ -606,6 +606,7 @@ FROM messages
 WHERE
     chat_id = $1
     AND expires_at > now()
+    AND created_at >= $5
     AND (
         (
             sender_id = $4
@@ -623,10 +624,11 @@ OFFSET
 `
 
 type GetChatMessagesParams struct {
-	ChatID   uuid.UUID `json:"chat_id"`
-	Limit    int32     `json:"limit"`
-	Offset   int32     `json:"offset"`
-	SenderID uuid.UUID `json:"sender_id"`
+	ChatID           uuid.UUID `json:"chat_id"`
+	Limit            int32     `json:"limit"`
+	Offset           int32     `json:"offset"`
+	SenderID         uuid.UUID `json:"sender_id"`
+	SessionCreatedAt time.Time `json:"session_created_at"`
 }
 
 func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams) ([]Message, error) {
@@ -635,6 +637,7 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 		arg.Limit,
 		arg.Offset,
 		arg.SenderID,
+		arg.SessionCreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -1103,17 +1106,19 @@ WHERE
     recipient_id = $1
     AND deleted_by_recipient = FALSE
     AND expires_at > now()
+    AND created_at >= $3
 ORDER BY created_at ASC
 LIMIT $2
 `
 
 type GetPendingMessagesForRecipientParams struct {
-	RecipientID uuid.UUID `json:"recipient_id"`
-	Limit       int32     `json:"limit"`
+	RecipientID      uuid.UUID `json:"recipient_id"`
+	Limit            int32     `json:"limit"`
+	SessionCreatedAt time.Time `json:"session_created_at"`
 }
 
 func (q *Queries) GetPendingMessagesForRecipient(ctx context.Context, arg GetPendingMessagesForRecipientParams) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getPendingMessagesForRecipient, arg.RecipientID, arg.Limit)
+	rows, err := q.db.Query(ctx, getPendingMessagesForRecipient, arg.RecipientID, arg.Limit, arg.SessionCreatedAt)
 	if err != nil {
 		return nil, err
 	}
