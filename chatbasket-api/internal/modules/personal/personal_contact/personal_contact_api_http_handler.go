@@ -1,8 +1,9 @@
-﻿package personal_contact
+package personal_contact
 
 import (
 	"chatbasket-api/internal/platform/kit"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 )
@@ -37,6 +38,11 @@ func (h *contactHandler) CreateContact(c *echo.Context) error {
 	var payload CreateContactPayload
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
+	}
+
+	if payload.Nickname != nil {
+		trimmedNickname := strings.TrimSpace(*payload.Nickname)
+		payload.Nickname = &trimmedNickname
 	}
 
 	res, err := h.Service.CreateContact(c.Request().Context(), &payload, userID)
@@ -189,6 +195,11 @@ func (h *contactHandler) UpdateContactNickname(c *echo.Context) error {
 	var payload UpdateContactNicknamePayload
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
+	}
+
+	if payload.Nickname != nil {
+		trimmedNickname := strings.TrimSpace(*payload.Nickname)
+		payload.Nickname = &trimmedNickname
 	}
 
 	res, err := h.Service.UpdateContactNickname(c.Request().Context(), &payload, userID)

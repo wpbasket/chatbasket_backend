@@ -3,6 +3,7 @@ package personal_profile
 import (
 	"encoding/base64"
 	"net/http"
+	"strings"
 
 	"chatbasket-api/internal/platform/kit"
 
@@ -23,6 +24,8 @@ func (h *profileHandler) CreateUserProfile(c *echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(400, "bad_request", "Invalid create user profile payload")
 	}
+
+	payload.Name = strings.TrimSpace(payload.Name)
 	userID, err := kit.ExtractUserID(c)
 	if err != nil {
 		return err
@@ -104,6 +107,15 @@ func (h *profileHandler) UpdateProfile(c *echo.Context) error {
 	var payload updateUserProfilePayload
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(400, "bad_request", "Invalid update profile payload: "+err.Error())
+	}
+	
+	if payload.Name != nil {
+		trimmedName := strings.TrimSpace(*payload.Name)
+		payload.Name = &trimmedName
+	}
+	if payload.Bio != nil {
+		trimmedBio := strings.TrimSpace(*payload.Bio)
+		payload.Bio = &trimmedBio
 	}
 	userID, err := kit.ExtractUserID(c)
 	if err != nil {
