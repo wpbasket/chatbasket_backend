@@ -97,6 +97,7 @@ func (wc *WSConn) WritePump(ctx context.Context) {
 			cancel()
 			if err != nil {
 				log.Printf("[WS] WritePump: WRITE ERROR for session %s: %v", wc.SessionID, err)
+				wc.Conn.Close(websocket.StatusAbnormalClosure, "write failed")
 				return
 			}
 			log.Printf("[WS] WritePump: SENT OK to session %s", wc.SessionID)
@@ -106,6 +107,8 @@ func (wc *WSConn) WritePump(ctx context.Context) {
 			err := wc.Conn.Ping(pingCtx)
 			cancel()
 			if err != nil {
+				log.Printf("[WS] WritePump: PING ERROR for session %s: %v", wc.SessionID, err)
+				wc.Conn.Close(websocket.StatusGoingAway, "ping failed")
 				return
 			}
 
@@ -201,6 +204,24 @@ func (h *WSHub) Unregister(wc *WSConn) {
 			delete(h.conns, wc.UserID.UuidUserId)
 		}
 	}
+}
+
+// IsSessionActive returns true if the specified session is currently connected.
+func (h *WSHub) IsSessionActive(userID uuid.UUID, sessionUUID uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	userConns, exists := h.conns[userID]
+	if !exists {
+		return false
+	}
+
+	for _, conn := range userConns {
+		if conn.SessionUUID == sessionUUID {
+			return true
+		}
+	}
+	return false
 }
 
 // BroadcastToUser sends a WSEvent to ALL connected devices of a user.

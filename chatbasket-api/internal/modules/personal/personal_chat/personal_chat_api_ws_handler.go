@@ -80,17 +80,7 @@ func (h *chatHandler) WebSocketUpgrade(c *echo.Context) error {
 		return nil
 	}
 
-	if isPrimary {
-		go func() {
-			payloads, _ := h.Service.ReplayPendingForPrimary(context.Background(), uuidUserId, sessionUUIDVal)
-			for _, payload := range payloads {
-				h.hub.BroadcastToUserSession(uuidUserId, sessionId, websocket.WSEvent{
-					Type:    WSEventHistorySyncRequested,
-					Payload: payload,
-				})
-			}
-		}()
-	}
+
 
 	// ── 5. Create WS router for handling client→server messages ─────────────
 	router := NewChatWSRouter(h.Service, h.hub)

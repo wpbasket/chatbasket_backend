@@ -22,7 +22,29 @@ type HistorySyncReadyPayload struct {
 }
 
 // RequestHistorySync handles step ①: secondary requests sync
-func (s *chatService) RequestHistorySync(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, chatsCipher string, usedPrimaryKey string) (uuid.UUID, uuid.UUID, string, error) {
+func (s *chatService) RequestHistorySync(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, chatsCipher string, usedPrimaryKey string, isPrimaryActive func(uuid.UUID, uuid.UUID) bool) (uuid.UUID, uuid.UUID, string, error) {
+	// 1. Find the primary session
+	primarySessionID, err := s.AuthProvider.GetUserPrimarySessionID(ctx, userID)
+	if err != nil || primarySessionID == uuid.Nil {
+		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusServiceUnavailable, "primary_offline", "Primary device is not connected")
+	}
+
+	// 2. Check if primary is actively connected to the WebSocket
+	if isPrimaryActive != nil && !isPrimaryActive(userID, primarySessionID) {
+		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusServiceUnavailable, "primary_offline", "Primary device is not connected")
+	}
+
+	// 3. Validate that the secondary device is using the correct primary key
+	primaryPublicKey, err := s.AuthProvider.GetSessionE2EEPublicKey(ctx, primarySessionID)
+	if err == nil && primaryPublicKey != nil && *primaryPublicKey != usedPrimaryKey {
+		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusConflict, "key_mismatch", "Primary key mismatch. Please refresh your keys.")
+	}
+
+	requesterPublicKey, err := s.AuthProvider.GetSessionE2EEPublicKey(ctx, sessionID)
+	if err != nil || requesterPublicKey == nil {
+		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to get requester public key")
+	}
+
 	requestID, err := uuid.NewV7()
 	if err != nil {
 		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to generate request ID")
@@ -30,7 +52,7 @@ func (s *chatService) RequestHistorySync(ctx context.Context, userID uuid.UUID, 
 
 	expiresAt := time.Now().Add(HistorySyncTTL)
 
-	// Upsert the request (replace on new)
+	// 4. Upsert the request (replace on new) ONLY if primary is active
 	_, err = s.PostgresQuerier.UpsertHistorySync(ctx, personal_chat_store.UpsertHistorySyncParams{
 		ID:        requestID,
 		UserID:    userID,
@@ -40,25 +62,6 @@ func (s *chatService) RequestHistorySync(ctx context.Context, userID uuid.UUID, 
 	})
 	if err != nil {
 		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to upsert history sync request: "+err.Error())
-	}
-
-	// Find the primary session and public key
-	primarySessionID, err := s.AuthProvider.GetUserPrimarySessionID(ctx, userID)
-	if err != nil {
-		// Log but don't fail, the primary might just be offline or we couldn't find it.
-		// ReplayPendingForPrimary will catch it later if they connect.
-		return requestID, uuid.Nil, "", nil
-	}
-
-	// Validate that the secondary device is using the correct primary key
-	primaryPublicKey, err := s.AuthProvider.GetSessionE2EEPublicKey(ctx, primarySessionID)
-	if err == nil && primaryPublicKey != nil && *primaryPublicKey != usedPrimaryKey {
-		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusConflict, "key_mismatch", "Primary key mismatch. Please refresh your keys.")
-	}
-
-	requesterPublicKey, err := s.AuthProvider.GetSessionE2EEPublicKey(ctx, sessionID)
-	if err != nil || requesterPublicKey == nil {
-		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to get requester public key")
 	}
 
 	return requestID, primarySessionID, *requesterPublicKey, nil
@@ -130,33 +133,4 @@ func (s *chatService) DownloadHistorySync(ctx context.Context, userID uuid.UUID,
 	return &payloadStr, nil
 }
 
-// ReplayPendingForPrimary is called when the primary session connects to WS
-func (s *chatService) ReplayPendingForPrimary(ctx context.Context, userID uuid.UUID, primarySessionID uuid.UUID) ([]HistorySyncRequestedPayload, error) {
-	pending, err := s.PostgresQuerier.GetPendingHistorySyncForUser(ctx, userID)
-	if err != nil {
-		// Just log and return empty, not a fatal error for connection
-		return nil, nil
-	}
 
-	var payloads []HistorySyncRequestedPayload
-	for _, p := range pending {
-		// fetch requester public key
-		requesterPublicKey, err := s.AuthProvider.GetSessionE2EEPublicKey(ctx, p.SessionID)
-		if err != nil || requesterPublicKey == nil {
-			continue // skip if we can't get the public key
-		}
-
-		chatsStr := string(p.ChatsJson)
-		if len(chatsStr) >= 2 && chatsStr[0] == '"' && chatsStr[len(chatsStr)-1] == '"' {
-			chatsStr = chatsStr[1 : len(chatsStr)-1]
-		}
-
-		payloads = append(payloads, HistorySyncRequestedPayload{
-			RequestID:          p.ID,
-			RequesterSessionID: p.SessionID,
-			RequesterPublicKey: *requesterPublicKey,
-			ChatsCipher:        chatsStr,
-		})
-	}
-	return payloads, nil
-}

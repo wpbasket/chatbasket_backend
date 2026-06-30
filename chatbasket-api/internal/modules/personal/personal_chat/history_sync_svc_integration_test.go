@@ -103,7 +103,7 @@ func TestHistorySync_FullIntegration_EdgeCases(t *testing.T) {
 	chatsCipher := "\"encrypted-chats\""
 
 	// 1. RequestHistorySync Success
-	reqID, pSession, key, err := svc.RequestHistorySync(ctx, userID, sessionID, chatsCipher, pubKey)
+	reqID, pSession, key, err := svc.RequestHistorySync(ctx, userID, sessionID, chatsCipher, pubKey, func(uid uuid.UUID, sid uuid.UUID) bool { return true })
 	require.NoError(t, err)
 	assert.NotEqual(t, uuid.Nil, reqID)
 	assert.Equal(t, primarySessionID, pSession)
@@ -188,15 +188,12 @@ func TestHistorySync_UpsertReplace(t *testing.T) {
 		AuthProvider:    mockAuth,
 	}
 
-	reqID, _, _, err := svc.RequestHistorySync(ctx, userID, sessionID, "\"chats1\"", pubKey)
+	reqID, _, _, err := svc.RequestHistorySync(ctx, userID, sessionID, "\"chats1\"", pubKey, func(uid uuid.UUID, sid uuid.UUID) bool { return true })
 	require.NoError(t, err)
 
-	// Replay
-	pending, err := svc.ReplayPendingForPrimary(ctx, userID, uuid.New())
+	// Verify the request exists in DB
+	meta, err := svc.PostgresQuerier.GetHistorySyncMeta(ctx, reqID)
 	require.NoError(t, err)
-	assert.Len(t, pending, 1)
-	assert.Equal(t, reqID, pending[0].RequestID)
-	assert.Equal(t, sessionID, pending[0].RequesterSessionID)
-	assert.Equal(t, pubKey, pending[0].RequesterPublicKey)
-	assert.Equal(t, "chats1", pending[0].ChatsCipher)
+	assert.Equal(t, userID, meta.UserID)
+	assert.Equal(t, sessionID, meta.SessionID)
 }

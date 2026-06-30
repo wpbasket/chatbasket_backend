@@ -48,7 +48,16 @@ func (h *chatHandler) RequestHistorySync(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "used_primary_key is required")
 	}
 
-	requestID, primarySessionID, requesterPubKey, err := h.Service.RequestHistorySync(c.Request().Context(), userID.UuidUserId, sessionUUIDVal, req.ChatsCipher, req.UsedPrimaryKey)
+	requestID, primarySessionID, requesterPubKey, err := h.Service.RequestHistorySync(
+		c.Request().Context(),
+		userID.UuidUserId,
+		sessionUUIDVal,
+		req.ChatsCipher,
+		req.UsedPrimaryKey,
+		func(uid uuid.UUID, sid uuid.UUID) bool {
+			return h.hub.IsSessionActive(uid, sid)
+		},
+	)
 	if err != nil {
 		return err
 	}
