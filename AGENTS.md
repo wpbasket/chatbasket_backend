@@ -15,7 +15,7 @@
 3. **Surgical Changes**: Touch only what you must. Clean up only your own mess.
    - When editing existing code:
      - Don't "improve" adjacent code, comments, or formatting.
-     - Don't refactor things thant aren't broken.
+     - Don't refactor things that aren't broken.
      - Match existing style, even if you'd do it differently.
      - If you notice unrelated dead code, mention it - don't delete it.
    - When your changes create orphans:
@@ -34,12 +34,56 @@
      3. [Step] → verify: [check]
      ```
      Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-5. **Semantic Preference**: Utilize tools with **semantic embeddings** (e.g., GitNexus `query`) for conceptual discovery whenever the specific task permits.
+5. **Semantic Preference**: Utilize tools with **semantic embeddings** (e.g., GitNexus `query`) for conceptual discovery whenever the specific task permits (see the [GitNexus Semantic & Embedding Query Guide](#gitnexus-semantic--embedding-query-guide) below).
 6. **Tiered Repository Discovery**: Utilize **group-level queries** (e.g., `gitnexus_group_query`) against **`cb-group`** for global discovery and cross-repo architectural queries. For deep implementation, refactoring, or impact analysis, switch to the specific **sub-repo index** (e.g., `chatbasket_backend`) to ensure maximum precision and local context.
-7. **Strategic Documentation**: If Wiki is present, then utilize the **GitNexus Wiki** (located in sub-repo `.gitnexus/wiki/` folders) when the task requires high-level architectural understanding, module mapping, or strategic context before deep-diving into code.
-8. **Context-mode MCP Rules**: [MUST READ] (See full rules at the bottom of this file)
-9. **Manual Route Overrides**: Due to GitNexus Go parser limitations (Echo struct method handlers) and custom React Native HTTP client wrappers, automatic API contract linking is skipped. When adding new backend/frontend endpoints, you **MUST** manually add them as overrides in `~/.gitnexus/groups/cb-group/group.yaml` under `links:` and run `npx gitnexus group sync cb-group --allow-stale`.
+7. **Manual Route Overrides**: Due to GitNexus Go parser limitations (Echo struct method handlers) and custom React Native HTTP client wrappers, automatic API contract linking is skipped. When adding new backend/frontend endpoints, you **MUST** manually add them as overrides in `~/.gitnexus/groups/cb-group/group.yaml` under `links:` and run `npx gitnexus group sync cb-group --allow-stale`.
 
+
+---
+
+# GitNexus Semantic & Embedding Query Guide
+
+GitNexus utilizes a hybrid search index combining **BM25 keyword matching** and **semantic vector embeddings**, merged via **Reciprocal Rank Fusion (RRF)**. This allows you to find concepts, execution flows, and symbol mappings using natural language instead of pure code syntax or grep.
+
+## 1. Single Repository vs. Group Mode Queries
+
+* **Single Repository Queries**: Specify the direct repository name in the `repo` field (e.g. `"<repo_name>"`).
+  ```javascript
+  query({
+    repo: "<repo_name>",
+    search_query: "<concept_or_topic_description>"
+  })
+  ```
+* **Group-Level Queries (Cross-Repo)**: Set `repo` to `@<groupName>` (e.g. `@<group_name>`) to query all repositories in the GitNexus group.
+  ```javascript
+  query({
+    repo: "@<group_name>",
+    search_query: "<cross_repo_concept_description>"
+  })
+  ```
+* **Group Member-Specific Queries**: Set `repo` to `@<groupName>/<repoPathKey>` (e.g. `@<group_name>/<member_repo_path>`) to target a specific member under the group environment.
+
+## 2. Query Parameters Reference
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `search_query` | String | **Yes** | Natural language concept, symptom, error message, or keyword to query. |
+| `repo` | String | No | Target repository name or group format (e.g. `@<group_name>`). |
+| `goal` | String | No | Explain what you want to accomplish (e.g., `"find the <concept_name> logic"`). Helps vector ranking. |
+| `task_context` | String | No | Set the context of the work you are performing (e.g., `"verifying that <logic_flow_name> is referenced"`). Helps vector ranking. |
+| `service` | String | No | Path prefix (e.g., `"<service_subdirectory>"`). In group mode, only returns processes/symbols falling under this path prefix. |
+| `limit` | Number | No | Maximum number of execution processes (flows) to return. Defaults to 5. |
+| `max_symbols` | Number | No | Maximum number of symbols to return per process. Defaults to 10. |
+| `include_content` | Boolean | No | If `true`, includes the full source code content of matched symbols inside the query response under a `content` field. Defaults to `false`. |
+| `branch` | String | No | Scope to a specific branch index (for multi-branch repositories). Omit for primary branch. |
+
+## 3. Best Practices for Semantic Queries
+
+* **Search by Concept instead of Code Syntax**: Rather than grepping for strict class/method names (e.g. `<ExactSymbolName>`), search for natural language descriptions of the logic (e.g. `"<description_of_behavior>"`). The semantic embedding engine matches synonyms and caller patterns even if names differ.
+* **Inspect the Processes First**: Identify relevant execution flows in the returned `processes` list, then drill down into the symbols participating in those flows via `process_symbols`.
+* **Utilize `include_content` for Quick Inspection**: If you need to quickly read a symbol's implementation without leaving the search tool or calling `view_file`, set `include_content: true` to get the source code inline.
+* **Use `service` to Filter Monorepos or Groups**: When running queries in group mode (`@<group_name>`), pass the specific subdirectory segment (e.g., `service: "<service_subdirectory>"`) to filter out other subprojects and focus the search scope.
+* **Follow up with `context`**: Once you have identified a suspect symbol name from `query()`, call `context({ name: "<symbol_name>", repo: "<repo_name>" })` to see its full incoming/outgoing calls, properties, accesses, and process participations.
 
 ---
 
@@ -91,130 +135,104 @@ This repository is listed under GitNexus **group(s): cb-group** (see `~/.gitnexu
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
-
-## Global Playwright Setup
-
-- Playwright is installed globally on this Windows machine via npm (`playwright@1.59.1`).
-- Prefer using the global `playwright` command instead of creating local temporary Playwright installs.
-- When requiring Playwright from ad-hoc Node scripts, set `NODE_PATH` to the global npm root first in PowerShell: `$env:NODE_PATH = (npm root -g)`.
-- Microsoft Edge is available at: `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`.
-
+---
+name: gitnexus-debugging
+description: "Use when the user is debugging a bug, tracing an error, or asking why something fails. Examples: \"Why is X failing?\", \"Where does this error come from?\", \"Trace this bug\""
 ---
 
-# context-mode — MANDATORY routing rules
+# Debugging with GitNexus
 
-context-mode MCP tools available. Rules protect context window from flooding. One unrouted command dumps 56 KB into context. Some agents have routing via hooks (`tool_call` blocks `curl`/`wget`) AND these instructions. Hooks = hard enforcement; rules = completeness for redirections hooks cannot catch. Follow strictly.
+## When to Use
 
-## Available MCP Tools (11 tools)
+- "Why is this function failing?"
+- "Trace where this error comes from"
+- "Who calls this method?"
+- "This endpoint returns 500"
+- Investigating bugs, errors, or unexpected behavior
 
-1. `ctx_batch_execute`: Run multiple commands in ONE call, auto-index all output, and search with multiple queries.
-2. `ctx_doctor`: Diagnose context-mode installation.
-3. `ctx_execute`: Execute code in a sandboxed subprocess (javascript, typescript, python, shell, etc.). Only stdout enters context.
-4. `ctx_execute_file`: Read a file and process it in a sandboxed subprocess without loading contents into context.
-5. `ctx_fetch_and_index`: Fetches URL content, converts HTML to markdown, and indexes into searchable knowledge base.
-6. `ctx_index`: Index documentation or knowledge content into a searchable BM25 knowledge base.
-7. `ctx_insight`: Opens the context-mode Insight dashboard in the browser to show personal analytics.
-8. `ctx_purge`: DESTRUCTIVE — permanently delete indexed content.
-9. `ctx_search`: Search indexed content.
-10. `ctx_stats`: Returns context consumption statistics for the current session.
-11. `ctx_upgrade`: Upgrade context-mode to the latest version.
+## Workflow
 
-## Think in Code — MANDATORY
+```
+1. query({search_query: "<error or symptom>"})            → Find related execution flows
+2. context({name: "<suspect>"})                    → See callers/callees/processes
+3. READ gitnexus://repo/{name}/process/{name}                → Trace execution flow
+4. cypher({statement: "MATCH path..."})                 → Custom traces if needed
+```
 
-Analyze/count/filter/compare/search/parse/transform data: **write code** via `ctx_execute(language, code)`, `console.log()` only the answer. Do NOT read raw data into context. PROGRAM the analysis, not COMPUTE it. Pure JavaScript — Node.js built-ins only (`fs`, `path`, `child_process`). `try/catch`, handle `null`/`undefined`. One script replaces ten tool calls.
+> If "Index is stale" → run `node .gitnexus/run.cjs analyze` in terminal.
 
-## BLOCKED — do NOT use
+## Checklist
 
-### curl / wget — FORBIDDEN
-Do NOT use `curl`/`wget` in `bash` or via generic `run_command`. Dumps raw HTTP into context.
-Use: `ctx_fetch_and_index(url, source)` or `ctx_execute(language: "javascript", code: "const r = await fetch(...)")`
+```
+- [ ] Understand the symptom (error message, unexpected behavior)
+- [ ] query for error text or related code
+- [ ] Identify the suspect function from returned processes
+- [ ] context to see callers and callees
+- [ ] Trace execution flow via process resource if applicable
+- [ ] cypher for custom call chain traces if needed
+- [ ] Read source files to confirm root cause
+```
 
-### Inline HTTP — FORBIDDEN
-No `node -e "fetch(..."`, `python -c "requests.get(..."`. Bypasses sandbox.
-Use: `ctx_execute(language, code)` — only stdout enters context
+## Debugging Patterns
 
-### Direct web fetching — FORBIDDEN
-Raw HTML can exceed 100 KB.
-Use: `ctx_fetch_and_index(url, source)` then `ctx_search(queries)`
+| Symptom              | GitNexus Approach                                          |
+| -------------------- | ---------------------------------------------------------- |
+| Error message        | `query` for error text → `context` on throw sites |
+| Wrong return value   | `context` on the function → trace callees for data flow    |
+| Intermittent failure | `context` → look for external calls, async deps            |
+| Performance issue    | `context` → find symbols with many callers (hot paths)     |
+| Recent regression    | `detect_changes` to see what your changes affect           |
+| "How does A reach B?" | `trace` between the two symbols — shortest call chain in one call |
 
-## REDIRECTED — use sandbox
+## Tools
 
-### Shell / Bash (>20 lines output)
-`shell` or `bash` ONLY for: `git`, `mkdir`, `rm`, `mv`, `cd`, `ls`, `npm install`, `pip install`.
-Otherwise: `ctx_batch_execute(commands, queries)` or `ctx_execute(language: "shell", code: "...")`
+**query** — find code related to error:
 
-### File reading (for analysis)
-Reading to **edit** → native read tools are correct. Reading to **analyze/explore/summarize** → `ctx_execute_file(path, language, code)`.
+```
+query({search_query: "payment validation error"})
+→ Processes: CheckoutFlow, ErrorHandling
+→ Symbols: validatePayment, handlePaymentError, PaymentException
+```
 
-### grep / find / search (large results)
-Use `ctx_execute(language: "shell", code: "grep ...")` in sandbox.
+**context** — full context for a suspect:
 
-## Tool selection
+```
+context({name: "validatePayment"})
+→ Incoming calls: processCheckout, webhookHandler
+→ Outgoing calls: verifyCard, fetchRates (external API!)
+→ Processes: CheckoutFlow (step 3/7)
+```
 
-0. **MEMORY**: `ctx_search(sort: "timeline")` — after resume, check prior context before asking user.
-1. **GATHER**: `ctx_batch_execute(commands, queries)` — runs all commands, auto-indexes, returns search. ONE call replaces 30+. Each command: `{label: "header", command: "..."}`.
-2. **FOLLOW-UP**: `ctx_search(queries: ["q1", "q2", ...])` — all questions as array, ONE call (default relevance mode).
-3. **PROCESSING**: `ctx_execute(language, code)` | `ctx_execute_file(path, language, code)` — sandbox, only stdout enters context.
-4. **WEB**: `ctx_fetch_and_index(url, source)` then `ctx_search(queries)` — raw HTML never enters context.
-5. **INDEX**: `ctx_index(content, source)` — store in FTS5 for later search.
+**cypher** — custom call chain traces:
 
-## Parallel I/O batches
+```cypher
+MATCH path = (a)-[:CodeRelation {type: 'CALLS'}*1..2]->(b:Function {name: "validatePayment"})
+RETURN [n IN nodes(path) | n.name] AS chain
+```
 
-For multi-URL fetches or multi-API calls, **always** include `concurrency: N` (1-8):
+**trace** — shortest call chain between two symbols ("how does A reach B?"), one call instead of chaining `context` hops:
 
-- `ctx_batch_execute(commands: [3+ network commands], concurrency: 5)` — gh, curl, dig, docker inspect, multi-region cloud queries
-- `ctx_fetch_and_index(requests: [{url, source}, ...], concurrency: 5)` — multi-URL batch fetch
+```
+trace({ from: "processCheckout", to: "fetchRates" })
+→ status: ok, hopCount: 3
+→ hops: processCheckout → validatePayment → verifyCard → fetchRates
+→ edges: CALLS (1.0), CALLS (0.95), CALLS (1.0)
+```
 
-**Use concurrency 4-8** for I/O-bound work (network calls, API queries). **Keep concurrency 1** for CPU-bound (npm test, build, lint) or commands sharing state (ports, lock files, same-repo writes).
+When no path exists, `trace` reports the furthest reachable node — exactly where the chain breaks (dynamic dispatch, reflection, or an external boundary).
 
-GitHub API rate-limit: cap at 4 for `gh` calls.
+## Example: "Payment endpoint returns 500 intermittently"
 
-## Output
+```
+1. query({search_query: "payment error handling"})
+   → Processes: CheckoutFlow, ErrorHandling
+   → Symbols: validatePayment, handlePaymentError
 
-Write artifacts to FILES — never inline. Return: file path + 1-line description.
-Descriptive source labels for `ctx_search(source: "label")`.
-Terse like caveman. Technical substance exact. Only fluff die.
-Drop: articles, filler (just/really/basically), pleasantries, hedging. Fragments OK. Short synonyms. Code unchanged.
-Pattern: [thing] [action] [reason]. [next step]. Auto-expand for: security warnings, irreversible actions, user confusion.
+2. context({name: "validatePayment"})
+   → Outgoing calls: verifyCard, fetchRates (external API!)
 
-## Session Continuity
+3. READ gitnexus://repo/my-app/process/CheckoutFlow
+   → Step 3: validatePayment → calls fetchRates (external)
 
-Skills, roles, and decisions persist for the entire session. Do not abandon them as the conversation grows.
-
-## Memory
-
-Session history is persistent and searchable. On resume, search BEFORE asking the user:
-
-| Need | Command |
-|------|---------|
-| What were we working on? | `ctx_search(queries: ["summary"], source: "compaction", sort: "timeline")` |
-| What did we decide? | `ctx_search(queries: ["decision"], source: "decision", sort: "timeline")` |
-| What NOT to repeat? | `ctx_search(queries: ["rejected"], source: "rejected-approach")` |
-| What constraints exist? | `ctx_search(queries: ["constraint"], source: "constraint")` |
-
-DO NOT ask "what were we working on?" — SEARCH FIRST.
-If search returns 0 results, proceed as a fresh session.
-
-## ctx commands
-
-| Command | Action |
-|---------|--------|
-| `ctx stats` | Call `stats` MCP tool, display full output verbatim |
-| `ctx doctor` | Call `doctor` MCP tool, run returned shell command, display as checklist |
-| `ctx upgrade` | Call `upgrade` MCP tool, run returned shell command, display as checklist |
-| `ctx purge` | Call `purge` MCP tool with confirm: true. Warns before wiping knowledge base. |
-| `ctx insight` | Call `insight` MCP tool, opens local dashboard for session analytics. |
-
-After /clear or /compact: knowledge base and session stats preserved. Use `ctx purge` to start fresh.
-
-## Windows notes
-
-**PowerShell cmdlets** — Sandbox uses bash. PowerShell cmdlets (`Format-List`, `Get-Culture`, etc.) fail with `command not found`. Wrap with `pwsh -NoProfile -Command "..."`.
-
-**Relative paths** — Sandbox CWD is temp dir, not project root. Convert to absolute paths. Ask user to confirm if unknown.
-
-**Windows drive letters** — Sandbox runs Git Bash / MSYS2. `X:\path` → `/x/path` (lowercase, no `/mnt/`). Never emit `/mnt/<letter>/`.
-
-**Quote paths** — Spaces in paths cause splits. Always double-quote: `rg "symbol" "$REPO_ROOT/some dir/Source"`.
-
----
+4. Root cause: fetchRates calls external API without proper timeout
+```
