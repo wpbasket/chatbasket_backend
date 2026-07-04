@@ -227,7 +227,9 @@ func (h *chatHandler) GetPendingMessages(c *echo.Context) error {
 		return err
 	}
 
-	res, svcErr := h.Service.GetPendingMessagesHandler(c.Request().Context(), &payload, userID, sessionCreatedAt)
+	isPrimary := extractIsPrimary(c)
+
+	res, svcErr := h.Service.GetPendingMessagesHandler(c.Request().Context(), &payload, userID, sessionCreatedAt, isPrimary)
 	if svcErr != nil {
 		return svcErr
 	}

@@ -1169,18 +1169,21 @@ FROM messages
 WHERE
     sender_id = $1
     AND deleted_by_sender = FALSE
+    AND synced_to_sender_primary = FALSE
     AND expires_at > now()
+    AND created_at >= $3
 ORDER BY created_at ASC
 LIMIT $2
 `
 
 type GetPendingSenderSyncMessagesParams struct {
-	SenderID uuid.UUID `json:"sender_id"`
-	Limit    int32     `json:"limit"`
+	SenderID         uuid.UUID `json:"sender_id"`
+	Limit            int32     `json:"limit"`
+	SessionCreatedAt time.Time `json:"session_created_at"`
 }
 
 func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendingSenderSyncMessagesParams) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getPendingSenderSyncMessages, arg.SenderID, arg.Limit)
+	rows, err := q.db.Query(ctx, getPendingSenderSyncMessages, arg.SenderID, arg.Limit, arg.SessionCreatedAt)
 	if err != nil {
 		return nil, err
 	}

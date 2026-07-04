@@ -169,9 +169,12 @@ FROM messages
 WHERE
     sender_id = $1
     AND deleted_by_sender = FALSE
+    AND synced_to_sender_primary = FALSE
     AND expires_at > now()
+    AND created_at >= sqlc.arg('session_created_at')
 ORDER BY created_at ASC
 LIMIT $2;
+
 
 -- name: MarkMessageDeliveredToRecipient :exec
 UPDATE messages

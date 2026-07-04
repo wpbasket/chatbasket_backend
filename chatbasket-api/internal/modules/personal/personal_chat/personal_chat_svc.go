@@ -12,6 +12,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 	"unicode/utf8"
 
@@ -996,12 +997,13 @@ func (s *chatService) AcknowledgeSyncActionHandler(ctx context.Context, payload 
 // Pending Messages
 // ──────────────────────────────────────────────────────────────────────────────
 
-func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *GetPendingMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time) (*GetMessagesResponse, error) {
+func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *GetPendingMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time, isPrimary bool) (*GetMessagesResponse, error) {
 	limit := payload.Limit
 	if limit <= 0 {
 		limit = 100
 	}
-	messages, err := s.PostgresQueries.GetPendingMessagesForRecipient(ctx, personal_chat_store.GetPendingMessagesForRecipientParams{
+	// 1. Fetch pending received messages
+	recipientMsgs, err := s.PostgresQueries.GetPendingMessagesForRecipient(ctx, personal_chat_store.GetPendingMessagesForRecipientParams{
 		RecipientID:      userID.UuidUserId,
 		Limit:            limit,
 		SessionCreatedAt: sessionCreatedAt,
@@ -1009,8 +1011,33 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
 	}
-	msgResponses := make([]MessageResponse, 0, len(messages))
-	for _, msg := range messages {
+
+	var combinedMsgs []personal_chat_store.Message
+	combinedMsgs = append(combinedMsgs, recipientMsgs...)
+
+	// 2. Fetch pending sender sync messages if device is Primary
+	if isPrimary {
+		senderMsgs, err := s.PostgresQueries.GetPendingSenderSyncMessages(ctx, personal_chat_store.GetPendingSenderSyncMessagesParams{
+			SenderID:         userID.UuidUserId,
+			Limit:            limit,
+			SessionCreatedAt: sessionCreatedAt,
+		})
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
+		}
+		combinedMsgs = append(combinedMsgs, senderMsgs...)
+	}
+
+	// 3. Sort chronologically by CreatedAt ASC
+	if len(combinedMsgs) > 1 {
+		sort.Slice(combinedMsgs, func(i, j int) bool {
+			return combinedMsgs[i].CreatedAt.Before(combinedMsgs[j].CreatedAt)
+		})
+	}
+
+	// 4. Build response payload
+	msgResponses := make([]MessageResponse, 0, len(combinedMsgs))
+	for _, msg := range combinedMsgs {
 		msgResponses = append(msgResponses, s.buildMessageResponse(ctx, msg, userID))
 	}
 	return &GetMessagesResponse{
@@ -1018,6 +1045,7 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 		Count:    len(msgResponses),
 	}, nil
 }
+
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Relay Cleanup
