@@ -123,9 +123,13 @@ CONSTRAINT messages_valid_participants CHECK (sender_id != recipient_id),
 -- File Attachment Constraints
 CONSTRAINT messages_file_size_limit
         CHECK (file_size IS NULL OR file_size <= 104857600), -- 100MB limit
+    -- 'text' has no file. Media types always have a file. 'unsent' is allowed
+    -- with or without a file: unsend tombstones the row first, then deletes
+    -- the R2 file and clears the file fields.
     CONSTRAINT messages_file_type_validation
         CHECK (
-            (message_type IN ('text', 'unsent') AND file_id IS NULL) OR
+            (message_type = 'text' AND file_id IS NULL) OR
+            (message_type = 'unsent') OR
             (message_type IN ('image', 'video', 'audio', 'file') AND file_id IS NOT NULL)
         )
 );
