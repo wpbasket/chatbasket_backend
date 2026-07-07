@@ -185,6 +185,7 @@ SELECT
     u.name,
     u.b64_cipher_chacha20poly1305_username AS username,
     u.bio,
+    u.profile_type,
     a.file_id,
     a.token_id,
     a.token_secret,
@@ -230,6 +231,7 @@ type GetContactableProfilesForViewerRow struct {
 	Name                   string     `json:"name"`
 	Username               string     `json:"username"`
 	Bio                    *string    `json:"bio"`
+	ProfileType            string     `json:"profile_type"`
 	FileID                 *string    `json:"file_id"`
 	TokenID                *string    `json:"token_id"`
 	TokenSecret            *string    `json:"token_secret"`
@@ -258,6 +260,7 @@ func (q *Queries) GetContactableProfilesForViewer(ctx context.Context, arg GetCo
 			&i.Name,
 			&i.Username,
 			&i.Bio,
+			&i.ProfileType,
 			&i.FileID,
 			&i.TokenID,
 			&i.TokenSecret,

@@ -47,6 +47,7 @@ type ChatResponse struct {
 	OtherUserID              string     `json:"other_user_id"`
 	OtherUserName            string     `json:"other_user_name"`
 	OtherUserUsername        string     `json:"other_user_username"`
+	OtherUserBio             *string    `json:"other_user_bio"`
 	AvatarURL                *string    `json:"avatar_url"`
 	AvatarFileId             *string    `json:"avatar_file_id"`
 	CreatedAt                time.Time  `json:"created_at"`
@@ -63,6 +64,7 @@ type ChatResponse struct {
 	LastMessageID            *string    `json:"last_message_id"`
 	UnreadCount              int        `json:"unread_count"`
 	OtherUserKeysRevision    int32      `json:"other_user_keys_revision"`
+	ProfileType              string     `json:"profile_type"`
 }
 
 type MessageResponse struct {

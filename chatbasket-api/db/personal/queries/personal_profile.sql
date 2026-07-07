@@ -103,6 +103,7 @@ SELECT
     u.name,
     u.b64_cipher_chacha20poly1305_username AS username,
     u.bio,
+    u.profile_type,
     a.file_id,
     a.token_id,
     a.token_secret,

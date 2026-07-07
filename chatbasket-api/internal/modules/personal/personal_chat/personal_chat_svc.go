@@ -244,14 +244,38 @@ func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChat
 		otherReadAt = kit.DerefTime(chat.P1LastReadAt)
 		otherDeliveredAt = kit.DerefTime(chat.P1LastDeliveredAt)
 	}
+	contactProfile, _ := s.ProfileProvider.GetContactableProfilesForViewer(ctx, userID.UuidUserId, []uuid.UUID{recipientID})
+	otherName := ""
+	otherUsername := ""
+	var otherBio *string
+	var avatarURL *string
+	var avatarFileID *string
+	otherProfileType := ""
+	var otherUserKeysRevision int32
+	if cp, ok := contactProfile[recipientID]; ok && cp != nil {
+		otherName = cp.Name
+		otherUsername = cp.Username
+		otherBio = cp.Bio
+		avatarURL = cp.AvatarURL
+		avatarFileID = cp.AvatarFileId
+		otherProfileType = cp.ProfileType
+		otherUserKeysRevision = cp.KeysRevision
+	}
 	return &ChatResponse{
 		ChatID:                   chat.ID.String(),
 		OtherUserID:              recipientID.String(),
+		OtherUserName:            otherName,
+		OtherUserUsername:        otherUsername,
+		OtherUserBio:             otherBio,
+		AvatarURL:                avatarURL,
+		AvatarFileId:             avatarFileID,
 		CreatedAt:                chat.CreatedAt,
 		UpdatedAt:                chat.UpdatedAt,
 		OtherUserLastReadAt:      otherReadAt,
 		OtherUserLastDeliveredAt: otherDeliveredAt,
 		LastMessageIsFromMe:      false,
+		OtherUserKeysRevision:    otherUserKeysRevision,
+		ProfileType:              otherProfileType,
 	}, nil
 }
 
@@ -587,6 +611,25 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
 	}
+	// Collect unique target IDs
+	targetIDs := make([]uuid.UUID, 0, len(chats))
+	seen := make(map[uuid.UUID]struct{})
+	for _, chat := range chats {
+		var otherUserID uuid.UUID
+		if chat.Participant1ID == userID.UuidUserId {
+			otherUserID = chat.Participant2ID
+		} else {
+			otherUserID = chat.Participant1ID
+		}
+		if _, exists := seen[otherUserID]; !exists {
+			targetIDs = append(targetIDs, otherUserID)
+			seen[otherUserID] = struct{}{}
+		}
+	}
+
+	// Batch fetch profiles to avoid N+1 queries
+	contactProfiles, _ := s.ProfileProvider.GetContactableProfilesForViewer(ctx, userID.UuidUserId, targetIDs)
+
 	chatResponses := make([]ChatResponse, 0, len(chats))
 	for _, chat := range chats {
 		var otherUserID uuid.UUID
@@ -595,14 +638,19 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 		} else {
 			otherUserID = chat.Participant1ID
 		}
-		contactProfile, _ := s.ProfileProvider.GetContactableProfilesForViewer(ctx, userID.UuidUserId, []uuid.UUID{otherUserID})
 		otherName := ""
+		otherUsername := ""
+		var otherBio *string
 		var avatarURL *string
 		var avatarFileID *string
-		if cp, ok := contactProfile[otherUserID]; ok && cp != nil {
+		otherProfileType := ""
+		if cp, ok := contactProfiles[otherUserID]; ok && cp != nil {
 			otherName = cp.Name
+			otherUsername = cp.Username
+			otherBio = cp.Bio
 			avatarURL = cp.AvatarURL
 			avatarFileID = cp.AvatarFileId
+			otherProfileType = cp.ProfileType
 		}
 		var lastMessageContent *string
 		var lastMessageType *string
@@ -640,7 +688,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 				lastMessageID = &s
 			}
 		}
-		if cp, ok := contactProfile[otherUserID]; ok && cp != nil {
+		if cp, ok := contactProfiles[otherUserID]; ok && cp != nil {
 			otherUserKeysRevision = cp.KeysRevision
 		}
 
@@ -655,6 +703,8 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 			ChatID:                   chat.ID.String(),
 			OtherUserID:              otherUserID.String(),
 			OtherUserName:            otherName,
+			OtherUserUsername:        otherUsername,
+			OtherUserBio:             otherBio,
 			AvatarURL:                avatarURL,
 			AvatarFileId:             avatarFileID,
 			CreatedAt:                chat.CreatedAt,
@@ -671,6 +721,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 			LastMessageID:            lastMessageID,
 			UnreadCount:              int(chat.UnreadCount),
 			OtherUserKeysRevision:    otherUserKeysRevision,
+			ProfileType:              otherProfileType,
 		})
 	}
 	return &GetUserChatsResponse{

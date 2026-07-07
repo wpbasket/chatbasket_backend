@@ -13,6 +13,7 @@ type Contact struct {
 	AvatarURL    *string   `json:"avatar_url"`
 	AvatarFileId *string   `json:"avatar_file_id"`
 	IsMutual     bool      `json:"is_mutual"`
+	ProfileType  string    `json:"profile_type"`
 }
 
 type GetContactsResponse struct {

@@ -21,6 +21,7 @@ type ContactProfileView struct {
 	AvatarURL     *string   `json:"avatar_url"`
 	AvatarFileId  *string   `json:"avatar_file_id"`
 	KeysRevision  int32     `json:"keys_revision"`
+	ProfileType   string    `json:"profile_type"`
 }
 
 type ContactLookupResult struct {

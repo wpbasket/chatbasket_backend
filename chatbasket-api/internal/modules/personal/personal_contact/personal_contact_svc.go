@@ -134,6 +134,7 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			AvatarURL:    profile.AvatarURL,
 			AvatarFileId: profile.AvatarFileId,
 			IsMutual:     isMutual,
+			ProfileType:  profile.ProfileType,
 		})
 	}
 
@@ -168,6 +169,7 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			AvatarURL:    profile.AvatarURL,
 			AvatarFileId: profile.AvatarFileId,
 			IsMutual:     isMutual,
+			ProfileType:  profile.ProfileType,
 		})
 	}
 

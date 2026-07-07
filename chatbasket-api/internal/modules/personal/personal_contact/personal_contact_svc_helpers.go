@@ -116,5 +116,6 @@ func (ps *contactService) buildSingleContactForOwner(ctx context.Context, ownerI
 		AvatarURL:    profile.AvatarURL,
 		AvatarFileId: profile.AvatarFileId,
 		IsMutual:     isMutual,
+		ProfileType:  profile.ProfileType,
 	}, nil
 }
