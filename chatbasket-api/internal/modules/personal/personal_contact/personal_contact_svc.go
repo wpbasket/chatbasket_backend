@@ -20,6 +20,8 @@ type personalProfilePersonalContactProvider interface {
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
 	GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	FindContactableUserByUsername(ctx context.Context, viewerID uuid.UUID, username string) (*personal_profile.ContactLookupResult, error)
+	CreateUserBlock(ctx context.Context, id, blockerID, blockedID uuid.UUID) error
+	IsEitherBlocked(ctx context.Context, user1ID, user2ID uuid.UUID) (int32, error)
 }
 
 type contactService struct {
@@ -248,10 +250,7 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 	}
 
 	// DB call to check if users are mutually blocked
-	blockStatus, err := ps.PostgresQueries.IsEitherBlocked(ctx, personal_contact_store.IsEitherBlockedParams{
-		BlockerUserID: userId.UuidUserId,
-		BlockedUserID: targetUUID,
-	})
+	blockStatus, err := ps.personalProfilePersonalContactProvider.IsEitherBlocked(ctx, userId.UuidUserId, targetUUID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
@@ -793,10 +792,7 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 	}
 
 	// Check if already blocked (to match original fidelity and prevent duplicate entry errors)
-	blockStatus, err := ps.PostgresQueries.IsEitherBlocked(ctx, personal_contact_store.IsEitherBlockedParams{
-		BlockerUserID: userId.UuidUserId,
-		BlockedUserID: blockedUUID,
-	})
+	blockStatus, err := ps.personalProfilePersonalContactProvider.IsEitherBlocked(ctx, userId.UuidUserId, blockedUUID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
@@ -810,11 +806,7 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to generate block ID")
 	}
 
-	err = ps.PostgresQueries.CreateUserBlock(ctx, personal_contact_store.CreateUserBlockParams{
-		ID:            blockID,
-		BlockerUserID: userId.UuidUserId,
-		BlockedUserID: blockedUUID,
-	})
+	err = ps.personalProfilePersonalContactProvider.CreateUserBlock(ctx, blockID, userId.UuidUserId, blockedUUID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
@@ -834,10 +826,7 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 
 // GetMessagingBlockStatus returns 0 if no block, 1 if user1 blocked user2, 2 if user2 blocked user1.
 func (ps *contactService) GetMessagingBlockStatus(ctx context.Context, user1ID uuid.UUID, user2ID uuid.UUID) (int32, error) {
-	return ps.PostgresQueries.IsEitherBlocked(ctx, personal_contact_store.IsEitherBlockedParams{
-		BlockerUserID: user1ID,
-		BlockedUserID: user2ID,
-	})
+	return ps.personalProfilePersonalContactProvider.IsEitherBlocked(ctx, user1ID, user2ID)
 }
 
 // IsAlreadyContact returns true if ownerID has contactID in their contacts list.

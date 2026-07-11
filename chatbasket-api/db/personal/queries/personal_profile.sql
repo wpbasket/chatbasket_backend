@@ -160,3 +160,17 @@ WHERE
            OR (ub.blocker_user_id = u.id AND ub.blocked_user_id = sqlc.arg (viewer_user_id))
     )
 ORDER BY u.id;
+
+
+-- name: CreateUserBlock :exec
+INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
+VALUES ($1, $2, $3)
+ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING;
+
+-- name: IsEitherBlocked :one
+-- Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
+SELECT (CASE
+    WHEN EXISTS(SELECT 1 FROM user_blocks ub1 WHERE ub1.blocker_user_id = $1 AND ub1.blocked_user_id = $2) THEN 1
+    WHEN EXISTS(SELECT 1 FROM user_blocks ub2 WHERE ub2.blocker_user_id = $2 AND ub2.blocked_user_id = $1) THEN 2
+    ELSE 0
+END)::INT;

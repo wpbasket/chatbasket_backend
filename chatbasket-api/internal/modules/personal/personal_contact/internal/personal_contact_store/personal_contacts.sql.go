@@ -47,70 +47,6 @@ func (q *Queries) AcceptContactRequest(ctx context.Context, arg AcceptContactReq
 	return outcome, err
 }
 
-const cleanupOrphanedContactRequestsFromBlocks = `-- name: CleanupOrphanedContactRequestsFromBlocks :exec
-DELETE FROM contact_requests cr
-WHERE EXISTS (
-    SELECT 1 FROM user_blocks ub
-    WHERE (
-        -- Either direction of block should remove the request
-        (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
-        OR
-        (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
-    )
-)
-`
-
-// Removes contact requests that should have been deleted when block was created
-func (q *Queries) CleanupOrphanedContactRequestsFromBlocks(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, cleanupOrphanedContactRequestsFromBlocks)
-	return err
-}
-
-const cleanupOrphanedContactsFromBlocks = `-- name: CleanupOrphanedContactsFromBlocks :exec
-
-
-
-DELETE FROM user_contacts uc
-WHERE EXISTS (
-    SELECT 1 FROM user_blocks ub
-    WHERE (
-        -- Either direction of block should remove the contact
-        (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
-        OR
-        (ub.blocker_user_id = uc.contact_user_id AND ub.blocked_user_id = uc.owner_user_id)
-    )
-)
-`
-
-// ===========================================
-// Contact existence helpers
-// ===========================================
-// ===========================================
-// Cleanup queries for orphaned data
-// ===========================================
-// Removes contact relationships that should have been deleted by block trigger
-func (q *Queries) CleanupOrphanedContactsFromBlocks(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, cleanupOrphanedContactsFromBlocks)
-	return err
-}
-
-const createUserBlock = `-- name: CreateUserBlock :exec
-INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
-VALUES ($1, $2, $3)
-ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING
-`
-
-type CreateUserBlockParams struct {
-	ID            uuid.UUID `json:"id"`
-	BlockerUserID uuid.UUID `json:"blocker_user_id"`
-	BlockedUserID uuid.UUID `json:"blocked_user_id"`
-}
-
-func (q *Queries) CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error {
-	_, err := q.db.Exec(ctx, createUserBlock, arg.ID, arg.BlockerUserID, arg.BlockedUserID)
-	return err
-}
-
 const deleteAndInsertContactRequest = `-- name: DeleteAndInsertContactRequest :exec
 WITH deleted AS (
     DELETE FROM contact_requests
@@ -165,117 +101,6 @@ func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (i
 	return removed, err
 }
 
-const detectOrphanedContactRequestsFromBlocks = `-- name: DetectOrphanedContactRequestsFromBlocks :many
-SELECT
-    cr.requester_user_id,
-    cr.receiver_user_id,
-    cr.status::text,
-    cr.created_at as request_created_at,
-    ub.created_at as block_created_at,
-    (CASE
-        WHEN ub.blocker_user_id = cr.requester_user_id THEN 'requester_blocked_receiver'
-        ELSE 'receiver_blocked_requester'
-    END)::TEXT AS block_direction
-FROM contact_requests cr
-INNER JOIN user_blocks ub ON (
-    (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
-    OR
-    (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
-)
-ORDER BY cr.created_at DESC
-`
-
-type DetectOrphanedContactRequestsFromBlocksRow struct {
-	RequesterUserID  uuid.UUID `json:"requester_user_id"`
-	ReceiverUserID   uuid.UUID `json:"receiver_user_id"`
-	CrStatus         string    `json:"cr_status"`
-	RequestCreatedAt time.Time `json:"request_created_at"`
-	BlockCreatedAt   time.Time `json:"block_created_at"`
-	BlockDirection   string    `json:"block_direction"`
-}
-
-// Finds contact requests that exist despite blocks (trigger failure detection)
-func (q *Queries) DetectOrphanedContactRequestsFromBlocks(ctx context.Context) ([]DetectOrphanedContactRequestsFromBlocksRow, error) {
-	rows, err := q.db.Query(ctx, detectOrphanedContactRequestsFromBlocks)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []DetectOrphanedContactRequestsFromBlocksRow
-	for rows.Next() {
-		var i DetectOrphanedContactRequestsFromBlocksRow
-		if err := rows.Scan(
-			&i.RequesterUserID,
-			&i.ReceiverUserID,
-			&i.CrStatus,
-			&i.RequestCreatedAt,
-			&i.BlockCreatedAt,
-			&i.BlockDirection,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const detectOrphanedContactsFromBlocks = `-- name: DetectOrphanedContactsFromBlocks :many
-SELECT
-    uc.owner_user_id,
-    uc.contact_user_id,
-    uc.created_at as contact_created_at,
-    ub.created_at as block_created_at,
-    (CASE
-        WHEN ub.blocker_user_id = uc.owner_user_id THEN 'owner_blocked_contact'
-        ELSE 'contact_blocked_owner'
-    END)::TEXT AS block_direction
-FROM user_contacts uc
-INNER JOIN user_blocks ub ON (
-    (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
-    OR
-    (ub.blocker_user_id = uc.contact_user_id AND ub.blocked_user_id = uc.owner_user_id)
-)
-ORDER BY uc.created_at DESC
-`
-
-type DetectOrphanedContactsFromBlocksRow struct {
-	OwnerUserID      uuid.UUID `json:"owner_user_id"`
-	ContactUserID    uuid.UUID `json:"contact_user_id"`
-	ContactCreatedAt time.Time `json:"contact_created_at"`
-	BlockCreatedAt   time.Time `json:"block_created_at"`
-	BlockDirection   string    `json:"block_direction"`
-}
-
-// Finds contacts that exist despite blocks (trigger failure detection)
-func (q *Queries) DetectOrphanedContactsFromBlocks(ctx context.Context) ([]DetectOrphanedContactsFromBlocksRow, error) {
-	rows, err := q.db.Query(ctx, detectOrphanedContactsFromBlocks)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []DetectOrphanedContactsFromBlocksRow
-	for rows.Next() {
-		var i DetectOrphanedContactsFromBlocksRow
-		if err := rows.Scan(
-			&i.OwnerUserID,
-			&i.ContactUserID,
-			&i.ContactCreatedAt,
-			&i.BlockCreatedAt,
-			&i.BlockDirection,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getContactRequestStatus = `-- name: GetContactRequestStatus :one
 SELECT status::text FROM contact_requests
 WHERE requester_user_id = $1 AND receiver_user_id = $2
@@ -302,14 +127,8 @@ SELECT
     cr.updated_at AS request_updated_at,
     cr.status::text AS status
 FROM contact_requests cr
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cr.requester_user_id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = cr.requester_user_id AND ub2.blocked_user_id = $1
 WHERE cr.receiver_user_id = $1
   AND cr.status = 'pending'
-  AND ub1.id IS NULL
-  AND ub2.id IS NULL
 ORDER BY cr.created_at DESC
 `
 
@@ -321,8 +140,8 @@ type GetPendingContactRequestsLiteRow struct {
 	Status           string    `json:"status"`
 }
 
-func (q *Queries) GetPendingContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetPendingContactRequestsLiteRow, error) {
-	rows, err := q.db.Query(ctx, getPendingContactRequestsLite, blockerUserID)
+func (q *Queries) GetPendingContactRequestsLite(ctx context.Context, receiverUserID uuid.UUID) ([]GetPendingContactRequestsLiteRow, error) {
+	rows, err := q.db.Query(ctx, getPendingContactRequestsLite, receiverUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -355,14 +174,8 @@ SELECT
     cr.updated_at AS request_updated_at,
     cr.status::text AS status
 FROM contact_requests cr
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cr.receiver_user_id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = cr.receiver_user_id AND ub2.blocked_user_id = $1
 WHERE cr.requester_user_id = $1
   AND cr.status IN ('pending', 'declined')
-  AND ub1.id IS NULL
-  AND ub2.id IS NULL
 ORDER BY cr.created_at DESC
 `
 
@@ -374,8 +187,8 @@ type GetSentContactRequestsLiteRow struct {
 	Status           string    `json:"status"`
 }
 
-func (q *Queries) GetSentContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetSentContactRequestsLiteRow, error) {
-	rows, err := q.db.Query(ctx, getSentContactRequestsLite, blockerUserID)
+func (q *Queries) GetSentContactRequestsLite(ctx context.Context, requesterUserID uuid.UUID) ([]GetSentContactRequestsLiteRow, error) {
+	rows, err := q.db.Query(ctx, getSentContactRequestsLite, requesterUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -437,19 +250,16 @@ func (q *Queries) GetSingleUserContactLite(ctx context.Context, arg GetSingleUse
 }
 
 const getUserContactsLite = `-- name: GetUserContactsLite :many
+
+
+
 SELECT
     uc.contact_user_id AS id,
     uc.nickname,
     uc.created_at AS contact_created_at,
     uc.updated_at AS contact_updated_at
 FROM user_contacts uc
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = uc.contact_user_id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = uc.contact_user_id AND ub2.blocked_user_id = $1
 WHERE uc.owner_user_id = $1
-  AND ub1.id IS NULL
-  AND ub2.id IS NULL
 ORDER BY uc.created_at DESC
 `
 
@@ -460,8 +270,11 @@ type GetUserContactsLiteRow struct {
 	ContactUpdatedAt time.Time `json:"contact_updated_at"`
 }
 
-func (q *Queries) GetUserContactsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetUserContactsLiteRow, error) {
-	rows, err := q.db.Query(ctx, getUserContactsLite, blockerUserID)
+// ===========================================
+// Contact existence helpers
+// ===========================================
+func (q *Queries) GetUserContactsLite(ctx context.Context, ownerUserID uuid.UUID) ([]GetUserContactsLiteRow, error) {
+	rows, err := q.db.Query(ctx, getUserContactsLite, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -495,13 +308,7 @@ FROM user_contacts uc
 LEFT JOIN user_contacts my_uc
     ON my_uc.owner_user_id = $1
    AND my_uc.contact_user_id = uc.owner_user_id
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = uc.owner_user_id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = uc.owner_user_id AND ub2.blocked_user_id = $1
 WHERE uc.contact_user_id = $1
-  AND ub1.id IS NULL
-  AND ub2.id IS NULL
 ORDER BY uc.created_at DESC
 `
 
@@ -597,6 +404,14 @@ func (q *Queries) InsertUserContact(ctx context.Context, arg InsertUserContactPa
 }
 
 const isAlreadyContact = `-- name: IsAlreadyContact :one
+
+
+
+
+
+
+
+
 SELECT EXISTS(
     SELECT 1 FROM user_contacts
     WHERE owner_user_id = $1 AND contact_user_id = $2
@@ -606,33 +421,6 @@ SELECT EXISTS(
 type IsAlreadyContactParams struct {
 	OwnerUserID   uuid.UUID `json:"owner_user_id"`
 	ContactUserID uuid.UUID `json:"contact_user_id"`
-}
-
-func (q *Queries) IsAlreadyContact(ctx context.Context, arg IsAlreadyContactParams) (bool, error) {
-	row := q.db.QueryRow(ctx, isAlreadyContact, arg.OwnerUserID, arg.ContactUserID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const isEitherBlocked = `-- name: IsEitherBlocked :one
-
-
-
-
-
-
-
-SELECT (CASE
-    WHEN EXISTS(SELECT 1 FROM user_blocks ub1 WHERE ub1.blocker_user_id = $1 AND ub1.blocked_user_id = $2) THEN 1
-    WHEN EXISTS(SELECT 1 FROM user_blocks ub2 WHERE ub2.blocker_user_id = $2 AND ub2.blocked_user_id = $1) THEN 2
-    ELSE 0
-END)::INT
-`
-
-type IsEitherBlockedParams struct {
-	BlockerUserID uuid.UUID `json:"blocker_user_id"`
-	BlockedUserID uuid.UUID `json:"blocked_user_id"`
 }
 
 // ===========================================
@@ -679,12 +467,11 @@ type IsEitherBlockedParams struct {
 // ===========================================
 // Contact creation helpers
 // ===========================================
-// Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
-func (q *Queries) IsEitherBlocked(ctx context.Context, arg IsEitherBlockedParams) (int32, error) {
-	row := q.db.QueryRow(ctx, isEitherBlocked, arg.BlockerUserID, arg.BlockedUserID)
-	var column_1 int32
-	err := row.Scan(&column_1)
-	return column_1, err
+func (q *Queries) IsAlreadyContact(ctx context.Context, arg IsAlreadyContactParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isAlreadyContact, arg.OwnerUserID, arg.ContactUserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const rejectContactRequest = `-- name: RejectContactRequest :one

@@ -140,6 +140,23 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const createUserBlock = `-- name: CreateUserBlock :exec
+INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
+VALUES ($1, $2, $3)
+ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING
+`
+
+type CreateUserBlockParams struct {
+	ID            uuid.UUID `json:"id"`
+	BlockerUserID uuid.UUID `json:"blocker_user_id"`
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+}
+
+func (q *Queries) CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error {
+	_, err := q.db.Exec(ctx, createUserBlock, arg.ID, arg.BlockerUserID, arg.BlockedUserID)
+	return err
+}
+
 const deleteAvatar = `-- name: DeleteAvatar :exec
 DELETE FROM avatars WHERE user_id = $1 AND avatar_type = 'profile'
 `
@@ -418,6 +435,27 @@ func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProf
 		&i.TokenExpiry,
 	)
 	return i, err
+}
+
+const isEitherBlocked = `-- name: IsEitherBlocked :one
+SELECT (CASE
+    WHEN EXISTS(SELECT 1 FROM user_blocks ub1 WHERE ub1.blocker_user_id = $1 AND ub1.blocked_user_id = $2) THEN 1
+    WHEN EXISTS(SELECT 1 FROM user_blocks ub2 WHERE ub2.blocker_user_id = $2 AND ub2.blocked_user_id = $1) THEN 2
+    ELSE 0
+END)::INT
+`
+
+type IsEitherBlockedParams struct {
+	BlockerUserID uuid.UUID `json:"blocker_user_id"`
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+}
+
+// Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
+func (q *Queries) IsEitherBlocked(ctx context.Context, arg IsEitherBlockedParams) (int32, error) {
+	row := q.db.QueryRow(ctx, isEitherBlocked, arg.BlockerUserID, arg.BlockedUserID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const isUserAdminBlocked = `-- name: IsUserAdminBlocked :one

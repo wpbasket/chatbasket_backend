@@ -19,6 +19,7 @@ type Querier interface {
 	// ======================================
 	// Inserts a new user and returns all columns
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error
 	// Deletes the main profile avatar for a user (called from ConfirmAvatarUpload tx when replacing)
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
 	// Fetches the id and file_id for the main profile avatar
@@ -34,6 +35,8 @@ type Querier interface {
 	GetUserCoreProfile(ctx context.Context, id uuid.UUID) (GetUserCoreProfileRow, error)
 	// Returns full user record along with its profile avatar file_id
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
+	// Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
+	IsEitherBlocked(ctx context.Context, arg IsEitherBlockedParams) (int32, error)
 	// Returns true if the user is admin-blocked
 	IsUserAdminBlocked(ctx context.Context, id uuid.UUID) (bool, error)
 	IsUserExists(ctx context.Context, id uuid.UUID) (bool, error)

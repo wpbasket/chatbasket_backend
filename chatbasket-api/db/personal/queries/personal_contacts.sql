@@ -44,13 +44,6 @@
 -- Contact creation helpers
 -- ===========================================
 
--- name: IsEitherBlocked :one
--- Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
-SELECT (CASE
-    WHEN EXISTS(SELECT 1 FROM user_blocks ub1 WHERE ub1.blocker_user_id = $1 AND ub1.blocked_user_id = $2) THEN 1
-    WHEN EXISTS(SELECT 1 FROM user_blocks ub2 WHERE ub2.blocker_user_id = $2 AND ub2.blocked_user_id = $1) THEN 2
-    ELSE 0
-END)::INT;
 
 -- name: IsAlreadyContact :one
 SELECT EXISTS(
@@ -165,10 +158,6 @@ WHERE owner_user_id = $1
   AND contact_user_id = $2
 RETURNING true AS updated;
 
--- name: CreateUserBlock :exec
-INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
-VALUES ($1, $2, $3)
-ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING;
 
 -- name: UndoContactRequest :one
 WITH deleted AS (
@@ -190,74 +179,6 @@ SELECT
 -- ===========================================
 
 
--- ===========================================
--- Cleanup queries for orphaned data
--- ===========================================
-
--- name: CleanupOrphanedContactsFromBlocks :exec
--- Removes contact relationships that should have been deleted by block trigger
-DELETE FROM user_contacts uc
-WHERE EXISTS (
-    SELECT 1 FROM user_blocks ub
-    WHERE (
-        -- Either direction of block should remove the contact
-        (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
-        OR
-        (ub.blocker_user_id = uc.contact_user_id AND ub.blocked_user_id = uc.owner_user_id)
-    )
-);
-
--- name: CleanupOrphanedContactRequestsFromBlocks :exec
--- Removes contact requests that should have been deleted when block was created
-DELETE FROM contact_requests cr
-WHERE EXISTS (
-    SELECT 1 FROM user_blocks ub
-    WHERE (
-        -- Either direction of block should remove the request
-        (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
-        OR
-        (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
-    )
-);
-
--- name: DetectOrphanedContactsFromBlocks :many
--- Finds contacts that exist despite blocks (trigger failure detection)
-SELECT
-    uc.owner_user_id,
-    uc.contact_user_id,
-    uc.created_at as contact_created_at,
-    ub.created_at as block_created_at,
-    (CASE
-        WHEN ub.blocker_user_id = uc.owner_user_id THEN 'owner_blocked_contact'
-        ELSE 'contact_blocked_owner'
-    END)::TEXT AS block_direction
-FROM user_contacts uc
-INNER JOIN user_blocks ub ON (
-    (ub.blocker_user_id = uc.owner_user_id AND ub.blocked_user_id = uc.contact_user_id)
-    OR
-    (ub.blocker_user_id = uc.contact_user_id AND ub.blocked_user_id = uc.owner_user_id)
-)
-ORDER BY uc.created_at DESC;
-
--- name: DetectOrphanedContactRequestsFromBlocks :many
--- Finds contact requests that exist despite blocks (trigger failure detection)
-SELECT
-    cr.requester_user_id,
-    cr.receiver_user_id,
-    cr.status::text,
-    cr.created_at as request_created_at,
-    ub.created_at as block_created_at,
-    (CASE
-        WHEN ub.blocker_user_id = cr.requester_user_id THEN 'requester_blocked_receiver'
-        ELSE 'receiver_blocked_requester'
-    END)::TEXT AS block_direction
-FROM contact_requests cr
-INNER JOIN user_blocks ub ON (
-    (ub.blocker_user_id = cr.requester_user_id AND ub.blocked_user_id = cr.receiver_user_id)
-    OR
-    (ub.blocker_user_id = cr.receiver_user_id AND ub.blocked_user_id = cr.requester_user_id)
-)
-ORDER BY cr.created_at DESC;
 
 -- name: GetUserContactsLite :many
 SELECT
@@ -266,13 +187,7 @@ SELECT
     uc.created_at AS contact_created_at,
     uc.updated_at AS contact_updated_at
 FROM user_contacts uc
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = uc.contact_user_id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = uc.contact_user_id AND ub2.blocked_user_id = $1
 WHERE uc.owner_user_id = $1
-  AND ub1.id IS NULL
-  AND ub2.id IS NULL
 ORDER BY uc.created_at DESC;
 
 -- name: GetUsersWhoAddedYouLite :many
@@ -285,13 +200,7 @@ FROM user_contacts uc
 LEFT JOIN user_contacts my_uc
     ON my_uc.owner_user_id = $1
    AND my_uc.contact_user_id = uc.owner_user_id
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = uc.owner_user_id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = uc.owner_user_id AND ub2.blocked_user_id = $1
 WHERE uc.contact_user_id = $1
-  AND ub1.id IS NULL
-  AND ub2.id IS NULL
 ORDER BY uc.created_at DESC;
 
 -- name: GetPendingContactRequestsLite :many
@@ -302,14 +211,8 @@ SELECT
     cr.updated_at AS request_updated_at,
     cr.status::text AS status
 FROM contact_requests cr
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cr.requester_user_id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = cr.requester_user_id AND ub2.blocked_user_id = $1
 WHERE cr.receiver_user_id = $1
   AND cr.status = 'pending'
-  AND ub1.id IS NULL
-  AND ub2.id IS NULL
 ORDER BY cr.created_at DESC;
 
 -- name: GetSentContactRequestsLite :many
@@ -320,12 +223,6 @@ SELECT
     cr.updated_at AS request_updated_at,
     cr.status::text AS status
 FROM contact_requests cr
-LEFT JOIN user_blocks ub1
-    ON ub1.blocker_user_id = $1 AND ub1.blocked_user_id = cr.receiver_user_id
-LEFT JOIN user_blocks ub2
-    ON ub2.blocker_user_id = cr.receiver_user_id AND ub2.blocked_user_id = $1
 WHERE cr.requester_user_id = $1
   AND cr.status IN ('pending', 'declined')
-  AND ub1.id IS NULL
-  AND ub2.id IS NULL
 ORDER BY cr.created_at DESC;

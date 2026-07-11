@@ -12,33 +12,20 @@ import (
 
 type Querier interface {
 	AcceptContactRequest(ctx context.Context, arg AcceptContactRequestParams) (string, error)
-	// Removes contact requests that should have been deleted when block was created
-	CleanupOrphanedContactRequestsFromBlocks(ctx context.Context) error
+	DeleteAndInsertContactRequest(ctx context.Context, arg DeleteAndInsertContactRequestParams) error
+	DeleteContact(ctx context.Context, arg DeleteContactParams) (int64, error)
+	GetContactRequestStatus(ctx context.Context, arg GetContactRequestStatusParams) (string, error)
+	GetPendingContactRequestsLite(ctx context.Context, receiverUserID uuid.UUID) ([]GetPendingContactRequestsLiteRow, error)
+	GetSentContactRequestsLite(ctx context.Context, requesterUserID uuid.UUID) ([]GetSentContactRequestsLiteRow, error)
+	GetSingleUserContactLite(ctx context.Context, arg GetSingleUserContactLiteParams) (GetSingleUserContactLiteRow, error)
 	// ===========================================
 	// Contact existence helpers
 	// ===========================================
-	// ===========================================
-	// Cleanup queries for orphaned data
-	// ===========================================
-	// Removes contact relationships that should have been deleted by block trigger
-	CleanupOrphanedContactsFromBlocks(ctx context.Context) error
-	CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error
-	DeleteAndInsertContactRequest(ctx context.Context, arg DeleteAndInsertContactRequestParams) error
-	DeleteContact(ctx context.Context, arg DeleteContactParams) (int64, error)
-	// Finds contact requests that exist despite blocks (trigger failure detection)
-	DetectOrphanedContactRequestsFromBlocks(ctx context.Context) ([]DetectOrphanedContactRequestsFromBlocksRow, error)
-	// Finds contacts that exist despite blocks (trigger failure detection)
-	DetectOrphanedContactsFromBlocks(ctx context.Context) ([]DetectOrphanedContactsFromBlocksRow, error)
-	GetContactRequestStatus(ctx context.Context, arg GetContactRequestStatusParams) (string, error)
-	GetPendingContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetPendingContactRequestsLiteRow, error)
-	GetSentContactRequestsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetSentContactRequestsLiteRow, error)
-	GetSingleUserContactLite(ctx context.Context, arg GetSingleUserContactLiteParams) (GetSingleUserContactLiteRow, error)
-	GetUserContactsLite(ctx context.Context, blockerUserID uuid.UUID) ([]GetUserContactsLiteRow, error)
+	GetUserContactsLite(ctx context.Context, ownerUserID uuid.UUID) ([]GetUserContactsLiteRow, error)
 	GetUsersWhoAddedYouLite(ctx context.Context, ownerUserID uuid.UUID) ([]GetUsersWhoAddedYouLiteRow, error)
 	HasPendingRequest(ctx context.Context, arg HasPendingRequestParams) (bool, error)
 	InsertContactRequest(ctx context.Context, arg InsertContactRequestParams) error
 	InsertUserContact(ctx context.Context, arg InsertUserContactParams) error
-	IsAlreadyContact(ctx context.Context, arg IsAlreadyContactParams) (bool, error)
 	// ===========================================
 	// Contacts Queries for sqlc
 	// ===========================================
@@ -78,8 +65,7 @@ type Querier interface {
 	// ===========================================
 	// Contact creation helpers
 	// ===========================================
-	// Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
-	IsEitherBlocked(ctx context.Context, arg IsEitherBlockedParams) (int32, error)
+	IsAlreadyContact(ctx context.Context, arg IsAlreadyContactParams) (bool, error)
 	RejectContactRequest(ctx context.Context, arg RejectContactRequestParams) (string, error)
 	UndoContactRequest(ctx context.Context, arg UndoContactRequestParams) (string, error)
 	UpdateContactNickname(ctx context.Context, arg UpdateContactNicknameParams) (bool, error)
