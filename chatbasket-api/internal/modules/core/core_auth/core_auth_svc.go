@@ -287,6 +287,9 @@ func (s *AuthService) ResendOTP(ctx context.Context, payload *ResendOTPPayload) 
 	}
 
 	// Send OTP
+	if err := s.CheckOTPVerifyRateLimit(ctx, user.ID); err != nil {
+		return nil, err
+	}
 	if err := s.CheckOTPSendRateLimit(ctx, user.ID); err != nil {
 		return nil, err
 	}
@@ -315,6 +318,9 @@ func (s *AuthService) ForgotPassword(ctx context.Context, payload *ForgotPasswor
 	}
 
 	// 3. Send OTP for password reset
+	if err := s.CheckOTPVerifyRateLimit(ctx, user.ID); err != nil {
+		return nil, err
+	}
 	if err := s.CheckOTPSendRateLimit(ctx, user.ID); err != nil {
 		return nil, err
 	}

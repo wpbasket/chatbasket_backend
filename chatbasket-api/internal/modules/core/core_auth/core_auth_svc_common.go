@@ -180,6 +180,9 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpda
 	}
 
 	// Generate OTP
+	if err := s.CheckOTPVerifyRateLimit(ctx, userID); err != nil {
+		return nil, err
+	}
 	if err := s.CheckOTPSendRateLimit(ctx, userID); err != nil {
 		return nil, err
 	}
@@ -335,6 +338,9 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEm
 	}
 
 	// Generate OTP
+	if err := s.CheckOTPVerifyRateLimit(ctx, userID); err != nil {
+		return nil, err
+	}
 	if err := s.CheckOTPSendRateLimit(ctx, userID); err != nil {
 		return nil, err
 	}
