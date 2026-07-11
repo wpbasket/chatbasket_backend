@@ -57,6 +57,10 @@ func (m *mockProfileProvider) GetActiveSessionKeysForUser(ctx context.Context, u
 	return []string{}, nil
 }
 
+func (m *mockProfileProvider) GetContactableUserIDs(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) ([]uuid.UUID, error) {
+	return targetIDs, nil
+}
+
 // mockContactProvider implements personalContactPersonalChatProvider interface
 type mockContactProvider struct {
 	isAlreadyContactFunc       func(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error)

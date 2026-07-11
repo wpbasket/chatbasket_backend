@@ -27,6 +27,8 @@ type Querier interface {
 	GetAvatarFileID(ctx context.Context, userID uuid.UUID) (*string, error)
 	// GetContactableProfilesForViewer fetches profiles for contact enrichment with privacy filtering.
 	GetContactableProfilesForViewer(ctx context.Context, arg GetContactableProfilesForViewerParams) ([]GetContactableProfilesForViewerRow, error)
+	// Checks which target user IDs are contactable for a viewer (not blocked, not admin-blocked).
+	GetContactableUserIDs(ctx context.Context, arg GetContactableUserIDsParams) ([]uuid.UUID, error)
 	GetUserByHashedUsernameForContact(ctx context.Context, hmacSha256HexUsername string) (User, error)
 	// Fetches minimal user info for eligibility checks
 	GetUserCoreProfile(ctx context.Context, id uuid.UUID) (GetUserCoreProfileRow, error)

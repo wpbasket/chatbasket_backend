@@ -46,6 +46,7 @@ type personalProfilePersonalChatProvider interface {
 	GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, int32, error)
 	GetActiveSessionKeysForUser(ctx context.Context, userID uuid.UUID) ([]string, error)
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
+	GetContactableUserIDs(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) ([]uuid.UUID, error)
 }
 
 type personalContactPersonalChatProvider interface {
@@ -1063,8 +1064,35 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
 	}
 
+	var recipientMsgsFiltered []personal_chat_store.Message
+	if len(recipientMsgs) > 0 {
+		senderIDsMap := make(map[uuid.UUID]struct{})
+		for _, m := range recipientMsgs {
+			senderIDsMap[m.SenderID] = struct{}{}
+		}
+		senderIDs := make([]uuid.UUID, 0, len(senderIDsMap))
+		for id := range senderIDsMap {
+			senderIDs = append(senderIDs, id)
+		}
+		// Batch check contactable user IDs to enforce both admin and peer blocks
+		contactableIDs, err := s.ProfileProvider.GetContactableUserIDs(ctx, userID.UuidUserId, senderIDs)
+		if err != nil {
+			return nil, err
+		}
+		// Convert slice to map for O(1) checks
+		contactableSet := make(map[uuid.UUID]struct{}, len(contactableIDs))
+		for _, id := range contactableIDs {
+			contactableSet[id] = struct{}{}
+		}
+		for _, m := range recipientMsgs {
+			if _, isContactable := contactableSet[m.SenderID]; isContactable {
+				recipientMsgsFiltered = append(recipientMsgsFiltered, m)
+			}
+		}
+	}
+
 	var combinedMsgs []personal_chat_store.Message
-	combinedMsgs = append(combinedMsgs, recipientMsgs...)
+	combinedMsgs = append(combinedMsgs, recipientMsgsFiltered...)
 
 	// 2. Fetch pending sender sync messages if device is Primary
 	if isPrimary {

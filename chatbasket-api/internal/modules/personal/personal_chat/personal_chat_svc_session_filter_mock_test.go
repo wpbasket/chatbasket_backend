@@ -116,6 +116,8 @@ func TestGetUserChatsHandler_SessionFilter(t *testing.T) {
 // Minimal manual mock for the ProfileProvider
 type mockPersonalProfileProvider struct {
 	getContactableProfilesForViewerFunc func(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
+	GetContactableUserIDsFunc           func(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) ([]uuid.UUID, error)
+	IsUserAdminBlockedFunc              func(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
 func (m *mockPersonalProfileProvider) GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error) {
@@ -135,5 +137,96 @@ func (m *mockPersonalProfileProvider) GetActiveSessionKeysForUser(ctx context.Co
 	return nil, nil
 }
 func (m *mockPersonalProfileProvider) IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error) {
+	if m.IsUserAdminBlockedFunc != nil {
+		return m.IsUserAdminBlockedFunc(ctx, userID)
+	}
 	return false, nil
+}
+func (m *mockPersonalProfileProvider) GetContactableUserIDs(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) ([]uuid.UUID, error) {
+	if m.GetContactableUserIDsFunc != nil {
+		return m.GetContactableUserIDsFunc(ctx, viewerID, targetIDs)
+	}
+	return targetIDs, nil
+}
+
+func TestGetPendingMessagesHandler_BlockFiltering(t *testing.T) {
+	mockPool, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer mockPool.Close()
+
+	userID := uuid.New()
+	kitUserID := kit.UserId{UuidUserId: userID, StringUserId: userID.String()}
+	sessionCreatedAt := time.Now().Add(-24 * time.Hour)
+
+	senderA := uuid.New()
+	senderB := uuid.New()
+
+	chatSvc := &chatService{
+		Pool:            nil,
+		PostgresQueries: personal_chat_store.New(mockPool),
+	}
+
+	// Mock ProfileProvider to return only senderA as contactable (senderB is blocked/admin-blocked)
+	mockProfileProvider := &mockPersonalProfileProvider{
+		IsUserAdminBlockedFunc: func(ctx context.Context, uID uuid.UUID) (bool, error) {
+			return false, nil
+		},
+		GetContactableUserIDsFunc: func(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) ([]uuid.UUID, error) {
+			return []uuid.UUID{senderA}, nil
+		},
+	}
+	chatSvc.ProfileProvider = mockProfileProvider
+
+	// Mock raw Postgres query to return pending messages from both senderA and senderB
+	msgAContent := "msg A cipher"
+	msgAType := "text"
+	msgBContent := "msg B cipher"
+	msgBType := "text"
+	nowTime := time.Now()
+
+	rows := pgxmock.NewRows([]string{
+		"id", "chat_id", "sender_id", "recipient_id",
+		"content", "message_type", "file_id", "file_name",
+		"file_size", "file_mime_type", "file_token_id", "file_token_secret",
+		"file_token_expiry", "thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
+		"delivered_to_recipient", "delivered_to_recipient_primary", "synced_to_sender_primary",
+		"deleted_by_sender", "deleted_by_recipient", "delivery_attempts",
+		"expires_at", "created_at", "updated_at",
+	}).AddRow(
+		uuid.New(), uuid.New(), senderA, userID,
+		msgAContent, msgAType, nil, nil,
+		nil, nil, nil, nil,
+		nil, nil, nil, nil,
+		false, nil, false,
+		false, false, int32(0),
+		nowTime.Add(1*time.Hour), nowTime, nowTime,
+	).AddRow(
+		uuid.New(), uuid.New(), senderB, userID,
+		msgBContent, msgBType, nil, nil,
+		nil, nil, nil, nil,
+		nil, nil, nil, nil,
+		false, nil, false,
+		false, false, int32(0),
+		nowTime.Add(1*time.Hour), nowTime.Add(1*time.Second), nowTime,
+	)
+
+	mockPool.ExpectQuery("SELECT (.+) FROM messages").
+		WithArgs(userID, int32(100), sessionCreatedAt).
+		WillReturnRows(rows)
+
+	ctx := context.Background()
+	payload := &GetPendingMessagesPayload{Limit: 100}
+	resp, err := chatSvc.GetPendingMessagesHandler(ctx, payload, kitUserID, sessionCreatedAt, false)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	// We expect only 1 message (from senderA) because senderB was filtered out by GetContactableUserIDs
+	assert.Len(t, resp.Messages, 1)
+	assert.Equal(t, msgAContent, resp.Messages[0].Content)
+
+	if err := mockPool.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
 }

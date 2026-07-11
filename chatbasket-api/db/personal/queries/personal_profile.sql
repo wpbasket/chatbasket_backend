@@ -144,3 +144,19 @@ FROM users
 WHERE
     hmac_sha256_hex_username = $1
     AND is_admin_blocked IS NOT TRUE;
+
+-- name: GetContactableUserIDs :many
+-- Checks which target user IDs are contactable for a viewer (not blocked, not admin-blocked).
+SELECT u.id
+FROM users u
+WHERE
+    u.id = ANY (
+        sqlc.arg (target_user_ids)::uuid []
+    )
+    AND u.is_admin_blocked IS FALSE
+    AND NOT EXISTS (
+        SELECT 1 FROM user_blocks ub
+        WHERE (ub.blocker_user_id = sqlc.arg (viewer_user_id) AND ub.blocked_user_id = u.id)
+           OR (ub.blocker_user_id = u.id AND ub.blocked_user_id = sqlc.arg (viewer_user_id))
+    )
+ORDER BY u.id;

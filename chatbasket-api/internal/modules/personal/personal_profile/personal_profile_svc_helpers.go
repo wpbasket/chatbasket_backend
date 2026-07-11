@@ -243,3 +243,24 @@ func (ps *profileService) GetContactableProfilesForViewer(
 
 	return result, nil
 }
+
+// GetContactableUserIDs checks which target user IDs are contactable for a viewer (not blocked, not admin-blocked).
+func (ps *profileService) GetContactableUserIDs(
+	ctx context.Context,
+	viewerID uuid.UUID,
+	targetIDs []uuid.UUID,
+) ([]uuid.UUID, error) {
+	if len(targetIDs) == 0 {
+		return []uuid.UUID{}, nil
+	}
+
+	ids, err := ps.PostgresQueries.GetContactableUserIDs(ctx, personal_profile_store.GetContactableUserIDsParams{
+		ViewerUserID:  viewerID,
+		TargetUserIds: targetIDs,
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to check contactable user IDs: "+kit.GetPostgresError(err).Message)
+	}
+	return ids, nil
+}
+

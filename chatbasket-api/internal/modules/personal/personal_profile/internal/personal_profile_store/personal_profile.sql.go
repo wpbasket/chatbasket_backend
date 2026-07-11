@@ -283,6 +283,48 @@ func (q *Queries) GetContactableProfilesForViewer(ctx context.Context, arg GetCo
 	return items, nil
 }
 
+const getContactableUserIDs = `-- name: GetContactableUserIDs :many
+SELECT u.id
+FROM users u
+WHERE
+    u.id = ANY (
+        $1::uuid []
+    )
+    AND u.is_admin_blocked IS FALSE
+    AND NOT EXISTS (
+        SELECT 1 FROM user_blocks ub
+        WHERE (ub.blocker_user_id = $2 AND ub.blocked_user_id = u.id)
+           OR (ub.blocker_user_id = u.id AND ub.blocked_user_id = $2)
+    )
+ORDER BY u.id
+`
+
+type GetContactableUserIDsParams struct {
+	TargetUserIds []uuid.UUID `json:"target_user_ids"`
+	ViewerUserID  uuid.UUID   `json:"viewer_user_id"`
+}
+
+// Checks which target user IDs are contactable for a viewer (not blocked, not admin-blocked).
+func (q *Queries) GetContactableUserIDs(ctx context.Context, arg GetContactableUserIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, getContactableUserIDs, arg.TargetUserIds, arg.ViewerUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByHashedUsernameForContact = `-- name: GetUserByHashedUsernameForContact :one
 SELECT id, name, bio, profile_type, is_admin_blocked, admin_block_reason, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at
 FROM users
