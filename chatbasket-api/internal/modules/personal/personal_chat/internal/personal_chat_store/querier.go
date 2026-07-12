@@ -23,6 +23,9 @@ type Querier interface {
 	// Background cleanup: Deletes sync actions for chats where users have blocked each other.
 	// This handles orphaned sync actions even if the trigger (007) is not yet applied or was missed.
 	CleanupSyncActionsForBlockedUsers(ctx context.Context) error
+	// Bounded cleanup batch: deletes sync actions for chats between blocked users.
+	// Controlled from Go with a batch_size parameter and a time budget.
+	CleanupSyncActionsForBlockedUsersBatch(ctx context.Context, batchSize int32) (int64, error)
 	// ===========================================
 	// Per-Participant Preview Operations
 	// ===========================================
@@ -50,10 +53,19 @@ type Querier interface {
 	// Bulk-deletes messages for blocked-user chats that have no attached file_id (safe — no R2 orphans).
 	// Messages WITH files are handled by the batched cleanup loop.
 	DeleteBlockedUserMessagesWithoutFiles(ctx context.Context) error
+	// Bounded cleanup batch: deletes no-file messages in chats between blocked users.
+	// Controlled from Go with a batch_size parameter and a time budget.
+	DeleteBlockedUserMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
 	DeleteExpiredHistorySync(ctx context.Context) error
+	// Bounded cleanup batch: deletes expired history-sync records.
+	// Controlled from Go with a batch_size parameter and a time budget.
+	DeleteExpiredHistorySyncBatch(ctx context.Context, batchSize int32) (int64, error)
 	// Bulk-deletes EXPIRED messages that have no attached file_id (safe — no R2 orphans possible).
 	// Messages WITH files are handled by the batched cleanup loop (file deleted first, then DB row).
 	DeleteExpiredMessagesWithoutFiles(ctx context.Context) error
+	// Bounded cleanup batch: deletes expired messages without attached files.
+	// Controlled from Go with a batch_size parameter and a time budget.
+	DeleteExpiredMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
 	// Bulk-deletes messages where BOTH primary devices have acknowledged (delivered to
 	// recipient primary AND synced to sender primary) AND the message has NO file_id.
 	// Safe bulk delete — no R2 orphan possible.
@@ -61,8 +73,14 @@ type Querier interface {
 	// copy is redundant and can be removed immediately.
 	// File-having messages are handled by the batched loop (R2 first, then DB).
 	DeleteFullyAcknowledgedMessagesWithoutFiles(ctx context.Context) error
+	// Bounded cleanup batch: deletes text-only messages fully acknowledged by both primaries.
+	// Controlled from Go with a batch_size parameter and a time budget.
+	DeleteFullyAcknowledgedMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
 	DeleteMessage(ctx context.Context, id uuid.UUID) error
 	DeleteOldSyncActions(ctx context.Context) error
+	// Bounded cleanup batch: deletes sync actions older than 30 days.
+	// Controlled from Go with a batch_size parameter and a time budget.
+	DeleteOldSyncActionsBatch(ctx context.Context, batchSize int32) (int64, error)
 	GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error)
 	GetChatByParticipants(ctx context.Context, arg GetChatByParticipantsParams) (Chat, error)
 	GetChatMessages(ctx context.Context, arg GetChatMessagesParams) ([]Message, error)

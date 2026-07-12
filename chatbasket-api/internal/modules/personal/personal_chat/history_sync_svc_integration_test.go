@@ -72,7 +72,7 @@ func createUserAndSession(t *testing.T, pool *pgxpool.Pool) (uuid.UUID, uuid.UUI
 	require.NoError(t, err)
 
 	sessionID := uuid.New()
-	publicKey := "test-public-key-44-chars-base64-encoded!!!"
+	publicKey := "test-public-key-44-chars-base-64-encoded-key"
 	_, err = pool.Exec(ctx,
 		"INSERT INTO sessions (id, auth_user_id, token_hash, e2ee_public_key, expires_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, now(), now())",
 		sessionID, userID, "token-hash-"+sessionID.String(), &publicKey, time.Now().Add(24*time.Hour))
@@ -87,7 +87,7 @@ func TestHistorySync_FullIntegration_EdgeCases(t *testing.T) {
 
 	userID, sessionID := createUserAndSession(t, pool)
 	primarySessionID := sessionID
-	pubKey := "test-public-key-44-chars-base64-encoded!!!"
+	pubKey := "test-public-key-44-chars-base-64-encoded-key"
 
 	mockAuth := &historySyncMockAuthProvider{
 		primarySessionID: primarySessionID,
@@ -143,7 +143,7 @@ func TestHistorySync_Timeouts(t *testing.T) {
 
 	mockAuth := &historySyncMockAuthProvider{
 		primarySessionID: sessionID,
-		publicKey:        "test-public-key-44-chars-base64-encoded!!!",
+		publicKey:        "test-public-key-44-chars-base-64-encoded-key",
 	}
 
 	svc := &chatService{
@@ -176,7 +176,7 @@ func TestHistorySync_UpsertReplace(t *testing.T) {
 	ctx := context.Background()
 
 	userID, sessionID := createUserAndSession(t, pool)
-	pubKey := "test-public-key-44-chars-base64-encoded!!!"
+	pubKey := "test-public-key-44-chars-base-64-encoded-key"
 
 	mockAuth := &historySyncMockAuthProvider{
 		primarySessionID: sessionID,

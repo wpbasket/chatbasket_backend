@@ -94,6 +94,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	)
 	personal_chat.Register(personalGroup, chatService, wsHub, authService)
 	personal_chat.StartMessageCleanupJob(chatService, 1*time.Hour)
+	personal_chat.StartDatabaseCleanupJob(chatService, 1*time.Hour)
 
 	// 4. Settings Module
 	settingService := personal_setting.NewSettingService(authService)

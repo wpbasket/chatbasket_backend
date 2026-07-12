@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
 	"chatbasket-api/internal/modules/personal/personal_profile"
 	"chatbasket-api/internal/platform/kit"
 	"github.com/google/uuid"
+	"github.com/pashagolub/pgxmock/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -175,11 +178,13 @@ func TestSendMessage_RevisionStaleness_RejectsStaleRevision(t *testing.T) {
 }
 
 func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
-	t.Skip("Skipping: requires database access for chat creation")
 	senderID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
 	recipientID := uuid.New()
+	chatID := uuid.New()
+	messageID := uuid.New()
+	now := time.Now()
 
-	// Recipient's current revision is 6, sender also has 6 (current)
+	// Recipient's current revision is 6; client also sends 6 — not stale
 	profileProvider := &mockProfileProvider{
 		getE2EEPublicKeyFunc: func(ctx context.Context, userID uuid.UUID) (*string, int32, error) {
 			key := "recipient-public-key-44-chars-base64-enc"
@@ -187,103 +192,195 @@ func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
 		},
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: false,
 				ProfileType:    "public",
 			}, nil
 		},
 	}
-
 	contactProvider := &mockContactProvider{
 		isAlreadyContactFunc: func(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error) {
 			return true, nil
 		},
 	}
 
-	authProvider := &mockAuthProvider{}
+	mockPool, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	store := personal_chat_store.New(mockPool)
+
+	// CreateChat mock — returns a valid Chat row
+	chatCols := []string{"id", "participant_1_id", "participant_2_id",
+		"p1_unread_count", "p2_unread_count",
+		"p1_last_read_at", "p2_last_read_at",
+		"p1_last_delivered_at", "p2_last_delivered_at",
+		"last_message_created_at", "last_message_sender_id", "last_message_id",
+		"p1_last_message_content", "p2_last_message_content",
+		"p1_last_message_type", "p2_last_message_type",
+		"created_at", "updated_at"}
+	mockPool.ExpectQuery(`INSERT INTO.*chats`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		pgxmock.NewRows(chatCols).AddRow(
+			chatID, senderID.UuidUserId, recipientID,
+			int32(0), int32(0),
+			nil, nil, nil, nil,
+			nil, nil, nil,
+			nil, nil, nil, nil,
+			now, now,
+		),
+	)
+
+	// CreateMessage mock — returns a valid Message row
+	msgCols := []string{"id", "chat_id", "sender_id", "recipient_id",
+		"content", "message_type",
+		"file_id", "file_name", "file_size", "file_mime_type",
+		"file_token_id", "file_token_secret", "file_token_expiry",
+		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
+		"delivered_to_recipient", "delivered_to_recipient_primary",
+		"synced_to_sender_primary",
+		"deleted_by_sender", "deleted_by_recipient",
+		"delivery_attempts", "expires_at", "created_at", "updated_at"}
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		pgxmock.NewRows(msgCols).AddRow(
+			messageID, chatID, senderID.UuidUserId, recipientID,
+			"Hello", "text",
+			nil, nil, nil, nil,
+			nil, nil, nil,
+			nil, nil, nil,
+			false, nil,
+			true,
+			false, false,
+			int32(0), now.Add(DefaultMessageTTL), now, now,
+		),
+	)
+
+	// UpdateChatStatus mock — fire and forget, returning no rows
+	mockPool.ExpectExec(`UPDATE.*chats`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 	svc := &chatService{
-		AuthProvider:    authProvider,
+		AuthProvider:    &mockAuthProvider{},
 		ProfileProvider: profileProvider,
 		ContactProvider: contactProvider,
+		PostgresQuerier: store,
+		PostgresQueries: store,
 	}
 
-	// Send message with current revision (6)
-	params := SendMessageParams{
+	_, sendErr := svc.SendMessage(context.Background(), SendMessageParams{
 		SenderID:              senderID,
 		RecipientID:           recipientID,
 		Content:               "Hello",
 		MessageType:           "text",
 		IsPrimary:             true,
-		RecipientKeysRevision: 6, // Current revision
+		RecipientKeysRevision: 6, // Matches DB revision — not stale
 		SenderKeysRevision:    0,
-	}
+	})
 
-	// Will fail at chat creation (no DB), but revision check should pass
-	_, err := svc.SendMessage(context.Background(), params)
-
-	// Should fail with a panic or DB error, but NOT revision staleness
-	if err != nil {
-		// Check it's not a revision staleness error
-		if pe, ok := err.(kit.ProcessedError); ok {
+	// Revision check passes — any error must NOT be a staleness error
+	if sendErr != nil {
+		if pe, ok := sendErr.(kit.ProcessedError); ok {
 			assert.NotEqual(t, "recipient_keys_stale", pe.Kind())
+			assert.NotEqual(t, "sender_keys_stale", pe.Kind())
+			assert.NotEqual(t, "keys_stale", pe.Kind())
 		}
 	}
+	assert.NoError(t, mockPool.ExpectationsWereMet())
 }
 
 func TestSendMessage_RevisionStaleness_AcceptsZeroRevision(t *testing.T) {
-	t.Skip("Skipping: requires database access for chat creation")
+	// Revision 0 means the client does not supply a revision — treated as always-fresh.
+	// checkRevisionStaleness skips the stale check when both revisions == 0,
+	// so message should be stored successfully.
 	senderID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
 	recipientID := uuid.New()
+	chatID := uuid.New()
+	messageID := uuid.New()
+	now := time.Now()
 
-	// Recipient has no keys (revision 0)
 	profileProvider := &mockProfileProvider{
 		getE2EEPublicKeyFunc: func(ctx context.Context, userID uuid.UUID) (*string, int32, error) {
-			return nil, 0, nil // No public key, revision 0
+			key := "recipient-public-key-44-chars-base64-enc"
+			return &key, 1, nil // DB has revision 1 so eligibility passes; client sends 0 to skip stale check
 		},
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: false,
 				ProfileType:    "public",
 			}, nil
 		},
 	}
-
 	contactProvider := &mockContactProvider{
 		isAlreadyContactFunc: func(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error) {
 			return true, nil
 		},
 	}
 
-	authProvider := &mockAuthProvider{}
+	mockPool, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	store := personal_chat_store.New(mockPool)
+
+	chatCols := []string{"id", "participant_1_id", "participant_2_id",
+		"p1_unread_count", "p2_unread_count",
+		"p1_last_read_at", "p2_last_read_at",
+		"p1_last_delivered_at", "p2_last_delivered_at",
+		"last_message_created_at", "last_message_sender_id", "last_message_id",
+		"p1_last_message_content", "p2_last_message_content",
+		"p1_last_message_type", "p2_last_message_type",
+		"created_at", "updated_at"}
+	mockPool.ExpectQuery(`INSERT INTO.*chats`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		pgxmock.NewRows(chatCols).AddRow(
+			chatID, senderID.UuidUserId, recipientID,
+			int32(0), int32(0),
+			nil, nil, nil, nil,
+			nil, nil, nil,
+			nil, nil, nil, nil,
+			now, now,
+		),
+	)
+
+	msgCols := []string{"id", "chat_id", "sender_id", "recipient_id",
+		"content", "message_type",
+		"file_id", "file_name", "file_size", "file_mime_type",
+		"file_token_id", "file_token_secret", "file_token_expiry",
+		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
+		"delivered_to_recipient", "delivered_to_recipient_primary",
+		"synced_to_sender_primary",
+		"deleted_by_sender", "deleted_by_recipient",
+		"delivery_attempts", "expires_at", "created_at", "updated_at"}
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		pgxmock.NewRows(msgCols).AddRow(
+			messageID, chatID, senderID.UuidUserId, recipientID,
+			"Hello", "text",
+			nil, nil, nil, nil,
+			nil, nil, nil,
+			nil, nil, nil,
+			false, nil,
+			true,
+			false, false,
+			int32(0), now.Add(DefaultMessageTTL), now, now,
+		),
+	)
+	mockPool.ExpectExec(`UPDATE.*chats`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 	svc := &chatService{
-		AuthProvider:    authProvider,
+		AuthProvider:    &mockAuthProvider{},
 		ProfileProvider: profileProvider,
 		ContactProvider: contactProvider,
+		PostgresQuerier: store,
+		PostgresQueries: store,
 	}
 
-	// Send message with zero revision
-	params := SendMessageParams{
+	_, sendErr := svc.SendMessage(context.Background(), SendMessageParams{
 		SenderID:              senderID,
 		RecipientID:           recipientID,
 		Content:               "Hello",
 		MessageType:           "text",
 		IsPrimary:             true,
-		RecipientKeysRevision: 0,
+		RecipientKeysRevision: 0, // Zero revision — never stale
 		SenderKeysRevision:    0,
-	}
+	})
 
-	// Will fail at eligibility check (no E2EE setup), but not at revision check
-	_, err := svc.SendMessage(context.Background(), params)
-
-	// Should fail with eligibility error, NOT revision staleness
-	if err != nil {
-		if pe, ok := err.(kit.ProcessedError); ok {
-			assert.NotEqual(t, "recipient_keys_stale", pe.Kind())
-		}
-	}
+	// Zero revision is always accepted — must NOT return any staleness error
+	require.NoError(t, sendErr)
+	assert.NoError(t, mockPool.ExpectationsWereMet())
 }
 
 func TestSendMessage_RevisionStaleness_ErrorFetchingRevision(t *testing.T) {

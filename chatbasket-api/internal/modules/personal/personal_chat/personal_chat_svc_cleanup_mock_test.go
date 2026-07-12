@@ -168,21 +168,7 @@ func TestCleanupExpiredMessages_Mock(t *testing.T) {
 		WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
 
-	// 3. Mock final bulk exec queries
-	mock.ExpectExec(`(?s)DELETE FROM messages\s+WHERE expires_at < now\(\)\s+AND file_id IS NULL`).
-		WillReturnResult(pgxmock.NewResult("DELETE", 0))
 
-	mock.ExpectExec(`(?s)DELETE FROM messages\s+WHERE delivered_to_recipient_primary = TRUE\s+AND synced_to_sender_primary = TRUE\s+AND file_id IS NULL`).
-		WillReturnResult(pgxmock.NewResult("DELETE", 0))
-
-	mock.ExpectExec(`(?s)DELETE FROM messages m\s+USING chats c, user_blocks ub.*`).
-		WillReturnResult(pgxmock.NewResult("DELETE", 0))
-
-	mock.ExpectExec(`(?s)DELETE FROM message_sync_actions msa\s+USING chats c, user_blocks ub.*`).
-		WillReturnResult(pgxmock.NewResult("DELETE", 0))
-
-	mock.ExpectExec(`(?s)DELETE FROM message_sync_actions\s+WHERE\s+created_at < now\(\) - INTERVAL '30 days'`).
-		WillReturnResult(pgxmock.NewResult("DELETE", 0))
 
 	// Run cleanup job
 	err := svc.CleanupExpiredMessages(ctx)

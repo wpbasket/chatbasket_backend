@@ -52,7 +52,7 @@ func createUserAndSession(t *testing.T, pool *pgxpool.Pool) (uuid.UUID, uuid.UUI
 	require.NoError(t, err)
 
 	sessionID := uuid.New()
-	publicKey := "test-public-key-44-chars-base64-encoded!!!"
+	publicKey := "test-public-key-44-chars-base-64-encoded-key"
 	_, err = pool.Exec(ctx,
 		"INSERT INTO sessions (id, auth_user_id, token_hash, e2ee_public_key, expires_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, now(), now())",
 		sessionID, userID, "token-hash-"+sessionID.String(), &publicKey, time.Now().Add(24*time.Hour))

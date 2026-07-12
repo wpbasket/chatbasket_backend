@@ -74,6 +74,32 @@ func (q *Queries) CleanupSyncActionsForBlockedUsers(ctx context.Context) error {
 	return err
 }
 
+const cleanupSyncActionsForBlockedUsersBatch = `-- name: CleanupSyncActionsForBlockedUsersBatch :execrows
+WITH batch AS (
+  SELECT msa.id FROM message_sync_actions msa
+  JOIN chats c ON (msa.payload::jsonb->>'chatId')::uuid = c.id
+  JOIN user_blocks ub ON (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+  )
+  FOR UPDATE SKIP LOCKED
+  LIMIT $1
+)
+DELETE FROM message_sync_actions AS msa
+USING batch
+WHERE msa.id = batch.id
+`
+
+// Bounded cleanup batch: deletes sync actions for chats between blocked users.
+// Controlled from Go with a batch_size parameter and a time budget.
+func (q *Queries) CleanupSyncActionsForBlockedUsersBatch(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupSyncActionsForBlockedUsersBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const clearLastMessageForParticipant = `-- name: ClearLastMessageForParticipant :exec
 
 UPDATE chats
@@ -470,6 +496,33 @@ func (q *Queries) DeleteBlockedUserMessagesWithoutFiles(ctx context.Context) err
 	return err
 }
 
+const deleteBlockedUserMessagesWithoutFilesBatch = `-- name: DeleteBlockedUserMessagesWithoutFilesBatch :execrows
+WITH batch AS (
+  SELECT m.id FROM messages m
+  JOIN chats c ON m.chat_id = c.id
+  JOIN user_blocks ub ON (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+  )
+  WHERE m.file_id IS NULL
+  FOR UPDATE SKIP LOCKED
+  LIMIT $1
+)
+DELETE FROM messages AS m
+USING batch
+WHERE m.id = batch.id
+`
+
+// Bounded cleanup batch: deletes no-file messages in chats between blocked users.
+// Controlled from Go with a batch_size parameter and a time budget.
+func (q *Queries) DeleteBlockedUserMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteBlockedUserMessagesWithoutFilesBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteExpiredHistorySync = `-- name: DeleteExpiredHistorySync :exec
 DELETE FROM history_sync WHERE expires_at < now()
 `
@@ -477,6 +530,28 @@ DELETE FROM history_sync WHERE expires_at < now()
 func (q *Queries) DeleteExpiredHistorySync(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteExpiredHistorySync)
 	return err
+}
+
+const deleteExpiredHistorySyncBatch = `-- name: DeleteExpiredHistorySyncBatch :execrows
+WITH batch AS (
+  SELECT id FROM history_sync
+  WHERE expires_at < now()
+  FOR UPDATE SKIP LOCKED
+  LIMIT $1
+)
+DELETE FROM history_sync AS hs
+USING batch
+WHERE hs.id = batch.id
+`
+
+// Bounded cleanup batch: deletes expired history-sync records.
+// Controlled from Go with a batch_size parameter and a time budget.
+func (q *Queries) DeleteExpiredHistorySyncBatch(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredHistorySyncBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteExpiredMessagesWithoutFiles = `-- name: DeleteExpiredMessagesWithoutFiles :exec
@@ -490,6 +565,28 @@ WHERE expires_at < now()
 func (q *Queries) DeleteExpiredMessagesWithoutFiles(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteExpiredMessagesWithoutFiles)
 	return err
+}
+
+const deleteExpiredMessagesWithoutFilesBatch = `-- name: DeleteExpiredMessagesWithoutFilesBatch :execrows
+WITH batch AS (
+  SELECT id FROM messages
+  WHERE expires_at < now() AND file_id IS NULL
+  FOR UPDATE SKIP LOCKED
+  LIMIT $1
+)
+DELETE FROM messages AS m
+USING batch
+WHERE m.id = batch.id
+`
+
+// Bounded cleanup batch: deletes expired messages without attached files.
+// Controlled from Go with a batch_size parameter and a time budget.
+func (q *Queries) DeleteExpiredMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredMessagesWithoutFilesBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteFullyAcknowledgedMessagesWithoutFiles = `-- name: DeleteFullyAcknowledgedMessagesWithoutFiles :exec
@@ -510,6 +607,28 @@ func (q *Queries) DeleteFullyAcknowledgedMessagesWithoutFiles(ctx context.Contex
 	return err
 }
 
+const deleteFullyAcknowledgedMessagesWithoutFilesBatch = `-- name: DeleteFullyAcknowledgedMessagesWithoutFilesBatch :execrows
+WITH batch AS (
+  SELECT id FROM messages
+  WHERE file_id IS NULL AND delivered_to_recipient_primary = TRUE AND synced_to_sender_primary = TRUE
+  FOR UPDATE SKIP LOCKED
+  LIMIT $1
+)
+DELETE FROM messages AS m
+USING batch
+WHERE m.id = batch.id
+`
+
+// Bounded cleanup batch: deletes text-only messages fully acknowledged by both primaries.
+// Controlled from Go with a batch_size parameter and a time budget.
+func (q *Queries) DeleteFullyAcknowledgedMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteFullyAcknowledgedMessagesWithoutFilesBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteMessage = `-- name: DeleteMessage :exec
 DELETE FROM messages WHERE id = $1
 `
@@ -528,6 +647,28 @@ WHERE
 func (q *Queries) DeleteOldSyncActions(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteOldSyncActions)
 	return err
+}
+
+const deleteOldSyncActionsBatch = `-- name: DeleteOldSyncActionsBatch :execrows
+WITH batch AS (
+  SELECT id FROM message_sync_actions
+  WHERE created_at < now() - INTERVAL '30 days'
+  FOR UPDATE SKIP LOCKED
+  LIMIT $1
+)
+DELETE FROM message_sync_actions AS msa
+USING batch
+WHERE msa.id = batch.id
+`
+
+// Bounded cleanup batch: deletes sync actions older than 30 days.
+// Controlled from Go with a batch_size parameter and a time budget.
+func (q *Queries) DeleteOldSyncActionsBatch(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOldSyncActionsBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getChatByID = `-- name: GetChatByID :one

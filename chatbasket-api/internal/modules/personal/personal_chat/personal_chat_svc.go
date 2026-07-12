@@ -1183,6 +1183,62 @@ func (s *chatService) deleteMessageFromRelay(ctx context.Context, message person
 	}
 }
 
+var (
+	cleanupDBBatchSize = int32(5000)
+	cleanupThrottleSleep = 50 * time.Millisecond
+)
+
+// deleteBatchUntilDone runs a bounded DELETE query repeatedly in batches of 5000 rows.
+// It enforces two layers of budget protection:
+// 1. Soft Active Work Limit (90%): Stops starting new delete query cycles if elapsed time passes 90% of the budget.
+// 2. Hard Stop Timeout (100%): Cancels the active query using a context timeout if execution overruns the total budget.
+// This prevents long-running locked transactions, ensures predictable completion times, and saves the remaining 10% safety buffer.
+func deleteBatchUntilDone(ctx context.Context, deleteFn func(context.Context, int32) (int64, error), budget time.Duration, label string) bool {
+	start := time.Now()
+	var total int64
+
+	// Allocate 90% of the budget for initiating new active batches. Keep 10% as a safety margin.
+	workBudget := (budget * 90) / 100
+
+	// Loop only while we are within the 90% soft active work budget limit
+	for time.Since(start) < workBudget {
+		// Calculate the hard remaining limit left in the total budget (100%)
+		timeLeft := budget - time.Since(start)
+		if timeLeft <= 0 {
+			break
+		}
+
+		// Cancel the active batch immediately if it exceeds the hard timeout limit
+		queryCtx, cancel := context.WithTimeout(ctx, timeLeft)
+		rows, err := deleteFn(queryCtx, cleanupDBBatchSize)
+		cancel()
+
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				log.Printf("[CleanupJob] Context expired during %s batch, stopping", label)
+			} else {
+				log.Printf("[CleanupJob] ERROR: Failed to delete %s batch: %v", label, err)
+			}
+			return false
+		}
+		total += rows
+		if rows == 0 {
+			log.Printf("[CleanupJob] Finished %s cleanup, deleted %d rows", label, total)
+			return true // Finished deleting all target records for this query
+		}
+
+		// Throttle execution by pausing between batch runs to allow autovacuum and concurrent traffic to execute.
+		select {
+		case <-ctx.Done():
+			log.Printf("[CleanupJob] Context cancelled during %s throttle sleep", label)
+			return false
+		case <-time.After(cleanupThrottleSleep):
+		}
+	}
+	log.Printf("[CleanupJob] Active work budget limit reached for %s, deleted %d rows total (exited within safety buffer)", label, total)
+	return false // Exited due to budget limit exhaustion
+}
+
 func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 	log.Printf("[CleanupJob] Starting cleanup of expired and orphaned messages/files")
 	const batchSize = 100
@@ -1293,33 +1349,72 @@ func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 		}
 		lastBlockedID = blockedMessages[len(blockedMessages)-1].ID
 	}
-	log.Printf("[CleanupJob] Starting final bulk sweep for safe records (no R2 files)")
-	// Safe bulk deletes: messages WITHOUT files. Messages WITH files were already
-	// handled by the batched loop above (R2 deleted first, then DB row).
-	// Three cases (matches original DeleteExpiredMessages + blocked-user cleanup):
-	//   1. Expired by TTL (expires_at < now())
-	//   2. Fully acknowledged by both primary devices (delivered + synced)
-	//   3. In a blocked-user chat
-	if err := s.PostgresQueries.DeleteExpiredMessagesWithoutFiles(ctx); err != nil {
-		log.Printf("[CleanupJob] ERROR: Failed to bulk delete expired messages without files: %v", err)
-	}
-	if err := s.PostgresQueries.DeleteFullyAcknowledgedMessagesWithoutFiles(ctx); err != nil {
-		log.Printf("[CleanupJob] ERROR: Failed to bulk delete fully-acknowledged messages without files: %v", err)
-	}
-	if err := s.PostgresQueries.DeleteBlockedUserMessagesWithoutFiles(ctx); err != nil {
-		log.Printf("[CleanupJob] ERROR: Failed to bulk delete blocked-user messages without files: %v", err)
-	}
-	// Safe sync action bulk deletes (sync actions have no R2 files).
-	if err := s.PostgresQueries.CleanupSyncActionsForBlockedUsers(ctx); err != nil {
-		log.Printf("[CleanupJob] ERROR: Failed to bulk delete blocked-user sync actions: %v", err)
-	}
-	_ = s.PostgresQueries.DeleteOldSyncActions(ctx)
-
-	// Clean up expired history sync requests (lazy expiry 410 enforces TTL instantly, sweep reclaims space)
-	if err := s.PostgresQueries.DeleteExpiredHistorySync(ctx); err != nil {
-		log.Printf("[CleanupJob] ERROR: Failed to delete expired history syncs: %v", err)
-	}
 
 	log.Printf("[CleanupJob] Cleanup process completed successfully")
 	return nil
 }
+
+// CleanupDatabaseOnly executes the 6 database-only cleanups sequentially.
+// It enforces a 55-minute worker lifetime to guarantee clean shutdown before the next hourly run,
+// and schedules all jobs within a 50-minute time budget. Leftover time from early completions is
+// dynamically shared equally among subsequent tasks.
+func (s *chatService) CleanupDatabaseOnly(ctx context.Context) error {
+	log.Printf("[DatabaseCleanupJob] Starting bounded DB-only cleanup sweep (no R2 files)")
+
+	// 1. Establish a 55-minute hard shutdown boundary to prevent overlapping runs.
+	jobCtx, cancel := context.WithTimeout(ctx, 55*time.Minute)
+	defer cancel()
+
+	// 2. Track the start time and the 50-minute active allocation budget.
+	jobStart := time.Now()
+	const totalBudget = 50 * time.Minute
+
+	// Helper function to dynamically track remaining active budget.
+	getRemainingBudget := func() time.Duration {
+		elapsed := time.Since(jobStart)
+		if elapsed >= totalBudget {
+			return 0
+		}
+		return totalBudget - elapsed
+	}
+
+	// Ordered list of database cleanup tasks to run sequentially.
+	jobs := []struct {
+		deleteFn func(context.Context, int32) (int64, error)
+		label    string
+	}{
+		{s.PostgresQueries.DeleteExpiredMessagesWithoutFilesBatch, "expired no-file messages"},
+		{s.PostgresQueries.DeleteFullyAcknowledgedMessagesWithoutFilesBatch, "fully-acknowledged no-file messages"},
+		{s.PostgresQueries.DeleteBlockedUserMessagesWithoutFilesBatch, "blocked-user no-file messages"},
+		{s.PostgresQueries.CleanupSyncActionsForBlockedUsersBatch, "blocked-user sync actions"},
+		{s.PostgresQueries.DeleteOldSyncActionsBatch, "old sync actions"},
+		{s.PostgresQueries.DeleteExpiredHistorySyncBatch, "expired history sync"},
+	}
+
+	for i := 0; i < len(jobs); i++ {
+		// Stop immediately before starting the next job if context has been cancelled or hard timed out.
+		select {
+		case <-jobCtx.Done():
+			log.Printf("[DatabaseCleanupJob] Job cancelled/timed out after %d/%d jobs, stopping remaining cleanups", i, len(jobs))
+			return jobCtx.Err()
+		default:
+		}
+
+		// Calculate job-specific budget: remaining budget divided equally among remaining jobs.
+		// If Job A completes early, its unused time increases the budget for subsequent jobs.
+		remainingJobsCount := int64(len(jobs) - i)
+		currentRemainingBudget := getRemainingBudget()
+		if currentRemainingBudget <= 0 {
+			log.Printf("[DatabaseCleanupJob] Time budget fully depleted after %d/%d jobs, skipping remaining", i, len(jobs))
+			break
+		}
+		jobBudget := currentRemainingBudget / time.Duration(remainingJobsCount)
+
+		log.Printf("[DatabaseCleanupJob] Allocating budget %v for %s", jobBudget, jobs[i].label)
+		deleteBatchUntilDone(jobCtx, jobs[i].deleteFn, jobBudget, jobs[i].label)
+	}
+
+	log.Printf("[DatabaseCleanupJob] Cleanup sweep completed (elapsed: %v)", time.Since(jobStart))
+	return nil
+}
+

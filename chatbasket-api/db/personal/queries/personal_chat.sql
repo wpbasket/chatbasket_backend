@@ -728,6 +728,93 @@ WHERE user_id = $1 AND payload IS NULL AND expires_at > now();
 -- name: DeleteExpiredHistorySync :exec
 DELETE FROM history_sync WHERE expires_at < now();
 
+-- name: DeleteExpiredMessagesWithoutFilesBatch :execrows
+-- Bounded cleanup batch: deletes expired messages without attached files.
+-- Controlled from Go with a batch_size parameter and a time budget.
+WITH batch AS (
+  SELECT id FROM messages
+  WHERE expires_at < now() AND file_id IS NULL
+  FOR UPDATE SKIP LOCKED
+  LIMIT sqlc.arg('batch_size')
+)
+DELETE FROM messages AS m
+USING batch
+WHERE m.id = batch.id;
+
+-- name: DeleteFullyAcknowledgedMessagesWithoutFilesBatch :execrows
+-- Bounded cleanup batch: deletes text-only messages fully acknowledged by both primaries.
+-- Controlled from Go with a batch_size parameter and a time budget.
+WITH batch AS (
+  SELECT id FROM messages
+  WHERE file_id IS NULL AND delivered_to_recipient_primary = TRUE AND synced_to_sender_primary = TRUE
+  FOR UPDATE SKIP LOCKED
+  LIMIT sqlc.arg('batch_size')
+)
+DELETE FROM messages AS m
+USING batch
+WHERE m.id = batch.id;
+
+-- name: DeleteBlockedUserMessagesWithoutFilesBatch :execrows
+-- Bounded cleanup batch: deletes no-file messages in chats between blocked users.
+-- Controlled from Go with a batch_size parameter and a time budget.
+WITH batch AS (
+  SELECT m.id FROM messages m
+  JOIN chats c ON m.chat_id = c.id
+  JOIN user_blocks ub ON (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+  )
+  WHERE m.file_id IS NULL
+  FOR UPDATE SKIP LOCKED
+  LIMIT sqlc.arg('batch_size')
+)
+DELETE FROM messages AS m
+USING batch
+WHERE m.id = batch.id;
+
+-- name: CleanupSyncActionsForBlockedUsersBatch :execrows
+-- Bounded cleanup batch: deletes sync actions for chats between blocked users.
+-- Controlled from Go with a batch_size parameter and a time budget.
+WITH batch AS (
+  SELECT msa.id FROM message_sync_actions msa
+  JOIN chats c ON (msa.payload::jsonb->>'chatId')::uuid = c.id
+  JOIN user_blocks ub ON (
+    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
+    OR (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
+  )
+  FOR UPDATE SKIP LOCKED
+  LIMIT sqlc.arg('batch_size')
+)
+DELETE FROM message_sync_actions AS msa
+USING batch
+WHERE msa.id = batch.id;
+
+-- name: DeleteOldSyncActionsBatch :execrows
+-- Bounded cleanup batch: deletes sync actions older than 30 days.
+-- Controlled from Go with a batch_size parameter and a time budget.
+WITH batch AS (
+  SELECT id FROM message_sync_actions
+  WHERE created_at < now() - INTERVAL '30 days'
+  FOR UPDATE SKIP LOCKED
+  LIMIT sqlc.arg('batch_size')
+)
+DELETE FROM message_sync_actions AS msa
+USING batch
+WHERE msa.id = batch.id;
+
+-- name: DeleteExpiredHistorySyncBatch :execrows
+-- Bounded cleanup batch: deletes expired history-sync records.
+-- Controlled from Go with a batch_size parameter and a time budget.
+WITH batch AS (
+  SELECT id FROM history_sync
+  WHERE expires_at < now()
+  FOR UPDATE SKIP LOCKED
+  LIMIT sqlc.arg('batch_size')
+)
+DELETE FROM history_sync AS hs
+USING batch
+WHERE hs.id = batch.id;
+
 -- name: GetHistorySyncMeta :one
 SELECT user_id, session_id, expires_at 
 FROM history_sync 
