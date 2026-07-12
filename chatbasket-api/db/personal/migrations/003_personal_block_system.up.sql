@@ -26,6 +26,18 @@ EXECUTE FUNCTION set_timestamps();
 -- Explicit index for fast lookups by blocked user
 CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_user_id);
 
+-- user_blocks pair lookups (support blocked-user cleanup joins).
+-- The cleanup query joins user_blocks to chats on either (blocker, blocked)
+-- or (blocked, blocker). Two B-tree indexes (one per ordering) let the
+-- planner use Index Scans instead of a Seq Scan if user_blocks grows to 
+-- millions of rows in production.
+CREATE INDEX IF NOT EXISTS idx_user_blocks_pair_p1
+    ON user_blocks (blocker_user_id, blocked_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_blocks_pair_p2
+    ON user_blocks (blocked_user_id, blocker_user_id);
+
+
 -- ======================================
 -- Function: remove_contact_on_block()
 -- Automatically removes mutual contacts when a block is created

@@ -180,6 +180,23 @@ WHERE
     file_id IS NOT NULL
     AND file_token_expiry IS NOT NULL;
 
+-- TTL-expired messages with no R2 file attached
+CREATE INDEX IF NOT EXISTS idx_messages_expired_no_file
+    ON messages (expires_at)
+    WHERE file_id IS NULL;
+
+-- Fully-acknowledged text-only messages (both primary devices confirmed)
+CREATE INDEX IF NOT EXISTS idx_messages_ack_no_file
+    ON messages (created_at)
+    WHERE file_id IS NULL
+      AND delivered_to_recipient_primary = TRUE
+      AND synced_to_sender_primary = TRUE;
+
+-- Messages in a blocked-user chat with no R2 file attached
+CREATE INDEX IF NOT EXISTS idx_messages_chat_no_file
+    ON messages (chat_id)
+    WHERE file_id IS NULL;
+
 -- ======================================
 -- End of messages table section
 -- ======================================
@@ -217,6 +234,14 @@ CREATE INDEX IF NOT EXISTS idx_sync_actions_user_pending ON message_sync_actions
     delivered_to_primary,
     created_at
 );
+
+-- Old cross-device sync actions (30-day retention rule)
+CREATE INDEX IF NOT EXISTS idx_sync_actions_created_at
+    ON message_sync_actions (created_at);
+
+-- Blocked-user sync actions payload chatId lookups (expression index)
+CREATE INDEX IF NOT EXISTS idx_sync_actions_payload_chat_id
+    ON message_sync_actions (((payload->>'chatId')::uuid));
 
 -- ======================================
 -- End of message_sync_actions table section
