@@ -89,6 +89,23 @@ func (s *AuthService) GetKeysRevision(ctx context.Context, userID uuid.UUID) (in
 	return rev, nil
 }
 
+func (s *AuthService) GetKeysRevisions(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]int32, error) {
+	if len(userIDs) == 0 {
+		return map[uuid.UUID]int32{}, nil
+	}
+	rows, err := s.PostgresQueries.GetKeysRevisions(ctx, userIDs)
+	if err != nil {
+		log.Printf("[E2EE] GetKeysRevisions: DB error: %v", err)
+		return nil, err
+	}
+	res := make(map[uuid.UUID]int32, len(rows))
+	for _, r := range rows {
+		res[r.ID] = r.KeysRevision
+	}
+	return res, nil
+}
+
+
 func (s *AuthService) IncrementKeysRevision(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
 	queries := s.PostgresQueries
 	if tx != nil {

@@ -202,6 +202,16 @@ func (ps *profileService) GetContactableProfilesForViewer(
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to fetch contactable profiles: "+kit.GetPostgresError(err).Message)
 	}
 
+	profileUserIDs := make([]uuid.UUID, len(rows))
+	for i, r := range rows {
+		profileUserIDs[i] = r.ID
+	}
+
+	revisionsMap, err := ps.AuthProvider.GetKeysRevisions(ctx, profileUserIDs)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to fetch keys revisions from auth provider: "+err.Error())
+	}
+
 	result := make(map[uuid.UUID]*ContactProfileView, len(rows))
 	for _, row := range rows {
 		// Decrypt username
@@ -230,13 +240,13 @@ func (ps *profileService) GetContactableProfilesForViewer(
 		}
 
 		result[row.ID] = &ContactProfileView{
-			ID:            row.ID,
-			Name:          row.Name,
-			Username:      username,
-			Bio:           row.Bio,
-			AvatarURL:     avatarURL,
-			AvatarFileId:  avatarFileID,
-			KeysRevision:  row.KeysRevision,
+			ID:           row.ID,
+			Name:         row.Name,
+			Username:     username,
+			Bio:          row.Bio,
+			AvatarURL:    avatarURL,
+			AvatarFileId: avatarFileID,
+			KeysRevision: revisionsMap[row.ID],
 			ProfileType:  row.ProfileType,
 		}
 	}

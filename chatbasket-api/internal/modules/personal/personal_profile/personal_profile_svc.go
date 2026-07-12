@@ -20,6 +20,7 @@ type coreAuthProfileProvider interface {
 	GetActiveSessionKeysForUser(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetActiveSessionKeysForUserExcluding(ctx context.Context, userID uuid.UUID, excludeSessionID uuid.UUID) ([]string, error)
 	GetKeysRevision(ctx context.Context, userID uuid.UUID) (int32, error)
+	GetKeysRevisions(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]int32, error)
 	IncrementKeysRevision(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error
 }
 

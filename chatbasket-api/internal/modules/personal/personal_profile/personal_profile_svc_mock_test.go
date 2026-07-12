@@ -94,6 +94,13 @@ func (m *mockAuthProviderProfile) GetActiveSessionKeysForUserExcluding(ctx conte
 func (m *mockAuthProviderProfile) GetKeysRevision(ctx context.Context, userID uuid.UUID) (int32, error) {
 	return m.keysRevision, nil
 }
+func (m *mockAuthProviderProfile) GetKeysRevisions(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]int32, error) {
+	res := make(map[uuid.UUID]int32, len(userIDs))
+	for _, id := range userIDs {
+		res[id] = m.keysRevision
+	}
+	return res, nil
+}
 func (m *mockAuthProviderProfile) IncrementKeysRevision(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
 	if m.incrementRevFunc != nil {
 		return m.incrementRevFunc(ctx, tx, userID)

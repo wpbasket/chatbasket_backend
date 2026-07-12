@@ -13,3 +13,7 @@ UPDATE auth_users SET keys_revision = keys_revision + 1 WHERE id = $1;
 -- name: ResetKeysRevision :exec
 -- Reset keys_revision to zero
 UPDATE auth_users SET keys_revision = 0 WHERE id = $1;
+
+-- name: GetKeysRevisions :many
+-- Get keys_revision for multiple users in a single query
+SELECT id, keys_revision FROM auth_users WHERE id = ANY(sqlc.arg('user_ids')::uuid[]);

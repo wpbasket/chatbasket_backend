@@ -50,7 +50,7 @@ func setupProfileIntegrationDB(t *testing.T) (*pgxpool.Pool, *core_auth.AuthServ
 
 	globalSvc := services.NewGlobalService("https://chatbasket.live")
 	authSvc := core_auth.NewAuthService(globalSvc, pool, []byte("test-secret"))
-	profileSvc := NewProfileService(globalSvc, pool, authSvc, []byte("test-username-key-32bytes-long!!!"), nil, (*clients.R2ClientPool)(nil))
+	profileSvc := NewProfileService(globalSvc, pool, authSvc, []byte("test-username-key-32bytes-long!!"), nil, (*clients.R2ClientPool)(nil))
 
 	return pool, authSvc, profileSvc
 }
@@ -69,7 +69,8 @@ func createTestUserWithProfile(t *testing.T, pool *pgxpool.Pool) (kit.UserId, uu
 	// Create profile
 	// hmac_sha256_hex_username must be exactly 64 hex characters (SHA-256 hash)
 	hmacHex := fmt.Sprintf("%064x", userID)[0:64]
-	encryptedUsername := fmt.Sprintf("encrypted-%s-base64-padded-to-52!", userID.String())[:52]
+	encryptedUsername, err := EncryptUsername("user", []byte("test-username-key-32bytes-long!!"), userID.String())
+	require.NoError(t, err)
 	_, err = pool.Exec(ctx,
 		"INSERT INTO users (id, name, profile_type, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at) VALUES ($1, 'Test User', 'public', $2, $3, now(), now())",
 		userID, hmacHex, encryptedUsername)
@@ -223,13 +224,15 @@ func TestGetE2EEPublicKey_Integration_NoKeys(t *testing.T) {
 // ============================================================================
 
 func TestGetContactableProfilesForViewer_Integration_IncludesKeysRevision(t *testing.T) {
-	t.Skip("Skipping: requires proper username encryption with personalUsernameKey")
 	pool, _, profileSvc := setupProfileIntegrationDB(t)
 	ctx := context.Background()
 
 	viewerID, _ := createTestUserWithProfile(t, pool)
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", viewerID.UuidUserId) })
 	target1ID, _ := createTestUserWithProfile(t, pool)
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", target1ID.UuidUserId) })
 	target2ID, _ := createTestUserWithProfile(t, pool)
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", target2ID.UuidUserId) })
 
 	// Set different keys_revision for targets
 	_, err := pool.Exec(ctx, "UPDATE auth_users SET keys_revision = 3 WHERE id = $1", target1ID.UuidUserId)
@@ -257,6 +260,7 @@ func TestGetContactableProfilesForViewer_Integration_EmptyList(t *testing.T) {
 	ctx := context.Background()
 
 	viewerID, _ := createTestUserWithProfile(t, pool)
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", viewerID.UuidUserId) })
 
 	profiles, err := profileSvc.GetContactableProfilesForViewer(ctx, viewerID.UuidUserId, []uuid.UUID{})
 	assert.NoError(t, err)

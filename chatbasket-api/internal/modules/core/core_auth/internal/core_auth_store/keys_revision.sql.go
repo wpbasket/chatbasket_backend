@@ -27,6 +27,36 @@ func (q *Queries) GetKeysRevision(ctx context.Context, id uuid.UUID) (int32, err
 	return keys_revision, err
 }
 
+const getKeysRevisions = `-- name: GetKeysRevisions :many
+SELECT id, keys_revision FROM auth_users WHERE id = ANY($1::uuid[])
+`
+
+type GetKeysRevisionsRow struct {
+	ID           uuid.UUID `json:"id"`
+	KeysRevision int32     `json:"keys_revision"`
+}
+
+// Get keys_revision for multiple users in a single query
+func (q *Queries) GetKeysRevisions(ctx context.Context, userIds []uuid.UUID) ([]GetKeysRevisionsRow, error) {
+	rows, err := q.db.Query(ctx, getKeysRevisions, userIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetKeysRevisionsRow
+	for rows.Next() {
+		var i GetKeysRevisionsRow
+		if err := rows.Scan(&i.ID, &i.KeysRevision); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const incrementKeysRevision = `-- name: IncrementKeysRevision :exec
 UPDATE auth_users SET keys_revision = keys_revision + 1 WHERE id = $1
 `

@@ -54,6 +54,8 @@ type Querier interface {
 	// ======================================
 	// Get the current keys_revision for a user (atomic read)
 	GetKeysRevision(ctx context.Context, id uuid.UUID) (int32, error)
+	// Get keys_revision for multiple users in a single query
+	GetKeysRevisions(ctx context.Context, userIds []uuid.UUID) ([]GetKeysRevisionsRow, error)
 	GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLoginRequestRow, error)
 	GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByToken(ctx context.Context, arg GetSessionByTokenParams) (Session, error)

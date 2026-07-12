@@ -108,7 +108,6 @@ SELECT
     a.token_id,
     a.token_secret,
     a.token_expiry,
-    au.keys_revision,
     COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
     COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
     COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
@@ -117,7 +116,6 @@ SELECT
     COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar
 FROM
     users u
-    INNER JOIN auth_users au ON u.id = au.id
     LEFT JOIN avatars a ON u.id = a.user_id
     AND a.avatar_type = 'profile'
     LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
