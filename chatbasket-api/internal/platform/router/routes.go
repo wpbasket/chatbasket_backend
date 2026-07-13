@@ -80,8 +80,6 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	)
 	personal_profile.Register(personalGroup, profileService, authService, wsHub)
 
-	// Start background cleanup jobs (now that all services are wired)
-	pending_uploads.StartCleanupJob(pendingUploadsSvc, 15*time.Minute)
 
 	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey, r.Config.Security.PersonalContactKey)
 	personal_contact.Register(personalGroup, contactService, authService)
@@ -93,10 +91,14 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 		pendingUploadsSvc, r.R2Pool,
 	)
 	personal_chat.Register(personalGroup, chatService, wsHub, authService)
-	personal_chat.StartMessageCleanupJob(chatService, 1*time.Hour)
-	personal_chat.StartDatabaseCleanupJob(chatService, 1*time.Hour)
+	contactService.RegisterChatCleanupProvider(chatService)
 
 	// 4. Settings Module
 	settingService := personal_setting.NewSettingService(authService)
 	personal_setting.Register(personalGroup, settingService, wsHub)
+
+	// 5. Start Background Cleanup Jobs (after all modules are registered)
+	pending_uploads.StartCleanupJob(pendingUploadsSvc, 15*time.Minute)
+	personal_chat.StartMessageCleanupJob(chatService, 1*time.Hour)
+	personal_chat.StartDatabaseCleanupJob(chatService, 1*time.Hour)
 }

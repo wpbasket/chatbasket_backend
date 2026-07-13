@@ -708,3 +708,10 @@ WHERE hs.id = batch.id;
 SELECT user_id, session_id, expires_at 
 FROM history_sync 
 WHERE id = $1;
+
+-- name: GetMessagesWithFilesByChatID :many
+SELECT * FROM messages 
+WHERE chat_id = $1 AND file_id IS NOT NULL;
+
+-- name: DeleteMessagesByChatID :exec
+DELETE FROM messages WHERE chat_id = $1;

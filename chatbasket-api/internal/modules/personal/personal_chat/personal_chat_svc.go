@@ -1183,6 +1183,86 @@ func (s *chatService) deleteMessageFromRelay(ctx context.Context, message person
 	}
 }
 
+// CleanupChatMessagesForBlockAsync deletes all messages in the chat between blocker and blocked asynchronously in the background.
+// It registers any attached files to pending_uploads, deletes the database rows in a transaction, and triggers R2 deletions.
+func (s *chatService) CleanupChatMessagesForBlockAsync(ctx context.Context, blockerID, blockedID uuid.UUID) {
+	// Use background context with timeout for background processing
+	bgCtx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	// 1. Get the chat between participants
+	chat, err := s.PostgresQueries.GetChatByParticipants(bgCtx, personal_chat_store.GetChatByParticipantsParams{
+		Column1: blockerID,
+		Column2: blockedID,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// No chat exists, nothing to clean up
+			return
+		}
+		log.Printf("[Block-Cleanup] ERROR: Failed to fetch chat for block cleanup: %v", err)
+		return
+	}
+
+	// 2. Fetch all messages in the chat containing a file
+	messages, err := s.PostgresQueries.GetMessagesWithFilesByChatID(bgCtx, chat.ID)
+	if err != nil {
+		log.Printf("[Block-Cleanup] ERROR: Failed to fetch messages with files for chat %s: %v", chat.ID, err)
+		return
+	}
+
+	// Start a transaction for registering to pending_uploads and deleting messages
+	tx, err := s.Pool.Begin(bgCtx)
+	if err != nil {
+		log.Printf("[Block-Cleanup] ERROR: Failed to start transaction for chat %s: %v", chat.ID, err)
+		return
+	}
+	defer tx.Rollback(bgCtx)
+	qtx := s.PostgresQueries.WithTx(tx)
+
+	var fileIDs []string
+	for _, msg := range messages {
+		if msg.FileID != nil && *msg.FileID != "" {
+			fileID := *msg.FileID
+			_, objectKey := clients.ParseFilePrefix(fileID)
+			client := s.R2Pool.GetClient(fileID)
+			bucket := client.ChatBucket()
+
+			if err := s.PendingUploads.RegisterTx(bgCtx, tx, fileID, bucket, objectKey, time.Now().UTC()); err != nil {
+				log.Printf("[Block-Cleanup] ERROR: Failed to register file %s in pending_uploads: %v", fileID, err)
+				return
+			}
+			fileIDs = append(fileIDs, fileID)
+		}
+	}
+
+	// Delete all messages in the chat from the messages table
+	if err := qtx.DeleteMessagesByChatID(bgCtx, chat.ID); err != nil {
+		log.Printf("[Block-Cleanup] ERROR: Failed to delete messages for chat %s: %v", chat.ID, err)
+		return
+	}
+
+	if err := tx.Commit(bgCtx); err != nil {
+		log.Printf("[Block-Cleanup] ERROR: Failed to commit transaction for chat %s: %v", chat.ID, err)
+		return
+	}
+
+	// 3. Post-commit: Asynchronously delete files from Cloudflare R2
+	if len(fileIDs) > 0 {
+		log.Printf("[Block-Cleanup] Triggering concurrent R2 deletion of %d files for chat %s", len(fileIDs), chat.ID)
+		r2Errors := kit.DeleteFilesBatch(bgCtx, fileIDs, s.DeleteChatFile)
+		for i, fileID := range fileIDs {
+			if r2Errors[i] == nil {
+				if err := s.PendingUploads.Remove(context.Background(), fileID); err != nil {
+					log.Printf("[Block-Cleanup] WARNING: Failed to remove file %s from pending_uploads: %v", fileID, err)
+				}
+			} else {
+				log.Printf("[Block-Cleanup] WARNING: Async file %s R2 delete failed: %v", fileID, r2Errors[i])
+			}
+		}
+	}
+}
+
 var (
 	cleanupDBBatchSize = int32(5000)
 	cleanupThrottleSleep = 50 * time.Millisecond

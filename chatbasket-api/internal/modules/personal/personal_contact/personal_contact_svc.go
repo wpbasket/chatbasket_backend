@@ -24,11 +24,17 @@ type personalProfilePersonalContactProvider interface {
 	IsEitherBlocked(ctx context.Context, user1ID, user2ID uuid.UUID) (int32, error)
 }
 
+// ChatCleanupProvider defines the decoupled method signature for async chat message/file cleanup on user block
+type ChatCleanupProvider interface {
+	CleanupChatMessagesForBlockAsync(ctx context.Context, blockerID, blockedID uuid.UUID)
+}
+
 type contactService struct {
 	GlobalService                  *services.GlobalService
 	PostgresQuerier                personal_contact_store.Querier
 	PostgresQueries                *personal_contact_store.Queries
 	personalProfilePersonalContactProvider personalProfilePersonalContactProvider
+	chatCleanupProvider            ChatCleanupProvider
 	PersonalUsernameKey            []byte
 	PersonalContactKey             []byte
 }
@@ -43,6 +49,10 @@ func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool
 		PersonalUsernameKey:            personalUsernameKey,
 		PersonalContactKey:             personalContactKey,
 	}
+}
+
+func (ps *contactService) RegisterChatCleanupProvider(provider ChatCleanupProvider) {
+	ps.chatCleanupProvider = provider
 }
 
 func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*GetContactsResponse, error) {
@@ -811,15 +821,9 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 
-	// When blocking, we also remove the contact relationship if it exists (both ways)
-	_, _ = ps.PostgresQueries.DeleteContact(ctx, personal_contact_store.DeleteContactParams{
-		OwnerUserID:    userId.UuidUserId,
-		ContactUserIds: []uuid.UUID{blockedUUID},
-	})
-	_, _ = ps.PostgresQueries.DeleteContact(ctx, personal_contact_store.DeleteContactParams{
-		OwnerUserID:    blockedUUID,
-		ContactUserIds: []uuid.UUID{userId.UuidUserId},
-	})
+	if ps.chatCleanupProvider != nil {
+		go ps.chatCleanupProvider.CleanupChatMessagesForBlockAsync(context.Background(), userId.UuidUserId, blockedUUID)
+	}
 
 	return &BlockUserResponse{Blocked: true}, nil
 }

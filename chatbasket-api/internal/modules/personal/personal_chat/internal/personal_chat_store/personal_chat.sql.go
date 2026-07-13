@@ -539,6 +539,15 @@ func (q *Queries) DeleteMessage(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteMessagesByChatID = `-- name: DeleteMessagesByChatID :exec
+DELETE FROM messages WHERE chat_id = $1
+`
+
+func (q *Queries) DeleteMessagesByChatID(ctx context.Context, chatID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteMessagesByChatID, chatID)
+	return err
+}
+
 const deleteOldSyncActionsBatch = `-- name: DeleteOldSyncActionsBatch :execrows
 WITH batch AS (
   SELECT id FROM message_sync_actions
@@ -853,6 +862,57 @@ func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, er
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getMessagesWithFilesByChatID = `-- name: GetMessagesWithFilesByChatID :many
+SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at FROM messages 
+WHERE chat_id = $1 AND file_id IS NOT NULL
+`
+
+func (q *Queries) GetMessagesWithFilesByChatID(ctx context.Context, chatID uuid.UUID) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getMessagesWithFilesByChatID, chatID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ChatID,
+			&i.SenderID,
+			&i.RecipientID,
+			&i.Content,
+			&i.MessageType,
+			&i.FileID,
+			&i.FileName,
+			&i.FileSize,
+			&i.FileMimeType,
+			&i.FileTokenID,
+			&i.FileTokenSecret,
+			&i.FileTokenExpiry,
+			&i.ThumbnailFileID,
+			&i.ThumbnailTokenID,
+			&i.ThumbnailTokenSecret,
+			&i.DeliveredToRecipient,
+			&i.DeliveredToRecipientPrimary,
+			&i.SyncedToSenderPrimary,
+			&i.DeletedBySender,
+			&i.DeletedByRecipient,
+			&i.DeliveryAttempts,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getMessagesWithFilesForBlockedUsers = `-- name: GetMessagesWithFilesForBlockedUsers :many

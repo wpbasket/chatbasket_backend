@@ -54,6 +54,7 @@ type Querier interface {
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteFullyAcknowledgedMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
 	DeleteMessage(ctx context.Context, id uuid.UUID) error
+	DeleteMessagesByChatID(ctx context.Context, chatID uuid.UUID) error
 	// Bounded cleanup batch: deletes sync actions older than 30 days.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteOldSyncActionsBatch(ctx context.Context, batchSize int32) (int64, error)
@@ -64,6 +65,7 @@ type Querier interface {
 	GetHistorySyncForDownload(ctx context.Context, arg GetHistorySyncForDownloadParams) ([]byte, error)
 	GetHistorySyncMeta(ctx context.Context, id uuid.UUID) (GetHistorySyncMetaRow, error)
 	GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error)
+	GetMessagesWithFilesByChatID(ctx context.Context, chatID uuid.UUID) ([]Message, error)
 	// ===========================================
 	// Block Cleanup Operations (Background Worker)
 	// ===========================================
