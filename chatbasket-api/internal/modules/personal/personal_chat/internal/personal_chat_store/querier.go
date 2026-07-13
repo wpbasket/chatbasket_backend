@@ -11,18 +11,9 @@ import (
 )
 
 type Querier interface {
-	// ===========================================
-	// Block Cleanup Operations (Background Worker)
-	// ===========================================
-	// Background cleanup: Deletes messages for chats where users have blocked each other.
-	// NOTE: This only handles DB records. Apprites file cleanup must be done in Go.
-	CleanupMessagesForBlockedUsers(ctx context.Context) error
 	// Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
 	// and are older than or equal to a specific timestamp, but ONLY if they are plain text.
 	CleanupOlderFullyAcknowledgedMessages(ctx context.Context, arg CleanupOlderFullyAcknowledgedMessagesParams) error
-	// Background cleanup: Deletes sync actions for chats where users have blocked each other.
-	// This handles orphaned sync actions even if the trigger (007) is not yet applied or was missed.
-	CleanupSyncActionsForBlockedUsers(ctx context.Context) error
 	// Bounded cleanup batch: deletes sync actions for chats between blocked users.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	CleanupSyncActionsForBlockedUsersBatch(ctx context.Context, batchSize int32) (int64, error)
@@ -50,50 +41,34 @@ type Querier interface {
 	// Sync Action Operations
 	// ===========================================
 	CreateSyncAction(ctx context.Context, arg CreateSyncActionParams) (MessageSyncAction, error)
-	// Bulk-deletes messages for blocked-user chats that have no attached file_id (safe — no R2 orphans).
-	// Messages WITH files are handled by the batched cleanup loop.
-	DeleteBlockedUserMessagesWithoutFiles(ctx context.Context) error
 	// Bounded cleanup batch: deletes no-file messages in chats between blocked users.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteBlockedUserMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
-	DeleteExpiredHistorySync(ctx context.Context) error
 	// Bounded cleanup batch: deletes expired history-sync records.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteExpiredHistorySyncBatch(ctx context.Context, batchSize int32) (int64, error)
-	// Bulk-deletes EXPIRED messages that have no attached file_id (safe — no R2 orphans possible).
-	// Messages WITH files are handled by the batched cleanup loop (file deleted first, then DB row).
-	DeleteExpiredMessagesWithoutFiles(ctx context.Context) error
 	// Bounded cleanup batch: deletes expired messages without attached files.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteExpiredMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
-	// Bulk-deletes messages where BOTH primary devices have acknowledged (delivered to
-	// recipient primary AND synced to sender primary) AND the message has NO file_id.
-	// Safe bulk delete — no R2 orphan possible.
-	// For text-only messages, both devices already have a local copy, so the server
-	// copy is redundant and can be removed immediately.
-	// File-having messages are handled by the batched loop (R2 first, then DB).
-	DeleteFullyAcknowledgedMessagesWithoutFiles(ctx context.Context) error
 	// Bounded cleanup batch: deletes text-only messages fully acknowledged by both primaries.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteFullyAcknowledgedMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
 	DeleteMessage(ctx context.Context, id uuid.UUID) error
-	DeleteOldSyncActions(ctx context.Context) error
 	// Bounded cleanup batch: deletes sync actions older than 30 days.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteOldSyncActionsBatch(ctx context.Context, batchSize int32) (int64, error)
 	GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error)
 	GetChatByParticipants(ctx context.Context, arg GetChatByParticipantsParams) (Chat, error)
 	GetChatMessages(ctx context.Context, arg GetChatMessagesParams) ([]Message, error)
-	GetChatsByUserID(ctx context.Context, participant1ID uuid.UUID) ([]Chat, error)
-	GetDeliveredMessagesByChat(ctx context.Context, arg GetDeliveredMessagesByChatParams) ([]Message, error)
 	GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpiredMessagesWithFilesParams) ([]Message, error)
 	GetHistorySyncForDownload(ctx context.Context, arg GetHistorySyncForDownloadParams) ([]byte, error)
 	GetHistorySyncMeta(ctx context.Context, id uuid.UUID) (GetHistorySyncMetaRow, error)
 	GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error)
-	GetMessagesWithExpiredFileTokens(ctx context.Context, limit int32) ([]Message, error)
+	// ===========================================
+	// Block Cleanup Operations (Background Worker)
+	// ===========================================
 	// Fetches messages with files for chats between blocked users for cleanup.
 	GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg GetMessagesWithFilesForBlockedUsersParams) ([]Message, error)
-	GetPendingHistorySyncForUser(ctx context.Context, userID uuid.UUID) ([]GetPendingHistorySyncForUserRow, error)
 	GetPendingMessagesForRecipient(ctx context.Context, arg GetPendingMessagesForRecipientParams) ([]Message, error)
 	GetPendingSenderSyncMessages(ctx context.Context, arg GetPendingSenderSyncMessagesParams) ([]Message, error)
 	GetPendingSyncActions(ctx context.Context, arg GetPendingSyncActionsParams) ([]MessageSyncAction, error)
@@ -104,7 +79,6 @@ type Querier interface {
 	// Per-Participant Last Message Preview
 	// Last Message Status (Calculated from chat metadata only)
 	GetUserChatsLite(ctx context.Context, participant1ID uuid.UUID) ([]GetUserChatsLiteRow, error)
-	IncrementDeliveryAttempts(ctx context.Context, id uuid.UUID) error
 	// ===========================================
 	// Messaging Eligibility Checks
 	// ===========================================
@@ -127,7 +101,6 @@ type Querier interface {
 	UpdateChatStatus(ctx context.Context, arg UpdateChatStatusParams) error
 	UpdateChatUnsendDecrement(ctx context.Context, arg UpdateChatUnsendDecrementParams) error
 	UpdateChatUnsendPreview(ctx context.Context, arg UpdateChatUnsendPreviewParams) error
-	UpdateMessageFileToken(ctx context.Context, arg UpdateMessageFileTokenParams) error
 	UpdateMessageToUnsent(ctx context.Context, id uuid.UUID) error
 	UploadHistorySyncPayload(ctx context.Context, arg UploadHistorySyncPayloadParams) (int64, error)
 	UpsertHistorySync(ctx context.Context, arg UpsertHistorySyncParams) (uuid.UUID, error)

@@ -110,13 +110,6 @@ ORDER BY c.updated_at DESC;
 -- name: GetChatByID :one
 SELECT * FROM chats WHERE id = $1 LIMIT 1;
 
--- name: GetChatsByUserID :many
-SELECT *
-FROM chats
-WHERE
-    participant_1_id = $1
-    OR participant_2_id = $1
-ORDER BY updated_at DESC;
 
 -- ===========================================
 -- Message Operations
@@ -299,13 +292,6 @@ WHERE
     AND delivered_to_recipient_primary = TRUE
     AND synced_to_sender_primary = TRUE;
 
--- name: IncrementDeliveryAttempts :exec
-UPDATE messages
-SET
-    delivery_attempts = delivery_attempts + 1,
-    updated_at = now()
-WHERE
-    id = $1;
 
 -- name: GetChatMessages :many
 SELECT *
@@ -329,23 +315,6 @@ LIMIT $2
 OFFSET
     $3;
 
--- name: GetDeliveredMessagesByChat :many
-SELECT *
-FROM messages
-WHERE
-    chat_id = sqlc.arg ('chat_id')
-    AND (
-        (
-            recipient_id = sqlc.arg ('user_id')
-            AND delivered_to_recipient_primary = TRUE
-            AND synced_to_sender_primary = TRUE
-        )
-        OR (
-            sender_id = sqlc.arg ('user_id')
-            AND delivered_to_recipient_primary = TRUE
-            AND synced_to_sender_primary = TRUE
-        )
-    );
 
 
 -- ===========================================
@@ -410,26 +379,7 @@ VALUES (
 RETURNING
     *;
 
--- name: UpdateMessageFileToken :exec
-UPDATE messages
-SET
-    file_token_id = $2,
-    file_token_secret = $3,
-    file_token_expiry = $4,
-    updated_at = now()
-WHERE
-    id = $1;
 
--- name: GetMessagesWithExpiredFileTokens :many
-SELECT *
-FROM messages
-WHERE
-    file_id IS NOT NULL
-    AND file_token_expiry IS NOT NULL
-    AND file_token_expiry < now()
-    AND expires_at > now()
-ORDER BY created_at ASC
-LIMIT $1;
 
 -- ===========================================
 -- Chat Status Update Operations (Phase 2b)
@@ -561,10 +511,6 @@ LIMIT $2;
 -- name: ConsumeSyncAction :exec
 DELETE FROM message_sync_actions WHERE id = $1;
 
--- name: DeleteOldSyncActions :exec
-DELETE FROM message_sync_actions
-WHERE
-    created_at < now() - INTERVAL '30 days';
 
 -- ===========================================
 -- Per-Participant Preview Operations
@@ -627,29 +573,7 @@ WHERE
 -- Block Cleanup Operations (Background Worker)
 -- ===========================================
 
--- name: CleanupMessagesForBlockedUsers :exec
--- Background cleanup: Deletes messages for chats where users have blocked each other.
--- NOTE: This only handles DB records. Apprites file cleanup must be done in Go.
-DELETE FROM messages m
-USING chats c, user_blocks ub
-WHERE m.chat_id = c.id
-AND (
-    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
-    OR
-    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
-);
 
--- name: CleanupSyncActionsForBlockedUsers :exec
--- Background cleanup: Deletes sync actions for chats where users have blocked each other.
--- This handles orphaned sync actions even if the trigger (007) is not yet applied or was missed.
-DELETE FROM message_sync_actions msa
-USING chats c, user_blocks ub
-WHERE (msa.payload::jsonb->>'chatId')::uuid = c.id
-AND (
-    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
-    OR
-    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
-);
 
 -- name: GetMessagesWithFilesForBlockedUsers :many
 -- Fetches messages with files for chats between blocked users for cleanup.
@@ -665,37 +589,8 @@ WHERE m.file_id IS NOT NULL
 AND m.id > sqlc.arg('last_id')
 ORDER BY m.id ASC
 LIMIT sqlc.arg('limit');
--- name: DeleteExpiredMessagesWithoutFiles :exec
--- Bulk-deletes EXPIRED messages that have no attached file_id (safe — no R2 orphans possible).
--- Messages WITH files are handled by the batched cleanup loop (file deleted first, then DB row).
-DELETE FROM messages
-WHERE expires_at < now()
-  AND file_id IS NULL;
 
--- name: DeleteBlockedUserMessagesWithoutFiles :exec
--- Bulk-deletes messages for blocked-user chats that have no attached file_id (safe — no R2 orphans).
--- Messages WITH files are handled by the batched cleanup loop.
-DELETE FROM messages m
-USING chats c, user_blocks ub
-WHERE m.chat_id = c.id
-  AND m.file_id IS NULL
-  AND (
-      (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
-      OR
-      (c.participant_2_id = ub.blocker_user_id AND c.participant_1_id = ub.blocked_user_id)
-  );
 
--- name: DeleteFullyAcknowledgedMessagesWithoutFiles :exec
--- Bulk-deletes messages where BOTH primary devices have acknowledged (delivered to
--- recipient primary AND synced to sender primary) AND the message has NO file_id.
--- Safe bulk delete — no R2 orphan possible.
--- For text-only messages, both devices already have a local copy, so the server
--- copy is redundant and can be removed immediately.
--- File-having messages are handled by the batched loop (R2 first, then DB).
-DELETE FROM messages
-WHERE delivered_to_recipient_primary = TRUE
-  AND synced_to_sender_primary = TRUE
-  AND file_id IS NULL;
 -- name: UpsertHistorySync :one
 INSERT INTO history_sync (
     id, user_id, session_id, chats_json, expires_at, created_at, updated_at
@@ -720,13 +615,7 @@ SELECT payload
 FROM history_sync 
 WHERE id = $1 AND session_id = $2;
 
--- name: GetPendingHistorySyncForUser :many
-SELECT id, session_id, chats_json 
-FROM history_sync 
-WHERE user_id = $1 AND payload IS NULL AND expires_at > now();
 
--- name: DeleteExpiredHistorySync :exec
-DELETE FROM history_sync WHERE expires_at < now();
 
 -- name: DeleteExpiredMessagesWithoutFilesBatch :execrows
 -- Bounded cleanup batch: deletes expired messages without attached files.
@@ -777,7 +666,7 @@ WHERE m.id = batch.id;
 -- Controlled from Go with a batch_size parameter and a time budget.
 WITH batch AS (
   SELECT msa.id FROM message_sync_actions msa
-  JOIN chats c ON (msa.payload::jsonb->>'chatId')::uuid = c.id
+  JOIN chats c ON (msa.payload::jsonb->>'chat_id')::uuid = c.id
   JOIN user_blocks ub ON (
     (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
     OR (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)

@@ -82,12 +82,6 @@ func TestHistorySyncStore_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, reqID, returnedID)
 
-	// 2. Get pending
-	pending, err := queries.GetPendingHistorySyncForUser(ctx, userID)
-	require.NoError(t, err)
-	assert.Len(t, pending, 1)
-	assert.Equal(t, reqID, pending[0].ID)
-	assert.Equal(t, chatsCipher, pending[0].ChatsJson)
 
 	// 3. Get Meta
 	meta, err := queries.GetHistorySyncMeta(ctx, reqID)

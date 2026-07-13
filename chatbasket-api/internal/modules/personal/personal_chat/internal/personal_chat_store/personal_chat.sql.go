@@ -12,28 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const cleanupMessagesForBlockedUsers = `-- name: CleanupMessagesForBlockedUsers :exec
-
-DELETE FROM messages m
-USING chats c, user_blocks ub
-WHERE m.chat_id = c.id
-AND (
-    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
-    OR
-    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
-)
-`
-
-// ===========================================
-// Block Cleanup Operations (Background Worker)
-// ===========================================
-// Background cleanup: Deletes messages for chats where users have blocked each other.
-// NOTE: This only handles DB records. Apprites file cleanup must be done in Go.
-func (q *Queries) CleanupMessagesForBlockedUsers(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, cleanupMessagesForBlockedUsers)
-	return err
-}
-
 const cleanupOlderFullyAcknowledgedMessages = `-- name: CleanupOlderFullyAcknowledgedMessages :exec
 DELETE FROM messages
 WHERE
@@ -56,28 +34,10 @@ func (q *Queries) CleanupOlderFullyAcknowledgedMessages(ctx context.Context, arg
 	return err
 }
 
-const cleanupSyncActionsForBlockedUsers = `-- name: CleanupSyncActionsForBlockedUsers :exec
-DELETE FROM message_sync_actions msa
-USING chats c, user_blocks ub
-WHERE (msa.payload::jsonb->>'chatId')::uuid = c.id
-AND (
-    (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
-    OR
-    (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
-)
-`
-
-// Background cleanup: Deletes sync actions for chats where users have blocked each other.
-// This handles orphaned sync actions even if the trigger (007) is not yet applied or was missed.
-func (q *Queries) CleanupSyncActionsForBlockedUsers(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, cleanupSyncActionsForBlockedUsers)
-	return err
-}
-
 const cleanupSyncActionsForBlockedUsersBatch = `-- name: CleanupSyncActionsForBlockedUsersBatch :execrows
 WITH batch AS (
   SELECT msa.id FROM message_sync_actions msa
-  JOIN chats c ON (msa.payload::jsonb->>'chatId')::uuid = c.id
+  JOIN chats c ON (msa.payload::jsonb->>'chat_id')::uuid = c.id
   JOIN user_blocks ub ON (
     (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
     OR (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
@@ -477,25 +437,6 @@ func (q *Queries) CreateSyncAction(ctx context.Context, arg CreateSyncActionPara
 	return i, err
 }
 
-const deleteBlockedUserMessagesWithoutFiles = `-- name: DeleteBlockedUserMessagesWithoutFiles :exec
-DELETE FROM messages m
-USING chats c, user_blocks ub
-WHERE m.chat_id = c.id
-  AND m.file_id IS NULL
-  AND (
-      (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
-      OR
-      (c.participant_2_id = ub.blocker_user_id AND c.participant_1_id = ub.blocked_user_id)
-  )
-`
-
-// Bulk-deletes messages for blocked-user chats that have no attached file_id (safe — no R2 orphans).
-// Messages WITH files are handled by the batched cleanup loop.
-func (q *Queries) DeleteBlockedUserMessagesWithoutFiles(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteBlockedUserMessagesWithoutFiles)
-	return err
-}
-
 const deleteBlockedUserMessagesWithoutFilesBatch = `-- name: DeleteBlockedUserMessagesWithoutFilesBatch :execrows
 WITH batch AS (
   SELECT m.id FROM messages m
@@ -523,15 +464,6 @@ func (q *Queries) DeleteBlockedUserMessagesWithoutFilesBatch(ctx context.Context
 	return result.RowsAffected(), nil
 }
 
-const deleteExpiredHistorySync = `-- name: DeleteExpiredHistorySync :exec
-DELETE FROM history_sync WHERE expires_at < now()
-`
-
-func (q *Queries) DeleteExpiredHistorySync(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredHistorySync)
-	return err
-}
-
 const deleteExpiredHistorySyncBatch = `-- name: DeleteExpiredHistorySyncBatch :execrows
 WITH batch AS (
   SELECT id FROM history_sync
@@ -554,19 +486,6 @@ func (q *Queries) DeleteExpiredHistorySyncBatch(ctx context.Context, batchSize i
 	return result.RowsAffected(), nil
 }
 
-const deleteExpiredMessagesWithoutFiles = `-- name: DeleteExpiredMessagesWithoutFiles :exec
-DELETE FROM messages
-WHERE expires_at < now()
-  AND file_id IS NULL
-`
-
-// Bulk-deletes EXPIRED messages that have no attached file_id (safe — no R2 orphans possible).
-// Messages WITH files are handled by the batched cleanup loop (file deleted first, then DB row).
-func (q *Queries) DeleteExpiredMessagesWithoutFiles(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredMessagesWithoutFiles)
-	return err
-}
-
 const deleteExpiredMessagesWithoutFilesBatch = `-- name: DeleteExpiredMessagesWithoutFilesBatch :execrows
 WITH batch AS (
   SELECT id FROM messages
@@ -587,24 +506,6 @@ func (q *Queries) DeleteExpiredMessagesWithoutFilesBatch(ctx context.Context, ba
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const deleteFullyAcknowledgedMessagesWithoutFiles = `-- name: DeleteFullyAcknowledgedMessagesWithoutFiles :exec
-DELETE FROM messages
-WHERE delivered_to_recipient_primary = TRUE
-  AND synced_to_sender_primary = TRUE
-  AND file_id IS NULL
-`
-
-// Bulk-deletes messages where BOTH primary devices have acknowledged (delivered to
-// recipient primary AND synced to sender primary) AND the message has NO file_id.
-// Safe bulk delete — no R2 orphan possible.
-// For text-only messages, both devices already have a local copy, so the server
-// copy is redundant and can be removed immediately.
-// File-having messages are handled by the batched loop (R2 first, then DB).
-func (q *Queries) DeleteFullyAcknowledgedMessagesWithoutFiles(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteFullyAcknowledgedMessagesWithoutFiles)
-	return err
 }
 
 const deleteFullyAcknowledgedMessagesWithoutFilesBatch = `-- name: DeleteFullyAcknowledgedMessagesWithoutFilesBatch :execrows
@@ -635,17 +536,6 @@ DELETE FROM messages WHERE id = $1
 
 func (q *Queries) DeleteMessage(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteMessage, id)
-	return err
-}
-
-const deleteOldSyncActions = `-- name: DeleteOldSyncActions :exec
-DELETE FROM message_sync_actions
-WHERE
-    created_at < now() - INTERVAL '30 days'
-`
-
-func (q *Queries) DeleteOldSyncActions(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteOldSyncActions)
 	return err
 }
 
@@ -780,124 +670,6 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 		arg.SenderID,
 		arg.SessionCreatedAt,
 	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Message
-	for rows.Next() {
-		var i Message
-		if err := rows.Scan(
-			&i.ID,
-			&i.ChatID,
-			&i.SenderID,
-			&i.RecipientID,
-			&i.Content,
-			&i.MessageType,
-			&i.FileID,
-			&i.FileName,
-			&i.FileSize,
-			&i.FileMimeType,
-			&i.FileTokenID,
-			&i.FileTokenSecret,
-			&i.FileTokenExpiry,
-			&i.ThumbnailFileID,
-			&i.ThumbnailTokenID,
-			&i.ThumbnailTokenSecret,
-			&i.DeliveredToRecipient,
-			&i.DeliveredToRecipientPrimary,
-			&i.SyncedToSenderPrimary,
-			&i.DeletedBySender,
-			&i.DeletedByRecipient,
-			&i.DeliveryAttempts,
-			&i.ExpiresAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getChatsByUserID = `-- name: GetChatsByUserID :many
-SELECT id, participant_1_id, participant_2_id, p1_unread_count, p2_unread_count, p1_last_read_at, p2_last_read_at, p1_last_delivered_at, p2_last_delivered_at, last_message_created_at, last_message_sender_id, last_message_id, p1_last_message_content, p2_last_message_content, p1_last_message_type, p2_last_message_type, created_at, updated_at
-FROM chats
-WHERE
-    participant_1_id = $1
-    OR participant_2_id = $1
-ORDER BY updated_at DESC
-`
-
-func (q *Queries) GetChatsByUserID(ctx context.Context, participant1ID uuid.UUID) ([]Chat, error) {
-	rows, err := q.db.Query(ctx, getChatsByUserID, participant1ID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Chat
-	for rows.Next() {
-		var i Chat
-		if err := rows.Scan(
-			&i.ID,
-			&i.Participant1ID,
-			&i.Participant2ID,
-			&i.P1UnreadCount,
-			&i.P2UnreadCount,
-			&i.P1LastReadAt,
-			&i.P2LastReadAt,
-			&i.P1LastDeliveredAt,
-			&i.P2LastDeliveredAt,
-			&i.LastMessageCreatedAt,
-			&i.LastMessageSenderID,
-			&i.LastMessageID,
-			&i.P1LastMessageContent,
-			&i.P2LastMessageContent,
-			&i.P1LastMessageType,
-			&i.P2LastMessageType,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getDeliveredMessagesByChat = `-- name: GetDeliveredMessagesByChat :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at
-FROM messages
-WHERE
-    chat_id = $1
-    AND (
-        (
-            recipient_id = $2
-            AND delivered_to_recipient_primary = TRUE
-            AND synced_to_sender_primary = TRUE
-        )
-        OR (
-            sender_id = $2
-            AND delivered_to_recipient_primary = TRUE
-            AND synced_to_sender_primary = TRUE
-        )
-    )
-`
-
-type GetDeliveredMessagesByChatParams struct {
-	ChatID uuid.UUID `json:"chat_id"`
-	UserID uuid.UUID `json:"user_id"`
-}
-
-func (q *Queries) GetDeliveredMessagesByChat(ctx context.Context, arg GetDeliveredMessagesByChatParams) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getDeliveredMessagesByChat, arg.ChatID, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -1083,65 +855,10 @@ func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, er
 	return i, err
 }
 
-const getMessagesWithExpiredFileTokens = `-- name: GetMessagesWithExpiredFileTokens :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at
-FROM messages
-WHERE
-    file_id IS NOT NULL
-    AND file_token_expiry IS NOT NULL
-    AND file_token_expiry < now()
-    AND expires_at > now()
-ORDER BY created_at ASC
-LIMIT $1
-`
-
-func (q *Queries) GetMessagesWithExpiredFileTokens(ctx context.Context, limit int32) ([]Message, error) {
-	rows, err := q.db.Query(ctx, getMessagesWithExpiredFileTokens, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Message
-	for rows.Next() {
-		var i Message
-		if err := rows.Scan(
-			&i.ID,
-			&i.ChatID,
-			&i.SenderID,
-			&i.RecipientID,
-			&i.Content,
-			&i.MessageType,
-			&i.FileID,
-			&i.FileName,
-			&i.FileSize,
-			&i.FileMimeType,
-			&i.FileTokenID,
-			&i.FileTokenSecret,
-			&i.FileTokenExpiry,
-			&i.ThumbnailFileID,
-			&i.ThumbnailTokenID,
-			&i.ThumbnailTokenSecret,
-			&i.DeliveredToRecipient,
-			&i.DeliveredToRecipientPrimary,
-			&i.SyncedToSenderPrimary,
-			&i.DeletedBySender,
-			&i.DeletedByRecipient,
-			&i.DeliveryAttempts,
-			&i.ExpiresAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getMessagesWithFilesForBlockedUsers = `-- name: GetMessagesWithFilesForBlockedUsers :many
+
+
+
 SELECT m.id, m.chat_id, m.sender_id, m.recipient_id, m.content, m.message_type, m.file_id, m.file_name, m.file_size, m.file_mime_type, m.file_token_id, m.file_token_secret, m.file_token_expiry, m.thumbnail_file_id, m.thumbnail_token_id, m.thumbnail_token_secret, m.delivered_to_recipient, m.delivered_to_recipient_primary, m.synced_to_sender_primary, m.deleted_by_sender, m.deleted_by_recipient, m.delivery_attempts, m.expires_at, m.created_at, m.updated_at
 FROM messages m
 INNER JOIN chats c ON m.chat_id = c.id
@@ -1161,6 +878,9 @@ type GetMessagesWithFilesForBlockedUsersParams struct {
 	Limit  int32     `json:"limit"`
 }
 
+// ===========================================
+// Block Cleanup Operations (Background Worker)
+// ===========================================
 // Fetches messages with files for chats between blocked users for cleanup.
 func (q *Queries) GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg GetMessagesWithFilesForBlockedUsersParams) ([]Message, error) {
 	rows, err := q.db.Query(ctx, getMessagesWithFilesForBlockedUsers, arg.LastID, arg.Limit)
@@ -1198,38 +918,6 @@ func (q *Queries) GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg G
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getPendingHistorySyncForUser = `-- name: GetPendingHistorySyncForUser :many
-SELECT id, session_id, chats_json 
-FROM history_sync 
-WHERE user_id = $1 AND payload IS NULL AND expires_at > now()
-`
-
-type GetPendingHistorySyncForUserRow struct {
-	ID        uuid.UUID `json:"id"`
-	SessionID uuid.UUID `json:"session_id"`
-	ChatsJson []byte    `json:"chats_json"`
-}
-
-func (q *Queries) GetPendingHistorySyncForUser(ctx context.Context, userID uuid.UUID) ([]GetPendingHistorySyncForUserRow, error) {
-	rows, err := q.db.Query(ctx, getPendingHistorySyncForUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetPendingHistorySyncForUserRow
-	for rows.Next() {
-		var i GetPendingHistorySyncForUserRow
-		if err := rows.Scan(&i.ID, &i.SessionID, &i.ChatsJson); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1560,20 +1248,6 @@ func (q *Queries) GetUserChatsLite(ctx context.Context, participant1ID uuid.UUID
 		return nil, err
 	}
 	return items, nil
-}
-
-const incrementDeliveryAttempts = `-- name: IncrementDeliveryAttempts :exec
-UPDATE messages
-SET
-    delivery_attempts = delivery_attempts + 1,
-    updated_at = now()
-WHERE
-    id = $1
-`
-
-func (q *Queries) IncrementDeliveryAttempts(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, incrementDeliveryAttempts, id)
-	return err
 }
 
 const isChatParticipant = `-- name: IsChatParticipant :one
@@ -1942,34 +1616,6 @@ type UpdateChatUnsendPreviewParams struct {
 
 func (q *Queries) UpdateChatUnsendPreview(ctx context.Context, arg UpdateChatUnsendPreviewParams) error {
 	_, err := q.db.Exec(ctx, updateChatUnsendPreview, arg.ID, arg.LastMessageID)
-	return err
-}
-
-const updateMessageFileToken = `-- name: UpdateMessageFileToken :exec
-UPDATE messages
-SET
-    file_token_id = $2,
-    file_token_secret = $3,
-    file_token_expiry = $4,
-    updated_at = now()
-WHERE
-    id = $1
-`
-
-type UpdateMessageFileTokenParams struct {
-	ID              uuid.UUID  `json:"id"`
-	FileTokenID     *string    `json:"file_token_id"`
-	FileTokenSecret *string    `json:"file_token_secret"`
-	FileTokenExpiry *time.Time `json:"file_token_expiry"`
-}
-
-func (q *Queries) UpdateMessageFileToken(ctx context.Context, arg UpdateMessageFileTokenParams) error {
-	_, err := q.db.Exec(ctx, updateMessageFileToken,
-		arg.ID,
-		arg.FileTokenID,
-		arg.FileTokenSecret,
-		arg.FileTokenExpiry,
-	)
 	return err
 }
 

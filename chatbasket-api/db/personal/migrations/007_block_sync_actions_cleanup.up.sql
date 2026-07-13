@@ -21,7 +21,7 @@ BEGIN
     IF affected_chat_id IS NOT NULL THEN
         DELETE FROM message_sync_actions msa
         WHERE msa.user_id IN (NEW.blocker_user_id, NEW.blocked_user_id)
-          AND (msa.payload->>'chatId')::uuid = affected_chat_id;
+          AND (msa.payload->>'chat_id')::uuid = affected_chat_id;
     END IF;
 
     RETURN NEW;

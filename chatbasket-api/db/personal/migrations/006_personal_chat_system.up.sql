@@ -241,7 +241,7 @@ CREATE INDEX IF NOT EXISTS idx_sync_actions_created_at
 
 -- Blocked-user sync actions payload chatId lookups (expression index)
 CREATE INDEX IF NOT EXISTS idx_sync_actions_payload_chat_id
-    ON message_sync_actions (((payload->>'chatId')::uuid));
+    ON message_sync_actions (((payload->>'chat_id')::uuid));
 
 -- ======================================
 -- End of message_sync_actions table section

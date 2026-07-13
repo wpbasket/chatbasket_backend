@@ -145,7 +145,7 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 	defer pool.Exec(ctx, "DELETE FROM messages WHERE id = $1", msgBlockedID)
 
 	// Create Sync Action A: Blocked User Chat Sync Action
-	syncActionBlockedPayload := fmt.Sprintf(`{"chatId": "%s"}`, chatID.String())
+	syncActionBlockedPayload := fmt.Sprintf(`{"chat_id": "%s"}`, chatID.String())
 	_, err = pool.Exec(ctx, `
 		INSERT INTO message_sync_actions (id, user_id, action_type, payload, delivered_to_primary, created_at, updated_at) 
 		VALUES ($1, $2, 'unsend', $3::jsonb, false, now(), now())`,
@@ -156,7 +156,7 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 	defer pool.Exec(ctx, "DELETE FROM message_sync_actions WHERE id = $1", syncActionBlockedID)
 
 	// Create Sync Action B: Old Sync Action (>30 days old)
-	syncActionOldPayload := `{"chatId": "00000000-0000-0000-0000-000000000000"}`
+	syncActionOldPayload := `{"chat_id": "00000000-0000-0000-0000-000000000000"}`
 	_, err = pool.Exec(ctx, `
 		INSERT INTO message_sync_actions (id, user_id, action_type, payload, delivered_to_primary, created_at, updated_at) 
 		VALUES ($1, $2, 'unsend', $3::jsonb, false, now(), now())`,
