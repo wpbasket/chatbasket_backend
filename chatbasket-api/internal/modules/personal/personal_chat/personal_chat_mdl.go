@@ -1,7 +1,6 @@
 package personal_chat
 
 import (
-	"fmt"
 	"chatbasket-api/internal/platform/kit"
 	"time"
 
@@ -165,7 +164,8 @@ type GetSyncActionsResponse struct {
 
 
 // ──────────────────────────────────────────────────────────────────────────────
-// StaleKeysError — returned when client's keys_revision is out of date
+// Stale keys error — returned when client's keys_revision is out of date.
+// The details are passed to kit.NewErrorWithDetails in the chat service.
 // ──────────────────────────────────────────────────────────────────────────────
 
 // StaleSide indicates which side has stale keys
@@ -186,31 +186,6 @@ type StaleKeysErrorDetails struct {
 	RecipientActiveKeys    []string  `json:"recipient_active_keys,omitempty"`
 }
 
-// StaleKeysError is a conflict error that carries structured data about which keys are stale.
-// Implements kit.DetailedProcessedError so the global error handler includes the details in the JSON response.
-type StaleKeysError struct {
-	details StaleKeysErrorDetails
-}
-
-func NewStaleKeysError(details StaleKeysErrorDetails) *StaleKeysError {
-	return &StaleKeysError{details: details}
-}
-
-func (e *StaleKeysError) Error() string {
-	return fmt.Sprintf("keys_revision is stale (side: %s)", e.details.StaleSide)
-}
-
-func (e *StaleKeysError) Status() int {
-	return 409 // Conflict
-}
-
-func (e *StaleKeysError) Kind() string {
-	return "keys_stale"
-}
-
-func (e *StaleKeysError) Details() interface{} {
-	return e.details
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Request Payloads

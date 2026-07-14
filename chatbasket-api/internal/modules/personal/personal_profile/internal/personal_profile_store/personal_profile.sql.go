@@ -433,6 +433,98 @@ func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProf
 	return i, err
 }
 
+const isBlockedBetweenUsers = `-- name: IsBlockedBetweenUsers :one
+SELECT
+    (SELECT u.is_admin_blocked FROM users u WHERE u.id = $1) AS requester_admin_blocked,
+    (SELECT u.is_admin_blocked FROM users u WHERE u.id = $2) AS target_admin_blocked,
+    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = $2 AND ub.blocked_user_id = $1) AS requester_user_blocked_by_target,
+    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = $1 AND ub.blocked_user_id = $2) AS target_user_blocked_by_requester
+`
+
+type IsBlockedBetweenUsersParams struct {
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
+	TargetUserID    uuid.UUID `json:"target_user_id"`
+}
+
+type IsBlockedBetweenUsersRow struct {
+	RequesterAdminBlocked        bool `json:"requester_admin_blocked"`
+	TargetAdminBlocked           bool `json:"target_admin_blocked"`
+	RequesterUserBlockedByTarget bool `json:"requester_user_blocked_by_target"`
+	TargetUserBlockedByRequester bool `json:"target_user_blocked_by_requester"`
+}
+
+// Returns block status flags between two users as individual boolean columns.
+func (q *Queries) IsBlockedBetweenUsers(ctx context.Context, arg IsBlockedBetweenUsersParams) (IsBlockedBetweenUsersRow, error) {
+	row := q.db.QueryRow(ctx, isBlockedBetweenUsers, arg.RequesterUserID, arg.TargetUserID)
+	var i IsBlockedBetweenUsersRow
+	err := row.Scan(
+		&i.RequesterAdminBlocked,
+		&i.TargetAdminBlocked,
+		&i.RequesterUserBlockedByTarget,
+		&i.TargetUserBlockedByRequester,
+	)
+	return i, err
+}
+
+const isBlockedBetweenUsersBatch = `-- name: IsBlockedBetweenUsersBatch :many
+SELECT
+    t.target_id::uuid AS target_id,
+    (SELECT u.is_admin_blocked FROM users u WHERE u.id = $1) AS requester_admin_blocked,
+    COALESCE(u_target.is_admin_blocked, FALSE) AS target_admin_blocked,
+    EXISTS (
+        SELECT 1 FROM user_blocks ub
+        WHERE ub.blocker_user_id = t.target_id
+          AND ub.blocked_user_id = $1
+    ) AS requester_user_blocked_by_target,
+    EXISTS (
+        SELECT 1 FROM user_blocks ub
+        WHERE ub.blocker_user_id = $1
+          AND ub.blocked_user_id = t.target_id
+    ) AS target_user_blocked_by_requester
+FROM unnest($2::uuid[]) AS t(target_id)
+LEFT JOIN users u_target ON u_target.id = t.target_id
+`
+
+type IsBlockedBetweenUsersBatchParams struct {
+	RequesterUserID uuid.UUID   `json:"requester_user_id"`
+	TargetUserIds   []uuid.UUID `json:"target_user_ids"`
+}
+
+type IsBlockedBetweenUsersBatchRow struct {
+	TargetID                     uuid.UUID `json:"target_id"`
+	RequesterAdminBlocked        bool      `json:"requester_admin_blocked"`
+	TargetAdminBlocked           bool      `json:"target_admin_blocked"`
+	RequesterUserBlockedByTarget bool      `json:"requester_user_blocked_by_target"`
+	TargetUserBlockedByRequester bool      `json:"target_user_blocked_by_requester"`
+}
+
+// Returns block status flags per target user for a requester and target user list.
+func (q *Queries) IsBlockedBetweenUsersBatch(ctx context.Context, arg IsBlockedBetweenUsersBatchParams) ([]IsBlockedBetweenUsersBatchRow, error) {
+	rows, err := q.db.Query(ctx, isBlockedBetweenUsersBatch, arg.RequesterUserID, arg.TargetUserIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IsBlockedBetweenUsersBatchRow
+	for rows.Next() {
+		var i IsBlockedBetweenUsersBatchRow
+		if err := rows.Scan(
+			&i.TargetID,
+			&i.RequesterAdminBlocked,
+			&i.TargetAdminBlocked,
+			&i.RequesterUserBlockedByTarget,
+			&i.TargetUserBlockedByRequester,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const isEitherBlocked = `-- name: IsEitherBlocked :one
 SELECT (CASE
     WHEN EXISTS(SELECT 1 FROM user_blocks ub1 WHERE ub1.blocker_user_id = $1 AND ub1.blocked_user_id = $2) THEN 1

@@ -170,6 +170,47 @@ func (ps *profileService) IsUserAdminBlocked(ctx context.Context, userID uuid.UU
 	return ps.PostgresQueries.IsUserAdminBlocked(ctx, userID)
 }
 
+// IsBlockedBetweenUsers checks if either user is admin-blocked or if either user has blocked the other.
+// Returns a BlockStatusResult with individual boolean flags for every condition.
+func (ps *profileService) IsBlockedBetweenUsers(ctx context.Context, requesterID uuid.UUID, targetID uuid.UUID) (*BlockStatusResult, error) {
+	row, err := ps.PostgresQueries.IsBlockedBetweenUsers(ctx, personal_profile_store.IsBlockedBetweenUsersParams{
+		RequesterUserID: requesterID,
+		TargetUserID:    targetID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return blockStatusFromRow(row.RequesterAdminBlocked, row.TargetAdminBlocked, row.RequesterUserBlockedByTarget, row.TargetUserBlockedByRequester, uuid.Nil), nil
+}
+
+// IsBlockedBetweenUsersBatch checks a requester against multiple target users in one query.
+// Returns a BlockStatusResult per target user, preserving the input order.
+func (ps *profileService) IsBlockedBetweenUsersBatch(ctx context.Context, requesterID uuid.UUID, targetIDs []uuid.UUID) ([]*BlockStatusResult, error) {
+	rows, err := ps.PostgresQueries.IsBlockedBetweenUsersBatch(ctx, personal_profile_store.IsBlockedBetweenUsersBatchParams{
+		RequesterUserID: requesterID,
+		TargetUserIds:   targetIDs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	results := make([]*BlockStatusResult, len(rows))
+	for i, row := range rows {
+		results[i] = blockStatusFromRow(row.RequesterAdminBlocked, row.TargetAdminBlocked, row.RequesterUserBlockedByTarget, row.TargetUserBlockedByRequester, row.TargetID)
+	}
+	return results, nil
+}
+
+func blockStatusFromRow(requesterAdmin, targetAdmin, requesterBlockedByTarget, targetBlockedByRequester bool, targetID uuid.UUID) *BlockStatusResult {
+	return &BlockStatusResult{
+		IsBlocked:                       requesterAdmin || targetAdmin || requesterBlockedByTarget || targetBlockedByRequester,
+		IsRequesterAdminBlocked:         requesterAdmin,
+		IsTargetAdminBlocked:            targetAdmin,
+		IsRequesterUserBlockedByTarget:  requesterBlockedByTarget,
+		IsTargetUserBlockedByRequester:  targetBlockedByRequester,
+		TargetID:                        targetID,
+	}
+}
+
 // GetUserCoreProfile fetches core profile information
 func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*UserCoreProfile, error) {
 	u, err := ps.PostgresQueries.GetUserCoreProfile(ctx, userID)

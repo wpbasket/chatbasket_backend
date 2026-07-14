@@ -22,6 +22,8 @@ type personalProfilePersonalContactProvider interface {
 	FindContactableUserByUsername(ctx context.Context, viewerID uuid.UUID, username string) (*personal_profile.ContactLookupResult, error)
 	CreateUserBlock(ctx context.Context, id, blockerID, blockedID uuid.UUID) error
 	IsEitherBlocked(ctx context.Context, user1ID, user2ID uuid.UUID) (int32, error)
+	IsBlockedBetweenUsers(ctx context.Context, requesterID, targetID uuid.UUID) (*personal_profile.BlockStatusResult, error)
+	IsBlockedBetweenUsersBatch(ctx context.Context, requesterID uuid.UUID, targetIDs []uuid.UUID) ([]*personal_profile.BlockStatusResult, error)
 }
 
 // ChatCleanupProvider defines the decoupled method signature for async chat message/file cleanup on user block
@@ -53,6 +55,22 @@ func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool
 
 func (ps *contactService) RegisterChatCleanupProvider(provider ChatCleanupProvider) {
 	ps.chatCleanupProvider = provider
+}
+
+func (ps *contactService) checkBlockStatus(ctx context.Context, requesterID, targetID uuid.UUID) error {
+	status, err := ps.personalProfilePersonalContactProvider.IsBlockedBetweenUsers(ctx, requesterID, targetID)
+	if err != nil {
+		return kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+	if !status.IsBlocked {
+		return nil
+	}
+	return kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", personal_profile.BlockStatusFlags{
+		IsRequesterAdminBlocked:        status.IsRequesterAdminBlocked,
+		IsTargetAdminBlocked:           status.IsTargetAdminBlocked,
+		IsRequesterUserBlockedByTarget: status.IsRequesterUserBlockedByTarget,
+		IsTargetUserBlockedByRequester: status.IsTargetUserBlockedByRequester,
+	})
 }
 
 func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*GetContactsResponse, error) {
@@ -204,6 +222,10 @@ func (ps *contactService) CheckContactExistance(ctx context.Context, payload *Ch
 
 	if !user.Exists {
 		return &CheckContactExistanceResponse{Exists: false}, nil
+	}
+
+	if err := ps.checkBlockStatus(ctx, userId.UuidUserId, user.ID); err != nil {
+		return nil, err
 	}
 
 	existsResp := &CheckContactExistanceResponse{
@@ -450,6 +472,10 @@ func (ps *contactService) AcceptContactRequest(ctx context.Context, payload *Acc
 		return nil, kit.NewError(http.StatusConflict, "conflict", "self_action_not_allowed")
 	}
 
+	if err := ps.checkBlockStatus(ctx, userId.UuidUserId, requesterUUID); err != nil {
+		return nil, err
+	}
+
 	result, err := ps.PostgresQueries.AcceptContactRequest(ctx, personal_contact_store.AcceptContactRequestParams{
 		RequesterUserID: requesterUUID,
 		ReceiverUserID:  userId.UuidUserId,
@@ -482,6 +508,10 @@ func (ps *contactService) RejectContactRequest(ctx context.Context, payload *Rej
 
 	if requesterUUID == userId.UuidUserId {
 		return nil, kit.NewError(http.StatusConflict, "conflict", "self_action_not_allowed")
+	}
+
+	if err := ps.checkBlockStatus(ctx, userId.UuidUserId, requesterUUID); err != nil {
+		return nil, err
 	}
 
 	result, err := ps.PostgresQueries.RejectContactRequest(ctx, personal_contact_store.RejectContactRequestParams{
@@ -538,9 +568,36 @@ func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteCont
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
+	statuses, err := ps.personalProfilePersonalContactProvider.IsBlockedBetweenUsersBatch(ctx, userId.UuidUserId, uniqIDs)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+
+	blockedIDs := make(map[uuid.UUID]struct{}, len(uniqIDs))
+	for _, s := range statuses {
+		if s.IsRequesterAdminBlocked {
+			return nil, kit.NewError(http.StatusForbidden, "forbidden", "self_admin_blocked")
+		}
+		if s.IsRequesterAdminBlocked || s.IsTargetAdminBlocked ||
+			s.IsRequesterUserBlockedByTarget || s.IsTargetUserBlockedByRequester {
+			blockedIDs[s.TargetID] = struct{}{}
+		}
+	}
+
+	if len(blockedIDs) == len(uniqIDs) {
+		return nil, kit.NewError(http.StatusForbidden, "forbidden", "all_contacts_blocked")
+	}
+
+	allowedIDs := make([]uuid.UUID, 0, len(uniqIDs)-len(blockedIDs))
+	for _, id := range uniqIDs {
+		if _, blocked := blockedIDs[id]; !blocked {
+			allowedIDs = append(allowedIDs, id)
+		}
+	}
+
 	removed, err := ps.PostgresQueries.DeleteContact(ctx, personal_contact_store.DeleteContactParams{
 		OwnerUserID:    userId.UuidUserId,
-		ContactUserIds: uniqIDs,
+		ContactUserIds: allowedIDs,
 	})
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -572,6 +629,10 @@ func (ps *contactService) UndoContactRequest(ctx context.Context, payload *UndoC
 
 	if receiverUUID == userId.UuidUserId {
 		return nil, kit.NewError(http.StatusConflict, "conflict", "self_action_not_allowed")
+	}
+
+	if err := ps.checkBlockStatus(ctx, userId.UuidUserId, receiverUUID); err != nil {
+		return nil, err
 	}
 
 	result, err := ps.PostgresQueries.UndoContactRequest(ctx, personal_contact_store.UndoContactRequestParams{
@@ -709,6 +770,10 @@ func (ps *contactService) UpdateContactNickname(ctx context.Context, payload *Up
 		return nil, kit.NewError(http.StatusConflict, "conflict", "self_action_not_allowed")
 	}
 
+	if err := ps.checkBlockStatus(ctx, userId.UuidUserId, contactUUID); err != nil {
+		return nil, err
+	}
+
 	var nickname *string
 	if payload.Nickname != nil {
 		trimmed := strings.TrimSpace(*payload.Nickname)
@@ -757,6 +822,10 @@ func (ps *contactService) RemoveContactNickname(ctx context.Context, payload *Re
 
 	if contactUUID == userId.UuidUserId {
 		return nil, kit.NewError(http.StatusConflict, "conflict", "self_action_not_allowed")
+	}
+
+	if err := ps.checkBlockStatus(ctx, userId.UuidUserId, contactUUID); err != nil {
+		return nil, err
 	}
 
 	_, err = ps.PostgresQueries.UpdateContactNickname(ctx, personal_contact_store.UpdateContactNicknameParams{

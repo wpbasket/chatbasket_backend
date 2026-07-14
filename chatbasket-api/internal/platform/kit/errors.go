@@ -20,7 +20,9 @@ type ProcessedError interface {
 }
 
 // DetailedProcessedError extends ProcessedError with structured details.
-// Used for errors that need to return additional data to the client (e.g., StaleKeysError).
+// Used for errors that need to return additional data to the client (e.g., a
+// chat keys-update error). The global error handler calls Details() to include
+// the value in the JSON response's "details" field.
 type DetailedProcessedError interface {
 	ProcessedError
 	Details() interface{} // Structured data included in the error response
@@ -50,11 +52,13 @@ type processedError struct {
 	code    int
 	errType string
 	message string
+	details interface{}
 }
 
-func (e *processedError) Error() string { return e.message }
-func (e *processedError) Status() int   { return e.code }
-func (e *processedError) Kind() string  { return e.errType }
+func (e *processedError) Error() string        { return e.message }
+func (e *processedError) Status() int          { return e.code }
+func (e *processedError) Kind() string         { return e.errType }
+func (e *processedError) Details() interface{} { return e.details }
 
 // NewError creates a new "Smart Processed Error" that implements kit.ProcessedError.
 func NewError(code int, errType, message string) error {
@@ -62,6 +66,19 @@ func NewError(code int, errType, message string) error {
 		code:    code,
 		errType: errType,
 		message: message,
+	}
+}
+
+// NewErrorWithDetails creates a ProcessedError that also implements
+// DetailedProcessedError. The details value is included in the JSON
+// response by the global error handler. Use this whenever the frontend
+// needs structured data about the error beyond the message.
+func NewErrorWithDetails(code int, errType, message string, details interface{}) error {
+	return &processedError{
+		code:    code,
+		errType: errType,
+		message: message,
+		details: details,
 	}
 }
 

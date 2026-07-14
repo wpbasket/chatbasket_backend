@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
@@ -322,7 +323,7 @@ func (s *chatService) checkRevisionStaleness(ctx context.Context, senderID kit.U
 		details.RecipientActiveKeys = recipientKeys
 		log.Printf("[E2EE] ⚠️ Recipient keys revision MISMATCH for user %s — client used %d, DB has %d", recipientID, recipientKeysRevision, recipientActualRevision)
 	}
-	return NewStaleKeysError(details)
+	return kit.NewErrorWithDetails(http.StatusConflict, "keys_stale", fmt.Sprintf("keys_revision is stale (side: %s)", side), details)
 }
 
 func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams) (*personal_chat_store.Message, error) {

@@ -35,6 +35,10 @@ type Querier interface {
 	GetUserCoreProfile(ctx context.Context, id uuid.UUID) (GetUserCoreProfileRow, error)
 	// Returns full user record along with its profile avatar file_id
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
+	// Returns block status flags between two users as individual boolean columns.
+	IsBlockedBetweenUsers(ctx context.Context, arg IsBlockedBetweenUsersParams) (IsBlockedBetweenUsersRow, error)
+	// Returns block status flags per target user for a requester and target user list.
+	IsBlockedBetweenUsersBatch(ctx context.Context, arg IsBlockedBetweenUsersBatchParams) ([]IsBlockedBetweenUsersBatchRow, error)
 	// Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
 	IsEitherBlocked(ctx context.Context, arg IsEitherBlockedParams) (int32, error)
 	// Returns true if the user is admin-blocked
