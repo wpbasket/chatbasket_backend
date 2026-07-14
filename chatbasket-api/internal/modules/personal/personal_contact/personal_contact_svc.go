@@ -585,6 +585,21 @@ func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteCont
 	}
 
 	if len(blockedIDs) == len(uniqIDs) {
+		if len(uniqIDs) == 1 {
+			var singleStatus personal_profile.BlockStatusFlags
+			for _, s := range statuses {
+				if s.TargetID == uniqIDs[0] {
+					singleStatus = personal_profile.BlockStatusFlags{
+						IsRequesterAdminBlocked:        s.IsRequesterAdminBlocked,
+						IsTargetAdminBlocked:           s.IsTargetAdminBlocked,
+						IsRequesterUserBlockedByTarget: s.IsRequesterUserBlockedByTarget,
+						IsTargetUserBlockedByRequester: s.IsTargetUserBlockedByRequester,
+					}
+					break
+				}
+			}
+			return nil, kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", singleStatus)
+		}
 		return nil, kit.NewError(http.StatusForbidden, "forbidden", "all_contacts_blocked")
 	}
 

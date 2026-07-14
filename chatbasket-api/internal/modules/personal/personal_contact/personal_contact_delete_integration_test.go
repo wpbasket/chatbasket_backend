@@ -259,3 +259,35 @@ func TestDeleteContact_Integration_DeduplicatesBeforeBlockCheck(t *testing.T) {
 	assert.True(t, res.Status)
 	assert.Equal(t, 0, countContacts(t, pool, owner, normal))
 }
+
+func TestDeleteContact_Integration_SingleBlockedDetail(t *testing.T) {
+	pool, contactSvc := setupContactDeleteIntegrationDB(t)
+	ctx := context.Background()
+
+	owner := createContactTestUser(t, pool)
+	blocked := createContactTestUser(t, pool)
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", owner) })
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", blocked) })
+
+	addContact(t, pool, owner, blocked)
+
+	// Block the user
+	_, err := pool.Exec(ctx,
+		"INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id) VALUES ($1, $2, $3)",
+		uuid.New(), owner, blocked)
+	require.NoError(t, err)
+
+	_, err = contactSvc.DeleteContact(ctx, &DeleteContactPayload{ContactUserId: []string{blocked.String()}}, kit.UserId{UuidUserId: owner})
+	require.Error(t, err)
+
+	var detailed kit.DetailedProcessedError
+	require.True(t, errors.As(err, &detailed))
+	assert.Equal(t, http.StatusForbidden, detailed.Status())
+	assert.Equal(t, "blocked", detailed.Error())
+
+	flags, ok := detailed.Details().(personal_profile.BlockStatusFlags)
+	require.True(t, ok, "details should be BlockStatusFlags")
+	assert.True(t, flags.IsTargetUserBlockedByRequester)
+	assert.False(t, flags.IsRequesterUserBlockedByTarget)
+}
+
