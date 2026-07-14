@@ -247,6 +247,12 @@ func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChat
 		otherDeliveredAt = kit.DerefTime(chat.P1LastDeliveredAt)
 	}
 	contactProfile, _ := s.ProfileProvider.GetContactableProfilesForViewer(ctx, userID.UuidUserId, []uuid.UUID{recipientID})
+	// Privacy exclusion: if the contactable profile lookup omits the user
+	// (admin-blocked / private profile / user-blocked either way), the map
+	// lookup below misses and the empty initials stand. The wire shape the
+	// frontend relies on is name/username/profile_type as `""` and
+	// bio/avatar_url/avatar_file_id as `null` — see
+	// profileService.GetContactableProfilesForViewer for the contract.
 	otherName := ""
 	otherUsername := ""
 	var otherBio *string
@@ -640,6 +646,13 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 		} else {
 			otherUserID = chat.Participant1ID
 		}
+		// Privacy exclusion: if the contactable profile lookup omitted this
+		// user (admin-blocked / private profile / user-blocked either way),
+		// the map lookup below misses and the empty initials stand. The
+		// wire shape — name/username/profile_type as `""` and
+		// bio/avatar_url/avatar_file_id as `null` — is the privacy
+		// contract the frontend relies on; see
+		// profileService.GetContactableProfilesForViewer.
 		otherName := ""
 		otherUsername := ""
 		var otherBio *string

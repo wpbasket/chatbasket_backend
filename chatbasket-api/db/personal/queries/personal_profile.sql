@@ -97,7 +97,35 @@ WHERE id = $1;
 
 
 -- name: GetContactableProfilesForViewer :many
--- GetContactableProfilesForViewer fetches profiles for contact enrichment with privacy filtering.
+-- GetContactableProfilesForViewer fetches profiles for contact enrichment with
+-- privacy filtering. The returned rows are used by the chat list, contact list,
+-- contact requests, and other surfaces to populate the "other user" identity
+-- block (name, username, bio, profile_type, avatar trio, keys revision).
+--
+-- Privacy exclusion is binary per user: a user is either IN the result set
+-- (all six identity fields returned) or OUT of it (no row at all, the
+-- caller treats them as missing). An excluded user means the wire payload
+-- the caller builds will have name/username/profile_type as `""` and
+-- bio/avatar_url/avatar_file_id as `null`. The frontend
+-- (upsertFromServer in $userProfilesState) treats these wire encodings
+-- differently on purpose:
+--   - `""` on name/username is "no data this round" (frontend preserves the
+--     owner's prior-known identity so the chat list stays identifiable).
+--   - `""` on profile_type IS authoritative clear (frontend would otherwise
+--     render a misleading "Public" badge on the user profile screen).
+--   - `null` on bio/avatar_url/avatar_file_id IS authoritative clear.
+--   - Omitted keys preserve the prior value (partial-payload case).
+-- This split is what lets the chat list keep showing a prior-known name
+-- while the user profile screen shows no stale profile state.
+--
+-- The WHERE clause is the privacy contract. Each condition excludes a
+-- different privacy-exclusion case; the caller does not need to know which
+-- one fired, the wire shape is identical for all of them:
+--   - `u.is_admin_blocked IS FALSE`           : admin removed this user.
+--   - `u.profile_type IN ('public', 'personal')` : the user switched to a
+--                                                  private profile.
+--   - `NOT EXISTS (... user_blocks ...)`      : either side user-blocked
+--                                                  the other.
 SELECT
     u.id,
     u.name,
@@ -144,7 +172,12 @@ WHERE
     AND is_admin_blocked IS NOT TRUE;
 
 -- name: GetContactableUserIDs :many
--- Checks which target user IDs are contactable for a viewer (not blocked, not admin-blocked).
+-- Returns just the subset of target_user_ids that pass the contactable
+-- filter. Same exclusion contract as GetContactableProfilesForViewer
+-- (admin-blocked / private profile / user-blocked either way), but
+-- returns only the IDs — callers that don't need the full profile
+-- (e.g. "is this user allowed to send me a message?") use this lighter
+-- query instead of fetching the full row.
 SELECT u.id
 FROM users u
 WHERE

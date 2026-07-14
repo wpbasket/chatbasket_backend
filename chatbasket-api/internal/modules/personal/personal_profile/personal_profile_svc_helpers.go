@@ -224,8 +224,29 @@ func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UU
 	}, nil
 }
 
-// GetContactableProfilesForViewer fetches profiles for contact enrichment with privacy filtering,
-// excluding users who have switched to a private profile type.
+// GetContactableProfilesForViewer fetches profiles for contact enrichment with
+// privacy filtering. The returned map only contains users that pass every
+// privacy-exclusion check (not admin-blocked, public/personal profile type,
+// not user-blocked in either direction). Users that fail any check are
+// omitted from the map entirely — the wire payload the caller builds for
+// them will have name/username/profile_type as `""` and
+// bio/avatar_url/avatar_file_id as `null`.
+//
+// This binary per-user exclusion is the wire contract. The frontend
+// ($userProfilesState.upsertFromServer) interprets the empty values
+// differently per field:
+//   - name/username `""` is "no data" — frontend preserves the owner's
+//     prior-known identity so the chat list stays identifiable across
+//     multiple excluded chats.
+//   - profileType `""` is authoritative clear — frontend would otherwise
+//     render a misleading "Public" badge on the user profile screen.
+//   - bio/avatar_url/avatar_file_id `null` is authoritative clear — the
+//     PrivacyAvatar resolver nulls the trio so a stale cached photo of
+//     a privacy-excluded user can't leak.
+//
+// Avatar visibility within the returned rows is gated further by
+// ShouldExposeAvatar (per-user and global restrictions) — the row may
+// be returned with name/username but no avatar URL/file_id.
 func (ps *profileService) GetContactableProfilesForViewer(
 	ctx context.Context,
 	viewerID uuid.UUID,
