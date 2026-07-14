@@ -211,6 +211,7 @@ END)::INT;
 SELECT
     (SELECT u.is_admin_blocked FROM users u WHERE u.id = sqlc.arg(requester_user_id)) AS requester_admin_blocked,
     (SELECT u.is_admin_blocked FROM users u WHERE u.id = sqlc.arg(target_user_id)) AS target_admin_blocked,
+    (COALESCE((SELECT u.profile_type FROM users u WHERE u.id = sqlc.arg(target_user_id)), '') = 'private') AS is_target_profile_private,
     EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = sqlc.arg(target_user_id) AND ub.blocked_user_id = sqlc.arg(requester_user_id)) AS requester_user_blocked_by_target,
     EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = sqlc.arg(requester_user_id) AND ub.blocked_user_id = sqlc.arg(target_user_id)) AS target_user_blocked_by_requester;
 
@@ -220,6 +221,7 @@ SELECT
     t.target_id::uuid AS target_id,
     (SELECT u.is_admin_blocked FROM users u WHERE u.id = sqlc.arg(requester_user_id)) AS requester_admin_blocked,
     COALESCE(u_target.is_admin_blocked, FALSE) AS target_admin_blocked,
+    (COALESCE(u_target.profile_type, '') = 'private') AS is_target_profile_private,
     EXISTS (
         SELECT 1 FROM user_blocks ub
         WHERE ub.blocker_user_id = t.target_id

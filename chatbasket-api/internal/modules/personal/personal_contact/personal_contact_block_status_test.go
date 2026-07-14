@@ -19,6 +19,7 @@ type blockStatusProfileProvider struct {
 	targetAdmin                  bool
 	requesterUserBlockedByTarget bool
 	targetUserBlockedByRequester bool
+	targetProfilePrivate         bool
 	targetID                     uuid.UUID
 	batchCalls                   int
 }
@@ -49,11 +50,12 @@ func (p *blockStatusProfileProvider) IsEitherBlocked(context.Context, uuid.UUID,
 
 func (p *blockStatusProfileProvider) IsBlockedBetweenUsers(context.Context, uuid.UUID, uuid.UUID) (*personal_profile.BlockStatusResult, error) {
 	return &personal_profile.BlockStatusResult{
-		IsBlocked:                       p.requesterAdmin || p.targetAdmin || p.requesterUserBlockedByTarget || p.targetUserBlockedByRequester,
+		IsBlocked:                       p.requesterAdmin || p.targetAdmin || p.requesterUserBlockedByTarget || p.targetUserBlockedByRequester || p.targetProfilePrivate,
 		IsRequesterAdminBlocked:         p.requesterAdmin,
 		IsTargetAdminBlocked:            p.targetAdmin,
 		IsRequesterUserBlockedByTarget:  p.requesterUserBlockedByTarget,
 		IsTargetUserBlockedByRequester:  p.targetUserBlockedByRequester,
+		IsTargetProfilePrivate:         p.targetProfilePrivate,
 	}, nil
 }
 
@@ -62,11 +64,12 @@ func (p *blockStatusProfileProvider) IsBlockedBetweenUsersBatch(_ context.Contex
 	results := make([]*personal_profile.BlockStatusResult, len(targetIDs))
 	for i, id := range targetIDs {
 		results[i] = &personal_profile.BlockStatusResult{
-			IsBlocked:                       p.requesterAdmin || p.targetAdmin || p.requesterUserBlockedByTarget || p.targetUserBlockedByRequester,
+			IsBlocked:                       p.requesterAdmin || p.targetAdmin || p.requesterUserBlockedByTarget || p.targetUserBlockedByRequester || p.targetProfilePrivate,
 			IsRequesterAdminBlocked:         p.requesterAdmin,
 			IsTargetAdminBlocked:            p.targetAdmin,
 			IsRequesterUserBlockedByTarget:  p.requesterUserBlockedByTarget,
 			IsTargetUserBlockedByRequester:  p.targetUserBlockedByRequester,
+			IsTargetProfilePrivate:         p.targetProfilePrivate,
 			TargetID:                        id,
 		}
 	}
@@ -79,6 +82,7 @@ func TestNewErrorWithDetails_BlockStatus(t *testing.T) {
 		IsTargetAdminBlocked:           true,
 		IsRequesterUserBlockedByTarget: true,
 		IsTargetUserBlockedByRequester: true,
+		IsTargetProfilePrivate:         true,
 	}
 	err := kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", flags)
 	require.Error(t, err)

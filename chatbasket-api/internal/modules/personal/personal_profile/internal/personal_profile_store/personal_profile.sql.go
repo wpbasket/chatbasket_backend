@@ -471,6 +471,7 @@ const isBlockedBetweenUsers = `-- name: IsBlockedBetweenUsers :one
 SELECT
     (SELECT u.is_admin_blocked FROM users u WHERE u.id = $1) AS requester_admin_blocked,
     (SELECT u.is_admin_blocked FROM users u WHERE u.id = $2) AS target_admin_blocked,
+    (COALESCE((SELECT u.profile_type FROM users u WHERE u.id = $2), '') = 'private') AS is_target_profile_private,
     EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = $2 AND ub.blocked_user_id = $1) AS requester_user_blocked_by_target,
     EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = $1 AND ub.blocked_user_id = $2) AS target_user_blocked_by_requester
 `
@@ -483,6 +484,7 @@ type IsBlockedBetweenUsersParams struct {
 type IsBlockedBetweenUsersRow struct {
 	RequesterAdminBlocked        bool `json:"requester_admin_blocked"`
 	TargetAdminBlocked           bool `json:"target_admin_blocked"`
+	IsTargetProfilePrivate       bool `json:"is_target_profile_private"`
 	RequesterUserBlockedByTarget bool `json:"requester_user_blocked_by_target"`
 	TargetUserBlockedByRequester bool `json:"target_user_blocked_by_requester"`
 }
@@ -494,6 +496,7 @@ func (q *Queries) IsBlockedBetweenUsers(ctx context.Context, arg IsBlockedBetwee
 	err := row.Scan(
 		&i.RequesterAdminBlocked,
 		&i.TargetAdminBlocked,
+		&i.IsTargetProfilePrivate,
 		&i.RequesterUserBlockedByTarget,
 		&i.TargetUserBlockedByRequester,
 	)
@@ -505,6 +508,7 @@ SELECT
     t.target_id::uuid AS target_id,
     (SELECT u.is_admin_blocked FROM users u WHERE u.id = $1) AS requester_admin_blocked,
     COALESCE(u_target.is_admin_blocked, FALSE) AS target_admin_blocked,
+    (COALESCE(u_target.profile_type, '') = 'private') AS is_target_profile_private,
     EXISTS (
         SELECT 1 FROM user_blocks ub
         WHERE ub.blocker_user_id = t.target_id
@@ -528,6 +532,7 @@ type IsBlockedBetweenUsersBatchRow struct {
 	TargetID                     uuid.UUID `json:"target_id"`
 	RequesterAdminBlocked        bool      `json:"requester_admin_blocked"`
 	TargetAdminBlocked           bool      `json:"target_admin_blocked"`
+	IsTargetProfilePrivate       bool      `json:"is_target_profile_private"`
 	RequesterUserBlockedByTarget bool      `json:"requester_user_blocked_by_target"`
 	TargetUserBlockedByRequester bool      `json:"target_user_blocked_by_requester"`
 }
@@ -546,6 +551,7 @@ func (q *Queries) IsBlockedBetweenUsersBatch(ctx context.Context, arg IsBlockedB
 			&i.TargetID,
 			&i.RequesterAdminBlocked,
 			&i.TargetAdminBlocked,
+			&i.IsTargetProfilePrivate,
 			&i.RequesterUserBlockedByTarget,
 			&i.TargetUserBlockedByRequester,
 		); err != nil {

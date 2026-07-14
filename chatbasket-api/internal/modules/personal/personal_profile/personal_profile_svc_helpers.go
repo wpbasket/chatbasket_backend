@@ -180,7 +180,7 @@ func (ps *profileService) IsBlockedBetweenUsers(ctx context.Context, requesterID
 	if err != nil {
 		return nil, err
 	}
-	return blockStatusFromRow(row.RequesterAdminBlocked, row.TargetAdminBlocked, row.RequesterUserBlockedByTarget, row.TargetUserBlockedByRequester, uuid.Nil), nil
+	return blockStatusFromRow(row.RequesterAdminBlocked, row.TargetAdminBlocked, row.RequesterUserBlockedByTarget, row.TargetUserBlockedByRequester, row.IsTargetProfilePrivate, uuid.Nil), nil
 }
 
 // IsBlockedBetweenUsersBatch checks a requester against multiple target users in one query.
@@ -195,18 +195,19 @@ func (ps *profileService) IsBlockedBetweenUsersBatch(ctx context.Context, reques
 	}
 	results := make([]*BlockStatusResult, len(rows))
 	for i, row := range rows {
-		results[i] = blockStatusFromRow(row.RequesterAdminBlocked, row.TargetAdminBlocked, row.RequesterUserBlockedByTarget, row.TargetUserBlockedByRequester, row.TargetID)
+		results[i] = blockStatusFromRow(row.RequesterAdminBlocked, row.TargetAdminBlocked, row.RequesterUserBlockedByTarget, row.TargetUserBlockedByRequester, row.IsTargetProfilePrivate, row.TargetID)
 	}
 	return results, nil
 }
 
-func blockStatusFromRow(requesterAdmin, targetAdmin, requesterBlockedByTarget, targetBlockedByRequester bool, targetID uuid.UUID) *BlockStatusResult {
+func blockStatusFromRow(requesterAdmin, targetAdmin, requesterBlockedByTarget, targetBlockedByRequester bool, targetProfilePrivate bool, targetID uuid.UUID) *BlockStatusResult {
 	return &BlockStatusResult{
-		IsBlocked:                       requesterAdmin || targetAdmin || requesterBlockedByTarget || targetBlockedByRequester,
+		IsBlocked:                       requesterAdmin || targetAdmin || requesterBlockedByTarget || targetBlockedByRequester || targetProfilePrivate,
 		IsRequesterAdminBlocked:         requesterAdmin,
 		IsTargetAdminBlocked:            targetAdmin,
 		IsRequesterUserBlockedByTarget:  requesterBlockedByTarget,
 		IsTargetUserBlockedByRequester:  targetBlockedByRequester,
+		IsTargetProfilePrivate:         targetProfilePrivate,
 		TargetID:                        targetID,
 	}
 }

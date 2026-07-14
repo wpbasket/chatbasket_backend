@@ -70,6 +70,7 @@ func (ps *contactService) checkBlockStatus(ctx context.Context, requesterID, tar
 		IsTargetAdminBlocked:           status.IsTargetAdminBlocked,
 		IsRequesterUserBlockedByTarget: status.IsRequesterUserBlockedByTarget,
 		IsTargetUserBlockedByRequester: status.IsTargetUserBlockedByRequester,
+		IsTargetProfilePrivate:         status.IsTargetProfilePrivate,
 	})
 }
 
@@ -578,8 +579,7 @@ func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteCont
 		if s.IsRequesterAdminBlocked {
 			return nil, kit.NewError(http.StatusForbidden, "forbidden", "self_admin_blocked")
 		}
-		if s.IsRequesterAdminBlocked || s.IsTargetAdminBlocked ||
-			s.IsRequesterUserBlockedByTarget || s.IsTargetUserBlockedByRequester {
+		if s.IsBlocked {
 			blockedIDs[s.TargetID] = struct{}{}
 		}
 	}
@@ -594,6 +594,7 @@ func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteCont
 						IsTargetAdminBlocked:           s.IsTargetAdminBlocked,
 						IsRequesterUserBlockedByTarget: s.IsRequesterUserBlockedByTarget,
 						IsTargetUserBlockedByRequester: s.IsTargetUserBlockedByRequester,
+						IsTargetProfilePrivate:         s.IsTargetProfilePrivate,
 					}
 					break
 				}

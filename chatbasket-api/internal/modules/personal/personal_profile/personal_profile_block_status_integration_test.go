@@ -367,10 +367,60 @@ func TestNewErrorWithDetails_BlockStatus_Integration_RoundTrip(t *testing.T) {
 		IsTargetAdminBlocked:           status.IsTargetAdminBlocked,
 		IsRequesterUserBlockedByTarget: status.IsRequesterUserBlockedByTarget,
 		IsTargetUserBlockedByRequester: status.IsTargetUserBlockedByRequester,
+		IsTargetProfilePrivate:         status.IsTargetProfilePrivate,
 	})
 	require.Error(t, err)
 	var processed kit.ProcessedError
 	require.True(t, errors.As(err, &processed))
 	assert.Equal(t, http.StatusForbidden, processed.Status())
 	assert.Equal(t, "blocked", processed.Error())
+}
+
+func TestIsBlockedBetweenUsers_Integration_TargetPrivate(t *testing.T) {
+	pool, _, profileSvc := setupProfileIntegrationDB(t)
+	ctx := context.Background()
+
+	requester, _ := createTestUserWithProfile(t, pool)
+	target, _ := createTestUserWithProfile(t, pool)
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", requester.UuidUserId) })
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", target.UuidUserId) })
+
+	// Update target's profile type to 'private'
+	_, err := pool.Exec(ctx, "UPDATE users SET profile_type = 'private' WHERE id = $1", target.UuidUserId)
+	require.NoError(t, err)
+
+	status, err := profileSvc.IsBlockedBetweenUsers(ctx, requester.UuidUserId, target.UuidUserId)
+	require.NoError(t, err)
+	assert.True(t, status.IsBlocked)
+	assert.True(t, status.IsTargetProfilePrivate)
+	assert.False(t, status.IsRequesterAdminBlocked)
+	assert.False(t, status.IsTargetAdminBlocked)
+	assert.False(t, status.IsRequesterUserBlockedByTarget)
+	assert.False(t, status.IsTargetUserBlockedByRequester)
+}
+
+func TestIsBlockedBetweenUsersBatch_Integration_TargetPrivate(t *testing.T) {
+	pool, _, profileSvc := setupProfileIntegrationDB(t)
+	ctx := context.Background()
+
+	requester, _ := createTestUserWithProfile(t, pool)
+	target, _ := createTestUserWithProfile(t, pool)
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", requester.UuidUserId) })
+	t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", target.UuidUserId) })
+
+	// Update target's profile type to 'private'
+	_, err := pool.Exec(ctx, "UPDATE users SET profile_type = 'private' WHERE id = $1", target.UuidUserId)
+	require.NoError(t, err)
+
+	statuses, err := profileSvc.IsBlockedBetweenUsersBatch(ctx, requester.UuidUserId, []uuid.UUID{target.UuidUserId})
+	require.NoError(t, err)
+	require.Len(t, statuses, 1)
+
+	status := statuses[0]
+	assert.True(t, status.IsBlocked)
+	assert.True(t, status.IsTargetProfilePrivate)
+	assert.False(t, status.IsRequesterAdminBlocked)
+	assert.False(t, status.IsTargetAdminBlocked)
+	assert.False(t, status.IsRequesterUserBlockedByTarget)
+	assert.False(t, status.IsTargetUserBlockedByRequester)
 }

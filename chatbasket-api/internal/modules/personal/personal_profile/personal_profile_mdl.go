@@ -17,22 +17,23 @@ type UserCoreProfile struct {
 // block exists between two users and which conditions are true. TargetID is
 // populated for batch query results.
 type BlockStatusResult struct {
-	IsBlocked                    bool      `json:"is_blocked"`
-	IsRequesterAdminBlocked      bool      `json:"is_requester_admin_blocked"`
-	IsTargetAdminBlocked         bool      `json:"is_target_admin_blocked"`
-	IsRequesterUserBlockedByTarget bool    `json:"is_requester_user_blocked_by_target"`
-	IsTargetUserBlockedByRequester bool    `json:"is_target_user_blocked_by_requester"`
-	TargetID                     uuid.UUID `json:"target_id,omitempty"`
+	IsBlocked                      bool      `json:"is_blocked"`
+	IsRequesterAdminBlocked        bool      `json:"is_requester_admin_blocked"`
+	IsTargetAdminBlocked           bool      `json:"is_target_admin_blocked"`
+	IsRequesterUserBlockedByTarget bool      `json:"is_requester_user_blocked_by_target"`
+	IsTargetUserBlockedByRequester bool      `json:"is_target_user_blocked_by_requester"`
+	IsTargetProfilePrivate         bool      `json:"is_target_profile_private"`
+	TargetID                       uuid.UUID `json:"target_id,omitempty"`
 }
 
-// BlockStatusFlags mirrors the four boolean columns returned by the profile
-// module's block-status queries. It is sent to the frontend inside the
+// BlockStatusFlags mirrors the block-status queries. It is sent to the frontend inside the
 // ApiError.Details field so clients can branch on the exact condition.
 type BlockStatusFlags struct {
 	IsRequesterAdminBlocked        bool `json:"is_requester_admin_blocked"`
 	IsTargetAdminBlocked           bool `json:"is_target_admin_blocked"`
 	IsRequesterUserBlockedByTarget bool `json:"is_requester_user_blocked_by_target"`
 	IsTargetUserBlockedByRequester bool `json:"is_target_user_blocked_by_requester"`
+	IsTargetProfilePrivate         bool `json:"is_target_profile_private"`
 }
 
 type ContactProfileView struct {
