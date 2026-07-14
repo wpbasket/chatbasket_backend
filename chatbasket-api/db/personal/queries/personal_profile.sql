@@ -156,7 +156,7 @@ WHERE
         sqlc.arg (target_user_ids)::uuid []
     )
     AND u.is_admin_blocked IS FALSE
-    AND u.profile_type IN ('public', 'personal')
+    AND u.profile_type != 'private'
     AND NOT EXISTS (
         SELECT 1 FROM user_blocks ub
         WHERE (ub.blocker_user_id = sqlc.arg (viewer_user_id) AND ub.blocked_user_id = u.id)
