@@ -99,6 +99,13 @@ func main() {
 			s.ReadTimeout = 600 * time.Second
 			s.WriteTimeout = 600 * time.Second
 			s.IdleTimeout = 120 * time.Second
+
+			// Enable native HTTP/2 cleartext (h2c) support directly in the standard library (Go 1.24+)
+			protocols := new(http.Protocols)
+			protocols.SetHTTP1(true)
+			protocols.SetUnencryptedHTTP2(true)
+			s.Protocols = protocols
+
 			return nil
 		},
 	}

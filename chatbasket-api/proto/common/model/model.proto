@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package rpc_common_model.v1;
+
+option go_package = "chatbasket-api/gen/proto/common/model;rpc_common_modelv1";
+
+message StatusOkay {
+  bool status = 1;
+  string message = 2;
+}

@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package rpc_personal_profile.v1;
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/model/model.proto";
+
+option go_package = "chatbasket-api/gen/proto/personal/personal_profile;rpc_personal_profilev1";
+
+
+message PrivateUser {
+  string id = 1;
+  string username = 2;
+  string name = 3;
+  string email = 4;
+  optional string bio = 5;
+  optional string avatar_url = 6;
+  optional string avatar_file_id = 7;
+  string profile_type = 8;
+  int32 keys_revision = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message CreateUserProfileRequest {
+  string name = 1;
+  string profile_type = 2;
+}
+
+message CreateUserProfileResponse {
+  PrivateUser user = 1;
+}
+
+message GetProfileRequest {}
+
+message GetProfileResponse {
+  PrivateUser user = 1;
+}
+
+message UpdateUserProfileRequest {
+  optional string name = 1;
+  optional string bio = 2;
+  optional string profile_type = 3;
+}
+
+message PresignAvatarRequest {}
+
+message PresignAvatarResponse {
+  string file_id = 1;
+  string presigned_url = 2;
+}
+
+message ConfirmAvatarRequest {
+  string file_id = 1;
+}
+
+message RemoveProfilePictureRequest {}
+
+message UploadE2EEPublicKeyRequest {
+  string e2ee_public_key = 1;
+}
+
+message UploadE2EEPublicKeyResponse {
+  bool status = 1;
+  string message = 2;
+  int32 keys_revision = 3;
+}
+
+message GetE2EEPublicKeyRequest {
+  string user_id = 1;
+}
+
+message GetE2EEPublicKeyResponse {
+  repeated string e2ee_public_keys = 1;
+  int32 keys_revision = 2;
+}
+
+service ProfileService {
+  rpc CreateUserProfile(CreateUserProfileRequest) returns (CreateUserProfileResponse);
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
+  rpc UpdateUserProfile(UpdateUserProfileRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc PresignAvatar(PresignAvatarRequest) returns (PresignAvatarResponse);
+  rpc ConfirmAvatar(ConfirmAvatarRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc RemoveProfilePicture(RemoveProfilePictureRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc UploadE2EEPublicKey(UploadE2EEPublicKeyRequest) returns (UploadE2EEPublicKeyResponse);
+  rpc GetE2EEPublicKey(GetE2EEPublicKeyRequest) returns (GetE2EEPublicKeyResponse);
+}

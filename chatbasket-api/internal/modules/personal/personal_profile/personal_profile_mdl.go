@@ -4,7 +4,10 @@ import (
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
 	"time"
 
+	rpc_personal_profilev1 "chatbasket-api/gen/proto/personal/personal_profile"
+
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type UserCoreProfile struct {
@@ -71,6 +74,25 @@ type privateUser struct {
 	KeysRevision int32     `json:"keys_revision"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+func toProtoPrivateUser(user *privateUser) *rpc_personal_profilev1.PrivateUser {
+	if user == nil {
+		return nil
+	}
+	return &rpc_personal_profilev1.PrivateUser{
+		Id:           user.Id,
+		Username:     user.Username,
+		Name:         user.Name,
+		Email:        user.Email,
+		Bio:          user.Bio,
+		AvatarUrl:    user.AvatarUrl,
+		AvatarFileId: user.AvatarFileId,
+		ProfileType:  user.ProfileType,
+		KeysRevision: user.KeysRevision,
+		CreatedAt:    timestamppb.New(user.CreatedAt),
+		UpdatedAt:    timestamppb.New(user.UpdatedAt),
+	}
 }
 
 type updateUserProfilePayload struct {

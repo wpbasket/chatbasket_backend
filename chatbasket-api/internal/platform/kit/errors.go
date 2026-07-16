@@ -5,8 +5,13 @@ import (
 	"log/slog"
 	"net/http"
 
+	rpc_common_errorv1 "chatbasket-api/gen/proto/common/error"
+
+	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/labstack/echo/v5"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // --- Fundamental Error Interfaces ---
@@ -177,4 +182,73 @@ func GetPostgresError(err error) *PostgresError {
 		return &PostgresError{Message: pgErr.Message, PgError: pgErr}
 	}
 	return &PostgresError{Message: err.Error(), PgError: nil}
+}
+
+// NewConnectRpcError maps a standard kit.ProcessedError status code to its Connect RPC equivalent code,
+// packages detailed metadata using commonpb.ErrorDetails, and serializes any inner details to JSON.
+func NewConnectRpcError(err error) error {
+	if err == nil {
+		return nil
+	}
+	// Check if the error is already a connect.Error
+	var connectErr *connect.Error
+	if errors.As(err, &connectErr) {
+		return err
+	}
+	// Map kit.ProcessedError status codes to Connect codes
+	var pe ProcessedError
+	if errors.As(err, &pe) {
+		var code connect.Code
+		switch pe.Status() {
+		case http.StatusBadRequest:
+			code = connect.CodeInvalidArgument
+		case http.StatusUnauthorized:
+			code = connect.CodeUnauthenticated
+		case http.StatusForbidden:
+			code = connect.CodePermissionDenied
+		case http.StatusNotFound:
+			code = connect.CodeNotFound
+		case http.StatusConflict:
+			code = connect.CodeAlreadyExists
+		case http.StatusTooManyRequests:
+			code = connect.CodeResourceExhausted
+		case http.StatusRequestTimeout:
+			code = connect.CodeDeadlineExceeded
+		case http.StatusPreconditionFailed:
+			code = connect.CodeFailedPrecondition
+		case http.StatusUnprocessableEntity:
+			code = connect.CodeInvalidArgument
+		case http.StatusNotImplemented:
+			code = connect.CodeUnimplemented
+		case http.StatusServiceUnavailable:
+			code = connect.CodeUnavailable
+		case http.StatusGatewayTimeout:
+			code = connect.CodeDeadlineExceeded
+		default:
+			code = connect.CodeInternal
+		}
+
+		newErr := connect.NewError(code, errors.New(pe.Error()))
+
+		// Build ErrorDetails protobuf payload (type + details only; code and message live in the Connect envelope)
+		detailsPayload := &rpc_common_errorv1.ErrorDetails{
+			Type: pe.Kind(),
+		}
+
+		// Extract and serialize structured details if available
+		if dpe, ok := pe.(DetailedProcessedError); ok && dpe.Details() != nil {
+			if protoMsg, ok := dpe.Details().(proto.Message); ok {
+				if detailsAny, anyErr := anypb.New(protoMsg); anyErr == nil {
+					detailsPayload.Details = detailsAny
+				}
+			}
+		}
+
+		if detailAny, detailErr := connect.NewErrorDetail(detailsPayload); detailErr == nil {
+			newErr.AddDetail(detailAny)
+		}
+
+		return newErr
+	}
+	return connect.NewError(connect.CodeInternal, err)
 }

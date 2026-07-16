@@ -135,7 +135,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 				return kit.NewError(http.StatusForbidden, "unverified_email", "Email must be verified to perform this action")
 			}
 
-			// âœ… Set context for handler access
+			// ✅ Set context for handler access
 			c.Set("uuidUserId", authUser.ID)
 			c.Set("userId", authUser.ID.String())
 			c.Set("sessionId", sessionId)
@@ -144,6 +144,20 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			c.Set("platform", platform)
 			c.Set("email", authUser.Email)
 			c.Set("isPrimary", session.IsCentral)
+
+			// Bridge to Go standard request context for Connect RPC or generic handlers
+			sessionData := kit.SessionData{
+				UserID:           authUser.ID.String(),
+				UUIDUserID:       authUser.ID,
+				SessionID:        sessionId,
+				SessionUUID:      session.ID,
+				Email:            authUser.Email,
+				SessionCreatedAt: session.CreatedAt,
+				Platform:         platform,
+				IsPrimary:        session.IsCentral,
+			}
+			reqCtx := context.WithValue(c.Request().Context(), kit.CtxSessionData, sessionData)
+			c.SetRequest(c.Request().WithContext(reqCtx))
 
 			return next(c)
 		}

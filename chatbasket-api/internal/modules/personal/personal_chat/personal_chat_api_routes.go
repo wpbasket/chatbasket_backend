@@ -42,7 +42,7 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WS
 
 	// History Sync
 	chat.POST("/history-sync/request", handler.RequestHistorySync)
-	chat.POST("/history-sync/upload", handler.UploadHistorySync)
+	chat.POST("/history-sync/upload", handler.UploadHistorySync, middleware.BodyLimit(94371840)) // 90MB limit for database cipher sync
 	chat.GET("/history-sync", handler.DownloadHistorySync)
 
 	// WebSocket

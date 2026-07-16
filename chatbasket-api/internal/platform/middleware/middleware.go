@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -18,32 +19,47 @@ func Register(e *echo.Echo, corsOrigin string) {
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		Level: 5,
 		Skipper: func(c *echo.Context) bool {
-			// Skip Gzip for WebSocket upgrades
-			return c.Request().Header.Get("Upgrade") == "websocket"
+			// Skip Gzip for WebSocket upgrades and Connect/gRPC RPCs (which manage their own compression)
+			ct := c.Request().Header.Get("Content-Type")
+			return c.Request().Header.Get("Upgrade") == "websocket" ||
+				strings.HasPrefix(ct, "application/grpc") ||
+				strings.HasPrefix(ct, "application/connect") ||
+				strings.HasPrefix(ct, "application/proto")
 		},
 	}))
-	e.Use(middleware.BodyLimit(209715200)) // 200MB as int64
+	e.Use(middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
+		LimitBytes: 5242880, // 5MB global limit
+		Skipper: func(c *echo.Context) bool {
+			return c.Path() == "/api/personal/chat/history-sync/upload"
+		},
+	}))
 
 	// Safeguard: Limit logic execution to 30s as per best practices
 	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
 		Timeout: 30 * time.Second,
 		Skipper: func(c *echo.Context) bool {
-			p := c.Path()
-			// Skip timeout for long-lived connections
-			return p == "/api/personal/chat/upload" ||
-				p == "/api/personal/profile/upload-avatar" ||
-				p == "/api/public/profile/upload-avatar" ||
-				c.Request().Header.Get("Upgrade") == "websocket"
+			ct := c.Request().Header.Get("Content-Type")
+			// Skip timeout for WebSockets and Connect/gRPC streams
+			return c.Request().Header.Get("Upgrade") == "websocket" ||
+				strings.HasPrefix(ct, "application/connect") ||
+				strings.HasPrefix(ct, "application/grpc")
 		},
 	}))
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{corsOrigin},
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "x-api-key"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "x-api-key", "Connect-Protocol-Version", "Connect-Timeout-Ms", "Grpc-Timeout", "X-Grpc-Web", "X-User-Agent"},
+		ExposeHeaders:    []string{"Connect-Content-Encoding", "Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
 		AllowCredentials: true,
+		MaxAge:           86400, // Cache preflight OPTIONS requests for 24 hours to reduce latency
 	}))
 
 	// Rate limit: 100 requests per second per IP
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(100)))
+}
+
+// BodyLimit returns a middleware that limits the request body size.
+func BodyLimit(limitBytes int64) echo.MiddlewareFunc {
+	return middleware.BodyLimit(limitBytes)
 }

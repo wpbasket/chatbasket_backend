@@ -4,7 +4,10 @@ import (
 	"chatbasket-api/internal/platform/middleware"
 	"chatbasket-api/internal/platform/websocket"
 
+	rpc_personal_profilev1connect "chatbasket-api/gen/proto/personal/personal_profile/rpc_personal_profilev1connect"
+
 	"github.com/labstack/echo/v5"
+	"net/http"
 )
 
 // Register initializes the Profile module dependencies and registers its routes.
@@ -26,4 +29,10 @@ func Register(personalGroup *echo.Group, profileService *profileService, authPro
 	profile.POST("/update-e2ee-key", handler.UploadE2EEPublicKey)
 	profile.GET("/get-e2ee-key", handler.GetE2EEPublicKey)
 
+	// Connect RPC Routes (inherits personalGroup's middleware for REST fallback)
+	connectServer := newProfileConnectServer(profileService)
+	path, connectHandler := rpc_personal_profilev1connect.NewProfileServiceHandler(
+		connectServer,
+	)
+	personalGroup.Any(path+"*", echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)))
 }
