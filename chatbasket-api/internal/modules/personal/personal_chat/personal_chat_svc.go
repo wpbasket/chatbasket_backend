@@ -333,6 +333,15 @@ func (s *chatService) checkRevisionStaleness(ctx context.Context, senderID kit.U
 }
 
 func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams) (*personal_chat_store.Message, error) {
+	// Idempotency check:
+	if s.PostgresQueries != nil && params.MessageID != uuid.Nil {
+		if exists, err := s.PostgresQueries.CheckMessageExists(ctx, params.MessageID); err == nil && exists {
+			log.Printf("[E2EE] SendMessage: IDEMPOTENT RETRY — message %s already exists. Fetching existing message.", params.MessageID)
+			if existingMsg, err := s.PostgresQueries.GetMessageByID(ctx, params.MessageID); err == nil {
+				return &existingMsg, nil
+			}
+		}
+	}
 	eligibility, _, recipientKeysRevision, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
 	if err != nil {
 		return nil, err
@@ -355,10 +364,9 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 	if chatErr != nil {
 		return nil, chatErr
 	}
-	messageID := uuid.New()
 	expiresAt := time.Now().Add(DefaultMessageTTL)
 	message, dbErr := s.PostgresQueries.CreateMessage(ctx, personal_chat_store.CreateMessageParams{
-		ID:                          messageID,
+		ID:                          params.MessageID,
 		ChatID:                      chat.ID,
 		SenderID:                    params.SenderID.UuidUserId,
 		RecipientID:                 params.RecipientID,
@@ -369,7 +377,15 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 		DeliveredToRecipientPrimary: new(bool),
 	})
 	if dbErr != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "message_send_failed", kit.GetPostgresError(dbErr).Message)
+		// Handle PK duplicate key violation (race condition: both WS and REST passed CheckMessageExists)
+		pgErr := kit.GetPostgresError(dbErr)
+		if pgErr.PgError != nil && pgErr.PgError.Code == "23505" {
+			log.Printf("[E2EE] SendMessage: PK CONFLICT (race) — message %s inserted concurrently. Fetching existing.", params.MessageID)
+			if existingMsg, err := s.PostgresQueries.GetMessageByID(ctx, params.MessageID); err == nil {
+				return &existingMsg, nil
+			}
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "message_send_failed", pgErr.Message)
 	}
 	_ = s.PostgresQueries.UpdateChatStatus(ctx, personal_chat_store.UpdateChatStatusParams{
 		ID:                   chat.ID,
@@ -392,6 +408,10 @@ func (s *chatService) getSenderKeysRevision(ctx context.Context, senderID uuid.U
 }
 
 func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessagePayload, userID kit.UserId, isPrimary bool) (*MessageResponse, error) {
+	messageID, err := uuid.Parse(payload.MessageID)
+	if err != nil {
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message id")
+	}
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
@@ -400,6 +420,7 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send message to yourself")
 	}
 	message, sendErr := s.SendMessage(ctx, SendMessageParams{
+		MessageID:             messageID,
 		SenderID:              userID,
 		RecipientID:           recipientID,
 		Content:               payload.Content,

@@ -126,6 +126,7 @@ type PresignChatUploadResponse struct {
 
 // ConfirmChatUploadPayload is the request body for POST /chat/confirm.
 type ConfirmChatUploadPayload struct {
+	MessageID             string `json:"message_id" validate:"required,uuid"`
 	FileID                string `json:"file_id" validate:"required"`
 	RecipientID           string `json:"recipient_id" validate:"required,uuid"`
 	Content               string `json:"content" validate:"required,max=5000"`
@@ -200,6 +201,7 @@ type CreateChatPayload struct {
 }
 
 type SendMessagePayload struct {
+	MessageID             string `json:"message_id" validate:"required,uuid"`
 	RecipientID           string `json:"recipient_id" validate:"required,uuid"`
 	Content               string `json:"content" validate:"required,max=5000"`
 	MessageType           string `json:"message_type" validate:"required,oneof=text image video audio file"`
@@ -290,6 +292,7 @@ type SyncActionPayload struct {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type SendMessageParams struct {
+	MessageID             uuid.UUID
 	SenderID              kit.UserId
 	RecipientID           uuid.UUID
 	Content               string

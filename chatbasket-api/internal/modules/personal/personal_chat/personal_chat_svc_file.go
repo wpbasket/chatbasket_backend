@@ -126,6 +126,16 @@ func (s *chatService) PresignChatUpload(ctx context.Context, params PresignChatU
 // deletes the pending_uploads row, and updates chat status — all in a single
 // transaction. Per spec §6.A.3.
 func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatUploadParams) (*personal_chat_store.Message, error) {
+	// Idempotency check:
+	if s.PostgresQueries != nil && params.MessageID != uuid.Nil {
+		if exists, err := s.PostgresQueries.CheckMessageExists(ctx, params.MessageID); err == nil && exists {
+			log.Printf("[E2EE] ConfirmChatUpload: IDEMPOTENT RETRY — message %s already exists. Fetching existing message.", params.MessageID)
+			if existingMsg, err := s.PostgresQueries.GetMessageByID(ctx, params.MessageID); err == nil {
+				return &existingMsg, nil
+			}
+		}
+	}
+
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to start confirm transaction")
@@ -149,13 +159,12 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 	}
 
 	// 3. Create the message record (in tx)
-	messageID := uuid.New()
 	expiresAt := time.Now().Add(DefaultMessageTTL)
 	fileID := pending.FileID
 	content := params.Content
 
 	message, dbErr := qtx.CreateMessageWithFile(ctx, personal_chat_store.CreateMessageWithFileParams{
-		ID:                          messageID,
+		ID:                          params.MessageID,
 		ChatID:                      chat.ID,
 		SenderID:                    params.SenderID.UuidUserId,
 		RecipientID:                 params.RecipientID,
@@ -175,7 +184,16 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 		DeliveredToRecipientPrimary: new(bool),
 	})
 	if dbErr != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "message_create_failed", kit.GetPostgresError(dbErr).Message)
+		// Handle PK duplicate key violation (race condition: concurrent confirm requests)
+		pgErr := kit.GetPostgresError(dbErr)
+		if pgErr.PgError != nil && pgErr.PgError.Code == "23505" {
+			log.Printf("[E2EE] ConfirmChatUpload: PK CONFLICT (race) — message %s inserted concurrently. Fetching existing.", params.MessageID)
+			tx.Rollback(ctx)
+			if existingMsg, err := s.PostgresQueries.GetMessageByID(ctx, params.MessageID); err == nil {
+				return &existingMsg, nil
+			}
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "message_create_failed", pgErr.Message)
 	}
 
 	// 4. Update chat status (in tx)
@@ -236,6 +254,7 @@ type PresignChatUploadParams struct {
 }
 
 type ConfirmChatUploadParams struct {
+	MessageID             uuid.UUID
 	SenderID              kit.UserId
 	RecipientID           uuid.UUID
 	FileID                string

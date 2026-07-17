@@ -145,6 +145,9 @@ RETURNING
 -- name: GetMessageByID :one
 SELECT * FROM messages WHERE id = $1 LIMIT 1;
 
+-- name: CheckMessageExists :one
+SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1);
+
 -- name: GetPendingMessagesForRecipient :many
 SELECT *
 FROM messages

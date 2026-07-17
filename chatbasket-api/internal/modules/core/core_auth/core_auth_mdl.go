@@ -23,7 +23,7 @@ type SessionResponse struct {
 	IsPrimary         bool   `json:"isPrimary"`
 	PrimaryDeviceName string `json:"primaryDeviceName,omitempty"`
 	PrimaryKey        string `json:"primaryKey"`
-	KeysRevision      int32  `json:"keys_revision"`
+	KeysRevision      int32  `json:"keysRevision"`
 }
 
 type AuthVerificationPayload struct {

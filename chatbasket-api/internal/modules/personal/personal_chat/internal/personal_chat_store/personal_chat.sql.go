@@ -12,6 +12,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const checkMessageExists = `-- name: CheckMessageExists :one
+SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1)
+`
+
+func (q *Queries) CheckMessageExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, checkMessageExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const cleanupOlderFullyAcknowledgedMessages = `-- name: CleanupOlderFullyAcknowledgedMessages :exec
 DELETE FROM messages
 WHERE

@@ -480,6 +480,10 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "Invalid confirm payload")
 	}
+	messageID, err := uuid.Parse(payload.MessageID)
+	if err != nil {
+		return kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message id")
+	}
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
 		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient id")
@@ -488,6 +492,7 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send file to yourself")
 	}
 	message, svcErr := h.Service.ConfirmChatUpload(c.Request().Context(), ConfirmChatUploadParams{
+		MessageID:             messageID,
 		SenderID:              userID,
 		RecipientID:           recipientID,
 		FileID:                payload.FileID,

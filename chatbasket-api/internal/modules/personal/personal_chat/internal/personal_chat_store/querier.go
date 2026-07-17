@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CheckMessageExists(ctx context.Context, id uuid.UUID) (bool, error)
 	// Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
 	// and are older than or equal to a specific timestamp, but ONLY if they are plain text.
 	CleanupOlderFullyAcknowledgedMessages(ctx context.Context, arg CleanupOlderFullyAcknowledgedMessagesParams) error
