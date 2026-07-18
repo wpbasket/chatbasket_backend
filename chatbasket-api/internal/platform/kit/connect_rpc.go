@@ -2,10 +2,9 @@ package kit
 
 import (
 	"context"
-	"errors"
+	"net/http"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/google/uuid"
 )
 
@@ -31,7 +30,7 @@ type SessionData struct {
 func GetConnectRpcUserID(ctx context.Context) (UserId, error) {
 	data, ok := ctx.Value(CtxSessionData).(SessionData)
 	if !ok {
-		return UserId{}, connect.NewError(connect.CodeUnauthenticated, errors.New("user context missing or invalid"))
+		return UserId{}, NewError(http.StatusUnauthorized, "unauthorized", "user context missing or invalid")
 	}
 	return UserId{
 		StringUserId: data.UserID,
@@ -43,7 +42,7 @@ func GetConnectRpcUserID(ctx context.Context) (UserId, error) {
 func GetConnectRpcEmail(ctx context.Context) (string, error) {
 	data, ok := ctx.Value(CtxSessionData).(SessionData)
 	if !ok {
-		return "", connect.NewError(connect.CodeUnauthenticated, errors.New("email context missing or invalid"))
+		return "", NewError(http.StatusUnauthorized, "unauthorized", "email context missing or invalid")
 	}
 	return data.Email, nil
 }
@@ -52,7 +51,7 @@ func GetConnectRpcEmail(ctx context.Context) (string, error) {
 func GetConnectRpcSessionID(ctx context.Context) (string, error) {
 	data, ok := ctx.Value(CtxSessionData).(SessionData)
 	if !ok {
-		return "", connect.NewError(connect.CodeUnauthenticated, errors.New("session ID context missing or invalid"))
+		return "", NewError(http.StatusUnauthorized, "unauthorized", "session ID context missing or invalid")
 	}
 	return data.SessionID, nil
 }
@@ -61,7 +60,7 @@ func GetConnectRpcSessionID(ctx context.Context) (string, error) {
 func GetConnectRpcSessionUUID(ctx context.Context) (uuid.UUID, error) {
 	data, ok := ctx.Value(CtxSessionData).(SessionData)
 	if !ok {
-		return uuid.Nil, connect.NewError(connect.CodeUnauthenticated, errors.New("session UUID context missing or invalid"))
+		return uuid.Nil, NewError(http.StatusUnauthorized, "unauthorized", "session UUID context missing or invalid")
 	}
 	return data.SessionUUID, nil
 }
@@ -70,7 +69,7 @@ func GetConnectRpcSessionUUID(ctx context.Context) (uuid.UUID, error) {
 func GetConnectRpcSessionCreatedAt(ctx context.Context) (time.Time, error) {
 	data, ok := ctx.Value(CtxSessionData).(SessionData)
 	if !ok {
-		return time.Time{}, connect.NewError(connect.CodeUnauthenticated, errors.New("session creation time context missing or invalid"))
+		return time.Time{}, NewError(http.StatusUnauthorized, "unauthorized", "session creation time context missing or invalid")
 	}
 	return data.SessionCreatedAt, nil
 }
@@ -79,16 +78,16 @@ func GetConnectRpcSessionCreatedAt(ctx context.Context) (time.Time, error) {
 func GetConnectRpcPlatform(ctx context.Context) (string, error) {
 	data, ok := ctx.Value(CtxSessionData).(SessionData)
 	if !ok {
-		return "", connect.NewError(connect.CodeUnauthenticated, errors.New("platform context missing or invalid"))
+		return "", NewError(http.StatusUnauthorized, "unauthorized", "platform context missing or invalid")
 	}
 	return data.Platform, nil
 }
 
-// GetConnectRpcIsPrimary helper checks if this session is the primary central device session.
+// GetConnectRpcIsPrimary checks if this session is the primary central device session.
 func GetConnectRpcIsPrimary(ctx context.Context) (bool, error) {
 	data, ok := ctx.Value(CtxSessionData).(SessionData)
 	if !ok {
-		return false, connect.NewError(connect.CodeUnauthenticated, errors.New("primary status context missing or invalid"))
+		return false, NewError(http.StatusUnauthorized, "unauthorized", "primary status context missing or invalid")
 	}
 	return data.IsPrimary, nil
 }

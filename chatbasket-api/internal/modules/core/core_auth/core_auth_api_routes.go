@@ -2,9 +2,13 @@ package core_auth
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"time"
 	"chatbasket-api/internal/platform/middleware"
 	"chatbasket-api/internal/platform/websocket"
+
+	rpc_core_authv1connect "chatbasket-api/gen/proto/core/core_auth/rpc_core_authv1connect"
 
 	"github.com/labstack/echo/v5"
 )
@@ -58,4 +62,30 @@ func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub)
 	settings.POST("/password/confirm", handler.ConfirmPasswordUpdate)
 	settings.POST("/email/request", handler.RequestEmailUpdate)
 	settings.POST("/email/confirm", handler.ConfirmEmailUpdate)
+
+	// Connect RPC Routes
+	connectServer := newAuthConnectServer(authService, hub, qrHub)
+	path, connectHandler := rpc_core_authv1connect.NewAuthServiceHandler(connectServer)
+	
+	group.Any(
+		"/personal"+path+"*",
+		echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)),
+		middleware.AuthSessionMiddlewareWithConfig(middleware.AuthSessionConfig{
+			AuthProvider:    authService,
+			RequireVerified: true,
+			Hub:             hub,
+			Skipper: func(c *echo.Context) bool {
+				p := c.Request().URL.Path
+				return strings.HasSuffix(p, "/Signup") ||
+					strings.HasSuffix(p, "/AccountVerification") ||
+					strings.HasSuffix(p, "/Login") ||
+					strings.HasSuffix(p, "/LoginVerification") ||
+					strings.HasSuffix(p, "/ResendOTP") ||
+					strings.HasSuffix(p, "/ForgotPassword") ||
+					strings.HasSuffix(p, "/VerifyForgotPassword") ||
+					strings.HasSuffix(p, "/QRInitiate") ||
+					strings.HasSuffix(p, "/QRCallback")
+			},
+		}),
+	)
 }

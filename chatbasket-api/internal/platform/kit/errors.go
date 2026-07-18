@@ -184,9 +184,9 @@ func GetPostgresError(err error) *PostgresError {
 	return &PostgresError{Message: err.Error(), PgError: nil}
 }
 
-// NewConnectRpcError maps a standard kit.ProcessedError status code to its Connect RPC equivalent code,
+// ParseIntoRpcError maps a standard kit.ProcessedError status code to its Connect RPC equivalent code,
 // packages detailed metadata using commonpb.ErrorDetails, and serializes any inner details to JSON.
-func NewConnectRpcError(err error) error {
+func ParseIntoRpcError(err error) error {
 	if err == nil {
 		return nil
 	}
@@ -252,3 +252,14 @@ func NewConnectRpcError(err error) error {
 	}
 	return connect.NewError(connect.CodeInternal, err)
 }
+
+// NewConnectRpcError constructs a *connect.Error directly from status code, type/kind, and message.
+func NewConnectRpcError(code int, errType, message string) error {
+	return ParseIntoRpcError(NewError(code, errType, message))
+}
+
+// NewConnectRpcErrorWithDetails constructs a *connect.Error directly from status code, type/kind, message, and details.
+func NewConnectRpcErrorWithDetails(code int, errType, message string, details interface{}) error {
+	return ParseIntoRpcError(NewErrorWithDetails(code, errType, message, details))
+}
+

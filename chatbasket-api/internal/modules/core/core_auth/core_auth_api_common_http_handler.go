@@ -99,6 +99,11 @@ func (h *authHandler) GetUser(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+
+	if platform, ok := c.Get("platform").(string); ok && platform == "web" {
+		res.SessionID = ""
+	}
+
 	return c.JSON(http.StatusOK, res)
 }
 

@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package rpc_core_auth.v1;
+
+import "proto/common/model/model.proto";
+
+option go_package = "chatbasket-api/gen/proto/core/core_auth;rpc_core_authv1";
+
+message SessionResponse {
+  string user_id = 1;
+  string name = 2;
+  string email = 3;
+  string session_id = 4;
+  string session_expiry = 5;
+  bool is_primary = 6;
+  string primary_device_name = 7;
+  string primary_key = 8;
+  int32 keys_revision = 9;
+}
+
+message SignupRequest {
+  string name = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message AccountVerificationRequest {
+  string email = 1;
+  string secret = 2;
+  string platform = 3;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginVerificationRequest {
+  string email = 1;
+  string secret = 2;
+  string platform = 3;
+}
+
+message ResendOTPRequest {
+  string email = 1;
+  string type = 2;
+}
+
+message ForgotPasswordRequest {
+  string email = 1;
+}
+
+message VerifyForgotPasswordRequest {
+  string update_id = 1;
+  string otp = 2;
+  string new_password = 3;
+}
+
+message LogoutRequest {
+  bool all_sessions = 1;
+}
+
+message GetUserRequest {}
+
+message RequestUpdateOTPRequest {
+  string update_type = 1;
+}
+
+message ConfirmPasswordUpdateRequest {
+  string update_id = 1;
+  string otp = 2;
+  string new_password = 3;
+}
+
+message RequestEmailUpdateRequest {
+  string new_email = 1;
+  string password = 2;
+}
+
+message ConfirmEmailUpdateRequest {
+  string update_id = 1;
+  string otp = 2;
+}
+
+message QRInitiateRequest {}
+
+message QRInitiateResponse {
+  string qr_token = 1;
+  int32 expires_in = 2;
+}
+
+message QRApproveRequest {
+  string qr_token = 1;
+}
+
+message QRApproveResponse {
+  bool status = 1;
+}
+
+message QRCallbackRequest {
+  string qr_token = 1;
+}
+
+service AuthService {
+  rpc Signup(SignupRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc AccountVerification(AccountVerificationRequest) returns (SessionResponse);
+  rpc Login(LoginRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc LoginVerification(LoginVerificationRequest) returns (SessionResponse);
+  rpc ResendOTP(ResendOTPRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc ForgotPassword(ForgotPasswordRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc VerifyForgotPassword(VerifyForgotPasswordRequest) returns (rpc_common_model.v1.StatusOkay);
+
+  // Authenticated endpoints
+  rpc Logout(LogoutRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc GetUser(GetUserRequest) returns (SessionResponse);
+  rpc RequestUpdateOTP(RequestUpdateOTPRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc ConfirmPasswordUpdate(ConfirmPasswordUpdateRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc RequestEmailUpdate(RequestEmailUpdateRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc ConfirmEmailUpdate(ConfirmEmailUpdateRequest) returns (rpc_common_model.v1.StatusOkay);
+
+  // QR Login endpoints
+  rpc QRInitiate(QRInitiateRequest) returns (QRInitiateResponse);
+  rpc QRApprove(QRApproveRequest) returns (QRApproveResponse);
+  rpc QRCallback(QRCallbackRequest) returns (SessionResponse);
+}

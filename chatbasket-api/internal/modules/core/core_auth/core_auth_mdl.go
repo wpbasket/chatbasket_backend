@@ -1,5 +1,9 @@
 package core_auth
 
+import (
+	rpc_core_authv1 "chatbasket-api/gen/proto/core/core_auth"
+)
+
 // 📝 Signup payload (used in signup endpoint)
 type SignupPayload struct {
 	Name     string `json:"name"`
@@ -24,6 +28,23 @@ type SessionResponse struct {
 	PrimaryDeviceName string `json:"primaryDeviceName,omitempty"`
 	PrimaryKey        string `json:"primaryKey"`
 	KeysRevision      int32  `json:"keysRevision"`
+}
+
+func (r *SessionResponse) ToProtoSessionResponse() *rpc_core_authv1.SessionResponse {
+	if r == nil {
+		return nil
+	}
+	return &rpc_core_authv1.SessionResponse{
+		UserId:            r.UserId,
+		Name:              r.Name,
+		Email:             r.Email,
+		SessionId:         r.SessionID,
+		SessionExpiry:     r.SessionExpiry,
+		IsPrimary:         r.IsPrimary,
+		PrimaryDeviceName: r.PrimaryDeviceName,
+		PrimaryKey:        r.PrimaryKey,
+		KeysRevision:      r.KeysRevision,
+	}
 }
 
 type AuthVerificationPayload struct {

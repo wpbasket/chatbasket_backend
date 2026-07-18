@@ -36,17 +36,42 @@ type AuthSessionProvider interface {
 	GetAuthSecret() []byte
 }
 
+// AuthSessionConfig defines the configuration for AuthSessionMiddleware.
+type AuthSessionConfig struct {
+	AuthProvider    AuthSessionProvider
+	RequireVerified bool
+	Hub             *websocket.WSHub
+	Skipper         func(c *echo.Context) bool
+}
+
 // AuthSessionMiddleware verifies the session token and populates the context.
 // Ported from legacy middleware/session.go with modular adjustments.
 func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified bool, hub *websocket.WSHub) echo.MiddlewareFunc {
+	return AuthSessionMiddlewareWithConfig(AuthSessionConfig{
+		AuthProvider:    authProvider,
+		RequireVerified: requireVerified,
+		Hub:             hub,
+	})
+}
+
+// AuthSessionMiddlewareWithConfig verifies the session token and populates the context with custom config.
+func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFunc {
+	if config.Skipper == nil {
+		config.Skipper = func(c *echo.Context) bool { return false }
+	}
+
 	closeSessionConnection := func(userID uuid.UUID, sessionID string) {
-		if hub != nil && sessionID != "" {
-			hub.CloseSessionConnection(userID, sessionID)
+		if config.Hub != nil && sessionID != "" {
+			config.Hub.CloseSessionConnection(userID, sessionID)
 		}
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
+			if config.Skipper(c) {
+				return next(c)
+			}
+
 			var sessionId, userId string
 			var platform string
 
@@ -95,13 +120,13 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			}
 
 			// 3. Compute HMAC and Verify Session via Store
-			tokenHash, err := kit.ComputeHMAC(sessionId, authProvider.GetAuthSecret(), true, new(uuidVal.String()))
+			tokenHash, err := kit.ComputeHMAC(sessionId, config.AuthProvider.GetAuthSecret(), true, new(uuidVal.String()))
 			if err != nil {
 				return kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to process session token")
 			}
 
 			ctx := c.Request().Context()
-			session, err := authProvider.GetSessionByToken(ctx, tokenHash, uuidVal)
+			session, err := config.AuthProvider.GetSessionByToken(ctx, tokenHash, uuidVal)
 
 			// Check if session found and not expired
 			if err != nil {
@@ -120,7 +145,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			}
 
 			// 4. Get User details
-			authUser, err := authProvider.GetAuthUserByID(ctx, uuidVal)
+			authUser, err := config.AuthProvider.GetAuthUserByID(ctx, uuidVal)
 			if err != nil {
 				if err == pgx.ErrNoRows {
 					closeSessionConnection(uuidVal, sessionId)
@@ -130,7 +155,7 @@ func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified boo
 			}
 
 			// 5. Check Verification (if required)
-			if requireVerified && !authUser.IsEmailVerified {
+			if config.RequireVerified && !authUser.IsEmailVerified {
 				closeSessionConnection(uuidVal, sessionId)
 				return kit.NewError(http.StatusForbidden, "unverified_email", "Email must be verified to perform this action")
 			}
