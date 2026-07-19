@@ -8,3 +8,11 @@ message StatusOkay {
   bool status = 1;
   string message = 2;
 }
+
+message BlockStatusFlags {
+  bool isRequesterAdminBlocked = 1;
+  bool isTargetAdminBlocked = 2;
+  bool isRequesterUserBlockedByTarget = 3;
+  bool isTargetUserBlockedByRequester = 4;
+  bool isTargetProfilePrivate = 5;
+}

@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package rpc_personal_contact.v1;
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/model/model.proto";
+
+option go_package = "chatbasket-api/gen/proto/personal/personal_contact;rpc_personal_contactv1";
+
+message Contact {
+  string id = 1;
+  string name = 2;
+  string username = 3;
+  optional string bio = 4;
+  optional string nickname = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  optional string avatar_url = 8;
+  optional string avatar_file_id = 9;
+  bool is_mutual = 10;
+  string profile_type = 11;
+}
+
+message GetContactsRequest {}
+
+message GetContactsResponse {
+  repeated Contact contacts = 1;
+  repeated Contact people_who_added_you = 2;
+}
+
+message CreateContactRequest {
+  string contact_user_id = 1;
+  optional string nickname = 2;
+}
+
+message CreateContactResponse {
+  bool status = 1;
+  string message = 2;
+  optional Contact contact = 3;
+}
+
+message CheckContactExistanceRequest {
+  string contact_username = 1;
+}
+
+message CheckContactExistanceResponse {
+  bool exists = 1;
+  string name = 2;
+  string profile_type = 3;
+  optional string recipient_user_id = 4;
+}
+
+message AcceptContactRequestRequest {
+  string contact_user_id = 1;
+}
+
+message RejectContactRequestRequest {
+  string contact_user_id = 1;
+}
+
+message DeleteContactRequest {
+  repeated string contact_user_id = 1;
+}
+
+message UndoContactRequestRequest {
+  string contact_user_id = 1;
+}
+
+message PendingContactRequest {
+  string id = 1;
+  string name = 2;
+  string username = 3;
+  optional string bio = 4;
+  optional string nickname = 5;
+  google.protobuf.Timestamp requested_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  string status = 8;
+  optional string avatar_url = 9;
+  optional string avatar_file_id = 10;
+}
+
+message SentContactRequest {
+  string id = 1;
+  string name = 2;
+  string username = 3;
+  optional string bio = 4;
+  optional string nickname = 5;
+  google.protobuf.Timestamp requested_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  string status = 8;
+  optional string avatar_url = 9;
+  optional string avatar_file_id = 10;
+}
+
+message GetContactRequestsRequest {}
+
+message GetContactRequestsResponse {
+  repeated PendingContactRequest pending_requests = 1;
+  repeated SentContactRequest sent_requests = 2;
+}
+
+message UpdateContactNicknameRequest {
+  string contact_user_id = 1;
+  optional string nickname = 2;
+}
+
+message RemoveContactNicknameRequest {
+  string contact_user_id = 1;
+}
+
+message BlockUserRequest {
+  string blocked_user_id = 1;
+}
+
+message BlockUserResponse {
+  bool blocked = 1;
+}
+
+service ContactService {
+  rpc GetContacts(GetContactsRequest) returns (GetContactsResponse);
+  rpc CheckContactExistance(CheckContactExistanceRequest) returns (CheckContactExistanceResponse);
+  rpc CreateContact(CreateContactRequest) returns (CreateContactResponse);
+  rpc DeleteContact(DeleteContactRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc GetContactRequests(GetContactRequestsRequest) returns (GetContactRequestsResponse);
+  rpc AcceptContactRequest(AcceptContactRequestRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc RejectContactRequest(RejectContactRequestRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc UndoContactRequest(UndoContactRequestRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc UpdateContactNickname(UpdateContactNicknameRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc RemoveContactNickname(RemoveContactNicknameRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc BlockUser(BlockUserRequest) returns (BlockUserResponse);
+}

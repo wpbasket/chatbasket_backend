@@ -1,6 +1,9 @@
-﻿package personal_contact
+package personal_contact
 
 import (
+	"net/http"
+
+	rpc_personal_contactv1connect "chatbasket-api/gen/proto/personal/personal_contact/rpc_personal_contactv1connect"
 	"chatbasket-api/internal/platform/middleware"
 
 	"github.com/labstack/echo/v5"
@@ -27,5 +30,12 @@ func Register(personalGroup *echo.Group, contactService *contactService, authPro
 	contacts.POST("/update-nickname", handler.UpdateContactNickname)
 	contacts.POST("/block", handler.BlockUser)
 	contacts.POST("/remove-nickname", handler.RemoveContactNickname)
+
+	// Connect RPC Routes
+	connectServer := newContactConnectServer(contactService)
+	path, connectHandler := rpc_personal_contactv1connect.NewContactServiceHandler(
+		connectServer,
+	)
+	personalGroup.Any(path+"*", echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)))
 }
 

@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"net/http"
 
+	rpc_personal_contactv1 "chatbasket-api/gen/proto/personal/personal_contact"
+
 	"github.com/google/uuid"
 	"golang.org/x/crypto/chacha20poly1305"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (ps *contactService) EncryptNickname(nickname string, ownerID uuid.UUID, contactID uuid.UUID) (string, error) {
@@ -69,7 +72,7 @@ func (ps *contactService) DecryptNickname(encryptedB64 *string, ownerID uuid.UUI
 	return &res, nil
 }
 
-func (ps *contactService) buildSingleContactForOwner(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (*Contact, error) {
+func (ps *contactService) buildSingleContactForOwner(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (*rpc_personal_contactv1.Contact, error) {
 	row, err := ps.PostgresQueries.GetSingleUserContactLite(ctx, personal_contact_store.GetSingleUserContactLiteParams{
 		OwnerUserID:   ownerID,
 		ContactUserID: contactID,
@@ -105,15 +108,15 @@ func (ps *contactService) buildSingleContactForOwner(ctx context.Context, ownerI
 		nickname = decrypted
 	}
 
-	return &Contact{
-		ID:           row.ID.String(),
+	return &rpc_personal_contactv1.Contact{
+		Id:           row.ID.String(),
 		Name:         profile.Name,
 		Username:     profile.Username,
 		Bio:          profile.Bio,
 		Nickname:     nickname,
-		CreatedAt:    row.ContactCreatedAt,
-		UpdatedAt:    row.ContactUpdatedAt,
-		AvatarURL:    profile.AvatarURL,
+		CreatedAt:    timestamppb.New(row.ContactCreatedAt),
+		UpdatedAt:    timestamppb.New(row.ContactUpdatedAt),
+		AvatarUrl:    profile.AvatarURL,
 		AvatarFileId: profile.AvatarFileId,
 		IsMutual:     isMutual,
 		ProfileType:  profile.ProfileType,

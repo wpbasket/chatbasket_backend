@@ -14,6 +14,8 @@ import (
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/services"
 
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -285,8 +287,8 @@ func TestDeleteContact_Integration_SingleBlockedDetail(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, detailed.Status())
 	assert.Equal(t, "blocked", detailed.Error())
 
-	flags, ok := detailed.Details().(personal_profile.BlockStatusFlags)
-	require.True(t, ok, "details should be BlockStatusFlags")
+	flags, ok := detailed.Details().(*rpc_common_modelv1.BlockStatusFlags)
+	require.True(t, ok, "details should be *rpc_common_modelv1.BlockStatusFlags")
 	assert.True(t, flags.IsTargetUserBlockedByRequester)
 	assert.False(t, flags.IsRequesterUserBlockedByTarget)
 }

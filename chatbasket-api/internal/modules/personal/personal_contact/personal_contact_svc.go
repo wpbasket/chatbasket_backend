@@ -9,9 +9,13 @@ import (
 	"net/http"
 	"strings"
 
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
+	rpc_personal_contactv1 "chatbasket-api/gen/proto/personal/personal_contact"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // personalProfilePersonalContactProvider defines the minimal set of methods required from the Profile module.
@@ -32,24 +36,24 @@ type ChatCleanupProvider interface {
 }
 
 type contactService struct {
-	GlobalService                  *services.GlobalService
-	PostgresQuerier                personal_contact_store.Querier
-	PostgresQueries                *personal_contact_store.Queries
+	GlobalService                          *services.GlobalService
+	PostgresQuerier                        personal_contact_store.Querier
+	PostgresQueries                        *personal_contact_store.Queries
 	personalProfilePersonalContactProvider personalProfilePersonalContactProvider
-	chatCleanupProvider            ChatCleanupProvider
-	PersonalUsernameKey            []byte
-	PersonalContactKey             []byte
+	chatCleanupProvider                    ChatCleanupProvider
+	PersonalUsernameKey                    []byte
+	PersonalContactKey                     []byte
 }
 
 func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool, personalProfilePersonalContactProvider personalProfilePersonalContactProvider, personalUsernameKey []byte, personalContactKey []byte) *contactService {
 	store := personal_contact_store.New(pool)
 	return &contactService{
-		GlobalService:                  globalService,
-		PostgresQuerier:                store,
-		PostgresQueries:                store,
+		GlobalService:                          globalService,
+		PostgresQuerier:                        store,
+		PostgresQueries:                        store,
 		personalProfilePersonalContactProvider: personalProfilePersonalContactProvider,
-		PersonalUsernameKey:            personalUsernameKey,
-		PersonalContactKey:             personalContactKey,
+		PersonalUsernameKey:                    personalUsernameKey,
+		PersonalContactKey:                     personalContactKey,
 	}
 }
 
@@ -65,7 +69,7 @@ func (ps *contactService) checkBlockStatus(ctx context.Context, requesterID, tar
 	if !status.IsBlocked {
 		return nil
 	}
-	return kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", personal_profile.BlockStatusFlags{
+	return kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", &rpc_common_modelv1.BlockStatusFlags{
 		IsRequesterAdminBlocked:        status.IsRequesterAdminBlocked,
 		IsTargetAdminBlocked:           status.IsTargetAdminBlocked,
 		IsRequesterUserBlockedByTarget: status.IsRequesterUserBlockedByTarget,
@@ -74,7 +78,7 @@ func (ps *contactService) checkBlockStatus(ctx context.Context, requesterID, tar
 	})
 }
 
-func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*GetContactsResponse, error) {
+func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*rpc_personal_contactv1.GetContactsResponse, error) {
 	// Fetch slim contact data
 	myContacts, err := ps.PostgresQueries.GetUserContactsLite(ctx, userId.UuidUserId)
 	if err != nil {
@@ -87,9 +91,9 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 	}
 
 	if len(myContacts) == 0 && len(addedMe) == 0 {
-		return &GetContactsResponse{
-			Contacts:          []Contact{},
-			PeopleWhoAddedYou: []Contact{},
+		return &rpc_personal_contactv1.GetContactsResponse{
+			Contacts:          []*rpc_personal_contactv1.Contact{},
+			PeopleWhoAddedYou: []*rpc_personal_contactv1.Contact{},
 		}, nil
 	}
 
@@ -135,13 +139,12 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 	}
 
 	// Build contacts list
-	contacts := make([]Contact, 0, len(myContacts))
+	contacts := make([]*rpc_personal_contactv1.Contact, 0, len(myContacts))
 	for _, c := range myContacts {
 		profile, ok := profilesByID[c.ID]
 		if !ok {
 			continue // Skip if profile not found
 		}
-
 
 		_, isMutual := addedMeMap[c.ID.String()]
 
@@ -154,15 +157,15 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			nickname = decrypted
 		}
 
-		contacts = append(contacts, Contact{
-			ID:           c.ID.String(),
+		contacts = append(contacts, &rpc_personal_contactv1.Contact{
+			Id:           c.ID.String(),
 			Name:         profile.Name,
 			Username:     profile.Username,
 			Bio:          profile.Bio,
 			Nickname:     nickname,
-			CreatedAt:    c.ContactCreatedAt,
-			UpdatedAt:    c.ContactUpdatedAt,
-			AvatarURL:    profile.AvatarURL,
+			CreatedAt:    timestamppb.New(c.ContactCreatedAt),
+			UpdatedAt:    timestamppb.New(c.ContactUpdatedAt),
+			AvatarUrl:    profile.AvatarURL,
 			AvatarFileId: profile.AvatarFileId,
 			IsMutual:     isMutual,
 			ProfileType:  profile.ProfileType,
@@ -170,13 +173,12 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 	}
 
 	// Build people who added you list
-	peopleWhoAddedYou := make([]Contact, 0, len(addedMe))
+	peopleWhoAddedYou := make([]*rpc_personal_contactv1.Contact, 0, len(addedMe))
 	for _, p := range addedMe {
 		profile, ok := profilesByID[p.ID]
 		if !ok {
 			continue // Skip if profile not found
 		}
-
 
 		_, isMutual := myContactsMap[p.ID.String()]
 
@@ -189,28 +191,28 @@ func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*
 			myNickname = decrypted
 		}
 
-		peopleWhoAddedYou = append(peopleWhoAddedYou, Contact{
-			ID:           p.ID.String(),
+		peopleWhoAddedYou = append(peopleWhoAddedYou, &rpc_personal_contactv1.Contact{
+			Id:           p.ID.String(),
 			Name:         profile.Name,
 			Username:     profile.Username,
 			Bio:          profile.Bio,
 			Nickname:     myNickname,
-			CreatedAt:    p.ContactCreatedAt,
-			UpdatedAt:    p.ContactUpdatedAt,
-			AvatarURL:    profile.AvatarURL,
+			CreatedAt:    timestamppb.New(p.ContactCreatedAt),
+			UpdatedAt:    timestamppb.New(p.ContactUpdatedAt),
+			AvatarUrl:    profile.AvatarURL,
 			AvatarFileId: profile.AvatarFileId,
 			IsMutual:     isMutual,
 			ProfileType:  profile.ProfileType,
 		})
 	}
 
-	return &GetContactsResponse{
+	return &rpc_personal_contactv1.GetContactsResponse{
 		Contacts:          contacts,
 		PeopleWhoAddedYou: peopleWhoAddedYou,
 	}, nil
 }
 
-func (ps *contactService) CheckContactExistance(ctx context.Context, payload *CheckContactExistancePayload, userId kit.UserId) (*CheckContactExistanceResponse, error) {
+func (ps *contactService) CheckContactExistance(ctx context.Context, payload *CheckContactExistancePayload, userId kit.UserId) (*rpc_personal_contactv1.CheckContactExistanceResponse, error) {
 	// Use profile module for username lookup
 	user, err := ps.personalProfilePersonalContactProvider.FindContactableUserByUsername(
 		ctx,
@@ -222,14 +224,14 @@ func (ps *contactService) CheckContactExistance(ctx context.Context, payload *Ch
 	}
 
 	if !user.Exists {
-		return &CheckContactExistanceResponse{Exists: false}, nil
+		return &rpc_personal_contactv1.CheckContactExistanceResponse{Exists: false}, nil
 	}
 
 	if err := ps.checkBlockStatus(ctx, userId.UuidUserId, user.ID); err != nil {
 		return nil, err
 	}
 
-	existsResp := &CheckContactExistanceResponse{
+	existsResp := &rpc_personal_contactv1.CheckContactExistanceResponse{
 		Exists:      true,
 		Name:        user.Name,
 		ProfileType: user.ProfileType,
@@ -244,7 +246,7 @@ func (ps *contactService) CheckContactExistance(ctx context.Context, payload *Ch
 	return existsResp, nil
 }
 
-func (ps *contactService) CreateContact(ctx context.Context, payload *CreateContactPayload, userId kit.UserId) (*CreateContactResponse, error) {
+func (ps *contactService) CreateContact(ctx context.Context, payload *CreateContactPayload, userId kit.UserId) (*rpc_personal_contactv1.CreateContactResponse, error) {
 	if payload == nil || payload.ContactUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -311,7 +313,7 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		if err != nil {
 			return nil, err
 		}
-		return &CreateContactResponse{Status: true, Message: "already_in_contacts", Contact: contact}, nil
+		return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "already_in_contacts", Contact: contact}, nil
 	}
 
 	// Normalize optional nickname
@@ -354,7 +356,7 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		if err != nil {
 			return nil, err
 		}
-		return &CreateContactResponse{Status: true, Message: "public_contact_added", Contact: contact}, nil
+		return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "public_contact_added", Contact: contact}, nil
 	case "personal":
 		targetAlreadyHasMe, err := ps.PostgresQueries.IsAlreadyContact(ctx, personal_contact_store.IsAlreadyContactParams{
 			OwnerUserID:   targetUUID,
@@ -386,7 +388,7 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 			if err != nil {
 				return nil, err
 			}
-			return &CreateContactResponse{Status: true, Message: "personal_contact_added", Contact: contact}, nil
+			return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "personal_contact_added", Contact: contact}, nil
 		}
 
 		// DB call to check for existing request status
@@ -407,31 +409,8 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		// If request exists, check its status
 		if err != pgx.ErrNoRows && requestStatus != "" {
 			if requestStatus == "pending" {
-				return &CreateContactResponse{Status: true, Message: "pending_request_exists"}, nil
+				return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "pending_request_exists"}, nil
 			}
-
-				// Encrypt nickname if provided
-				var encryptedNickname *string
-				if nickname != nil {
-					encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
-					if err != nil {
-						return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
-					}
-					encryptedNickname = &encrypted
-				}
-
-				// If accepted or declined, delete old request and insert new one
-				err = ps.PostgresQueries.DeleteAndInsertContactRequest(ctx, personal_contact_store.DeleteAndInsertContactRequestParams{
-					ID:              reqID,
-					RequesterUserID: userId.UuidUserId,
-					ReceiverUserID:  targetUUID,
-					Nickname:        encryptedNickname,
-				})
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
-			}
-			return &CreateContactResponse{Status: true, Message: "contact_request_sent"}, nil
-		}
 
 			// Encrypt nickname if provided
 			var encryptedNickname *string
@@ -443,23 +422,46 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 				encryptedNickname = &encrypted
 			}
 
-			// No existing request, insert new one
-			err = ps.PostgresQueries.InsertContactRequest(ctx, personal_contact_store.InsertContactRequestParams{
+			// If accepted or declined, delete old request and insert new one
+			err = ps.PostgresQueries.DeleteAndInsertContactRequest(ctx, personal_contact_store.DeleteAndInsertContactRequestParams{
 				ID:              reqID,
 				RequesterUserID: userId.UuidUserId,
 				ReceiverUserID:  targetUUID,
 				Nickname:        encryptedNickname,
 			})
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+			}
+			return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "contact_request_sent"}, nil
+		}
+
+		// Encrypt nickname if provided
+		var encryptedNickname *string
+		if nickname != nil {
+			encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
+			if err != nil {
+				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
+			}
+			encryptedNickname = &encrypted
+		}
+
+		// No existing request, insert new one
+		err = ps.PostgresQueries.InsertContactRequest(ctx, personal_contact_store.InsertContactRequestParams{
+			ID:              reqID,
+			RequesterUserID: userId.UuidUserId,
+			ReceiverUserID:  targetUUID,
+			Nickname:        encryptedNickname,
+		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 		}
-		return &CreateContactResponse{Status: true, Message: "contact_request_sent"}, nil
+		return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "contact_request_sent"}, nil
 	default:
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid target profile type")
 	}
 }
 
-func (ps *contactService) AcceptContactRequest(ctx context.Context, payload *AcceptContactRequestPayload, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *contactService) AcceptContactRequest(ctx context.Context, payload *AcceptContactRequestPayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
 	if payload == nil || payload.ContactUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -487,7 +489,7 @@ func (ps *contactService) AcceptContactRequest(ctx context.Context, payload *Acc
 
 	switch result {
 	case "accepted":
-		return &kit.StatusOkay{Status: true, Message: "contact_request_accepted"}, nil
+		return &rpc_common_modelv1.StatusOkay{Status: true, Message: "contact_request_accepted"}, nil
 	case "not_found":
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "pending_request_not_found")
 	case "processed":
@@ -497,7 +499,7 @@ func (ps *contactService) AcceptContactRequest(ctx context.Context, payload *Acc
 	}
 }
 
-func (ps *contactService) RejectContactRequest(ctx context.Context, payload *RejectContactRequestPayload, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *contactService) RejectContactRequest(ctx context.Context, payload *RejectContactRequestPayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
 	if payload == nil || payload.ContactUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -525,7 +527,7 @@ func (ps *contactService) RejectContactRequest(ctx context.Context, payload *Rej
 
 	switch result {
 	case "declined":
-		return &kit.StatusOkay{Status: true, Message: "contact_request_declined"}, nil
+		return &rpc_common_modelv1.StatusOkay{Status: true, Message: "contact_request_declined"}, nil
 	case "not_found":
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "pending_request_not_found")
 	case "processed":
@@ -535,7 +537,7 @@ func (ps *contactService) RejectContactRequest(ctx context.Context, payload *Rej
 	}
 }
 
-func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteContactPayload, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteContactPayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
 	if payload == nil || len(payload.ContactUserId) == 0 {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -586,10 +588,10 @@ func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteCont
 
 	if len(blockedIDs) == len(uniqIDs) {
 		if len(uniqIDs) == 1 {
-			var singleStatus personal_profile.BlockStatusFlags
+			var singleStatus *rpc_common_modelv1.BlockStatusFlags
 			for _, s := range statuses {
 				if s.TargetID == uniqIDs[0] {
-					singleStatus = personal_profile.BlockStatusFlags{
+					singleStatus = &rpc_common_modelv1.BlockStatusFlags{
 						IsRequesterAdminBlocked:        s.IsRequesterAdminBlocked,
 						IsTargetAdminBlocked:           s.IsTargetAdminBlocked,
 						IsRequesterUserBlockedByTarget: s.IsRequesterUserBlockedByTarget,
@@ -630,10 +632,10 @@ func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteCont
 		message = "contacts_deleted_partial"
 	}
 
-	return &kit.StatusOkay{Status: true, Message: message}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: message}, nil
 }
 
-func (ps *contactService) UndoContactRequest(ctx context.Context, payload *UndoContactRequestPayload, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *contactService) UndoContactRequest(ctx context.Context, payload *UndoContactRequestPayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
 	if payload == nil || payload.ContactUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -661,7 +663,7 @@ func (ps *contactService) UndoContactRequest(ctx context.Context, payload *UndoC
 
 	switch result {
 	case "undone":
-		return &kit.StatusOkay{Status: true, Message: "contact_request_undone"}, nil
+		return &rpc_common_modelv1.StatusOkay{Status: true, Message: "contact_request_undone"}, nil
 	case "not_found":
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "pending_request_not_found")
 	default:
@@ -669,7 +671,7 @@ func (ps *contactService) UndoContactRequest(ctx context.Context, payload *UndoC
 	}
 }
 
-func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.UserId) (*GetContactRequestsResponse, error) {
+func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.UserId) (*rpc_personal_contactv1.GetContactRequestsResponse, error) {
 	// Fetch slim request data
 	pendingRows, err := ps.PostgresQueries.GetPendingContactRequestsLite(ctx, userId.UuidUserId)
 	if err != nil {
@@ -714,29 +716,29 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 	}
 
 	// Build pending list
-	pending := make([]PendingContactRequest, 0, len(pendingRows))
+	pending := make([]*rpc_personal_contactv1.PendingContactRequest, 0, len(pendingRows))
 	for _, r := range pendingRows {
 		profile, ok := profilesByID[r.ID]
 		if !ok {
 			continue
 		}
 
-		pending = append(pending, PendingContactRequest{
-			ID:           r.ID.String(),
+		pending = append(pending, &rpc_personal_contactv1.PendingContactRequest{
+			Id:           r.ID.String(),
 			Name:         profile.Name,
 			Username:     profile.Username,
 			Bio:          profile.Bio,
 			Nickname:     nil, // Privacy: Receiver should not see the nickname given by requester
-			RequestedAt:  r.RequestCreatedAt,
-			UpdatedAt:    r.RequestUpdatedAt,
+			RequestedAt:  timestamppb.New(r.RequestCreatedAt),
+			UpdatedAt:    timestamppb.New(r.RequestUpdatedAt),
 			Status:       r.Status,
-			AvatarURL:    profile.AvatarURL,
+			AvatarUrl:    profile.AvatarURL,
 			AvatarFileId: profile.AvatarFileId,
 		})
 	}
 
 	// Build sent list
-	sent := make([]SentContactRequest, 0, len(sentRows))
+	sent := make([]*rpc_personal_contactv1.SentContactRequest, 0, len(sentRows))
 	for _, r := range sentRows {
 		profile, ok := profilesByID[r.ID]
 		if !ok {
@@ -752,27 +754,27 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 			nickname = decrypted
 		}
 
-		sent = append(sent, SentContactRequest{
-			ID:           r.ID.String(),
+		sent = append(sent, &rpc_personal_contactv1.SentContactRequest{
+			Id:           r.ID.String(),
 			Name:         profile.Name,
 			Username:     profile.Username,
 			Bio:          profile.Bio,
 			Nickname:     nickname,
-			RequestedAt:  r.RequestCreatedAt,
-			UpdatedAt:    r.RequestUpdatedAt,
+			RequestedAt:  timestamppb.New(r.RequestCreatedAt),
+			UpdatedAt:    timestamppb.New(r.RequestUpdatedAt),
 			Status:       r.Status,
-			AvatarURL:    profile.AvatarURL,
+			AvatarUrl:    profile.AvatarURL,
 			AvatarFileId: profile.AvatarFileId,
 		})
 	}
 
-	return &GetContactRequestsResponse{
-		Pending: pending,
-		Sent:    sent,
+	return &rpc_personal_contactv1.GetContactRequestsResponse{
+		PendingRequests: pending,
+		SentRequests:    sent,
 	}, nil
 }
 
-func (ps *contactService) UpdateContactNickname(ctx context.Context, payload *UpdateContactNicknamePayload, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *contactService) UpdateContactNickname(ctx context.Context, payload *UpdateContactNicknamePayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
 	if payload == nil || payload.ContactUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -823,10 +825,10 @@ func (ps *contactService) UpdateContactNickname(ctx context.Context, payload *Up
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "contact_nickname_updated"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "contact_nickname_updated"}, nil
 }
 
-func (ps *contactService) RemoveContactNickname(ctx context.Context, payload *RemoveContactNicknamePayload, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *contactService) RemoveContactNickname(ctx context.Context, payload *RemoveContactNicknamePayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
 	if payload == nil || payload.ContactUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -856,10 +858,10 @@ func (ps *contactService) RemoveContactNickname(ctx context.Context, payload *Re
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "contact_nickname_removed"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "contact_nickname_removed"}, nil
 }
 
-func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPayload, userId kit.UserId) (*BlockUserResponse, error) {
+func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPayload, userId kit.UserId) (*rpc_personal_contactv1.BlockUserResponse, error) {
 	if payload == nil || payload.BlockedUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -893,7 +895,7 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 	}
 	if blockStatus == 1 {
 		// Already blocked by you
-		return &BlockUserResponse{Blocked: true}, nil
+		return &rpc_personal_contactv1.BlockUserResponse{Blocked: true}, nil
 	}
 
 	blockID, err := uuid.NewV7()
@@ -910,7 +912,7 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 		go ps.chatCleanupProvider.CleanupChatMessagesForBlockAsync(context.Background(), userId.UuidUserId, blockedUUID)
 	}
 
-	return &BlockUserResponse{Blocked: true}, nil
+	return &rpc_personal_contactv1.BlockUserResponse{Blocked: true}, nil
 }
 
 // GetMessagingBlockStatus returns 0 if no block, 1 if user1 blocked user2, 2 if user2 blocked user1.
@@ -925,5 +927,3 @@ func (ps *contactService) IsAlreadyContact(ctx context.Context, ownerID uuid.UUI
 		ContactUserID: contactID,
 	})
 }
-
-

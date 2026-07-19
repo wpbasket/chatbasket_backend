@@ -1,46 +1,12 @@
 package personal_contact
 
-import "time"
-
-type Contact struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Username     string    `json:"username"`
-	Bio          *string   `json:"bio"`
-	Nickname     *string   `json:"nickname"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	AvatarURL    *string   `json:"avatar_url"`
-	AvatarFileId *string   `json:"avatar_file_id"`
-	IsMutual     bool      `json:"is_mutual"`
-	ProfileType  string    `json:"profile_type"`
-}
-
-type GetContactsResponse struct {
-	Contacts          []Contact `json:"contacts"`             // ✅ You added
-	PeopleWhoAddedYou []Contact `json:"people_who_added_you"` // ✅ They added you
-}
-
 type CreateContactPayload struct {
 	ContactUserId string  `json:"contact_user_id"`
 	Nickname      *string `json:"nickname"`
 }
 
-type CreateContactResponse struct {
-	Status  bool     `json:"status"`
-	Message string   `json:"message"`
-	Contact *Contact `json:"contact,omitempty"`
-}
-
 type CheckContactExistancePayload struct {
 	ContactUsername string `json:"contact_username"`
-}
-
-type CheckContactExistanceResponse struct {
-	Exists          bool    `json:"exists"`
-	Name            string  `json:"name"`
-	ProfileType     string  `json:"profile_type"`
-	RecipientUserId *string `json:"recipient_user_id"`
 }
 
 type AcceptContactRequestPayload struct {
@@ -59,37 +25,6 @@ type UndoContactRequestPayload struct {
 	ContactUserId string `json:"contact_user_id"`
 }
 
-type PendingContactRequest struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Username     string    `json:"username"`
-	Bio          *string   `json:"bio"`
-	Nickname     *string   `json:"nickname"`
-	RequestedAt  time.Time `json:"requested_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Status       string    `json:"status"`
-	AvatarURL    *string   `json:"avatar_url"`
-	AvatarFileId *string   `json:"avatar_file_id"`
-}
-
-type SentContactRequest struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Username     string    `json:"username"`
-	Bio          *string   `json:"bio"`
-	Nickname     *string   `json:"nickname"`
-	RequestedAt  time.Time `json:"requested_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Status       string    `json:"status"`
-	AvatarURL    *string   `json:"avatar_url"`
-	AvatarFileId *string   `json:"avatar_file_id"`
-}
-
-type GetContactRequestsResponse struct {
-	Pending []PendingContactRequest `json:"pending_requests"`
-	Sent    []SentContactRequest    `json:"sent_requests"`
-}
-
 type UpdateContactNicknamePayload struct {
 	ContactUserId string  `json:"contact_user_id"`
 	Nickname      *string `json:"nickname"`
@@ -103,6 +38,3 @@ type BlockUserPayload struct {
 	BlockedUserId string `json:"blocked_user_id" validate:"required,uuid"`
 }
 
-type BlockUserResponse struct {
-	Blocked bool `json:"blocked"`
-}

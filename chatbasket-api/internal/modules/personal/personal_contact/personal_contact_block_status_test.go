@@ -9,6 +9,8 @@ import (
 	"chatbasket-api/internal/modules/personal/personal_profile"
 	"chatbasket-api/internal/platform/kit"
 
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,7 +79,7 @@ func (p *blockStatusProfileProvider) IsBlockedBetweenUsersBatch(_ context.Contex
 }
 
 func TestNewErrorWithDetails_BlockStatus(t *testing.T) {
-	flags := personal_profile.BlockStatusFlags{
+	flags := &rpc_common_modelv1.BlockStatusFlags{
 		IsRequesterAdminBlocked:        true,
 		IsTargetAdminBlocked:           true,
 		IsRequesterUserBlockedByTarget: true,
@@ -102,11 +104,15 @@ func TestNewErrorWithDetails_BlockStatus(t *testing.T) {
 	if !errors.As(err, &detailed) {
 		t.Fatalf("returned error does not implement DetailedProcessedError: %v", err)
 	}
-	got, ok := detailed.Details().(personal_profile.BlockStatusFlags)
+	got, ok := detailed.Details().(*rpc_common_modelv1.BlockStatusFlags)
 	if !ok {
-		t.Fatalf("details is not BlockStatusFlags, got %T", detailed.Details())
+		t.Fatalf("details is not *rpc_common_modelv1.BlockStatusFlags, got %T", detailed.Details())
 	}
-	if got != flags {
+	if got.IsRequesterAdminBlocked != flags.IsRequesterAdminBlocked ||
+		got.IsTargetAdminBlocked != flags.IsTargetAdminBlocked ||
+		got.IsRequesterUserBlockedByTarget != flags.IsRequesterUserBlockedByTarget ||
+		got.IsTargetUserBlockedByRequester != flags.IsTargetUserBlockedByRequester ||
+		got.IsTargetProfilePrivate != flags.IsTargetProfilePrivate {
 		t.Fatalf("details = %+v, want %+v", got, flags)
 	}
 }
