@@ -1,6 +1,7 @@
 package personal_chat
 
 import (
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 
 // newStaleKeysError wraps kit.NewErrorWithDetails to keep tests terse and
 // preserve the previous message format.
-func newStaleKeysError(details StaleKeysErrorDetails) error {
+func newStaleKeysError(details *rpc_common_modelv1.StaleKeysErrorDetails) error {
 	return kit.NewErrorWithDetails(
 		http.StatusConflict,
 		"keys_stale",
@@ -28,8 +29,8 @@ func newStaleKeysError(details StaleKeysErrorDetails) error {
 // ============================================================================
 
 func TestStaleKeysError_ImplementsProcessedError(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideRecipient,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideRecipient),
 		RecipientKeysRevision: 7,
 		RecipientActiveKeys:   []string{"key1", "key2"},
 	}
@@ -44,8 +45,8 @@ func TestStaleKeysError_ImplementsProcessedError(t *testing.T) {
 }
 
 func TestStaleKeysError_ImplementsDetailedProcessedError(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideRecipient,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideRecipient),
 		RecipientKeysRevision: 7,
 		RecipientActiveKeys:   []string{"key1", "key2"},
 	}
@@ -58,9 +59,9 @@ func TestStaleKeysError_ImplementsDetailedProcessedError(t *testing.T) {
 	returnedDetails := dpe.Details()
 	assert.NotNil(t, returnedDetails)
 
-	returnedStaleDetails, ok := returnedDetails.(StaleKeysErrorDetails)
-	require.True(t, ok, "Details should be StaleKeysErrorDetails")
-	assert.Equal(t, StaleSideRecipient, returnedStaleDetails.StaleSide)
+	returnedStaleDetails, ok := returnedDetails.(*rpc_common_modelv1.StaleKeysErrorDetails)
+	require.True(t, ok, "Details should be *rpc_common_modelv1.StaleKeysErrorDetails")
+	assert.Equal(t, string(StaleSideRecipient), returnedStaleDetails.StaleSide)
 	assert.Equal(t, int32(7), returnedStaleDetails.RecipientKeysRevision)
 	assert.Equal(t, []string{"key1", "key2"}, returnedStaleDetails.RecipientActiveKeys)
 }
@@ -70,8 +71,8 @@ func TestStaleKeysError_ImplementsDetailedProcessedError(t *testing.T) {
 // ============================================================================
 
 func TestStaleKeysError_HTTPResponse_IncludesDetails(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideRecipient,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideRecipient),
 		RecipientKeysRevision: 7,
 		RecipientActiveKeys:   []string{"device1_key_base64", "device2_key_base64"},
 	}
@@ -103,10 +104,10 @@ func TestStaleKeysError_HTTPResponse_IncludesDetails(t *testing.T) {
 
 	detailsMap, ok := result["details"].(map[string]interface{})
 	require.True(t, ok, "details field should exist and be a map")
-	assert.Equal(t, "recipient", detailsMap["stale_side"])
-	assert.Equal(t, float64(7), detailsMap["recipient_keys_revision"])
+	assert.Equal(t, "recipient", detailsMap["staleSide"])
+	assert.Equal(t, float64(7), detailsMap["recipientKeysRevision"])
 
-	activeKeys, ok := detailsMap["recipient_active_keys"].([]interface{})
+	activeKeys, ok := detailsMap["recipientActiveKeys"].([]interface{})
 	require.True(t, ok, "recipient_active_keys should be an array")
 	assert.Len(t, activeKeys, 2)
 	assert.Equal(t, "device1_key_base64", activeKeys[0])
@@ -114,8 +115,8 @@ func TestStaleKeysError_HTTPResponse_IncludesDetails(t *testing.T) {
 }
 
 func TestStaleKeysError_HTTPResponse_RecipientStale(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideRecipient,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideRecipient),
 		RecipientKeysRevision: 7,
 		RecipientActiveKeys:   []string{"key1"},
 	}
@@ -141,15 +142,15 @@ func TestStaleKeysError_HTTPResponse_RecipientStale(t *testing.T) {
 	require.NoError(t, json.Unmarshal(jsonBytes, &result))
 	detailsMap := result["details"].(map[string]interface{})
 
-	_, hasSenderRevision := detailsMap["sender_keys_revision"]
-	_, hasSenderKeys := detailsMap["sender_active_keys"]
+	_, hasSenderRevision := detailsMap["senderKeysRevision"]
+	_, hasSenderKeys := detailsMap["senderActiveKeys"]
 	assert.False(t, hasSenderRevision, "sender_keys_revision should be omitted")
 	assert.False(t, hasSenderKeys, "sender_active_keys should be omitted")
 }
 
 func TestStaleKeysError_HTTPResponse_SenderStale(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:          StaleSideSender,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:          string(StaleSideSender),
 		SenderKeysRevision: 3,
 		SenderActiveKeys:   []string{"sender_key1"},
 	}
@@ -175,18 +176,18 @@ func TestStaleKeysError_HTTPResponse_SenderStale(t *testing.T) {
 	require.NoError(t, json.Unmarshal(jsonBytes, &result))
 	detailsMap := result["details"].(map[string]interface{})
 
-	assert.Equal(t, "sender", detailsMap["stale_side"])
-	assert.Equal(t, float64(3), detailsMap["sender_keys_revision"])
+	assert.Equal(t, "sender", detailsMap["staleSide"])
+	assert.Equal(t, float64(3), detailsMap["senderKeysRevision"])
 
-	_, hasRecipientRevision := detailsMap["recipient_keys_revision"]
-	_, hasRecipientKeys := detailsMap["recipient_active_keys"]
+	_, hasRecipientRevision := detailsMap["recipientKeysRevision"]
+	_, hasRecipientKeys := detailsMap["recipientActiveKeys"]
 	assert.False(t, hasRecipientRevision, "recipient_keys_revision should be omitted")
 	assert.False(t, hasRecipientKeys, "recipient_active_keys should be omitted")
 }
 
 func TestStaleKeysError_HTTPResponse_BothStale(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideBoth,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideBoth),
 		SenderKeysRevision:    3,
 		SenderActiveKeys:      []string{"sender_key1"},
 		RecipientKeysRevision: 7,
@@ -214,14 +215,14 @@ func TestStaleKeysError_HTTPResponse_BothStale(t *testing.T) {
 	require.NoError(t, json.Unmarshal(jsonBytes, &result))
 	detailsMap := result["details"].(map[string]interface{})
 
-	assert.Equal(t, "both", detailsMap["stale_side"])
-	assert.Equal(t, float64(3), detailsMap["sender_keys_revision"])
-	assert.Equal(t, float64(7), detailsMap["recipient_keys_revision"])
+	assert.Equal(t, "both", detailsMap["staleSide"])
+	assert.Equal(t, float64(3), detailsMap["senderKeysRevision"])
+	assert.Equal(t, float64(7), detailsMap["recipientKeysRevision"])
 
-	senderKeys := detailsMap["sender_active_keys"].([]interface{})
+	senderKeys := detailsMap["senderActiveKeys"].([]interface{})
 	assert.Len(t, senderKeys, 1)
 
-	recipientKeys := detailsMap["recipient_active_keys"].([]interface{})
+	recipientKeys := detailsMap["recipientActiveKeys"].([]interface{})
 	assert.Len(t, recipientKeys, 2)
 }
 
@@ -230,8 +231,8 @@ func TestStaleKeysError_HTTPResponse_BothStale(t *testing.T) {
 // ============================================================================
 
 func TestToWSError_IncludesDetails(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideRecipient,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideRecipient),
 		RecipientKeysRevision: 7,
 		RecipientActiveKeys:   []string{"key1", "key2"},
 	}
@@ -245,9 +246,9 @@ func TestToWSError_IncludesDetails(t *testing.T) {
 
 	assert.NotNil(t, wsErr.Details, "details should not be nil")
 
-	returnedDetails, ok := wsErr.Details.(StaleKeysErrorDetails)
-	require.True(t, ok, "details should be StaleKeysErrorDetails")
-	assert.Equal(t, StaleSideRecipient, returnedDetails.StaleSide)
+	returnedDetails, ok := wsErr.Details.(*rpc_common_modelv1.StaleKeysErrorDetails)
+	require.True(t, ok, "details should be *rpc_common_modelv1.StaleKeysErrorDetails")
+	assert.Equal(t, string(StaleSideRecipient), returnedDetails.StaleSide)
 	assert.Equal(t, int32(7), returnedDetails.RecipientKeysRevision)
 	assert.Equal(t, []string{"key1", "key2"}, returnedDetails.RecipientActiveKeys)
 }
@@ -263,8 +264,8 @@ func TestToWSError_RegularError_NoDetails(t *testing.T) {
 }
 
 func TestToWSError_JSONSerialization_IncludesDetails(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideRecipient,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideRecipient),
 		RecipientKeysRevision: 7,
 		RecipientActiveKeys:   []string{"key1"},
 	}
@@ -284,8 +285,8 @@ func TestToWSError_JSONSerialization_IncludesDetails(t *testing.T) {
 
 	detailsMap, ok := result["details"].(map[string]interface{})
 	require.True(t, ok, "details field should exist and be a map")
-	assert.Equal(t, "recipient", detailsMap["stale_side"])
-	assert.Equal(t, float64(7), detailsMap["recipient_keys_revision"])
+	assert.Equal(t, "recipient", detailsMap["staleSide"])
+	assert.Equal(t, float64(7), detailsMap["recipientKeysRevision"])
 }
 
 func TestToWSError_RegularError_JSONSerialization_OmitsDetails(t *testing.T) {
@@ -352,8 +353,8 @@ func TestExistingErrors_StillWork_NoDetails(t *testing.T) {
 // ============================================================================
 
 func TestStaleKeysError_EmptyKeys(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideRecipient,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideRecipient),
 		RecipientKeysRevision: 0,
 		RecipientActiveKeys:   []string{},
 	}
@@ -362,14 +363,14 @@ func TestStaleKeysError_EmptyKeys(t *testing.T) {
 	wsErr := toWSError(err)
 
 	assert.NotNil(t, wsErr.Details)
-	returnedDetails := wsErr.Details.(StaleKeysErrorDetails)
+	returnedDetails := wsErr.Details.(*rpc_common_modelv1.StaleKeysErrorDetails)
 	assert.Equal(t, int32(0), returnedDetails.RecipientKeysRevision)
 	assert.Empty(t, returnedDetails.RecipientActiveKeys)
 }
 
 func TestStaleKeysError_MultipleKeys(t *testing.T) {
-	details := StaleKeysErrorDetails{
-		StaleSide:             StaleSideRecipient,
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{
+		StaleSide:             string(StaleSideRecipient),
 		RecipientKeysRevision: 10,
 		RecipientActiveKeys:   []string{"key1", "key2", "key3", "key4", "key5"},
 	}
@@ -377,6 +378,6 @@ func TestStaleKeysError_MultipleKeys(t *testing.T) {
 	err := newStaleKeysError(details)
 	wsErr := toWSError(err)
 
-	returnedDetails := wsErr.Details.(StaleKeysErrorDetails)
+	returnedDetails := wsErr.Details.(*rpc_common_modelv1.StaleKeysErrorDetails)
 	assert.Len(t, returnedDetails.RecipientActiveKeys, 5)
 }

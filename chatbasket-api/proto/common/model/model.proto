@@ -16,3 +16,11 @@ message BlockStatusFlags {
   bool isTargetUserBlockedByRequester = 4;
   bool isTargetProfilePrivate = 5;
 }
+
+message StaleKeysErrorDetails {
+  string staleSide = 1;
+  int32 senderKeysRevision = 2;
+  int32 recipientKeysRevision = 3;
+  repeated string senderActiveKeys = 4;
+  repeated string recipientActiveKeys = 5;
+}

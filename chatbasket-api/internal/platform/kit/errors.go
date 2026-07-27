@@ -78,6 +78,16 @@ func NewError(code int, errType, message string) error {
 // DetailedProcessedError. The details value is included in the JSON
 // response by the global error handler. Use this whenever the frontend
 // needs structured data about the error beyond the message.
+//
+// IMPORTANT ARCHITECTURAL NOTE: The `details` argument passed here MUST implement
+// proto.Message if this error is returned from Connect RPC endpoints (so it can be
+// packed into google.protobuf.Any). Define it in a .proto file (e.g., model.proto),
+// compile it, and pass the generated pointer struct. Do NOT pass a plain Go struct,
+// as it will be silently ignored by the RPC error serializer.
+//
+// Example:
+//   details := &rpc_common_modelv1.StaleKeysErrorDetails{StaleSide: "recipient"}
+//   return NewErrorWithDetails(http.StatusConflict, "keys_stale", "stale keys", details)
 func NewErrorWithDetails(code int, errType, message string, details interface{}) error {
 	return &processedError{
 		code:    code,
@@ -235,7 +245,12 @@ func ParseIntoRpcError(err error) error {
 			Type: pe.Kind(),
 		}
 
-		// Extract and serialize structured details if available
+		// Extract and serialize structured details if available.
+		// IMPORTANT ARCHITECTURAL NOTE: Any structured error details object passed to
+		// kit.NewErrorWithDetails MUST implement proto.Message. This means the details
+		// struct must be defined as a Protobuf message in the .proto files (e.g. model.proto)
+		// and compiled. DO NOT pass plain Go structs here, as they cannot be serialized
+		// into google.protobuf.Any and will be silently ignored.
 		if dpe, ok := pe.(DetailedProcessedError); ok && dpe.Details() != nil {
 			if protoMsg, ok := dpe.Details().(proto.Message); ok {
 				if detailsAny, anyErr := anypb.New(protoMsg); anyErr == nil {
@@ -259,6 +274,15 @@ func NewConnectRpcError(code int, errType, message string) error {
 }
 
 // NewConnectRpcErrorWithDetails constructs a *connect.Error directly from status code, type/kind, message, and details.
+//
+// IMPORTANT ARCHITECTURAL NOTE: The `details` argument passed here MUST implement
+// proto.Message (so it can be packed into google.protobuf.Any). Define it in a .proto file
+// (e.g., model.proto), compile it, and pass the generated pointer struct. Do NOT pass a plain Go
+// struct, as it will be silently ignored by the RPC error serializer.
+//
+// Example:
+//   details := &rpc_common_modelv1.StaleKeysErrorDetails{StaleSide: "recipient"}
+//   return NewConnectRpcErrorWithDetails(http.StatusConflict, "keys_stale", "stale keys", details)
 func NewConnectRpcErrorWithDetails(code int, errType, message string, details interface{}) error {
 	return ParseIntoRpcError(NewErrorWithDetails(code, errType, message, details))
 }

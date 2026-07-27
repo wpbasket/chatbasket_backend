@@ -1,12 +1,14 @@
 package personal_chat
 
 import (
+	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"log"
 	"net/http"
 	"strings"
@@ -54,7 +56,7 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 	return viewURL, downloadURL, nil
 }
 
-func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURLPayload, userID kit.UserId) (*GetFileURLResponse, error) {
+func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURLPayload, userID kit.UserId) (*rpc_personal_chatv1.GetFileURLResponse, error) {
 	messageID, err := uuid.Parse(payload.MessageID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_request", "Invalid message ID")
@@ -67,9 +69,9 @@ func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURL
 	if fileErr != nil {
 		return nil, fileErr
 	}
-	return &GetFileURLResponse{
-		ViewURL:     viewURL,
-		DownloadURL: downloadURL,
+	return &rpc_personal_chatv1.GetFileURLResponse{
+		ViewUrl:     viewURL,
+		DownloadUrl: downloadURL,
 	}, nil
 }
 
@@ -89,7 +91,7 @@ func validateChatMessageType(messageType string) error {
 // PresignChatUpload picks the next R2 account (round-robin), generates a unique
 // file ID with account prefix, registers the upload in pending_uploads with a
 // 2-hour TTL, and returns a presigned R2 PUT URL with a 15-minute lifetime.
-func (s *chatService) PresignChatUpload(ctx context.Context, params PresignChatUploadParams) (*PresignChatUploadResponse, error) {
+func (s *chatService) PresignChatUpload(ctx context.Context, params PresignChatUploadParams) (*rpc_personal_chatv1.PresignChatUploadResponse, error) {
 	if err := validateChatMessageType(params.MessageType); err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_request", err.Error())
 	}
@@ -115,10 +117,10 @@ func (s *chatService) PresignChatUpload(ctx context.Context, params PresignChatU
 		_ = s.PendingUploads.Remove(ctx, fileID)
 		return nil, kit.NewError(http.StatusInternalServerError, "presign_failed", "Failed to generate presigned URL: "+err.Error())
 	}
-	return &PresignChatUploadResponse{
-		FileID:       fileID,
-		PresignedURL: presignedURL,
-		ExpiresAt:    time.Now().UTC().Add(r2PresignedURLLifetime),
+	return &rpc_personal_chatv1.PresignChatUploadResponse{
+		FileId:       fileID,
+		PresignedUrl: presignedURL,
+		ExpiresAt:    timestamppb.New(time.Now().UTC().Add(r2PresignedURLLifetime)),
 	}, nil
 }
 

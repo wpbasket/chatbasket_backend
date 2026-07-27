@@ -11,14 +11,14 @@ import (
 )
 
 type HistorySyncRequestedPayload struct {
-	RequestID          uuid.UUID `json:"request_id"`
-	RequesterSessionID uuid.UUID `json:"requester_session_id"`
-	RequesterPublicKey string    `json:"requester_public_key"`
-	ChatsCipher        string    `json:"chats_cipher"`
+	RequestID          uuid.UUID `json:"requestId"`
+	RequesterSessionID uuid.UUID `json:"requesterSessionId"`
+	RequesterPublicKey string    `json:"requesterPublicKey"`
+	ChatsCipher        string    `json:"chatsCipher"`
 }
 
 type HistorySyncReadyPayload struct {
-	RequestID uuid.UUID `json:"request_id"`
+	RequestID uuid.UUID `json:"requestId"`
 }
 
 // RequestHistorySync handles step ①: secondary requests sync

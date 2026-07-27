@@ -1,6 +1,7 @@
 package personal_chat
 
 import (
+	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/websocket"
 	"log"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
+	"google.golang.org/protobuf/proto"
 )
 
 type chatHandler struct {
@@ -94,13 +96,13 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 	// ——— WS Broadcast: new_message ————————————————————————————————————————————————————————————————
 	if h.hub != nil {
 		sessionId := extractSessionId(c)
-		recipientUUID, _ := uuid.Parse(resp.RecipientID)
+		recipientUUID, _ := uuid.Parse(resp.RecipientId)
 
 		log.Printf("[WS Broadcast] SendMessage: msgID=%s chatID=%s sender=%s recipient=%s sessionId=%s",
-			resp.MessageID, resp.ChatID, userID.StringUserId, resp.RecipientID, sessionId)
+			resp.MessageId, resp.ChatId, userID.StringUserId, resp.RecipientId, sessionId)
 
 		// For recipient: is_from_me = false
-		recipientPayload := *resp
+		recipientPayload := proto.Clone(resp).(*rpc_personal_chatv1.Message)
 		recipientPayload.IsFromMe = false
 		log.Printf("[WS Broadcast] SendMessage: pushing new_message to RECIPIENT=%s (is_from_me=false)", recipientUUID)
 		go h.hub.BroadcastToUser(recipientUUID, websocket.WSEvent{

@@ -1,6 +1,7 @@
 package personal_chat
 
 import (
+	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/websocket"
 	"context"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 )
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -59,19 +61,19 @@ func (r *chatWSRouter) handleMessage(ctx context.Context, conn *websocket.WSConn
 	var wsErr *websocket.WSError
 
 	switch event.Type {
-	case "send_message":
+	case "sendMessage":
 		payload, wsErr = r.handleSendMessage(ctx, conn, event.Payload)
-	case "ack_delivery":
+	case "ackDelivery":
 		payload, wsErr = r.handleAckDelivery(ctx, conn, event.Payload)
-	case "ack_delivery_batch":
+	case "ackDeliveryBatch":
 		payload, wsErr = r.handleAckDeliveryBatch(ctx, conn, event.Payload)
-	case "mark_read":
+	case "markRead":
 		payload, wsErr = r.handleMarkRead(ctx, conn, event.Payload)
 	case "unsend":
 		payload, wsErr = r.handleUnsend(ctx, conn, event.Payload)
-	case "delete_for_me":
+	case "deleteForMe":
 		payload, wsErr = r.handleDeleteForMe(ctx, conn, event.Payload)
-	case "ack_sync_action":
+	case "ackSyncAction":
 		payload, wsErr = r.handleAckSyncAction(ctx, conn, event.Payload)
 	case "ping":
 		payload = map[string]string{"type": "pong"}
@@ -80,7 +82,7 @@ func (r *chatWSRouter) handleMessage(ctx context.Context, conn *websocket.WSConn
 	}
 
 	return websocket.WSResponseEvent{
-		Type:    event.Type + "_response",
+		Type:    event.Type + "Response",
 		Ref:     event.Ref,
 		Payload: payload,
 		Error:   wsErr,
@@ -114,10 +116,10 @@ func (r *chatWSRouter) handleSendMessage(ctx context.Context, conn *websocket.WS
 
 	// WS Broadcast: new_message to recipient and sender's other devices
 	if r.hub != nil {
-		recipientUUID, _ := uuid.Parse(resp.RecipientID)
+		recipientUUID, _ := uuid.Parse(resp.RecipientId)
 
 		// To recipient: is_from_me = false
-		recipientPayload := *resp
+		recipientPayload := proto.Clone(resp).(*rpc_personal_chatv1.Message)
 		recipientPayload.IsFromMe = false
 		go r.hub.BroadcastToUser(recipientUUID, websocket.WSEvent{
 			Type:    WSEventNewMessage,

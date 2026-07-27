@@ -12,14 +12,14 @@ import (
 // ──────────────────────────────────────────────────────────────────────────────
 
 const (
-	WSEventNewMessage  = "new_message"
-	WSEventDeliveryAck = "delivery_ack"
-	WSEventReadReceipt = "read_receipt"
+	WSEventNewMessage  = "newMessage"
+	WSEventDeliveryAck = "deliveryAck"
+	WSEventReadReceipt = "readReceipt"
 	WSEventUnsend      = "unsend"
-	WSEventDeleteForMe = "delete_for_me"
-	WSEventSyncAction  = "sync_action"
-	WSEventHistorySyncRequested = "history_sync_requested"
-	WSEventHistorySyncReady     = "history_sync_ready"
+	WSEventDeleteForMe = "deleteForMe"
+	WSEventSyncAction  = "syncAction"
+	WSEventHistorySyncRequested = "historySyncRequested"
+	WSEventHistorySyncReady     = "historySyncReady"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -42,49 +42,49 @@ const (
 // ──────────────────────────────────────────────────────────────────────────────
 
 type ChatResponse struct {
-	ChatID                   string     `json:"chat_id"`
-	OtherUserID              string     `json:"other_user_id"`
-	OtherUserName            string     `json:"other_user_name"`
-	OtherUserUsername        string     `json:"other_user_username"`
-	OtherUserBio             *string    `json:"other_user_bio"`
-	AvatarURL                *string    `json:"avatar_url"`
-	AvatarFileId             *string    `json:"avatar_file_id"`
-	CreatedAt                time.Time  `json:"created_at"`
-	UpdatedAt                time.Time  `json:"updated_at"`
-	OtherUserLastReadAt      time.Time  `json:"other_user_last_read_at"`
-	OtherUserLastDeliveredAt time.Time  `json:"other_user_last_delivered_at"`
-	LastMessageContent       *string    `json:"last_message_content"`
-	LastMessageCreatedAt     *time.Time `json:"last_message_created_at"`
-	LastMessageType          *string    `json:"last_message_type"`
+	ChatID                   string     `json:"chatId"`
+	OtherUserID              string     `json:"otherUserId"`
+	OtherUserName            string     `json:"otherUserName"`
+	OtherUserUsername        string     `json:"otherUserUsername"`
+	OtherUserBio             *string    `json:"otherUserBio"`
+	AvatarURL                *string    `json:"avatarUrl"`
+	AvatarFileId             *string    `json:"avatarFileId"`
+	CreatedAt                time.Time  `json:"createdAt"`
+	UpdatedAt                time.Time  `json:"updatedAt"`
+	OtherUserLastReadAt      time.Time  `json:"otherUserLastReadAt"`
+	OtherUserLastDeliveredAt time.Time  `json:"otherUserLastDeliveredAt"`
+	LastMessageContent       *string    `json:"lastMessageContent"`
+	LastMessageCreatedAt     *time.Time `json:"lastMessageCreatedAt"`
+	LastMessageType          *string    `json:"lastMessageType"`
 	LastMessageSenderID      *string    `json:"-"`
-	LastMessageIsFromMe      bool       `json:"last_message_is_from_me"`
-	LastMessageStatus        string     `json:"last_message_status"`
-	LastMessageIsUnsent      bool       `json:"last_message_is_unsent"`
-	LastMessageID            *string    `json:"last_message_id"`
-	UnreadCount              int        `json:"unread_count"`
-	OtherUserKeysRevision    int32      `json:"other_user_keys_revision"`
-	ProfileType              string     `json:"profile_type"`
+	LastMessageIsFromMe      bool       `json:"lastMessageIsFromMe"`
+	LastMessageStatus        string     `json:"lastMessageStatus"`
+	LastMessageIsUnsent      bool       `json:"lastMessageIsUnsent"`
+	LastMessageID            *string    `json:"lastMessageId"`
+	UnreadCount              int        `json:"unreadCount"`
+	OtherUserKeysRevision    int32      `json:"otherUserKeysRevision"`
+	ProfileType              string     `json:"profileType"`
 }
 
 type MessageResponse struct {
-	MessageID                   string     `json:"message_id"`
-	ChatID                      string     `json:"chat_id"`
-	RecipientID                 string     `json:"recipient_id"`
-	SenderKeysRevision          int32      `json:"sender_keys_revision"`
+	MessageID                   string     `json:"messageId"`
+	ChatID                      string     `json:"chatId"`
+	RecipientID                 string     `json:"recipientId"`
+	SenderKeysRevision          int32      `json:"senderKeysRevision"`
 	Content                     string     `json:"content"`
-	MessageType                 string     `json:"message_type"`
-	DeliveredToRecipient        bool       `json:"delivered_to_recipient"`
-	DeliveredToRecipientPrimary bool       `json:"delivered_to_recipient_primary"`
-	SyncedToSenderPrimary       bool       `json:"synced_to_sender_primary"`
-	CreatedAt                   time.Time  `json:"created_at"`
-	ExpiresAt                   time.Time  `json:"expires_at"`
-	IsFromMe                    bool       `json:"is_from_me"`
-	FileID                      *string    `json:"file_id"`
-	FileName                    *string    `json:"file_name"`
-	FileSize                    *int64     `json:"file_size"`
-	FileMimeType                *string    `json:"file_mime_type"`
-	ViewURL                     string     `json:"view_url,omitempty"`
-	DownloadURL                 string     `json:"download_url,omitempty"`
+	MessageType                 string     `json:"messageType"`
+	DeliveredToRecipient        bool       `json:"deliveredToRecipient"`
+	DeliveredToRecipientPrimary bool       `json:"deliveredToRecipientPrimary"`
+	SyncedToSenderPrimary       bool       `json:"syncedToSenderPrimary"`
+	CreatedAt                   time.Time  `json:"createdAt"`
+	ExpiresAt                   time.Time  `json:"expiresAt"`
+	IsFromMe                    bool       `json:"isFromMe"`
+	FileID                      *string    `json:"fileId"`
+	FileName                    *string    `json:"fileName"`
+	FileSize                    *int64     `json:"fileSize"`
+	FileMimeType                *string    `json:"fileMimeType"`
+	ViewURL                     string     `json:"viewUrl,omitempty"`
+	DownloadURL                 string     `json:"downloadUrl,omitempty"`
 }
 
 type MessagingEligibilityResponse struct {
@@ -95,8 +95,8 @@ type MessagingEligibilityResponse struct {
 type GetMessagesResponse struct {
 	Messages                 []MessageResponse `json:"messages"`
 	Count                    int               `json:"count"`
-	OtherUserLastReadAt      time.Time         `json:"other_user_last_read_at"`
-	OtherUserLastDeliveredAt time.Time         `json:"other_user_last_delivered_at"`
+	OtherUserLastReadAt      time.Time         `json:"otherUserLastReadAt"`
+	OtherUserLastDeliveredAt time.Time         `json:"otherUserLastDeliveredAt"`
 }
 
 type GetUserChatsResponse struct {
@@ -109,53 +109,53 @@ type AcknowledgeDeliveryResponse struct {
 }
 
 type AckDeliveryBatchResponse struct {
-	AcknowledgedCount int `json:"acknowledged_count"`
+	AcknowledgedCount int `json:"acknowledgedCount"`
 }
 
 type GetFileURLResponse struct {
-	ViewURL     string `json:"view_url,omitempty"`
-	DownloadURL string `json:"download_url"`
+	ViewURL     string `json:"viewUrl,omitempty"`
+	DownloadURL string `json:"downloadUrl"`
 }
 
 // PresignChatUploadResponse is returned by POST /chat/presign.
 type PresignChatUploadResponse struct {
-	FileID       string    `json:"file_id"`
-	PresignedURL string    `json:"presigned_url"`
-	ExpiresAt    time.Time `json:"expires_at"`
+	FileID       string    `json:"fileId"`
+	PresignedURL string    `json:"presignedUrl"`
+	ExpiresAt    time.Time `json:"expiresAt"`
 }
 
 // ConfirmChatUploadPayload is the request body for POST /chat/confirm.
 type ConfirmChatUploadPayload struct {
-	MessageID             string `json:"message_id" validate:"required,uuid"`
-	FileID                string `json:"file_id" validate:"required"`
-	RecipientID           string `json:"recipient_id" validate:"required,uuid"`
+	MessageID             string `json:"messageId" validate:"required,uuid"`
+	FileID                string `json:"fileId" validate:"required"`
+	RecipientID           string `json:"recipientId" validate:"required,uuid"`
 	Content               string `json:"content" validate:"required,max=5000"`
-	MessageType           string `json:"message_type" validate:"required,oneof=image video audio file"`
-	RecipientKeysRevision int32  `json:"recipient_keys_revision"`
-	SenderKeysRevision    int32  `json:"sender_keys_revision"`
+	MessageType           string `json:"messageType" validate:"required,oneof=image video audio file"`
+	RecipientKeysRevision int32  `json:"recipientKeysRevision"`
+	SenderKeysRevision    int32  `json:"senderKeysRevision"`
 }
 
 // ConfirmChatUploadResponse is returned by POST /chat/confirm.
 type ConfirmChatUploadResponse struct {
-	MessageID          string    `json:"message_id"`
-	ChatID             string    `json:"chat_id"`
-	RecipientID        string    `json:"recipient_id"`
-	SenderKeysRevision int32     `json:"sender_keys_revision"`
-	FileID             string    `json:"file_id"`
-	MessageType        string    `json:"message_type"`
-	ViewURL            string    `json:"view_url,omitempty"`
-	DownloadURL        string    `json:"download_url"`
-	CreatedAt          time.Time `json:"created_at"`
-	ExpiresAt          time.Time `json:"expires_at"`
+	MessageID          string    `json:"messageId"`
+	ChatID             string    `json:"chatId"`
+	RecipientID        string    `json:"recipientId"`
+	SenderKeysRevision int32     `json:"senderKeysRevision"`
+	FileID             string    `json:"fileId"`
+	MessageType        string    `json:"messageType"`
+	ViewURL            string    `json:"viewUrl,omitempty"`
+	DownloadURL        string    `json:"downloadUrl"`
+	CreatedAt          time.Time `json:"createdAt"`
+	ExpiresAt          time.Time `json:"expiresAt"`
 }
 
 type SyncActionResponse struct {
 	ID                 string            `json:"id"`
-	UserID             string            `json:"user_id"`
-	ActionType         string            `json:"action_type"`
+	UserID             string            `json:"userId"`
+	ActionType         string            `json:"actionType"`
 	Payload            SyncActionPayload `json:"payload"`
-	DeliveredToPrimary bool              `json:"delivered_to_primary"`
-	CreatedAt          time.Time         `json:"created_at"`
+	DeliveredToPrimary bool              `json:"deliveredToPrimary"`
+	CreatedAt          time.Time         `json:"createdAt"`
 }
 
 type GetSyncActionsResponse struct {
@@ -180,11 +180,11 @@ const (
 
 // StaleKeysErrorDetails carries the fresh keys and revisions for the stale side(s)
 type StaleKeysErrorDetails struct {
-	StaleSide              StaleSide `json:"stale_side"`
-	SenderKeysRevision     int32     `json:"sender_keys_revision,omitempty"`
-	RecipientKeysRevision  int32     `json:"recipient_keys_revision,omitempty"`
-	SenderActiveKeys       []string  `json:"sender_active_keys,omitempty"`
-	RecipientActiveKeys    []string  `json:"recipient_active_keys,omitempty"`
+	StaleSide              StaleSide `json:"staleSide"`
+	SenderKeysRevision     int32     `json:"senderKeysRevision,omitempty"`
+	RecipientKeysRevision  int32     `json:"recipientKeysRevision,omitempty"`
+	SenderActiveKeys       []string  `json:"senderActiveKeys,omitempty"`
+	RecipientActiveKeys    []string  `json:"recipientActiveKeys,omitempty"`
 }
 
 
@@ -193,49 +193,49 @@ type StaleKeysErrorDetails struct {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type CheckEligibilityPayload struct {
-	RecipientID string `json:"recipient_id" validate:"required,uuid"`
+	RecipientID string `json:"recipientId" validate:"required,uuid"`
 }
 
 type CreateChatPayload struct {
-	RecipientID string `json:"recipient_id" validate:"required,uuid"`
+	RecipientID string `json:"recipientId" validate:"required,uuid"`
 }
 
 type SendMessagePayload struct {
-	MessageID             string `json:"message_id" validate:"required,uuid"`
-	RecipientID           string `json:"recipient_id" validate:"required,uuid"`
+	MessageID             string `json:"messageId" validate:"required,uuid"`
+	RecipientID           string `json:"recipientId" validate:"required,uuid"`
 	Content               string `json:"content" validate:"required,max=5000"`
-	MessageType           string `json:"message_type" validate:"required,oneof=text image video audio file"`
-	RecipientKeysRevision int32  `json:"recipient_keys_revision"`
-	SenderKeysRevision    int32  `json:"sender_keys_revision"`
+	MessageType           string `json:"messageType" validate:"required,oneof=text image video audio file"`
+	RecipientKeysRevision int32  `json:"recipientKeysRevision"`
+	SenderKeysRevision    int32  `json:"senderKeysRevision"`
 }
 
 type AcknowledgeDeliveryPayload struct {
-	MessageID      string `json:"message_id" validate:"required,uuid"`
-	AcknowledgedBy string `json:"acknowledged_by" validate:"required,oneof=recipient sender"`
+	MessageID      string `json:"messageId" validate:"required,uuid"`
+	AcknowledgedBy string `json:"acknowledgedBy" validate:"required,oneof=recipient sender"`
 	Success        bool   `json:"success"`
 }
 
 type GetMessagesPayload struct {
-	ChatID string `query:"chat_id" validate:"required,uuid"`
+	ChatID string `query:"chatId" validate:"required,uuid"`
 	Limit  int32  `query:"limit"`
 	Offset int32  `query:"offset"`
 }
 
 type MarkChatReadPayload struct {
-	ChatID string `json:"chat_id" validate:"required,uuid"`
+	ChatID string `json:"chatId" validate:"required,uuid"`
 }
 
 type GetFileURLPayload struct {
-	MessageID string `json:"message_id" query:"message_id" validate:"required,uuid"`
+	MessageID string `json:"messageId" query:"messageId" validate:"required,uuid"`
 }
 
 type UnsendMessagePayload struct {
-	ChatID     string   `json:"chat_id" validate:"required,uuid"`
-	MessageIDs []string `json:"message_ids" validate:"required,min=1,dive,uuid"`
+	ChatID     string   `json:"chatId" validate:"required,uuid"`
+	MessageIDs []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
 }
 
 type DeleteMessageForMePayload struct {
-	MessageIDs []string `json:"message_ids" validate:"required,min=1,dive,uuid"`
+	MessageIDs []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
 }
 
 type GetSyncActionsPayload struct {
@@ -247,12 +247,12 @@ type GetPendingMessagesPayload struct {
 }
 
 type AcknowledgeSyncActionPayload struct {
-	ActionID string `json:"action_id" validate:"required,uuid"`
+	ActionID string `json:"actionId" validate:"required,uuid"`
 }
 
 type AckDeliveryBatchPayload struct {
-	MessageIDs     []string `json:"message_ids" validate:"required,min=1,dive,uuid"`
-	AcknowledgedBy string   `json:"acknowledged_by" validate:"required,oneof=recipient sender"`
+	MessageIDs     []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
+	AcknowledgedBy string   `json:"acknowledgedBy" validate:"required,oneof=recipient sender"`
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -260,31 +260,31 @@ type AckDeliveryBatchPayload struct {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type DeliveryAckEventPayload struct {
-	ChatID      string    `json:"chat_id"`
-	MessageIDs  []string  `json:"message_ids"`
-	DeliveredAt time.Time `json:"delivered_at"`
+	ChatID      string    `json:"chatId"`
+	MessageIDs  []string  `json:"messageIds"`
+	DeliveredAt time.Time `json:"deliveredAt"`
 }
 
 type ReadReceiptEventPayload struct {
-	ChatID   string `json:"chat_id"`
-	ReaderID string `json:"reader_id"`
-	ReadAt   string `json:"read_at"`
+	ChatID   string `json:"chatId"`
+	ReaderID string `json:"readerId"`
+	ReadAt   string `json:"readAt"`
 }
 
 type UnsendEventPayload struct {
-	ChatID     string   `json:"chat_id"`
-	MessageIDs []string `json:"message_ids"`
-	SenderID   string   `json:"sender_id"`
+	ChatID     string   `json:"chatId"`
+	MessageIDs []string `json:"messageIds"`
+	SenderID   string   `json:"senderId"`
 }
 
 type DeleteForMeEventPayload struct {
-	ChatID     string   `json:"chat_id"`
-	MessageIDs []string `json:"message_ids"`
+	ChatID     string   `json:"chatId"`
+	MessageIDs []string `json:"messageIds"`
 }
 
 type SyncActionPayload struct {
-	MessageIDs []string `json:"message_ids"`
-	ChatID     string   `json:"chat_id,omitempty"`
+	MessageIDs []string `json:"messageIds"`
+	ChatID     string   `json:"chatId,omitempty"`
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

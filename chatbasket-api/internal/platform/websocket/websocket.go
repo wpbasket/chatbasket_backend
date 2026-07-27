@@ -4,13 +4,14 @@ import (
 	"chatbasket-api/internal/platform/kit"
 	"context"
 	"encoding/json"
+	"log"
 	"sync"
 	"time"
 
-	"log"
-
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // WSEvent is the envelope for server→client push events (broadcasts).
@@ -18,6 +19,39 @@ type WSEvent struct {
 	Type    string `json:"type"`
 	Payload any    `json:"payload"`
 }
+
+// MarshalJSON ensures that if Payload is a Protobuf message, it is serialized
+// via protojson (camelCase field names, ISO 8601 timestamps) for consistency
+// with the rest of the API surface.
+func (e WSEvent) MarshalJSON() ([]byte, error) {
+	var payloadBytes []byte
+	var err error
+
+	if pm, ok := e.Payload.(proto.Message); ok {
+		m := protojson.MarshalOptions{
+			UseProtoNames:   false,
+			EmitUnpopulated: false,
+		}
+		payloadBytes, err = m.Marshal(pm)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		payloadBytes, err = json.Marshal(e.Payload)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return json.Marshal(struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}{
+		Type:    e.Type,
+		Payload: payloadBytes,
+	})
+}
+
 
 // WSClientEvent is the envelope for client→server messages.
 type WSClientEvent struct {
@@ -33,6 +67,47 @@ type WSResponseEvent struct {
 	Payload any      `json:"payload"`
 	Error   *WSError `json:"error"`
 }
+
+// MarshalJSON ensures proto payloads in direct WS responses are serialized via
+// protojson (camelCase keys, ISO 8601 timestamps) for consistency with WSEvent.
+func (e WSResponseEvent) MarshalJSON() ([]byte, error) {
+	var payloadBytes []byte
+	var err error
+
+	if pm, ok := e.Payload.(proto.Message); ok {
+		m := protojson.MarshalOptions{
+			UseProtoNames:   false,
+			EmitUnpopulated: false,
+		}
+		payloadBytes, err = m.Marshal(pm)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		payloadBytes, err = json.Marshal(e.Payload)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	errBytes, err := json.Marshal(e.Error)
+	if err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(struct {
+		Type    string          `json:"type"`
+		Ref     string          `json:"ref"`
+		Payload json.RawMessage `json:"payload"`
+		Error   json.RawMessage `json:"error"`
+	}{
+		Type:    e.Type,
+		Ref:     e.Ref,
+		Payload: payloadBytes,
+		Error:   errBytes,
+	})
+}
+
 
 // WSError represents an error in a WS response.
 type WSError struct {

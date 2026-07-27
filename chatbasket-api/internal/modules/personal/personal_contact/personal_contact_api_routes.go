@@ -4,18 +4,14 @@ import (
 	"net/http"
 
 	rpc_personal_contactv1connect "chatbasket-api/gen/proto/personal/personal_contact/rpc_personal_contactv1connect"
-	"chatbasket-api/internal/platform/middleware"
 
 	"github.com/labstack/echo/v5"
 )
 
 // Register initializes the Contact module dependencies and registers its routes.
-func Register(personalGroup *echo.Group, contactService *contactService, authProvider middleware.AuthSessionProvider) {
+func Register(personalGroup *echo.Group, contactService *contactService) {
 	handler := newContactHandler(contactService)
 
-	// Apply Auth Middleware to all personal routes
-	// Note: personalGroup already has AuthSessionMiddleware applied in routes.go
-	
 	// Contact Routes
 	contacts := personalGroup.Group("/contacts")
 	

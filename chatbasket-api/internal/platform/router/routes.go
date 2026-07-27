@@ -10,6 +10,7 @@ import (
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/config"
 	"chatbasket-api/internal/platform/kit"
+	"chatbasket-api/internal/platform/middleware"
 	"chatbasket-api/internal/platform/services"
 	"chatbasket-api/internal/platform/websocket"
 	"context"
@@ -73,16 +74,18 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 
 	// 2. Personal Category
 	personalGroup := apiGroup.Group("/personal")
+	personalGroup.Use(middleware.AuthSessionMiddleware(authService, true, wsHub))
+
 	profileService := personal_profile.NewProfileService(
 		globalService, r.Pool, authService,
 		r.Config.Security.PersonalUsernameKey,
 		pendingUploadsSvc, r.R2Pool,
 	)
-	personal_profile.Register(personalGroup, profileService, authService, wsHub)
+	personal_profile.Register(personalGroup, profileService)
 
 
 	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey, r.Config.Security.PersonalContactKey)
-	personal_contact.Register(personalGroup, contactService, authService)
+	personal_contact.Register(personalGroup, contactService)
 
 	// 3. Chat Module
 	chatService := personal_chat.NewChatService(
@@ -90,7 +93,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 		r.Pool, authService, profileService, contactService,
 		pendingUploadsSvc, r.R2Pool,
 	)
-	personal_chat.Register(personalGroup, chatService, wsHub, authService)
+	personal_chat.Register(personalGroup, chatService, wsHub)
 	contactService.RegisterChatCleanupProvider(chatService)
 
 	// 4. Settings Module

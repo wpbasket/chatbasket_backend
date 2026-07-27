@@ -1,19 +1,20 @@
 package personal_chat
 
 import (
+	rpc_personal_chatv1connect "chatbasket-api/gen/proto/personal/personal_chat/rpc_personal_chatv1connect"
 	"chatbasket-api/internal/platform/middleware"
 	"chatbasket-api/internal/platform/websocket"
 
 	"github.com/labstack/echo/v5"
+	"net/http"
 )
 
 // Register initializes the Chat module dependencies and registers its routes.
-func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WSHub, authProvider middleware.AuthSessionProvider) {
+func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WSHub) {
 	handler := newChatHandler(chatSvc, hub)
 
 	// Chat Routes
 	chat := personalGroup.Group("/chat")
-	chat.Use(middleware.AuthSessionMiddleware(authProvider, true, hub))
 
 	// Chat management
 	chat.POST("/check-eligibility", handler.CheckEligibility)
@@ -47,4 +48,9 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WS
 
 	// WebSocket
 	chat.GET("/ws", handler.WebSocketUpgrade)
+
+	// Connect RPC Routes
+	connectServer := newChatConnectServer(chatSvc, hub)
+	path, connectHandler := rpc_personal_chatv1connect.NewChatServiceHandler(connectServer)
+	personalGroup.Any(path+"*", echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)))
 }

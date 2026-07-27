@@ -114,14 +114,15 @@ chatbasket_backend/
 │       └── deploy_web.yml
 ├── .gitnexus/
 │   ├── parse-cache/
-│   │   ├── 264d7f038abc482e289eb511ea573882eebb651684529733a09df8c17a422e80.json
+│   │   ├── 108258dbbdd104bc29336a440e82a8fe11b0ee7a7eb410216c60639db7393548.json
 │   │   └── index.json
 │   ├── parsedfile-cache/
-│   │   ├── 264d7f038abc482e289eb511ea573882eebb651684529733a09df8c17a422e80/
-│   │   │   ├── 264d7f038abc482e289eb511ea573882eebb651684529733a09df8c17a422e80-w1-0.json
-│   │   │   └── 264d7f038abc482e289eb511ea573882eebb651684529733a09df8c17a422e80-w1-1.json
+│   │   ├── 108258dbbdd104bc29336a440e82a8fe11b0ee7a7eb410216c60639db7393548/
+│   │   │   ├── 108258dbbdd104bc29336a440e82a8fe11b0ee7a7eb410216c60639db7393548-w1-0.json
+│   │   │   └── 108258dbbdd104bc29336a440e82a8fe11b0ee7a7eb410216c60639db7393548-w1-1.json
 │   │   └── index.json
 │   ├── .gitignore
+│   ├── gitnexus.json
 │   ├── lbug
 │   ├── lbug.wal.missing-shadow.1781598046694-ombdqhuclvl
 │   ├── meta.json
@@ -140,11 +141,7 @@ chatbasket_backend/
 │   │   │   │   ├── 002_auth_rate_limiter.down.sql
 │   │   │   │   ├── 002_auth_rate_limiter.up.sql
 │   │   │   │   ├── 003_qr_login.down.sql
-│   │   │   │   ├── 003_qr_login.up.sql
-│   │   │   │   ├── 004_sessions_e2ee.down.sql
-│   │   │   │   ├── 004_sessions_e2ee.up.sql
-│   │   │   │   ├── 009_auth_users_keys_revision.down.sql
-│   │   │   │   └── 009_auth_users_keys_revision.up.sql
+│   │   │   │   └── 003_qr_login.up.sql
 │   │   │   └── queries/
 │   │   │       ├── auth.sql
 │   │   │       ├── e2ee.sql
@@ -166,16 +163,10 @@ chatbasket_backend/
 │   │   │   │   ├── 006_personal_chat_system.up.sql
 │   │   │   │   ├── 007_block_sync_actions_cleanup.down.sql
 │   │   │   │   ├── 007_block_sync_actions_cleanup.up.sql
-│   │   │   │   ├── 008_e2ee_public_key.down.sql
-│   │   │   │   ├── 008_e2ee_public_key.up.sql
-│   │   │   │   ├── 009_drop_users_e2ee_public_key.down.sql
-│   │   │   │   ├── 009_drop_users_e2ee_public_key.up.sql
-│   │   │   │   ├── 010_chat_pending_uploads.down.sql
-│   │   │   │   ├── 010_chat_pending_uploads.up.sql
-│   │   │   │   ├── 011_avatar_status_lifecycle.down.sql
-│   │   │   │   ├── 011_avatar_status_lifecycle.up.sql
-│   │   │   │   ├── 012_revert_avatar_status.down.sql
-│   │   │   │   └── 012_revert_avatar_status.up.sql
+│   │   │   │   ├── 010_pending_uploads.down.sql
+│   │   │   │   ├── 010_pending_uploads.up.sql
+│   │   │   │   ├── 011_history_sync.down.sql
+│   │   │   │   └── 011_history_sync.up.sql
 │   │   │   └── queries/
 │   │   │       ├── pending_uploads.sql
 │   │   │       ├── personal_chat.sql
@@ -184,6 +175,31 @@ chatbasket_backend/
 │   │   └── public/
 │   │       └── queries/
 │   │           └── placeholder.sql
+│   ├── gen/
+│   │   └── proto/
+│   │       ├── common/
+│   │       │   ├── error/
+│   │       │   │   └── errors.pb.go
+│   │       │   └── model/
+│   │       │       └── model.pb.go
+│   │       ├── core/
+│   │       │   └── core_auth/
+│   │       │       ├── rpc_core_authv1connect/
+│   │       │       │   └── core_auth_api.connect.go
+│   │       │       └── core_auth_api.pb.go
+│   │       └── personal/
+│   │           ├── personal_chat/
+│   │           │   ├── rpc_personal_chatv1connect/
+│   │           │   │   └── personal_chat_api.connect.go
+│   │           │   └── personal_chat_api.pb.go
+│   │           ├── personal_contact/
+│   │           │   ├── rpc_personal_contactv1connect/
+│   │           │   │   └── personal_contact_api.connect.go
+│   │           │   └── personal_contact_api.pb.go
+│   │           └── personal_profile/
+│   │               ├── rpc_personal_profilev1connect/
+│   │               │   └── personal_profile_base_api.connect.go
+│   │               └── personal_profile_base_api.pb.go
 │   ├── internal/
 │   │   ├── modules/
 │   │   │   ├── core/
@@ -202,6 +218,7 @@ chatbasket_backend/
 │   │   │   │   │   ├── core_auth_api_qr_handler.go
 │   │   │   │   │   ├── core_auth_api_qr_handler_test.go
 │   │   │   │   │   ├── core_auth_api_routes.go
+│   │   │   │   │   ├── core_auth_connect_handler.go
 │   │   │   │   │   ├── core_auth_errors.go
 │   │   │   │   │   ├── core_auth_kit_otp.go
 │   │   │   │   │   ├── core_auth_kit_password.go
@@ -235,20 +252,28 @@ chatbasket_backend/
 │   │   │       │   ├── internal/
 │   │   │       │   │   └── personal_chat_store/
 │   │   │       │   │       ├── db.go
+│   │   │       │   │       ├── history_sync_integration_test.go
 │   │   │       │   │       ├── models.go
 │   │   │       │   │       ├── personal_chat.sql.go
 │   │   │       │   │       └── querier.go
+│   │   │       │   ├── cleanup_integration_test.go
+│   │   │       │   ├── history_sync_api_http_handler.go
+│   │   │       │   ├── history_sync_svc.go
+│   │   │       │   ├── history_sync_svc_integration_test.go
 │   │   │       │   ├── personal_chat_api_http_handler.go
 │   │   │       │   ├── personal_chat_api_routes.go
 │   │   │       │   ├── personal_chat_api_ws_handler.go
 │   │   │       │   ├── personal_chat_api_ws_router.go
+│   │   │       │   ├── personal_chat_connect_handler.go
 │   │   │       │   ├── personal_chat_errors.go
 │   │   │       │   ├── personal_chat_mdl.go
 │   │   │       │   ├── personal_chat_svc.go
 │   │   │       │   ├── personal_chat_svc_cleanup.go
 │   │   │       │   ├── personal_chat_svc_cleanup_mock_test.go
 │   │   │       │   ├── personal_chat_svc_file.go
+│   │   │       │   ├── personal_chat_svc_idempotency_test.go
 │   │   │       │   ├── personal_chat_svc_revision_test.go
+│   │   │       │   ├── personal_chat_svc_session_filter_mock_test.go
 │   │   │       │   └── stale_keys_error_test.go
 │   │   │       ├── personal_contact/
 │   │   │       │   ├── internal/
@@ -259,6 +284,9 @@ chatbasket_backend/
 │   │   │       │   │       └── querier.go
 │   │   │       │   ├── personal_contact_api_http_handler.go
 │   │   │       │   ├── personal_contact_api_routes.go
+│   │   │       │   ├── personal_contact_block_status_test.go
+│   │   │       │   ├── personal_contact_connect_handler.go
+│   │   │       │   ├── personal_contact_delete_integration_test.go
 │   │   │       │   ├── personal_contact_errors.go
 │   │   │       │   ├── personal_contact_mdl.go
 │   │   │       │   ├── personal_contact_svc.go
@@ -272,6 +300,8 @@ chatbasket_backend/
 │   │   │       │   │       └── querier.go
 │   │   │       │   ├── personal_profile_api_http_handler.go
 │   │   │       │   ├── personal_profile_api_routes.go
+│   │   │       │   ├── personal_profile_block_status_integration_test.go
+│   │   │       │   ├── personal_profile_connect_handler.go
 │   │   │       │   ├── personal_profile_constants.go
 │   │   │       │   ├── personal_profile_errors.go
 │   │   │       │   ├── personal_profile_mdl.go
@@ -299,9 +329,12 @@ chatbasket_backend/
 │   │       │   └── config.go
 │   │       ├── kit/
 │   │       │   ├── concurrent_delete.go
+│   │       │   ├── connect_rpc.go
 │   │       │   ├── crypto.go
 │   │       │   ├── errors.go
+│   │       │   ├── errors_test.go
 │   │       │   ├── models.go
+│   │       │   ├── proto_helpers.go
 │   │       │   └── utils.go
 │   │       ├── logger/
 │   │       │   └── logger.go
@@ -314,9 +347,27 @@ chatbasket_backend/
 │   │       │   └── services.go
 │   │       └── websocket/
 │   │           └── websocket.go
+│   ├── proto/
+│   │   ├── common/
+│   │   │   ├── error/
+│   │   │   │   └── errors.proto
+│   │   │   └── model/
+│   │   │       └── model.proto
+│   │   ├── core/
+│   │   │   └── core_auth/
+│   │   │       └── core_auth_api.proto
+│   │   └── personal/
+│   │       ├── personal_chat/
+│   │       │   └── personal_chat_api.proto
+│   │       ├── personal_contact/
+│   │       │   └── personal_contact_api.proto
+│   │       └── personal_profile/
+│   │           └── personal_profile_base_api.proto
 │   ├── .env
 │   ├── .gitignore
 │   ├── Dockerfile
+│   ├── buf.gen.yaml
+│   ├── buf.yaml
 │   ├── go.mod
 │   ├── go.sum
 │   └── sqlc.yaml
@@ -691,14 +742,16 @@ chatbasket/
 │       └── deploy-web.yml
 ├── .gitnexus/
 │   ├── parse-cache/
-│   │   ├── 1742e6ce83a5de97cf3d40233f19265c185c77509de9bf875eeae1cd2ae11716.json
+│   │   ├── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d.json
 │   │   └── index.json
 │   ├── parsedfile-cache/
-│   │   ├── 1742e6ce83a5de97cf3d40233f19265c185c77509de9bf875eeae1cd2ae11716/
-│   │   │   ├── 1742e6ce83a5de97cf3d40233f19265c185c77509de9bf875eeae1cd2ae11716-w1-0.json
-│   │   │   └── 1742e6ce83a5de97cf3d40233f19265c185c77509de9bf875eeae1cd2ae11716-w1-1.json
+│   │   ├── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d/
+│   │   │   ├── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d-w1-0.json
+│   │   │   ├── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d-w1-1.json
+│   │   │   └── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d-w1-2.json
 │   │   └── index.json
 │   ├── .gitignore
+│   ├── gitnexus.json
 │   ├── lbug
 │   ├── meta.json
 │   └── run.cjs
@@ -769,6 +822,8 @@ chatbasket/
 │   └── prune-pages-deployments.ts
 ├── src/
 │   ├── __tests__/
+│   │   ├── components/
+│   │   │   └── privacy_avatar.test.ts
 │   │   ├── lib/
 │   │   │   ├── e2ee/
 │   │   │   │   ├── e2ee_recipient_key_validation.test.ts
@@ -781,18 +836,26 @@ chatbasket/
 │   │   │   ├── chat/
 │   │   │   │   ├── ack_race_condition.test.ts
 │   │   │   │   ├── avatar_caching.test.ts
+│   │   │   │   ├── history_sync.test.ts
 │   │   │   │   ├── is_contactable.test.ts
 │   │   │   │   ├── pending_preview_heal.test.ts
 │   │   │   │   ├── ui_sort_local_seq.test.ts
 │   │   │   │   └── ws.e2ee_v3_bridge.test.ts
-│   │   │   └── personalState/
-│   │   │       └── profile_avatar.test.ts
+│   │   │   ├── contacts/
+│   │   │   │   └── personal.state.contacts.test.ts
+│   │   │   ├── personalState/
+│   │   │   │   └── profile_avatar.test.ts
+│   │   │   └── userProfiles/
+│   │   │       ├── user_profiles_appliers.test.ts
+│   │   │       └── user_profiles_store.test.ts
 │   │   ├── storage/
 │   │   │   ├── auth.e2ee_revision.test.ts
 │   │   │   ├── chat.storage.localSeq.test.ts
+│   │   │   ├── sqlite_key.test.ts
 │   │   │   └── storage_init.e2ee_seed.test.ts
 │   │   └── utils/
 │   │       ├── personalUtils/
+│   │       │   ├── util.contactErrors.test.ts
 │   │       │   └── util.messageTick.test.ts
 │   │       └── personal_util_device.test.ts
 │   ├── app/
@@ -802,8 +865,13 @@ chatbasket/
 │   │   │   └── index.tsx
 │   │   ├── personal/
 │   │   │   ├── contacts/
+│   │   │   │   ├── chat/
+│   │   │   │   │   ├── user/
+│   │   │   │   │   │   └── [user_id].tsx
+│   │   │   │   │   └── [chat_id].tsx
 │   │   │   │   ├── components/
 │   │   │   │   │   ├── ContactRow.tsx
+│   │   │   │   │   ├── ContactsBulkActionBar.tsx
 │   │   │   │   │   ├── ContactsHeaderSection.tsx
 │   │   │   │   │   └── ContactsSegmentTabs.tsx
 │   │   │   │   ├── requests/
@@ -828,6 +896,8 @@ chatbasket/
 │   │   │   │   │   │   ├── BulkActionBar.tsx
 │   │   │   │   │   │   ├── ChatInputBar.tsx
 │   │   │   │   │   │   └── MessageBubble.tsx
+│   │   │   │   │   ├── user/
+│   │   │   │   │   │   └── [user_id].tsx
 │   │   │   │   │   ├── README_CHAT.md
 │   │   │   │   │   ├── [chat_id].tsx
 │   │   │   │   │   ├── _layout.tsx
@@ -967,15 +1037,32 @@ chatbasket/
 │   │   ├── Colors.ts
 │   │   ├── fonts.ts
 │   │   └── theme.ts
+│   ├── gen/
+│   │   └── proto/
+│   │       ├── common/
+│   │       │   ├── error/
+│   │       │   │   └── errors_pb.ts
+│   │       │   └── model/
+│   │       │       └── model_pb.ts
+│   │       ├── core/
+│   │       │   └── core_auth/
+│   │       │       └── core_auth_api_pb.ts
+│   │       └── personal/
+│   │           ├── personal_chat/
+│   │           │   └── personal_chat_api_pb.ts
+│   │           ├── personal_contact/
+│   │           │   └── personal_contact_api_pb.ts
+│   │           └── personal_profile/
+│   │               └── personal_profile_base_api_pb.ts
 │   ├── hooks/
 │   │   ├── commonHooks/
 │   │   │   ├── hooks.notificationPermission.ts
 │   │   │   ├── hooks.notificationPermission.web.ts
 │   │   │   ├── hooks.pressableAnimation.ts
 │   │   │   ├── hooks.qrLogin.ts
-│   │   │   └── hooks.qrScanner.ts
+│   │   │   ├── hooks.qrScanner.ts
+│   │   │   └── hooks.theme.ts
 │   │   ├── personalHooks/
-│   │   │   └── hooks.stableIme.ts
 │   │   └── useIncomingShare.ts
 │   ├── lib/
 │   │   ├── commonLib/
@@ -991,6 +1078,8 @@ chatbasket/
 │   │   │   │   └── api.auth.ts
 │   │   │   ├── clients/
 │   │   │   │   ├── client.ts
+│   │   │   │   ├── connectClient.ts
+│   │   │   │   ├── errorDetailRegistry.ts
 │   │   │   │   ├── fileClient.ts
 │   │   │   │   └── fileClient.web.ts
 │   │   │   ├── constants/
@@ -1003,6 +1092,7 @@ chatbasket/
 │   │   │   ├── chatApi/
 │   │   │   │   ├── chat.transport.ts
 │   │   │   │   ├── connection.watcher.ts
+│   │   │   │   ├── history.sync.ts
 │   │   │   │   ├── outbox.errors.ts
 │   │   │   │   ├── outbox.queue.ts
 │   │   │   │   ├── personal.api.chat.ts
@@ -1019,7 +1109,8 @@ chatbasket/
 │   │   │   │   └── index.ts
 │   │   │   ├── fileSystem/
 │   │   │   │   ├── file.copy.ts
-│   │   │   │   └── file.download.ts
+│   │   │   │   ├── file.download.ts
+│   │   │   │   └── file.upload.ts
 │   │   │   ├── models/
 │   │   │   │   ├── personal.model.chat.ts
 │   │   │   │   ├── personal.model.contact.ts
@@ -1027,7 +1118,8 @@ chatbasket/
 │   │   │   │   ├── personal.model.profile.ts
 │   │   │   │   └── personal.model.setting.ts
 │   │   │   ├── profileApi/
-│   │   │   │   └── personal.api.profile.ts
+│   │   │   │   ├── personal.api.profile.ts
+│   │   │   │   └── profile.service.ts
 │   │   │   ├── settingApi/
 │   │   │   │   └── personal.api.setting.ts
 │   │   │   └── index.ts
@@ -1043,7 +1135,8 @@ chatbasket/
 │   │   ├── storage/
 │   │   │   ├── commonStorage/
 │   │   │   │   ├── storage.auth.ts
-│   │   │   │   └── storage.preferences.ts
+│   │   │   │   ├── storage.preferences.ts
+│   │   │   │   └── storage.sqliteKey.ts
 │   │   │   ├── personalStorage/
 │   │   │   │   ├── chat/
 │   │   │   │   │   ├── chat.storage.native.ts
@@ -1094,8 +1187,10 @@ chatbasket/
 │   │   │   ├── profile/
 │   │   │   │   ├── personal.state.profile.createProfile.ts
 │   │   │   │   └── personal.state.profile.updateProfile.ts
-│   │   │   └── user/
-│   │   │       └── personal.state.user.ts
+│   │   │   ├── user/
+│   │   │   │   └── personal.state.user.ts
+│   │   │   └── userProfiles/
+│   │   │       └── personal.state.userProfiles.ts
 │   │   ├── publicState/
 │   │   │   ├── profile/
 │   │   │   │   ├── public.state.profile.createProfile.ts
@@ -1109,6 +1204,9 @@ chatbasket/
 │   │   │   └── public.state.userPostsStore.ts
 │   │   ├── settings/
 │   │   │   └── state.setting.ts
+│   │   ├── theme/
+│   │   │   ├── README_THEME.md
+│   │   │   └── state.theme.ts
 │   │   ├── tools/
 │   │   │   └── state.network.ts
 │   │   ├── ui/
@@ -1121,12 +1219,15 @@ chatbasket/
 │   │   │   ├── util.modal.ts
 │   │   │   ├── util.resendCooldown.ts
 │   │   │   ├── util.router.ts
-│   │   │   └── util.upload.ts
+│   │   │   ├── util.supportsHover.ts
+│   │   │   ├── util.upload.ts
+│   │   │   └── uuid.ts
 │   │   ├── personalUtils/
 │   │   │   ├── logger/
 │   │   │   │   ├── README.md
 │   │   │   │   ├── logger.config.ts
 │   │   │   │   └── logger.ts
+│   │   │   ├── personal.util.chatActions.ts
 │   │   │   ├── personal.util.contactActions.ts
 │   │   │   ├── personal.util.contacts.ts
 │   │   │   ├── personal.util.device.ts
@@ -1150,6 +1251,7 @@ chatbasket/
 ├── README.md
 ├── app.json
 ├── babel.config.js
+├── buf.gen.yaml
 ├── eas.json
 ├── eslint.config.js
 ├── expo-env.d.ts

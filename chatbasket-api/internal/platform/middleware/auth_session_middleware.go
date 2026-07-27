@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v5"
@@ -42,6 +43,15 @@ type AuthSessionConfig struct {
 	RequireVerified bool
 	Hub             *websocket.WSHub
 	Skipper         func(c *echo.Context) bool
+}
+
+var connectErrorWriter = connect.NewErrorWriter()
+
+func writeAuthError(c *echo.Context, err error) error {
+	if connectErrorWriter.IsSupported(c.Request()) {
+		return connectErrorWriter.Write(c.Response(), c.Request(), kit.ParseIntoRpcError(err))
+	}
+	return err
 }
 
 // AuthSessionMiddleware verifies the session token and populates the context.
@@ -110,19 +120,19 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 
 			// 1. Check missing auth
 			if sessionId == "" || userId == "" {
-				return kit.NewError(http.StatusUnauthorized, "missing_auth", "Missing session ID or User ID")
+				return writeAuthError(c, kit.NewError(http.StatusUnauthorized, "missing_auth", "Missing session ID or User ID"))
 			}
 
 			// 2. Parse User ID to UUID
 			uuidVal, err := kit.StringToUUID(userId)
 			if err != nil {
-				return kit.NewError(http.StatusUnauthorized, "invalid_user_id", "Invalid user format")
+				return writeAuthError(c, kit.NewError(http.StatusUnauthorized, "invalid_user_id", "Invalid user format"))
 			}
 
 			// 3. Compute HMAC and Verify Session via Store
 			tokenHash, err := kit.ComputeHMAC(sessionId, config.AuthProvider.GetAuthSecret(), true, new(uuidVal.String()))
 			if err != nil {
-				return kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to process session token")
+				return writeAuthError(c, kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to process session token"))
 			}
 
 			ctx := c.Request().Context()
@@ -133,15 +143,15 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 				// Distinguish between legitimate auth errors and infrastructure errors
 				if err == pgx.ErrNoRows {
 					closeSessionConnection(uuidVal, sessionId)
-					return kit.NewError(http.StatusUnauthorized, "session_invalid", "Invalid or expired session")
+					return writeAuthError(c, kit.NewError(http.StatusUnauthorized, "session_invalid", "Invalid or expired session"))
 				}
 				// Database connection error or other infrastructure issue
-				return kit.NewError(http.StatusServiceUnavailable, "service_unavailable", "Unable to verify session: "+kit.GetPostgresError(err).Message)
+				return writeAuthError(c, kit.NewError(http.StatusServiceUnavailable, "service_unavailable", "Unable to verify session: "+kit.GetPostgresError(err).Message))
 			}
 
 			if session.ExpiresAt.Before(time.Now()) {
 				closeSessionConnection(uuidVal, sessionId)
-				return kit.NewError(http.StatusUnauthorized, "session_invalid", "Session expired")
+				return writeAuthError(c, kit.NewError(http.StatusUnauthorized, "session_invalid", "Session expired"))
 			}
 
 			// 4. Get User details
@@ -149,15 +159,15 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 			if err != nil {
 				if err == pgx.ErrNoRows {
 					closeSessionConnection(uuidVal, sessionId)
-					return kit.NewError(http.StatusUnauthorized, "user_not_found", "User not found")
+					return writeAuthError(c, kit.NewError(http.StatusUnauthorized, "user_not_found", "User not found"))
 				}
-				return kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user: "+kit.GetPostgresError(err).Message)
+				return writeAuthError(c, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user: "+kit.GetPostgresError(err).Message))
 			}
 
 			// 5. Check Verification (if required)
 			if config.RequireVerified && !authUser.IsEmailVerified {
 				closeSessionConnection(uuidVal, sessionId)
-				return kit.NewError(http.StatusForbidden, "unverified_email", "Email must be verified to perform this action")
+				return writeAuthError(c, kit.NewError(http.StatusForbidden, "unverified_email", "Email must be verified to perform this action"))
 			}
 
 			// ✅ Set context for handler access

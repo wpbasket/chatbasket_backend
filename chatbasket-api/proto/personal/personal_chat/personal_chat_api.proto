@@ -1,0 +1,261 @@
+syntax = "proto3";
+
+package rpc_personal_chat.v1;
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/model/model.proto";
+
+option go_package = "chatbasket-api/gen/proto/personal/personal_chat;rpc_personal_chatv1";
+
+message Chat {
+  string chatId = 1;
+  string otherUserId = 2;
+  string otherUserName = 3;
+  string otherUserUsername = 4;
+  optional string otherUserBio = 5;
+  optional string avatarUrl = 6;
+  optional string avatarFileId = 7;
+  google.protobuf.Timestamp createdAt = 8;
+  google.protobuf.Timestamp updatedAt = 9;
+  google.protobuf.Timestamp otherUserLastReadAt = 10;
+  google.protobuf.Timestamp otherUserLastDeliveredAt = 11;
+  optional string lastMessageContent = 12;
+  optional google.protobuf.Timestamp lastMessageCreatedAt = 13;
+  optional string lastMessageType = 14;
+  bool lastMessageIsFromMe = 15;
+  string lastMessageStatus = 16;
+  bool lastMessageIsUnsent = 17;
+  optional string lastMessageId = 18;
+  int32 unreadCount = 19;
+  int32 otherUserKeysRevision = 20;
+  string profileType = 21;
+}
+
+message Message {
+  string messageId = 1;
+  string chatId = 2;
+  string recipientId = 3;
+  int32 senderKeysRevision = 4;
+  string content = 5;
+  string messageType = 6;
+  bool deliveredToRecipient = 7;
+  bool deliveredToRecipientPrimary = 8;
+  bool syncedToSenderPrimary = 9;
+  google.protobuf.Timestamp createdAt = 10;
+  google.protobuf.Timestamp expiresAt = 11;
+  bool isFromMe = 12;
+  optional string fileId = 13;
+  optional string fileName = 14;
+  optional int64 fileSize = 15;
+  optional string fileMimeType = 16;
+  string viewUrl = 17;
+  string downloadUrl = 18;
+}
+
+message CheckEligibilityRequest {
+  string recipientId = 1;
+}
+
+message CheckEligibilityResponse {
+  bool allowed = 1;
+  string reason = 2;
+}
+
+message CreateChatRequest {
+  string recipientId = 1;
+}
+
+message CreateChatResponse {
+  string chatId = 1;
+  string otherUserId = 2;
+  string otherUserName = 3;
+  string otherUserUsername = 4;
+  optional string otherUserBio = 5;
+  optional string avatarUrl = 6;
+  optional string avatarFileId = 7;
+  google.protobuf.Timestamp createdAt = 8;
+  google.protobuf.Timestamp updatedAt = 9;
+  google.protobuf.Timestamp otherUserLastReadAt = 10;
+  google.protobuf.Timestamp otherUserLastDeliveredAt = 11;
+  bool lastMessageIsFromMe = 12;
+  int32 otherUserKeysRevision = 13;
+  string profileType = 14;
+}
+
+message GetUserChatsRequest {}
+
+message GetUserChatsResponse {
+  repeated Chat chats = 1;
+  int32 count = 2;
+}
+
+message SendMessageRequest {
+  string messageId = 1;
+  string recipientId = 2;
+  string content = 3;
+  string messageType = 4;
+  int32 recipientKeysRevision = 5;
+  int32 senderKeysRevision = 6;
+}
+
+message GetMessagesRequest {
+  string chatId = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message GetMessagesResponse {
+  repeated Message messages = 1;
+  int32 count = 2;
+  google.protobuf.Timestamp otherUserLastReadAt = 3;
+  google.protobuf.Timestamp otherUserLastDeliveredAt = 4;
+}
+
+message GetPendingMessagesRequest {
+  int32 limit = 1;
+}
+
+message GetPendingMessagesResponse {
+  repeated Message messages = 1;
+  int32 count = 2;
+  google.protobuf.Timestamp otherUserLastReadAt = 3;
+  google.protobuf.Timestamp otherUserLastDeliveredAt = 4;
+}
+
+message AcknowledgeDeliveryRequest {
+  string messageId = 1;
+  string acknowledgedBy = 2;
+  bool success = 3;
+}
+
+message AcknowledgeDeliveryResponse {
+  bool acknowledged = 1;
+}
+
+message PresignChatUploadRequest {
+  string recipientId = 1;
+  string messageType = 2;
+  int32 recipientKeysRevision = 3;
+  int32 senderKeysRevision = 4;
+}
+
+message PresignChatUploadResponse {
+  string fileId = 1;
+  string presignedUrl = 2;
+  google.protobuf.Timestamp expiresAt = 3;
+}
+
+message ConfirmChatUploadRequest {
+  string messageId = 1;
+  string fileId = 2;
+  string recipientId = 3;
+  string content = 4;
+  string messageType = 5;
+  int32 recipientKeysRevision = 6;
+  int32 senderKeysRevision = 7;
+}
+
+message ConfirmChatUploadResponse {
+  string messageId = 1;
+  string chatId = 2;
+  string recipientId = 3;
+  int32 senderKeysRevision = 4;
+  string fileId = 5;
+  string messageType = 6;
+  string viewUrl = 7;
+  string downloadUrl = 8;
+  google.protobuf.Timestamp createdAt = 9;
+  google.protobuf.Timestamp expiresAt = 10;
+}
+
+message GetFileURLRequest {
+  string messageId = 1;
+}
+
+message GetFileURLResponse {
+  string viewUrl = 1;
+  string downloadUrl = 2;
+}
+
+message MarkChatReadRequest {
+  string chatId = 1;
+}
+
+message UnsendMessageRequest {
+  string chatId = 2;
+  repeated string messageIds = 3;
+}
+
+message DeleteMessageForMeRequest {
+  repeated string messageIds = 1;
+}
+
+message SyncActionPayload {
+  repeated string messageIds = 1;
+  optional string chatId = 2;
+}
+
+message SyncAction {
+  string id = 1;
+  string userId = 2;
+  string actionType = 3;
+  SyncActionPayload payload = 4;
+  bool deliveredToPrimary = 5;
+  google.protobuf.Timestamp createdAt = 6;
+}
+
+message GetSyncActionsRequest {
+  int32 limit = 1;
+}
+
+message GetSyncActionsResponse {
+  repeated SyncAction actions = 1;
+  int32 count = 2;
+}
+
+message AcknowledgeSyncActionRequest {
+  string actionId = 1;
+}
+
+message RequestHistorySyncRequest {
+  string chatsCipher = 1;
+  string usedPrimaryKey = 2;
+}
+
+message RequestHistorySyncResponse {
+  string requestId = 1;
+}
+
+message UploadHistorySyncRequest {
+  string requestId = 1;
+  string payloadCipher = 2;
+}
+
+message DownloadHistorySyncRequest {
+  string requestId = 1;
+}
+
+message DownloadHistorySyncResponse {
+  string payloadCipher = 1;
+}
+
+service ChatService {
+  rpc CheckEligibility(CheckEligibilityRequest) returns (CheckEligibilityResponse);
+  rpc CreateChat(CreateChatRequest) returns (CreateChatResponse);
+  rpc GetUserChats(GetUserChatsRequest) returns (GetUserChatsResponse);
+  rpc SendMessage(SendMessageRequest) returns (Message);
+  rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse);
+  rpc GetPendingMessages(GetPendingMessagesRequest) returns (GetPendingMessagesResponse);
+  rpc AcknowledgeDelivery(AcknowledgeDeliveryRequest) returns (AcknowledgeDeliveryResponse);
+  rpc PresignUpload(PresignChatUploadRequest) returns (PresignChatUploadResponse);
+  rpc ConfirmUpload(ConfirmChatUploadRequest) returns (ConfirmChatUploadResponse);
+  rpc GetFileURL(GetFileURLRequest) returns (GetFileURLResponse);
+  rpc MarkChatRead(MarkChatReadRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc UnsendMessage(UnsendMessageRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc DeleteMessageForMe(DeleteMessageForMeRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc GetSyncActions(GetSyncActionsRequest) returns (GetSyncActionsResponse);
+  rpc AcknowledgeSyncAction(AcknowledgeSyncActionRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc RequestHistorySync(RequestHistorySyncRequest) returns (RequestHistorySyncResponse);
+  rpc UploadHistorySync(UploadHistorySyncRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc DownloadHistorySync(DownloadHistorySyncRequest) returns (DownloadHistorySyncResponse);
+}

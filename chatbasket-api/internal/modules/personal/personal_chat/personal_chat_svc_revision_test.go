@@ -1,14 +1,15 @@
 package personal_chat
 
 import (
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
+	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
+	"chatbasket-api/internal/modules/personal/personal_profile"
+	"chatbasket-api/internal/platform/kit"
 	"context"
 	"errors"
 	"testing"
 	"time"
 
-	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
-	"chatbasket-api/internal/modules/personal/personal_profile"
-	"chatbasket-api/internal/platform/kit"
 	"github.com/google/uuid"
 	"github.com/pashagolub/pgxmock/v5"
 	"github.com/stretchr/testify/assert"
@@ -166,8 +167,8 @@ func TestSendMessage_RevisionStaleness_RejectsStaleRevision(t *testing.T) {
 		assert.Equal(t, "keys_stale", pe.Kind())
 		// Check details
 		if dpe, ok := err.(kit.DetailedProcessedError); ok {
-			details := dpe.Details().(StaleKeysErrorDetails)
-			assert.Equal(t, StaleSideRecipient, details.StaleSide)
+			details := dpe.Details().(*rpc_common_modelv1.StaleKeysErrorDetails)
+			assert.Equal(t, string(StaleSideRecipient), details.StaleSide)
 			assert.Equal(t, int32(6), details.RecipientKeysRevision)
 		} else {
 			t.Errorf("Expected DetailedProcessedError, got %T", err)
@@ -489,8 +490,8 @@ func TestSendMessage_RevisionStaleness_LargeRevisionJump(t *testing.T) {
 		assert.Equal(t, "keys_stale", pe.Kind())
 		// Check details
 		if dpe, ok := err.(kit.DetailedProcessedError); ok {
-			details := dpe.Details().(StaleKeysErrorDetails)
-			assert.Equal(t, StaleSideRecipient, details.StaleSide)
+			details := dpe.Details().(*rpc_common_modelv1.StaleKeysErrorDetails)
+			assert.Equal(t, string(StaleSideRecipient), details.StaleSide)
 			assert.Equal(t, int32(100), details.RecipientKeysRevision)
 		} else {
 			t.Errorf("Expected DetailedProcessedError, got %T", err)

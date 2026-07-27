@@ -1,6 +1,8 @@
 package personal_chat
 
 import (
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
+	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
 	"chatbasket-api/internal/modules/core/pending_uploads"
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
 	"chatbasket-api/internal/modules/personal/personal_profile"
@@ -20,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -60,7 +63,7 @@ type personalContactPersonalChatProvider interface {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type chatService struct {
-	GlobalService    *services.GlobalService
+	GlobalService   *services.GlobalService
 	Pool            *pgxpool.Pool
 	PostgresQuerier personal_chat_store.Querier
 	PostgresQueries *personal_chat_store.Queries
@@ -82,7 +85,7 @@ func NewChatService(
 ) *chatService {
 	store := personal_chat_store.New(pool)
 	return &chatService{
-		GlobalService:    globalService,
+		GlobalService:   globalService,
 		Pool:            pool,
 		PostgresQuerier: store,
 		PostgresQueries: store,
@@ -173,7 +176,7 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID ki
 	return EligibilityAllowed, recipientKey, recipientKeysRevision, nil
 }
 
-func (s *chatService) CheckEligibilityHandler(ctx context.Context, payload *CheckEligibilityPayload, userID kit.UserId) (*MessagingEligibilityResponse, error) {
+func (s *chatService) CheckEligibilityHandler(ctx context.Context, payload *CheckEligibilityPayload, userID kit.UserId) (*rpc_personal_chatv1.CheckEligibilityResponse, error) {
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
@@ -182,7 +185,7 @@ func (s *chatService) CheckEligibilityHandler(ctx context.Context, payload *Chec
 	if eligErr != nil {
 		return nil, eligErr
 	}
-	resp := &MessagingEligibilityResponse{
+	resp := &rpc_personal_chatv1.CheckEligibilityResponse{
 		Allowed: eligibility == EligibilityAllowed,
 		Reason:  "",
 	}
@@ -219,7 +222,7 @@ func (s *chatService) createOrGetChatTx(ctx context.Context, qtx *personal_chat_
 	return &chat, nil
 }
 
-func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChatPayload, userID kit.UserId) (*ChatResponse, error) {
+func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChatPayload, userID kit.UserId) (*rpc_personal_chatv1.CreateChatResponse, error) {
 	recipientID, err := uuid.Parse(payload.RecipientID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Invalid recipient ID")
@@ -269,18 +272,18 @@ func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChat
 		otherProfileType = cp.ProfileType
 		otherUserKeysRevision = cp.KeysRevision
 	}
-	return &ChatResponse{
-		ChatID:                   chat.ID.String(),
-		OtherUserID:              recipientID.String(),
+	return &rpc_personal_chatv1.CreateChatResponse{
+		ChatId:                   chat.ID.String(),
+		OtherUserId:              recipientID.String(),
 		OtherUserName:            otherName,
 		OtherUserUsername:        otherUsername,
 		OtherUserBio:             otherBio,
-		AvatarURL:                avatarURL,
+		AvatarUrl:                avatarURL,
 		AvatarFileId:             avatarFileID,
-		CreatedAt:                chat.CreatedAt,
-		UpdatedAt:                chat.UpdatedAt,
-		OtherUserLastReadAt:      otherReadAt,
-		OtherUserLastDeliveredAt: otherDeliveredAt,
+		CreatedAt:                timestamppb.New(chat.CreatedAt),
+		UpdatedAt:                timestamppb.New(chat.UpdatedAt),
+		OtherUserLastReadAt:      timestamppb.New(otherReadAt),
+		OtherUserLastDeliveredAt: timestamppb.New(otherDeliveredAt),
 		LastMessageIsFromMe:      false,
 		OtherUserKeysRevision:    otherUserKeysRevision,
 		ProfileType:              otherProfileType,
@@ -316,7 +319,7 @@ func (s *chatService) checkRevisionStaleness(ctx context.Context, senderID kit.U
 	} else {
 		side = StaleSideRecipient
 	}
-	details := StaleKeysErrorDetails{StaleSide: side}
+	details := &rpc_common_modelv1.StaleKeysErrorDetails{StaleSide: string(side)}
 	if senderStale {
 		details.SenderKeysRevision = senderActualRevision
 		senderKeys, _ := s.ProfileProvider.GetActiveSessionKeysForUser(ctx, senderID.UuidUserId)
@@ -407,7 +410,7 @@ func (s *chatService) getSenderKeysRevision(ctx context.Context, senderID uuid.U
 	return revision
 }
 
-func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessagePayload, userID kit.UserId, isPrimary bool) (*MessageResponse, error) {
+func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessagePayload, userID kit.UserId, isPrimary bool) (*rpc_personal_chatv1.Message, error) {
 	messageID, err := uuid.Parse(payload.MessageID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message id")
@@ -432,19 +435,19 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 	if sendErr != nil {
 		return nil, sendErr
 	}
-	return &MessageResponse{
-		MessageID:             message.ID.String(),
-		ChatID:                message.ChatID.String(),
-		RecipientID:           message.RecipientID.String(),
+	return &rpc_personal_chatv1.Message{
+		MessageId:             message.ID.String(),
+		ChatId:                message.ChatID.String(),
+		RecipientId:           message.RecipientID.String(),
 		SenderKeysRevision:    s.getSenderKeysRevision(ctx, message.SenderID),
 		Content:               message.Content,
 		MessageType:           message.MessageType,
 		DeliveredToRecipient:  message.DeliveredToRecipient,
 		SyncedToSenderPrimary: message.SyncedToSenderPrimary,
-		CreatedAt:             message.CreatedAt,
-		ExpiresAt:             message.ExpiresAt,
+		CreatedAt:             timestamppb.New(message.CreatedAt),
+		ExpiresAt:             timestamppb.New(message.ExpiresAt),
 		IsFromMe:              true,
-		FileID:                message.FileID,
+		FileId:                message.FileID,
 		FileName:              message.FileName,
 		FileSize:              message.FileSize,
 		FileMimeType:          message.FileMimeType,
@@ -520,18 +523,18 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 	return nil
 }
 
-func (s *chatService) AcknowledgeDeliveryHandler(ctx context.Context, payload *AcknowledgeDeliveryPayload, userID kit.UserId, sessionId string) (*AcknowledgeDeliveryResponse, error) {
+func (s *chatService) AcknowledgeDeliveryHandler(ctx context.Context, payload *AcknowledgeDeliveryPayload, userID kit.UserId, sessionId string) (*rpc_personal_chatv1.AcknowledgeDeliveryResponse, error) {
 	messageID, err := uuid.Parse(payload.MessageID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message ID")
 	}
 	if !payload.Success {
-		return &AcknowledgeDeliveryResponse{Acknowledged: false}, nil
+		return &rpc_personal_chatv1.AcknowledgeDeliveryResponse{Acknowledged: false}, nil
 	}
 	if err := s.AcknowledgeDelivery(ctx, messageID, payload.AcknowledgedBy, sessionId, userID); err != nil {
 		return nil, err
 	}
-	return &AcknowledgeDeliveryResponse{Acknowledged: true}, nil
+	return &rpc_personal_chatv1.AcknowledgeDeliveryResponse{Acknowledged: true}, nil
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -587,7 +590,7 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 	}
 }
 
-func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time) (*GetMessagesResponse, error) {
+func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time) (*rpc_personal_chatv1.GetMessagesResponse, error) {
 	chatID, err := uuid.Parse(payload.ChatID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_chat_id", "Invalid chat ID")
@@ -603,9 +606,29 @@ func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessag
 	if err != nil {
 		return nil, err
 	}
-	msgResponses := make([]MessageResponse, 0, len(messages))
+	msgResponses := make([]*rpc_personal_chatv1.Message, 0, len(messages))
 	for _, msg := range messages {
-		msgResponses = append(msgResponses, s.buildMessageResponse(ctx, msg, userID))
+		messageResponse := s.buildMessageResponse(ctx, msg, userID)
+		msgResponses = append(msgResponses, &rpc_personal_chatv1.Message{
+			MessageId:                   messageResponse.MessageID,
+			ChatId:                      messageResponse.ChatID,
+			RecipientId:                 messageResponse.RecipientID,
+			SenderKeysRevision:          messageResponse.SenderKeysRevision,
+			Content:                     messageResponse.Content,
+			MessageType:                 messageResponse.MessageType,
+			DeliveredToRecipient:        messageResponse.DeliveredToRecipient,
+			DeliveredToRecipientPrimary: messageResponse.DeliveredToRecipientPrimary,
+			SyncedToSenderPrimary:       messageResponse.SyncedToSenderPrimary,
+			CreatedAt:                   timestamppb.New(messageResponse.CreatedAt),
+			ExpiresAt:                   timestamppb.New(messageResponse.ExpiresAt),
+			IsFromMe:                    messageResponse.IsFromMe,
+			FileId:                      messageResponse.FileID,
+			FileName:                    messageResponse.FileName,
+			FileSize:                    messageResponse.FileSize,
+			FileMimeType:                messageResponse.FileMimeType,
+			ViewUrl:                     messageResponse.ViewURL,
+			DownloadUrl:                 messageResponse.DownloadURL,
+		})
 	}
 	chat, chatErr := s.PostgresQueries.GetChatByID(ctx, chatID)
 	if chatErr != nil {
@@ -619,11 +642,11 @@ func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessag
 		otherReadAt = kit.DerefTime(chat.P1LastReadAt)
 		otherDeliveredAt = kit.DerefTime(chat.P1LastDeliveredAt)
 	}
-	return &GetMessagesResponse{
+	return &rpc_personal_chatv1.GetMessagesResponse{
 		Messages:                 msgResponses,
-		Count:                    len(msgResponses),
-		OtherUserLastReadAt:      otherReadAt,
-		OtherUserLastDeliveredAt: otherDeliveredAt,
+		Count:                    int32(len(msgResponses)),
+		OtherUserLastReadAt:      timestamppb.New(otherReadAt),
+		OtherUserLastDeliveredAt: timestamppb.New(otherDeliveredAt),
 	}, nil
 }
 
@@ -635,7 +658,7 @@ func (s *chatService) GetUserChatsLite(ctx context.Context, userID uuid.UUID) ([
 	return s.PostgresQueries.GetUserChatsLite(ctx, userID)
 }
 
-func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId, sessionCreatedAt time.Time) (*GetUserChatsResponse, error) {
+func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId, sessionCreatedAt time.Time) (*rpc_personal_chatv1.GetUserChatsResponse, error) {
 	chats, err := s.GetUserChatsLite(ctx, userID.UuidUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
@@ -659,7 +682,7 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 	// Batch fetch profiles to avoid N+1 queries
 	contactProfiles, _ := s.ProfileProvider.GetContactableProfilesForViewer(ctx, userID.UuidUserId, targetIDs)
 
-	chatResponses := make([]ChatResponse, 0, len(chats))
+	chatResponses := make([]*rpc_personal_chatv1.Chat, 0, len(chats))
 	for _, chat := range chats {
 		var otherUserID uuid.UUID
 		if chat.Participant1ID == userID.UuidUserId {
@@ -735,34 +758,34 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 
 		lastMessageIsUnsent := false
 		lastMessageStatus := "sent"
-		chatResponses = append(chatResponses, ChatResponse{
-			ChatID:                   chat.ID.String(),
-			OtherUserID:              otherUserID.String(),
+		chatResponses = append(chatResponses, &rpc_personal_chatv1.Chat{
+			ChatId:                   chat.ID.String(),
+			OtherUserId:              otherUserID.String(),
 			OtherUserName:            otherName,
 			OtherUserUsername:        otherUsername,
 			OtherUserBio:             otherBio,
-			AvatarURL:                avatarURL,
+			AvatarUrl:                avatarURL,
 			AvatarFileId:             avatarFileID,
-			CreatedAt:                chat.CreatedAt,
-			UpdatedAt:                chat.UpdatedAt,
-			OtherUserLastReadAt:      otherUserLastReadAt,
-			OtherUserLastDeliveredAt: otherUserLastDeliveredAt,
+			CreatedAt:                timestamppb.New(chat.CreatedAt),
+			UpdatedAt:                timestamppb.New(chat.UpdatedAt),
+			OtherUserLastReadAt:      timestamppb.New(otherUserLastReadAt),
+			OtherUserLastDeliveredAt: timestamppb.New(otherUserLastDeliveredAt),
 			LastMessageContent:       lastMessageContent,
-			LastMessageCreatedAt:     lastMessageCreatedAt,
+			LastMessageCreatedAt:     kit.OptionalTimestamp(lastMessageCreatedAt),
 			LastMessageType:          lastMessageType,
-			LastMessageSenderID:      lastMessageSenderID,
-			LastMessageIsFromMe:      lastMessageSenderID != nil && *lastMessageSenderID == userID.StringUserId,
-			LastMessageStatus:        lastMessageStatus,
-			LastMessageIsUnsent:      lastMessageIsUnsent,
-			LastMessageID:            lastMessageID,
-			UnreadCount:              int(chat.UnreadCount),
-			OtherUserKeysRevision:    otherUserKeysRevision,
-			ProfileType:              otherProfileType,
+
+			LastMessageIsFromMe:   lastMessageSenderID != nil && *lastMessageSenderID == userID.StringUserId,
+			LastMessageStatus:     lastMessageStatus,
+			LastMessageIsUnsent:   lastMessageIsUnsent,
+			LastMessageId:         lastMessageID,
+			UnreadCount:           chat.UnreadCount,
+			OtherUserKeysRevision: otherUserKeysRevision,
+			ProfileType:           otherProfileType,
 		})
 	}
-	return &GetUserChatsResponse{
+	return &rpc_personal_chatv1.GetUserChatsResponse{
 		Chats: chatResponses,
-		Count: len(chatResponses),
+		Count: int32(len(chatResponses)),
 	}, nil
 }
 
@@ -1035,7 +1058,7 @@ func (s *chatService) GetSyncActions(ctx context.Context, userID kit.UserId, lim
 	})
 }
 
-func (s *chatService) GetSyncActionsHandler(ctx context.Context, payload *GetSyncActionsPayload, userID kit.UserId) (*GetSyncActionsResponse, error) {
+func (s *chatService) GetSyncActionsHandler(ctx context.Context, payload *GetSyncActionsPayload, userID kit.UserId) (*rpc_personal_chatv1.GetSyncActionsResponse, error) {
 	limit := payload.Limit
 	if limit <= 0 {
 		limit = 50
@@ -1044,22 +1067,25 @@ func (s *chatService) GetSyncActionsHandler(ctx context.Context, payload *GetSyn
 	if err != nil {
 		return nil, err
 	}
-	respActions := make([]SyncActionResponse, 0, len(actions))
+	respActions := make([]*rpc_personal_chatv1.SyncAction, 0, len(actions))
 	for _, a := range actions {
 		var payloadObj SyncActionPayload
 		_ = json.Unmarshal(a.Payload, &payloadObj)
-		respActions = append(respActions, SyncActionResponse{
-			ID:                 a.ID.String(),
-			UserID:             a.UserID.String(),
-			ActionType:         a.ActionType,
-			Payload:            payloadObj,
+		respActions = append(respActions, &rpc_personal_chatv1.SyncAction{
+			Id:         a.ID.String(),
+			UserId:     a.UserID.String(),
+			ActionType: a.ActionType,
+			Payload: &rpc_personal_chatv1.SyncActionPayload{
+				MessageIds: payloadObj.MessageIDs,
+				ChatId:     kit.OptionalString(payloadObj.ChatID),
+			},
 			DeliveredToPrimary: a.DeliveredToPrimary,
-			CreatedAt:          a.CreatedAt,
+			CreatedAt:          timestamppb.New(a.CreatedAt),
 		})
 	}
-	return &GetSyncActionsResponse{
+	return &rpc_personal_chatv1.GetSyncActionsResponse{
 		Actions: respActions,
-		Count:   len(respActions),
+		Count:   int32(len(respActions)),
 	}, nil
 }
 
@@ -1084,7 +1110,7 @@ func (s *chatService) AcknowledgeSyncActionHandler(ctx context.Context, payload 
 // Pending Messages
 // ──────────────────────────────────────────────────────────────────────────────
 
-func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *GetPendingMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time, isPrimary bool) (*GetMessagesResponse, error) {
+func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *GetPendingMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time, isPrimary bool) (*rpc_personal_chatv1.GetPendingMessagesResponse, error) {
 	limit := payload.Limit
 	if limit <= 0 {
 		limit = 100
@@ -1150,16 +1176,35 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 	}
 
 	// 4. Build response payload
-	msgResponses := make([]MessageResponse, 0, len(combinedMsgs))
+	msgResponses := make([]*rpc_personal_chatv1.Message, 0, len(combinedMsgs))
 	for _, msg := range combinedMsgs {
-		msgResponses = append(msgResponses, s.buildMessageResponse(ctx, msg, userID))
+		mr := s.buildMessageResponse(ctx, msg, userID)
+		msgResponses = append(msgResponses, &rpc_personal_chatv1.Message{
+			MessageId:                   mr.MessageID,
+			ChatId:                      mr.ChatID,
+			RecipientId:                 mr.RecipientID,
+			SenderKeysRevision:          mr.SenderKeysRevision,
+			Content:                     mr.Content,
+			MessageType:                 mr.MessageType,
+			DeliveredToRecipient:        mr.DeliveredToRecipient,
+			DeliveredToRecipientPrimary: mr.DeliveredToRecipientPrimary,
+			SyncedToSenderPrimary:       mr.SyncedToSenderPrimary,
+			CreatedAt:                   timestamppb.New(mr.CreatedAt),
+			ExpiresAt:                   timestamppb.New(mr.ExpiresAt),
+			IsFromMe:                    mr.IsFromMe,
+			FileId:                      mr.FileID,
+			FileName:                    mr.FileName,
+			FileSize:                    mr.FileSize,
+			FileMimeType:                mr.FileMimeType,
+			ViewUrl:                     mr.ViewURL,
+			DownloadUrl:                 mr.DownloadURL,
+		})
 	}
-	return &GetMessagesResponse{
+	return &rpc_personal_chatv1.GetPendingMessagesResponse{
 		Messages: msgResponses,
-		Count:    len(msgResponses),
+		Count:    int32(len(msgResponses)),
 	}, nil
 }
-
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Relay Cleanup
@@ -1299,7 +1344,7 @@ func (s *chatService) CleanupChatMessagesForBlockAsync(ctx context.Context, bloc
 }
 
 var (
-	cleanupDBBatchSize = int32(5000)
+	cleanupDBBatchSize   = int32(5000)
 	cleanupThrottleSleep = 50 * time.Millisecond
 )
 
@@ -1532,4 +1577,3 @@ func (s *chatService) CleanupDatabaseOnly(ctx context.Context) error {
 	log.Printf("[DatabaseCleanupJob] Cleanup sweep completed (elapsed: %v)", time.Since(jobStart))
 	return nil
 }
-
