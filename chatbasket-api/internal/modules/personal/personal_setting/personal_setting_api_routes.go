@@ -1,6 +1,9 @@
 package personal_setting
 
 import (
+	"net/http"
+
+	rpc_personal_settingv1connect "chatbasket-api/gen/proto/personal/personal_setting/rpc_personal_settingv1connect"
 	"chatbasket-api/internal/platform/websocket"
 
 	"github.com/labstack/echo/v5"
@@ -10,8 +13,16 @@ import (
 func Register(personalGroup *echo.Group, settingService *settingService, hub *websocket.WSHub) {
 	handler := newSettingHandler(settingService, hub)
 
-	// Settings Routes
+	// Settings HTTP Routes
 	settings := personalGroup.Group("/settings")
 	settings.POST("/session/central", handler.updateSessionCentral)
 	settings.POST("/session/notification-token", handler.updateSessionNotificationToken)
+
+	// Connect RPC Routes
+	connectServer := newSettingConnectServer(settingService, hub)
+	path, connectHandler := rpc_personal_settingv1connect.NewSettingServiceHandler(
+		connectServer,
+	)
+	personalGroup.Any(path+"*", echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)))
 }
+

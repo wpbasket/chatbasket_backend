@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package rpc_personal_setting.v1;
+
+import "proto/common/model/model.proto";
+
+option go_package = "chatbasket-api/gen/proto/personal/personal_setting;rpc_personal_settingv1";
+
+message SetCentralDeviceRequest {}
+
+message RegisterOrUpdateNotificationTokenRequest {
+  string token = 1;
+  string type = 2;
+  optional string deviceName = 3;
+}
+
+service SettingService {
+  rpc SetCentralDevice(SetCentralDeviceRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc UpdateSessionNotificationToken(RegisterOrUpdateNotificationTokenRequest) returns (rpc_common_model.v1.StatusOkay);
+}

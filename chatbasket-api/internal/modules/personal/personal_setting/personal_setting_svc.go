@@ -1,9 +1,11 @@
-﻿package personal_setting
+package personal_setting
 
 import (
+	"context"
+
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
 	"chatbasket-api/internal/modules/core/core_auth"
 	"chatbasket-api/internal/platform/kit"
-	"context"
 
 	"github.com/google/uuid"
 )
@@ -27,16 +29,19 @@ func NewSettingService(coreAuthPersonalSettingProvider coreAuthPersonalSettingPr
 }
 
 // setCentralDevice promotes the current session to be the user's primary device.
-func (s *settingService) setCentralDevice(ctx context.Context, userID uuid.UUID, token string) (*kit.StatusOkay, error) {
+func (s *settingService) setCentralDevice(ctx context.Context, userID uuid.UUID, token string) (*rpc_common_modelv1.StatusOkay, error) {
 	ok, err := s.coreAuthPersonalSettingProvider.SetCentralDevice(ctx, userID, token)
 	if err != nil {
 		return nil, err
 	}
-	return ok, nil
+	return &rpc_common_modelv1.StatusOkay{
+		Status:  ok.Status,
+		Message: ok.Message,
+	}, nil
 }
 
 // updateSessionNotificationToken updates the push notification token for the current session.
-func (s *settingService) updateSessionNotificationToken(ctx context.Context, userID uuid.UUID, sessionToken string, payload *registerOrUpdateFcmOrApnTokenPayload) (*kit.StatusOkay, error) {
+func (s *settingService) updateSessionNotificationToken(ctx context.Context, userID uuid.UUID, sessionToken string, payload *registerOrUpdateFcmOrApnTokenPayload) (*rpc_common_modelv1.StatusOkay, error) {
 	// Map local model to Auth model for delegation
 	authPayload := &core_auth.RegisterOrUpdateFcmOrApnTokenPayload{
 		Token:      payload.Token,
@@ -49,6 +54,9 @@ func (s *settingService) updateSessionNotificationToken(ctx context.Context, use
 		return nil, err
 	}
 
-	return ok, nil
+	return &rpc_common_modelv1.StatusOkay{
+		Status:  ok.Status,
+		Message: ok.Message,
+	}, nil
 }
 
