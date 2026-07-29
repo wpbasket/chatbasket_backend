@@ -43,14 +43,12 @@ func (s *profileConnectServer) CreateUserProfile(ctx context.Context, req *conne
 		ProfileType: req.Msg.ProfileType,
 	}
 
-	user, err := s.profileService.CreateUserProfile(ctx, payload, &userID, email)
+	res, err := s.profileService.CreateUserProfile(ctx, payload, &userID, email)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_personal_profilev1.CreateUserProfileResponse{
-		User: toProtoPrivateUser(user),
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *profileConnectServer) GetProfile(ctx context.Context, req *connect.Request[rpc_personal_profilev1.GetProfileRequest]) (*connect.Response[rpc_personal_profilev1.GetProfileResponse], error) {
@@ -63,14 +61,12 @@ func (s *profileConnectServer) GetProfile(ctx context.Context, req *connect.Requ
 		return nil, kit.ParseIntoRpcError(ErrInvalidEmailContext)
 	}
 
-	user, err := s.profileService.GetProfile(ctx, &userID, email)
+	res, err := s.profileService.GetProfile(ctx, &userID, email)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_personal_profilev1.GetProfileResponse{
-		User: toProtoPrivateUser(user),
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *profileConnectServer) UpdateUserProfile(ctx context.Context, req *connect.Request[rpc_personal_profilev1.UpdateUserProfileRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -99,15 +95,12 @@ func (s *profileConnectServer) UpdateUserProfile(ctx context.Context, req *conne
 		ProfileType: profileType,
 	}
 
-	status, err := s.profileService.UpdateUserProfile(ctx, payload, userID)
+	res, err := s.profileService.UpdateUserProfile(ctx, payload, userID)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  status.Status,
-		Message: status.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *profileConnectServer) PresignAvatar(ctx context.Context, req *connect.Request[rpc_personal_profilev1.PresignAvatarRequest]) (*connect.Response[rpc_personal_profilev1.PresignAvatarResponse], error) {
@@ -121,10 +114,7 @@ func (s *profileConnectServer) PresignAvatar(ctx context.Context, req *connect.R
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_personal_profilev1.PresignAvatarResponse{
-		FileId:       res.FileID,
-		PresignedUrl: res.PresignedURL,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *profileConnectServer) ConfirmAvatar(ctx context.Context, req *connect.Request[rpc_personal_profilev1.ConfirmAvatarRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -137,15 +127,12 @@ func (s *profileConnectServer) ConfirmAvatar(ctx context.Context, req *connect.R
 		return nil, kit.ParseIntoRpcError(ErrInvalidUserContext)
 	}
 
-	status, err := s.profileService.ConfirmAvatarUpload(ctx, userID, req.Msg.FileId)
+	res, err := s.profileService.ConfirmAvatarUpload(ctx, userID, req.Msg.FileId)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  status.Status,
-		Message: status.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *profileConnectServer) RemoveProfilePicture(ctx context.Context, req *connect.Request[rpc_personal_profilev1.RemoveProfilePictureRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -154,15 +141,12 @@ func (s *profileConnectServer) RemoveProfilePicture(ctx context.Context, req *co
 		return nil, kit.ParseIntoRpcError(ErrInvalidUserContext)
 	}
 
-	status, err := s.profileService.RemoveUserProfilePicture(ctx, userID)
+	res, err := s.profileService.RemoveUserProfilePicture(ctx, userID)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  status.Status,
-		Message: status.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *profileConnectServer) UploadE2EEPublicKey(ctx context.Context, req *connect.Request[rpc_personal_profilev1.UploadE2EEPublicKeyRequest]) (*connect.Response[rpc_personal_profilev1.UploadE2EEPublicKeyResponse], error) {
@@ -195,11 +179,7 @@ func (s *profileConnectServer) UploadE2EEPublicKey(ctx context.Context, req *con
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_personal_profilev1.UploadE2EEPublicKeyResponse{
-		Status:       res.Status,
-		Message:      res.Message,
-		KeysRevision: res.KeysRevision,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *profileConnectServer) GetE2EEPublicKey(ctx context.Context, req *connect.Request[rpc_personal_profilev1.GetE2EEPublicKeyRequest]) (*connect.Response[rpc_personal_profilev1.GetE2EEPublicKeyResponse], error) {
@@ -217,13 +197,10 @@ func (s *profileConnectServer) GetE2EEPublicKey(ctx context.Context, req *connec
 		callerSessionID = &sid
 	}
 
-	keys, revision, err := s.profileService.GetE2EEKeySet(ctx, uuidVal, callerSessionID)
+	res, err := s.profileService.GetE2EEKeySet(ctx, uuidVal, callerSessionID)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_personal_profilev1.GetE2EEPublicKeyResponse{
-		E2EePublicKeys: keys,
-		KeysRevision:   revision,
-	}), nil
+	return connect.NewResponse(res), nil
 }

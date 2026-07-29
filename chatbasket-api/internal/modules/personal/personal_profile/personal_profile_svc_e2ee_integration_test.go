@@ -96,10 +96,10 @@ func TestGetE2EEKeySet_Integration_EmptyKeys(t *testing.T) {
 
 	userID, _ := createTestUserWithProfile(t, pool)
 
-	keys, revision, err := profileSvc.GetE2EEKeySet(ctx, userID.UuidUserId, nil)
+	res, err := profileSvc.GetE2EEKeySet(ctx, userID.UuidUserId, nil)
 	assert.NoError(t, err)
-	assert.Empty(t, keys)
-	assert.Equal(t, int32(0), revision)
+	assert.Empty(t, res.E2EePublicKeys)
+	assert.Equal(t, int32(0), res.KeysRevision)
 }
 
 func TestGetE2EEKeySet_Integration_MultipleKeys(t *testing.T) {
@@ -129,10 +129,10 @@ func TestGetE2EEKeySet_Integration_MultipleKeys(t *testing.T) {
 	err = authSvc.IncrementKeysRevision(ctx, nil, userID.UuidUserId)
 	require.NoError(t, err)
 
-	keys, revision, err := profileSvc.GetE2EEKeySet(ctx, userID.UuidUserId, nil)
+	res, err := profileSvc.GetE2EEKeySet(ctx, userID.UuidUserId, nil)
 	assert.NoError(t, err)
-	assert.Len(t, keys, 2)
-	assert.Equal(t, int32(2), revision)
+	assert.Len(t, res.E2EePublicKeys, 2)
+	assert.Equal(t, int32(2), res.KeysRevision)
 }
 
 func TestGetE2EEKeySet_Integration_ExcludesExpiredSessions(t *testing.T) {
@@ -163,10 +163,10 @@ func TestGetE2EEKeySet_Integration_ExcludesExpiredSessions(t *testing.T) {
 	err = authSvc.IncrementKeysRevision(ctx, nil, userID.UuidUserId)
 	require.NoError(t, err)
 
-	keys, revision, err := profileSvc.GetE2EEKeySet(ctx, userID.UuidUserId, nil)
+	res, err := profileSvc.GetE2EEKeySet(ctx, userID.UuidUserId, nil)
 	assert.NoError(t, err)
-	assert.Len(t, keys, 1) // Only active session
-	assert.Equal(t, int32(2), revision) // Revision still incremented twice
+	assert.Len(t, res.E2EePublicKeys, 1) // Only active session
+	assert.Equal(t, int32(2), res.KeysRevision) // Revision still incremented twice
 }
 
 // ============================================================================

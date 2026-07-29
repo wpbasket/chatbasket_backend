@@ -167,7 +167,7 @@ func TestCreateUserProfile_Mock_Success(t *testing.T) {
 	res, err := svc.CreateUserProfile(context.Background(), payload, &userID, email)
 	require.NoError(t, err)
 	require.NotNil(t, res)
-	assert.Equal(t, "Test User", res.Name)
+	assert.Equal(t, "Test User", res.User.Name)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -261,9 +261,9 @@ func TestGetProfile_Mock_Success(t *testing.T) {
 	res, err := svc.GetProfile(context.Background(), &userID, email)
 	require.NoError(t, err)
 	require.NotNil(t, res)
-	assert.Equal(t, "Test User", res.Name)
-	assert.Equal(t, plainUsername, res.Username)
-	assert.Equal(t, int32(4), res.KeysRevision)
+	assert.Equal(t, "Test User", res.User.Name)
+	assert.Equal(t, plainUsername, res.User.Username)
+	assert.Equal(t, int32(4), res.User.KeysRevision)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -343,8 +343,8 @@ func TestPresignAvatarUpload_Mock_Success(t *testing.T) {
 	// But let's handle case where it might succeed or error gracefully.
 	if err == nil {
 		assert.NotNil(t, res)
-		assert.Contains(t, res.FileID, "primary:")
-		assert.NotEmpty(t, res.PresignedURL)
+		assert.Contains(t, res.FileId, "primary:")
+		assert.NotEmpty(t, res.PresignedUrl)
 	} else {
 		// If it errors due to S3 client validation (which is unlikely but possible), that's fine too as long as
 		// pendingUploads was called.

@@ -188,13 +188,10 @@ func (h *profileHandler) GetE2EEPublicKey(c *echo.Context) error {
 		callerSessionID = &sid
 	}
 
-	keys, revision, err := h.Service.GetE2EEKeySet(c.Request().Context(), uuidVal, callerSessionID)
+	res, err := h.Service.GetE2EEKeySet(c.Request().Context(), uuidVal, callerSessionID)
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, &getE2EEPublicKeyResponse{
-		E2eePublicKeys: keys,
-		KeysRevision:   revision,
-	})
+	return c.JSON(http.StatusOK, res)
 }

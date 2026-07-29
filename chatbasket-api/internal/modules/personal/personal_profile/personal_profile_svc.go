@@ -1,6 +1,8 @@
 package personal_profile
 
 import (
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
+	rpc_personal_profilev1 "chatbasket-api/gen/proto/personal/personal_profile"
 	"chatbasket-api/internal/modules/core/pending_uploads"
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
 	"chatbasket-api/internal/platform/clients"
@@ -8,11 +10,13 @@ import (
 	"chatbasket-api/internal/platform/services"
 	"context"
 	"log"
+	"net/http"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"net/http"
-	"time"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type coreAuthProfileProvider interface {
@@ -62,7 +66,7 @@ func NewProfileService(globalService *services.GlobalService, pool *pgxpool.Pool
 	}
 }
 
-func (ps *profileService) CreateUserProfile(ctx context.Context, payload *createUserProfilePayload, userId *kit.UserId, email string) (*privateUser, error) {
+func (ps *profileService) CreateUserProfile(ctx context.Context, payload *createUserProfilePayload, userId *kit.UserId, email string) (*rpc_personal_profilev1.CreateUserProfileResponse, error) {
 	if payload == nil {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -111,10 +115,24 @@ func (ps *profileService) CreateUserProfile(ctx context.Context, payload *create
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to create alone username")
 	}
-	return toPrivateUser(&responseUser, generatedUsername, email, 0), nil
+	return &rpc_personal_profilev1.CreateUserProfileResponse{
+		User: &rpc_personal_profilev1.PrivateUser{
+			Id:           responseUser.ID.String(),
+			Username:     generatedUsername,
+			Name:         responseUser.Name,
+			Email:        email,
+			Bio:          responseUser.Bio,
+			AvatarUrl:    nil,
+			AvatarFileId: nil,
+			KeysRevision: 0,
+			ProfileType:  responseUser.ProfileType,
+			CreatedAt:    timestamppb.New(responseUser.CreatedAt),
+			UpdatedAt:    timestamppb.New(responseUser.UpdatedAt),
+		},
+	}, nil
 }
 
-func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, email string) (*privateUser, error) {
+func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, email string) (*rpc_personal_profilev1.GetProfileResponse, error) {
 	profile, err := ps.PostgresQueries.GetUserProfile(ctx, userId.UuidUserId)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -138,10 +156,24 @@ func (ps *profileService) GetProfile(ctx context.Context, userId *kit.UserId, em
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to read keys revision: "+kit.GetPostgresError(err).Message)
 		}
 	}
-	return toPrivateUserWithAvatar(&profile, decodeUsername, email, finalAvatarUrl, keysRevision), nil
+	return &rpc_personal_profilev1.GetProfileResponse{
+		User: &rpc_personal_profilev1.PrivateUser{
+			Id:           profile.ID.String(),
+			Username:     decodeUsername,
+			Name:         profile.Name,
+			Email:        email,
+			Bio:          profile.Bio,
+			AvatarUrl:    finalAvatarUrl,
+			AvatarFileId: profile.FileID,
+			ProfileType:  profile.ProfileType,
+			KeysRevision: keysRevision,
+			CreatedAt:    timestamppb.New(profile.CreatedAt),
+			UpdatedAt:    timestamppb.New(profile.UpdatedAt),
+		},
+	}, nil
 }
 
-func (ps *profileService) UpdateUserProfile(ctx context.Context, payload *updateUserProfilePayload, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *profileService) UpdateUserProfile(ctx context.Context, payload *updateUserProfilePayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
 	err := ps.PostgresQueries.UpdateUserProfile(ctx, personal_profile_store.UpdateUserProfileParams{
 		ID:          userId.UuidUserId,
 		Name:        payload.Name,
@@ -151,13 +183,13 @@ func (ps *profileService) UpdateUserProfile(ctx context.Context, payload *update
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update user profile: "+kit.GetPostgresError(err).Message)
 	}
-	return &kit.StatusOkay{Status: true, Message: "Profile updated successfully"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "Profile updated successfully"}, nil
 }
 
 // PresignAvatarUpload selects the next R2 account via round-robin, generates a
 // unique prefixed file ID, registers the upload in pending_uploads with a
 // 2-hour TTL, and returns a presigned R2 PUT URL.
-func (ps *profileService) PresignAvatarUpload(ctx context.Context, userId kit.UserId) (*PresignAvatarResponse, error) {
+func (ps *profileService) PresignAvatarUpload(ctx context.Context, userId kit.UserId) (*rpc_personal_profilev1.PresignAvatarResponse, error) {
 	accountName := ps.R2Pool.NextProfileAccount()
 	client := ps.R2Pool.GetClientByAccount(accountName)
 	objectID := uuid.New().String()
@@ -173,9 +205,9 @@ func (ps *profileService) PresignAvatarUpload(ctx context.Context, userId kit.Us
 		_ = ps.PendingUploads.Remove(ctx, fileID)
 		return nil, kit.NewError(http.StatusInternalServerError, "presign_failed", "Failed to generate presigned URL: "+err.Error())
 	}
-	return &PresignAvatarResponse{
-		FileID:       fileID,
-		PresignedURL: presignedURL,
+	return &rpc_personal_profilev1.PresignAvatarResponse{
+		FileId:       fileID,
+		PresignedUrl: presignedURL,
 	}, nil
 }
 
@@ -194,7 +226,7 @@ func (ps *profileService) PresignAvatarUpload(ctx context.Context, userId kit.Us
 // Why this pattern:
 //   - Fast path: immediate inline cleanup without blocking the DB transaction.
 //   - Recovery path: no orphans created if R2 is down; background sweeper automatically cleans up later.
-func (ps *profileService) ConfirmAvatarUpload(ctx context.Context, userId kit.UserId, fileID string) (*kit.StatusOkay, error) {
+func (ps *profileService) ConfirmAvatarUpload(ctx context.Context, userId kit.UserId, fileID string) (*rpc_common_modelv1.StatusOkay, error) {
 	// 1. Tx: verify pending, register old avatar in pending_uploads, delete old avatar, insert new avatar, delete new avatar from pending_uploads
 	tx, err := ps.Pool.Begin(ctx)
 	if err != nil {
@@ -266,7 +298,7 @@ func (ps *profileService) ConfirmAvatarUpload(ctx context.Context, userId kit.Us
 		}
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "Avatar uploaded successfully"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "Avatar uploaded successfully"}, nil
 }
 
 // RemoveUserProfilePicture removes the user's avatar.
@@ -276,7 +308,7 @@ func (ps *profileService) ConfirmAvatarUpload(ctx context.Context, userId kit.Us
 //   2. Post-commit: try inline R2 delete of the file (best-effort).
 //   3. On success: remove from pending_uploads.
 //   4. Background sweeper (CleanupExpiredPendingUploads) will clean it up if R2 fails.
-func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId kit.UserId) (*kit.StatusOkay, error) {
+func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
 	// 1. Tx: fetch file_id, register in pending_uploads, delete row
 	tx, err := ps.Pool.Begin(ctx)
 	if err != nil {
@@ -322,11 +354,11 @@ func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId k
 		log.Printf("[RemoveUserProfilePicture] WARNING: Inline R2 delete failed for avatar %s: %v (sweeper will retry)", fileID, r2Err)
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "Avatar removed successfully"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "Avatar removed successfully"}, nil
 }
 
 
-func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.UserId, sessionID uuid.UUID, publicKey string) (*updateE2EEKeyResponse, error) {
+func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.UserId, sessionID uuid.UUID, publicKey string) (*rpc_personal_profilev1.UploadE2EEPublicKeyResponse, error) {
 	exists, err := ps.PostgresQueries.IsUserExists(ctx, userID.UuidUserId)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -357,20 +389,20 @@ func (ps *profileService) SaveE2EEPublicKey(ctx context.Context, userID kit.User
 	}
 	log.Printf("[E2EE] SaveE2EEPublicKey: user %s new keys_revision=%d", userID.UuidUserId, revision)
 
-	return &updateE2EEKeyResponse{
+	return &rpc_personal_profilev1.UploadE2EEPublicKeyResponse{
 		Status:       true,
 		Message:      "E2EE public key saved successfully",
 		KeysRevision: revision,
 	}, nil
 }
 
-func (ps *profileService) GetE2EEKeySet(ctx context.Context, targetUserID uuid.UUID, callerSessionID *uuid.UUID) ([]string, int32, error) {
+func (ps *profileService) GetE2EEKeySet(ctx context.Context, targetUserID uuid.UUID, callerSessionID *uuid.UUID) (*rpc_personal_profilev1.GetE2EEPublicKeyResponse, error) {
 	revision, err := ps.AuthProvider.GetKeysRevision(ctx, targetUserID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, 0, kit.NewError(http.StatusNotFound, "not_found", "User profile not found")
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "User profile not found")
 		}
-		return nil, 0, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user keys revision: "+kit.GetPostgresError(err).Message)
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user keys revision: "+kit.GetPostgresError(err).Message)
 	}
 
 	var keys []string
@@ -382,21 +414,24 @@ func (ps *profileService) GetE2EEKeySet(ctx context.Context, targetUserID uuid.U
 		keys, err = ps.AuthProvider.GetActiveSessionKeysForUser(ctx, targetUserID)
 	}
 	if err != nil {
-		return nil, 0, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch active E2EE keys: "+kit.GetPostgresError(err).Message)
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch active E2EE keys: "+kit.GetPostgresError(err).Message)
 	}
 	log.Printf("[E2EE] GetE2EEKeySet: target user %s → %d key(s), revision=%d (callerSessionExcluded=%v)", targetUserID, len(keys), revision, callerSessionID != nil)
-	return keys, revision, nil
+	return &rpc_personal_profilev1.GetE2EEPublicKeyResponse{
+		E2EePublicKeys: keys,
+		KeysRevision:   revision,
+	}, nil
 }
 
 func (ps *profileService) GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, int32, error) {
-	keys, revision, err := ps.GetE2EEKeySet(ctx, targetUserID, nil)
+	res, err := ps.GetE2EEKeySet(ctx, targetUserID, nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	if len(keys) == 0 {
-		return nil, revision, nil
+	if len(res.E2EePublicKeys) == 0 {
+		return nil, res.KeysRevision, nil
 	}
-	return &keys[0], revision, nil
+	return &res.E2EePublicKeys[0], res.KeysRevision, nil
 }
 
 func (ps *profileService) GetActiveSessionKeysForUser(ctx context.Context, userID uuid.UUID) ([]string, error) {
