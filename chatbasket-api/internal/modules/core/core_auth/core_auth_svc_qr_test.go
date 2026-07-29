@@ -52,10 +52,10 @@ func TestQRInitiate_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	
-	parsedID, err := svc.ParseAndVerifyQRToken(resp.QRToken)
+	parsedID, err := svc.ParseAndVerifyQRToken(resp.QrToken)
 	assert.NoError(t, err)
 	assert.Equal(t, id, parsedID)
-	assert.Equal(t, 300, resp.ExpiresIn)
+	assert.Equal(t, int32(300), resp.ExpiresIn)
 }
 
 func TestQRInitiate_DBError(t *testing.T) {

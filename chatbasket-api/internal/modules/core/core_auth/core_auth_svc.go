@@ -1,6 +1,8 @@
 package core_auth
 
 import (
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
+	rpc_core_authv1 "chatbasket-api/gen/proto/core/core_auth"
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/services"
@@ -39,7 +41,7 @@ func NewAuthService(globalService *services.GlobalService, pool *pgxpool.Pool, a
 
 
 // Signup handles user registration: Validates email, creates user (unverified), sends verification OTP.
-func (s *AuthService) Signup(ctx context.Context, payload *SignupPayload) (*kit.StatusOkay, error) {
+func (s *AuthService) Signup(ctx context.Context, payload *SignupPayload) (*rpc_common_modelv1.StatusOkay, error) {
 	var userID uuid.UUID
 	// 1. Check if email already exists
 	user, err := s.PostgresQuerier.GetAuthUserByEmail(ctx, payload.Email)
@@ -102,11 +104,11 @@ func (s *AuthService) Signup(ctx context.Context, payload *SignupPayload) (*kit.
 		return nil, err
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "User created, OTP sent to email"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "User created, OTP sent to email"}, nil
 }
 
 // AccountVerification verifies the OTP and activates the account/session.
-func (s *AuthService) AccountVerification(ctx context.Context, payload *AuthVerificationPayload) (*SessionResponse, error) {
+func (s *AuthService) AccountVerification(ctx context.Context, payload *AuthVerificationPayload) (*rpc_core_authv1.SessionResponse, error) {
 	// 1. Get User
 	user, err := s.PostgresQuerier.GetAuthUserByEmail(ctx, payload.Email)
 	if err != nil {
@@ -147,11 +149,11 @@ func (s *AuthService) AccountVerification(ctx context.Context, payload *AuthVeri
 		keysRevision = 0
 	}
 
-	return &SessionResponse{
+	return &rpc_core_authv1.SessionResponse{
 		UserId:            user.ID.String(),
 		Name:              user.Name,
 		Email:             user.Email,
-		SessionID:         sessionRes.Token,
+		SessionId:         sessionRes.Token,
 		SessionExpiry:     sessionRes.ExpiresAt,
 		IsPrimary:         sessionRes.IsPrimary,
 		PrimaryDeviceName: sessionRes.PrimaryDeviceName,
@@ -161,7 +163,7 @@ func (s *AuthService) AccountVerification(ctx context.Context, payload *AuthVeri
 }
 
 // Login validates password and sends OTP (2FA flow).
-func (s *AuthService) Login(ctx context.Context, payload *LoginPayload) (*kit.StatusOkay, error) {
+func (s *AuthService) Login(ctx context.Context, payload *LoginPayload) (*rpc_common_modelv1.StatusOkay, error) {
 	// 1. Get User
 	user, err := s.PostgresQuerier.GetAuthUserByEmail(ctx, payload.Email)
 	if err != nil {
@@ -207,11 +209,11 @@ func (s *AuthService) Login(ctx context.Context, payload *LoginPayload) (*kit.St
 		return nil, err
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "Login successful, OTP sent to email"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "Login successful, OTP sent to email"}, nil
 }
 
 // LoginVerification verifies Login OTP and creates session.
-func (s *AuthService) LoginVerification(ctx context.Context, payload *AuthVerificationPayload) (*SessionResponse, error) {
+func (s *AuthService) LoginVerification(ctx context.Context, payload *AuthVerificationPayload) (*rpc_core_authv1.SessionResponse, error) {
 	// 1. Get User
 	user, err := s.PostgresQuerier.GetAuthUserByEmail(ctx, payload.Email)
 	if err != nil {
@@ -241,11 +243,11 @@ func (s *AuthService) LoginVerification(ctx context.Context, payload *AuthVerifi
 		keysRevision = 0
 	}
 
-	return &SessionResponse{
+	return &rpc_core_authv1.SessionResponse{
 		UserId:            user.ID.String(),
 		Name:              user.Name,
 		Email:             user.Email,
-		SessionID:         sessionRes.Token,
+		SessionId:         sessionRes.Token,
 		SessionExpiry:     sessionRes.ExpiresAt,
 		IsPrimary:         sessionRes.IsPrimary,
 		PrimaryDeviceName: sessionRes.PrimaryDeviceName,
@@ -255,7 +257,7 @@ func (s *AuthService) LoginVerification(ctx context.Context, payload *AuthVerifi
 }
 
 // ResendOTP handles OTP resend for both signup and login flows.
-func (s *AuthService) ResendOTP(ctx context.Context, payload *ResendOTPPayload) (*kit.StatusOkay, error) {
+func (s *AuthService) ResendOTP(ctx context.Context, payload *ResendOTPPayload) (*rpc_common_modelv1.StatusOkay, error) {
 	// Validate type
 	if payload.Type != "signup" && payload.Type != "login" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "Invalid type. Must be 'signup' or 'login'")
@@ -297,11 +299,11 @@ func (s *AuthService) ResendOTP(ctx context.Context, payload *ResendOTPPayload) 
 		return nil, err
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "OTP sent to email"}, nil
 }
 
 // ForgotPassword initiates the forgot password flow by sending OTP to email.
-func (s *AuthService) ForgotPassword(ctx context.Context, payload *ForgotPasswordPayload) (*kit.StatusOkay, error) {
+func (s *AuthService) ForgotPassword(ctx context.Context, payload *ForgotPasswordPayload) (*rpc_common_modelv1.StatusOkay, error) {
 	// 1. Get user by email
 	user, err := s.PostgresQuerier.GetAuthUserByEmail(ctx, payload.Email)
 	if err != nil {
@@ -329,11 +331,11 @@ func (s *AuthService) ForgotPassword(ctx context.Context, payload *ForgotPasswor
 	}
 
 	// 4. Return updateId (user ID as string) for verification step
-	return &kit.StatusOkay{Status: true, Message: user.ID.String()}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: user.ID.String()}, nil
 }
 
 // VerifyForgotPassword verifies OTP and updates the password.
-func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotPasswordVerifyPayload) (*kit.StatusOkay, error) {
+func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotPasswordVerifyPayload) (*rpc_common_modelv1.StatusOkay, error) {
 	// 1. Parse updateId as UUID
 	userID, err := uuid.Parse(payload.UpdateID)
 	if err != nil {
@@ -404,5 +406,5 @@ func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotP
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete verification code")
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "Password updated successfully"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "Password updated successfully"}, nil
 }

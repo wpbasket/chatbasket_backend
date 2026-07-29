@@ -1,6 +1,7 @@
 package core_auth
 
 import (
+	rpc_core_authv1 "chatbasket-api/gen/proto/core/core_auth"
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"chatbasket-api/internal/platform/kit"
 	"context"
@@ -14,19 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// QRInitiatePayload is the response to initiating a QR login.
-type QRInitiatePayload struct {
-	QRToken   string `json:"qr_token"`
-	ExpiresIn int    `json:"expires_in"` // seconds
-}
-
-// QRApproveResponse indicates approval status.
-type QRApproveResponse struct {
-	Status bool `json:"status"`
-}
-
 // QRInitiate generates a new QR token, saves it in the database, and returns the signed token.
-func (s *AuthService) QRInitiate(ctx context.Context) (*QRInitiatePayload, error) {
+func (s *AuthService) QRInitiate(ctx context.Context) (*rpc_core_authv1.QRInitiateResponse, error) {
 	qrToken, err := uuid.NewV7()
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate token")
@@ -49,8 +39,8 @@ func (s *AuthService) QRInitiate(ctx context.Context) (*QRInitiatePayload, error
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to sign token")
 	}
 
-	return &QRInitiatePayload{
-		QRToken:   fmt.Sprintf("%s.%s", id.String(), signature),
+	return &rpc_core_authv1.QRInitiateResponse{
+		QrToken:   fmt.Sprintf("%s.%s", id.String(), signature),
 		ExpiresIn: 300,
 	}, nil
 }
@@ -84,7 +74,7 @@ func (s *AuthService) ParseAndVerifyQRToken(tokenStr string) (uuid.UUID, error) 
 
 // QRApprove verifies the token signature and links the authenticated user's ID to the QR login request.
 // It executes a Postgres NOTIFY upon successful update.
-func (s *AuthService) QRApprove(ctx context.Context, userID uuid.UUID, qrTokenStr string) (*QRApproveResponse, error) {
+func (s *AuthService) QRApprove(ctx context.Context, userID uuid.UUID, qrTokenStr string) (*rpc_core_authv1.QRApproveResponse, error) {
 	token, err := s.ParseAndVerifyQRToken(qrTokenStr)
 	if err != nil {
 		return nil, err
@@ -106,11 +96,11 @@ func (s *AuthService) QRApprove(ctx context.Context, userID uuid.UUID, qrTokenSt
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to notify QR event")
 	}
 
-	return &QRApproveResponse{Status: true}, nil
+	return &rpc_core_authv1.QRApproveResponse{Status: true}, nil
 }
 
 // QRCallback verifies the token signature and exchanges the APPROVED token for a real session.
-func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platform string) (*SessionResponse, error) {
+func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platform string) (*rpc_core_authv1.SessionResponse, error) {
 	token, err := s.ParseAndVerifyQRToken(qrTokenStr)
 	if err != nil {
 		return nil, err
@@ -146,11 +136,11 @@ func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platfor
 		keysRevision = 0
 	}
 
-	return &SessionResponse{
+	return &rpc_core_authv1.SessionResponse{
 		UserId:            user.ID.String(),
 		Name:              user.Name,
 		Email:             user.Email,
-		SessionID:         session.Token,
+		SessionId:         session.Token,
 		SessionExpiry:     session.ExpiresAt,
 		IsPrimary:         session.IsPrimary,
 		PrimaryDeviceName: session.PrimaryDeviceName,

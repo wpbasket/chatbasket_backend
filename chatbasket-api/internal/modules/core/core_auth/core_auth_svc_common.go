@@ -2,6 +2,8 @@ package core_auth
 
 import (
 	"log"
+	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
+	rpc_core_authv1 "chatbasket-api/gen/proto/core/core_auth"
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
@@ -15,7 +17,7 @@ import (
 
 // Logout handles logout from single or all sessions
 // Works for both public and personal modes
-func (s *AuthService) Logout(ctx context.Context, payload *LogoutPayload, userID uuid.UUID, sessionToken string) (*kit.StatusOkay, error) {
+func (s *AuthService) Logout(ctx context.Context, payload *LogoutPayload, userID uuid.UUID, sessionToken string) (*rpc_common_modelv1.StatusOkay, error) {
 	var tokenHash string
 	if !payload.AllSessions {
 		var err error
@@ -70,11 +72,11 @@ func (s *AuthService) Logout(ctx context.Context, payload *LogoutPayload, userID
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to commit logout transaction: "+err.Error())
 	}
 
-	return &kit.StatusOkay{Status: true, Message: "Logged out successfully"}, nil
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "Logged out successfully"}, nil
 }
 
 // GetUserWithSession retrieves user and session details (similar to login response)
-func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, sessionToken string) (*SessionResponse, error) {
+func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, sessionToken string) (*rpc_core_authv1.SessionResponse, error) {
 	// 1. Compute HMAC
 	tokenHash, err := kit.ComputeHMAC(sessionToken, s.AuthSecret, true, new(userID.String()))
 	if err != nil {
@@ -134,11 +136,11 @@ func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, 
 	log.Printf("[E2EE] GetUserWithSession: user %s session issued with keys_revision=%d", userID, keysRevision)
 
 	// 6. Construct Response
-	return &SessionResponse{
+	return &rpc_core_authv1.SessionResponse{
 		UserId:            user.ID.String(),
 		Name:              user.Name,
 		Email:             user.Email,
-		SessionID:         session.ID.String(),
+		SessionId:         session.ID.String(),
 		SessionExpiry:     session.ExpiresAt.Format(time.RFC3339),
 		IsPrimary:         session.IsCentral,
 		PrimaryDeviceName: centralDeviceName,
@@ -166,7 +168,7 @@ var allowedUpdateOTPTypes = map[string]struct{}{
 // email_update mails get the same branded, multipart/alternative,
 // spam-hardened layout — not the bare "<h1>OTP</h1>" template that used to
 // land in users' Spam folders.
-func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpdateOTPPayload, userID uuid.UUID) (*kit.StatusOkay, error) {
+func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpdateOTPPayload, userID uuid.UUID) (*rpc_common_modelv1.StatusOkay, error) {
 	// Validate update_type against the known set before doing anything
 	// expensive (DB writes, OTP generation, mail send).
 	if _, ok := allowedUpdateOTPTypes[payload.UpdateType]; !ok {
@@ -224,7 +226,7 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpda
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to send email: "+err.Error())
 	}
 
-	return &kit.StatusOkay{
+	return &rpc_common_modelv1.StatusOkay{
 		Status:  true,
 		Message: updateID.String(), // Return update_id as message
 	}, nil
@@ -232,7 +234,7 @@ func (s *AuthService) RequestUpdateOTP(ctx context.Context, payload *RequestUpda
 
 // ConfirmPasswordUpdate verifies OTP and updates password
 // Step 2 of two-step password update flow
-func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *ConfirmPasswordUpdatePayload, userID uuid.UUID) (*kit.StatusOkay, error) {
+func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *ConfirmPasswordUpdatePayload, userID uuid.UUID) (*rpc_common_modelv1.StatusOkay, error) {
 	// Parse update_id
 	updateID, err := kit.StringToUUID(payload.UpdateID)
 	if err != nil {
@@ -304,7 +306,7 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete verification code")
 	}
 
-	return &kit.StatusOkay{
+	return &rpc_common_modelv1.StatusOkay{
 		Status:  true,
 		Message: "Password updated successfully",
 	}, nil
@@ -312,7 +314,7 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 
 // RequestEmailUpdate sends OTP to new email for verification
 // Step 1 of two-step email update flow
-func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEmailUpdatePayload, userID uuid.UUID) (*kit.StatusOkay, error) {
+func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEmailUpdatePayload, userID uuid.UUID) (*rpc_common_modelv1.StatusOkay, error) {
 	// Get user from database
 	user, err := s.PostgresQuerier.GetAuthUserByID(ctx, userID)
 	if err != nil {
@@ -381,7 +383,7 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEm
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to send email: "+err.Error())
 	}
 
-	return &kit.StatusOkay{
+	return &rpc_common_modelv1.StatusOkay{
 		Status:  true,
 		Message: updateID.String(), // Return update_id as message
 	}, nil
@@ -389,7 +391,7 @@ func (s *AuthService) RequestEmailUpdate(ctx context.Context, payload *RequestEm
 
 // ConfirmEmailUpdate verifies OTP and updates email
 // Step 2 of two-step email update flow
-func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEmailUpdatePayload, userID uuid.UUID) (*kit.StatusOkay, error) {
+func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEmailUpdatePayload, userID uuid.UUID) (*rpc_common_modelv1.StatusOkay, error) {
 	// Parse update_id
 	updateID, err := kit.StringToUUID(payload.UpdateID)
 	if err != nil {
@@ -456,7 +458,7 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete verification code")
 	}
 
-	return &kit.StatusOkay{
+	return &rpc_common_modelv1.StatusOkay{
 		Status:  true,
 		Message: "Email updated successfully",
 	}, nil

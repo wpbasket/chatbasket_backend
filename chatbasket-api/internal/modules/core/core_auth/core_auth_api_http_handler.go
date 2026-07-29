@@ -84,7 +84,7 @@ func (h *authHandler) AccountVerification(c *echo.Context) error {
 		// Set cookies with actual values (before they get emptied in response)
 		sessionCookie := &http.Cookie{
 			Name:     "sessionId",
-			Value:    user.SessionID,
+			Value:    user.SessionId,
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   cookieSecure,
@@ -108,17 +108,8 @@ func (h *authHandler) AccountVerification(c *echo.Context) error {
 		c.SetCookie(userCookie)
 
 		// Return SessionResponse with empty sensitive fields for web (except UserId for E2EE mapping)
-		webResponse := &SessionResponse{
-			UserId:        user.UserId,
-			Name:          user.Name,
-			Email:         user.Email,
-			SessionID:     "",
-			SessionExpiry: user.SessionExpiry,
-			IsPrimary:     user.IsPrimary,
-			PrimaryKey:    user.PrimaryKey,
-			KeysRevision:  user.KeysRevision,
-		}
-		return c.JSON(http.StatusOK, webResponse)
+		user.SessionId = ""
+		return c.JSON(http.StatusOK, user)
 	}
 
 	return c.JSON(http.StatusOK, user)
@@ -183,7 +174,7 @@ func (h *authHandler) LoginVerification(c *echo.Context) error {
 		// Set cookies with actual values (before they get emptied in response)
 		sessionCookie := &http.Cookie{
 			Name:     "sessionId",
-			Value:    user.SessionID,
+			Value:    user.SessionId,
 			Path:     "/",
 			HttpOnly: true,
 			Secure:   cookieSecure,
@@ -207,17 +198,8 @@ func (h *authHandler) LoginVerification(c *echo.Context) error {
 		c.SetCookie(userCookie)
 
 		// Return SessionResponse with empty sensitive fields for web (except UserId for E2EE mapping)
-		webResponse := &SessionResponse{
-			UserId:        user.UserId,
-			Name:          user.Name,
-			Email:         user.Email,
-			SessionID:     "",
-			SessionExpiry: user.SessionExpiry,
-			IsPrimary:     user.IsPrimary,
-			PrimaryKey:    user.PrimaryKey,
-			KeysRevision:  user.KeysRevision,
-		}
-		return c.JSON(http.StatusOK, webResponse)
+		user.SessionId = ""
+		return c.JSON(http.StatusOK, user)
 	}
 
 	return c.JSON(http.StatusOK, user)

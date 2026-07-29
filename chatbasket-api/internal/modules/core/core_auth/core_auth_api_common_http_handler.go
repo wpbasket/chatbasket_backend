@@ -101,7 +101,7 @@ func (h *authHandler) GetUser(c *echo.Context) error {
 	}
 
 	if platform, ok := c.Get("platform").(string); ok && platform == "web" {
-		res.SessionID = ""
+		res.SessionId = ""
 	}
 
 	return c.JSON(http.StatusOK, res)

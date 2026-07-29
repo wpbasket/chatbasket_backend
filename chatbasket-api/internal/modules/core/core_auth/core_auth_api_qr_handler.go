@@ -16,11 +16,11 @@ import (
 
 // QRInitiate triggers the creation of a new QR token.
 func (h *authHandler) QRInitiate(c *echo.Context) error {
-	payload, err := h.Service.QRInitiate(c.Request().Context())
+	res, err := h.Service.QRInitiate(c.Request().Context())
 	if err != nil {
 		return err
 	}
-	return c.JSON(http.StatusOK, payload)
+	return c.JSON(http.StatusOK, res)
 }
 
 // QRWebSocket upgrades the HTTP connection to a WebSocket for real-time signaling.
@@ -135,7 +135,7 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 
 	sessionCookie := &http.Cookie{
 		Name:     "sessionId",
-		Value:    user.SessionID,
+		Value:    user.SessionId,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   cookieSecure,
@@ -159,17 +159,7 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 	c.SetCookie(userCookie)
 
 	// Return SessionResponse with empty sensitive fields for web (except UserId for E2EE mapping)
-	webResponse := &SessionResponse{
-		UserId:            user.UserId,
-		Name:              user.Name,
-		Email:             user.Email,
-		SessionID:         "",
-		SessionExpiry:     user.SessionExpiry,
-		IsPrimary:         user.IsPrimary,
-		PrimaryDeviceName: user.PrimaryDeviceName,
-		PrimaryKey:        user.PrimaryKey,
-		KeysRevision:      user.KeysRevision,
-	}
+	user.SessionId = ""
 
-	return c.JSON(http.StatusOK, webResponse)
+	return c.JSON(http.StatusOK, user)
 }

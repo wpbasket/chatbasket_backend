@@ -30,7 +30,7 @@ func newAuthConnectServer(authService *AuthService, hub *websocket.WSHub, qrHub 
 	}
 }
 
-func (s *authConnectServer) setWebCookies(header http.Header, origin string, user *SessionResponse) error {
+func (s *authConnectServer) setWebCookies(header http.Header, origin string, user *rpc_core_authv1.SessionResponse) error {
 	expiry, err := time.Parse(time.RFC3339, user.SessionExpiry)
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func (s *authConnectServer) setWebCookies(header http.Header, origin string, use
 
 	sessionCookie := &http.Cookie{
 		Name:     "sessionId",
-		Value:    user.SessionID,
+		Value:    user.SessionId,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   cookieSecure,
@@ -123,10 +123,7 @@ func (s *authConnectServer) Signup(ctx context.Context, req *connect.Request[rpc
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) AccountVerification(ctx context.Context, req *connect.Request[rpc_core_authv1.AccountVerificationRequest]) (*connect.Response[rpc_core_authv1.SessionResponse], error) {
@@ -145,7 +142,7 @@ func (s *authConnectServer) AccountVerification(ctx context.Context, req *connec
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	res := connect.NewResponse(user.ToProtoSessionResponse())
+	res := connect.NewResponse(user)
 
 	if req.Msg.Platform == "web" {
 		origin := req.Header().Get("Origin")
@@ -174,10 +171,7 @@ func (s *authConnectServer) Login(ctx context.Context, req *connect.Request[rpc_
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) LoginVerification(ctx context.Context, req *connect.Request[rpc_core_authv1.LoginVerificationRequest]) (*connect.Response[rpc_core_authv1.SessionResponse], error) {
@@ -196,7 +190,7 @@ func (s *authConnectServer) LoginVerification(ctx context.Context, req *connect.
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	res := connect.NewResponse(user.ToProtoSessionResponse())
+	res := connect.NewResponse(user)
 
 	if req.Msg.Platform == "web" {
 		origin := req.Header().Get("Origin")
@@ -225,10 +219,7 @@ func (s *authConnectServer) ResendOTP(ctx context.Context, req *connect.Request[
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) ForgotPassword(ctx context.Context, req *connect.Request[rpc_core_authv1.ForgotPasswordRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -245,10 +236,7 @@ func (s *authConnectServer) ForgotPassword(ctx context.Context, req *connect.Req
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) VerifyForgotPassword(ctx context.Context, req *connect.Request[rpc_core_authv1.VerifyForgotPasswordRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -267,10 +255,7 @@ func (s *authConnectServer) VerifyForgotPassword(ctx context.Context, req *conne
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) Logout(ctx context.Context, req *connect.Request[rpc_core_authv1.LogoutRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -312,10 +297,7 @@ func (s *authConnectServer) Logout(ctx context.Context, req *connect.Request[rpc
 		}
 	}
 
-	resp := connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	})
+	resp := connect.NewResponse(res)
 
 	if platform == "web" {
 		origin := req.Header().Get("Origin")
@@ -344,7 +326,7 @@ func (s *authConnectServer) GetUser(ctx context.Context, req *connect.Request[rp
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	res := connect.NewResponse(user.ToProtoSessionResponse())
+	res := connect.NewResponse(user)
 	if platform == "web" {
 		res.Msg.SessionId = ""
 	}
@@ -367,10 +349,7 @@ func (s *authConnectServer) RequestUpdateOTP(ctx context.Context, req *connect.R
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) ConfirmPasswordUpdate(ctx context.Context, req *connect.Request[rpc_core_authv1.ConfirmPasswordUpdateRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -390,10 +369,7 @@ func (s *authConnectServer) ConfirmPasswordUpdate(ctx context.Context, req *conn
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) RequestEmailUpdate(ctx context.Context, req *connect.Request[rpc_core_authv1.RequestEmailUpdateRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -412,10 +388,7 @@ func (s *authConnectServer) RequestEmailUpdate(ctx context.Context, req *connect
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) ConfirmEmailUpdate(ctx context.Context, req *connect.Request[rpc_core_authv1.ConfirmEmailUpdateRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -434,22 +407,16 @@ func (s *authConnectServer) ConfirmEmailUpdate(ctx context.Context, req *connect
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{
-		Status:  res.Status,
-		Message: res.Message,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) QRInitiate(ctx context.Context, req *connect.Request[rpc_core_authv1.QRInitiateRequest]) (*connect.Response[rpc_core_authv1.QRInitiateResponse], error) {
-	payload, err := s.authService.QRInitiate(ctx)
+	res, err := s.authService.QRInitiate(ctx)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_core_authv1.QRInitiateResponse{
-		QrToken:   payload.QRToken,
-		ExpiresIn: int32(payload.ExpiresIn),
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) QRApprove(ctx context.Context, req *connect.Request[rpc_core_authv1.QRApproveRequest]) (*connect.Response[rpc_core_authv1.QRApproveResponse], error) {
@@ -463,9 +430,7 @@ func (s *authConnectServer) QRApprove(ctx context.Context, req *connect.Request[
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	return connect.NewResponse(&rpc_core_authv1.QRApproveResponse{
-		Status: res.Status,
-	}), nil
+	return connect.NewResponse(res), nil
 }
 
 func (s *authConnectServer) QRCallback(ctx context.Context, req *connect.Request[rpc_core_authv1.QRCallbackRequest]) (*connect.Response[rpc_core_authv1.SessionResponse], error) {
@@ -484,7 +449,7 @@ func (s *authConnectServer) QRCallback(ctx context.Context, req *connect.Request
 		s.qrHub.Close(token)
 	}
 
-	res := connect.NewResponse(user.ToProtoSessionResponse())
+	res := connect.NewResponse(user)
 
 	origin := req.Header().Get("Origin")
 	if err := s.setWebCookies(res.Header(), origin, user); err != nil {

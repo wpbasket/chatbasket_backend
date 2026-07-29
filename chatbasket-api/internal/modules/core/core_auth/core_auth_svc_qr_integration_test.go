@@ -63,7 +63,7 @@ func TestQRLoginFlow_Integration(t *testing.T) {
 	initResp, err := svc.QRInitiate(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, initResp)
-	qrTokenStr := initResp.QRToken
+	qrTokenStr := initResp.QrToken
 	require.NotEmpty(t, qrTokenStr)
 
 	// 2. Mobile Approves Login
@@ -83,7 +83,7 @@ func TestQRLoginFlow_Integration(t *testing.T) {
 	cbResp, err := svc.QRCallback(ctx, qrTokenStr, "web")
 	require.NoError(t, err)
 	require.NotNil(t, cbResp)
-	assert.NotEmpty(t, cbResp.SessionID)
+	assert.NotEmpty(t, cbResp.SessionId)
 	assert.Equal(t, testUserID.String(), cbResp.UserId)
 
 	// Verify DB status is EXCHANGED
@@ -100,7 +100,7 @@ func TestQREdgeCases_Integration(t *testing.T) {
 	// 1. Callback on non-approved token
 	initResp, err := svc.QRInitiate(ctx)
 	require.NoError(t, err)
-	_, err = svc.QRCallback(ctx, initResp.QRToken, "web")
+	_, err = svc.QRCallback(ctx, initResp.QrToken, "web")
 	assert.ErrorContains(t, err, "expired or not approved") // Should fail because status is PENDING
 }
 
@@ -125,7 +125,7 @@ func TestQRLoginFlow_Concurrent_Integration(t *testing.T) {
 				errChan <- err
 				return
 			}
-			qrToken := initResp.QRToken
+			qrToken := initResp.QrToken
 
 			// 2. Mobile Approve
 			_, err = svc.QRApprove(ctx, testUserID, qrToken)
