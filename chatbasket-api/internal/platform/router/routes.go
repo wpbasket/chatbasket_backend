@@ -19,6 +19,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v5"
+	echomiddleware "github.com/labstack/echo/v5/middleware"
 )
 
 // Router orchestrates route registration from various modules.
@@ -49,14 +50,20 @@ func New(e *echo.Echo, pool *pgxpool.Pool, cfg *config.Config, r2Pool *clients.R
 // RegisterGlobalRoutes sets up the base API group and health check.
 func (r *Router) RegisterGlobalRoutes() *echo.Group {
 	apiGroup := r.App.Group("/api")
+
+	// Restrict healthz endpoint to 2 requests per 5 seconds per IP (0.4 req/sec)
+	healthzLimiter := echomiddleware.RateLimiter(echomiddleware.NewRateLimiterMemoryStore(0.4))
+
 	apiGroup.GET("/healthz", func(c *echo.Context) error {
-		pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
-		defer cancel()
-		if err := r.Pool.Ping(pingCtx); err != nil {
-			return c.JSON(http.StatusServiceUnavailable, &kit.StatusOkay{Status: false, Message: "unhealthy"})
+		if r.Pool != nil {
+			pingCtx, cancel := context.WithTimeout(c.Request().Context(), 200*time.Millisecond)
+			defer cancel()
+			if err := r.Pool.Ping(pingCtx); err != nil {
+				return c.JSON(http.StatusServiceUnavailable, &kit.StatusOkay{Status: false, Message: "unhealthy"})
+			}
 		}
 		return c.JSON(http.StatusOK, &kit.StatusOkay{Status: true, Message: "ok"})
-	})
+	}, healthzLimiter)
 	return apiGroup
 }
 
