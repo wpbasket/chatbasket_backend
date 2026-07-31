@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "chatbasket-api/**"
+      - "deployment/**"
       - ".github/workflows/deploy_web.yml"
 
 jobs:
@@ -105,6 +106,10 @@ jobs:
           # Pull and Start
           docker compose pull
           docker compose up -d --remove-orphans
+
+          # Validate and reload Nginx after the bind-mounted config changes
+          docker exec chatbasket-nginx nginx -t
+          docker exec chatbasket-nginx nginx -s reload
 
           # --- CRITICAL CLEANUP STEP ---
           # Deletes the old "dangling" image to save disk space
