@@ -42,7 +42,7 @@ func setupContactDeleteIntegrationDB(t *testing.T) (*pgxpool.Pool, *contactServi
 	globalSvc := services.NewGlobalService("https://chatbasket.live")
 	authSvc := core_auth.NewAuthService(globalSvc, pool, []byte("test-secret"))
 	profileSvc := personal_profile.NewProfileService(globalSvc, pool, authSvc, []byte("test-username-key-32bytes-long!!"), nil, (*clients.R2ClientPool)(nil))
-	contactSvc := NewContactService(globalSvc, pool, profileSvc, []byte("test-username-key-32bytes-long!!"), []byte("test-contact-key-32bytes-long!!"))
+	contactSvc := NewContactService(globalSvc, pool, profileSvc, []byte("test-username-key-32bytes-long!!"), []byte("test-contact-key-32bytes-long!!!"))
 
 	return pool, contactSvc
 }
