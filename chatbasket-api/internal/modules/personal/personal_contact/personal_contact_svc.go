@@ -23,8 +23,10 @@ type personalProfilePersonalContactProvider interface {
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
 	GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
+	GetBlockListProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	FindContactableUserByUsername(ctx context.Context, viewerID uuid.UUID, username string) (*personal_profile.ContactLookupResult, error)
 	CreateUserBlock(ctx context.Context, id, blockerID, blockedID uuid.UUID) error
+	GetUserBlocks(ctx context.Context, blockerID uuid.UUID) ([]personal_profile.UserBlock, error)
 	IsEitherBlocked(ctx context.Context, user1ID, user2ID uuid.UUID) (int32, error)
 	IsBlockedBetweenUsers(ctx context.Context, requesterID, targetID uuid.UUID) (*personal_profile.BlockStatusResult, error)
 	IsBlockedBetweenUsersBatch(ctx context.Context, requesterID uuid.UUID, targetIDs []uuid.UUID) ([]*personal_profile.BlockStatusResult, error)
@@ -913,6 +915,52 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 	}
 
 	return &rpc_personal_contactv1.BlockUserResponse{Blocked: true}, nil
+}
+
+// GetBlocks lists the requester's own blocks with block-list profile enrichment.
+func (ps *contactService) GetBlocks(ctx context.Context, userId kit.UserId) (*rpc_personal_contactv1.GetBlocksResponse, error) {
+	blocks, err := ps.personalProfilePersonalContactProvider.GetUserBlocks(ctx, userId.UuidUserId)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(blocks) == 0 {
+		return &rpc_personal_contactv1.GetBlocksResponse{
+			BlockedUsers: []*rpc_personal_contactv1.BlockedUser{},
+		}, nil
+	}
+
+	blockedIDs := make([]uuid.UUID, 0, len(blocks))
+	for _, block := range blocks {
+		blockedIDs = append(blockedIDs, block.BlockedUserID)
+	}
+
+	profiles, err := ps.personalProfilePersonalContactProvider.GetBlockListProfilesForViewer(ctx, userId.UuidUserId, blockedIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	blockedUsers := make([]*rpc_personal_contactv1.BlockedUser, 0, len(blocks))
+	for _, block := range blocks {
+		profile, ok := profiles[block.BlockedUserID]
+		if !ok {
+			continue
+		}
+
+		blockedUser := &rpc_personal_contactv1.BlockedUser{
+			Id:           profile.ID.String(),
+			Name:         profile.Name,
+			Username:     profile.Username,
+			ProfileType:  profile.ProfileType,
+			BlockedAt:    timestamppb.New(block.CreatedAt),
+			Bio:          profile.Bio,
+			AvatarUrl:    profile.AvatarURL,
+			AvatarFileId: profile.AvatarFileId,
+		}
+		blockedUsers = append(blockedUsers, blockedUser)
+	}
+
+	return &rpc_personal_contactv1.GetBlocksResponse{BlockedUsers: blockedUsers}, nil
 }
 
 // GetMessagingBlockStatus returns 0 if no block, 1 if user1 blocked user2, 2 if user2 blocked user1.

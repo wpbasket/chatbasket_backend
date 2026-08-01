@@ -116,6 +116,23 @@ message BlockUserResponse {
   bool blocked = 1;
 }
 
+message GetBlocksRequest {}
+
+message BlockedUser {
+  string id = 1;
+  string name = 2;
+  string username = 3;
+  optional string bio = 4;
+  google.protobuf.Timestamp blockedAt = 5;
+  optional string avatarUrl = 6;
+  optional string avatarFileId = 7;
+  string profileType = 8;
+}
+
+message GetBlocksResponse {
+  repeated BlockedUser blockedUsers = 1;
+}
+
 service ContactService {
   rpc GetContacts(GetContactsRequest) returns (GetContactsResponse);
   rpc CheckContactExistance(CheckContactExistanceRequest) returns (CheckContactExistanceResponse);
@@ -128,4 +145,5 @@ service ContactService {
   rpc UpdateContactNickname(UpdateContactNicknameRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc RemoveContactNickname(RemoveContactNicknameRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc BlockUser(BlockUserRequest) returns (BlockUserResponse);
+  rpc GetBlocks(GetBlocksRequest) returns (GetBlocksResponse);
 }

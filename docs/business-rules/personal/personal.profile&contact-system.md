@@ -146,7 +146,9 @@ The system implements a profile enrichment layer (`GetContactableProfilesForView
 
 1.  **Administrative Block**: The target user is administratively blocked.
 2.  **Private Profile**: The target user has set their profile type to `private`.
-3.  **Bidirectional User Block**: A block relationship exists between the viewer and the target in either direction.
+3.  **User Block in Either Direction**: Either the target user has blocked the viewer or the viewer has blocked the target. Both directions suppress the target from normal profile enrichment.
+
+The chat-specific `GetContactableUserIDs` query uses a separate contract: it excludes user blocks in both directions when filtering pending messages.
 
 ### 3.3 Persistence vs. Visibility
 Hard exclusions do not delete the underlying relationship (e.g., the contact record or chat entry) but prevent its display and interaction. If the exclusion condition is lifted (e.g., user switches back to public or unblocks), the entry automatically reappears during the next enrichment cycle ("self-healing").
@@ -294,7 +296,8 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
 - Query filtering:
   - Excludes administratively blocked users (Hard Exclusion).
   - Excludes private profiles: If a user changes profile_type to private after being added, they are filtered out during profile enrichment (Hard Exclusion).
-  - Excludes blocked users in **either direction** (Hard Exclusion via anti-join).
+  - Profile enrichment excludes users in either block direction via an anti-join; the viewer's own blocks are excluded from normal profile surfaces as well.
+  - Chat pending-message filtering separately excludes blocks in either direction through `GetContactableUserIDs`.
   - Applies "Soft Restrictions" to avatar, bio, and status visibility based on global/user settings.
 - Username decryption:
   - System decrypts encrypted usernames for display
@@ -394,7 +397,16 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   - Contact creation: Prevents adding blocked users.
   - Message sending: Prevents messaging blocked users.
   - Block creation: Checks for existing blocks.
-  - **Profile Listing/Enrichment**: Dynamically filters out blocked profiles from Contacts, Chat Lists, and Request Lists using an anti-join (`NOT EXISTS`) in the database query.
+  - **Normal Profile Listing/Enrichment**: `GetContactableProfilesForViewer` filters out admin-blocked users, private profiles, and users blocked in either direction. The block-list endpoint uses a separate enrichment contract.
+  - **Chat Pending Messages**: `GetContactableUserIDs` filters user blocks in both directions because messages from either side of a block must be hidden.
+
+### 5.3.1 Blocked-user List
+- Endpoint: `GET /api/personal/contacts/blocks/get`
+- The authenticated requester is used as the blocker; no request body is required.
+- Block rows are ordered newest first and provide `blockedAt` from the block record.
+- Admin-blocked and private targets are omitted as whole items.
+- A target who blocked the requester remains in the list with `id`, `blockedAt`, `name`, `username`, and `profileType`; only `bio`, `avatarUrl`, and `avatarFileId` are hidden.
+- A target blocked only by the requester is fully enriched, subject to normal avatar visibility restrictions.
 
 ### 5.4 Message Cleanup on Block
 - System automatically deletes message sync actions between users in both directions

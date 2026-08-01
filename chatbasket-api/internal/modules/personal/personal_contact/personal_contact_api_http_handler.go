@@ -227,3 +227,15 @@ func (h *contactHandler) BlockUser(c *echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
+func (h *contactHandler) GetBlocks(c *echo.Context) error {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	res, err := h.Service.GetBlocks(c.Request().Context(), userID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, res)
+}

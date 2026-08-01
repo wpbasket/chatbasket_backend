@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
 	"chatbasket-api/internal/platform/kit"
@@ -423,4 +424,127 @@ func TestIsBlockedBetweenUsersBatch_Integration_TargetPrivate(t *testing.T) {
 	assert.False(t, status.IsTargetAdminBlocked)
 	assert.False(t, status.IsRequesterUserBlockedByTarget)
 	assert.False(t, status.IsTargetUserBlockedByRequester)
+}
+
+func TestGetContactableProfilesForViewer_Integration_ExcludesBothBlockDirections(t *testing.T) {
+	pool, _, profileSvc := setupProfileIntegrationDB(t)
+	ctx := context.Background()
+
+	requester, _ := createTestUserWithProfile(t, pool)
+	ownBlocked, _ := createTestUserWithProfile(t, pool)
+	reciprocalBlocked, _ := createTestUserWithProfile(t, pool)
+	visible, _ := createTestUserWithProfile(t, pool)
+	for _, user := range []kit.UserId{requester, ownBlocked, reciprocalBlocked, visible} {
+		userID := user.UuidUserId
+		t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", userID) })
+	}
+
+	_, err := pool.Exec(ctx,
+		"INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id) VALUES ($1, $2, $3), ($4, $5, $6)",
+		uuid.New(), requester.UuidUserId, ownBlocked.UuidUserId,
+		uuid.New(), reciprocalBlocked.UuidUserId, requester.UuidUserId,
+	)
+	require.NoError(t, err)
+
+	profiles, err := profileSvc.GetContactableProfilesForViewer(ctx, requester.UuidUserId, []uuid.UUID{
+		ownBlocked.UuidUserId,
+		reciprocalBlocked.UuidUserId,
+		visible.UuidUserId,
+	})
+	require.NoError(t, err)
+
+	assert.NotContains(t, profiles, ownBlocked.UuidUserId)
+	assert.NotContains(t, profiles, reciprocalBlocked.UuidUserId)
+	assert.Contains(t, profiles, visible.UuidUserId)
+
+	contactableIDs, err := profileSvc.GetContactableUserIDs(ctx, requester.UuidUserId, []uuid.UUID{
+		ownBlocked.UuidUserId,
+		reciprocalBlocked.UuidUserId,
+		visible.UuidUserId,
+	})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []uuid.UUID{visible.UuidUserId}, contactableIDs)
+}
+
+func TestGetBlockListProfilesForViewer_Integration_PrivacyAndOrdering(t *testing.T) {
+	pool, _, profileSvc := setupProfileIntegrationDB(t)
+	ctx := context.Background()
+
+	requester, _ := createTestUserWithProfile(t, pool)
+	ownBlocked, _ := createTestUserWithProfile(t, pool)
+	reciprocalBlocked, _ := createTestUserWithProfile(t, pool)
+	privateTarget, _ := createTestUserWithProfile(t, pool)
+	adminBlocked, _ := createTestUserWithProfile(t, pool)
+	for _, user := range []kit.UserId{requester, ownBlocked, reciprocalBlocked, privateTarget, adminBlocked} {
+		userID := user.UuidUserId
+		t.Cleanup(func() { pool.Exec(ctx, "DELETE FROM auth_users WHERE id = $1", userID) })
+	}
+
+	ownBio := "own block bio"
+	reciprocalBio := "reciprocal block bio"
+	_, err := pool.Exec(ctx, "UPDATE users SET name = $1, bio = $2 WHERE id = $3", "Own Blocked", ownBio, ownBlocked.UuidUserId)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE users SET name = $1, bio = $2 WHERE id = $3", "Reciprocal Blocked", reciprocalBio, reciprocalBlocked.UuidUserId)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE users SET profile_type = 'private' WHERE id = $1", privateTarget.UuidUserId)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, "UPDATE users SET is_admin_blocked = true WHERE id = $1", adminBlocked.UuidUserId)
+	require.NoError(t, err)
+
+	insertBlock := func(blockerID, blockedID uuid.UUID) {
+		t.Helper()
+		_, err := pool.Exec(ctx,
+			"INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id) VALUES ($1, $2, $3)",
+			uuid.New(), blockerID, blockedID)
+		require.NoError(t, err)
+	}
+	// user_blocks' timestamp trigger owns created_at, so insert rows separately
+	// and let the short delays establish a deterministic newest-first order.
+	insertBlock(requester.UuidUserId, adminBlocked.UuidUserId)
+	time.Sleep(20 * time.Millisecond)
+	insertBlock(requester.UuidUserId, privateTarget.UuidUserId)
+	time.Sleep(20 * time.Millisecond)
+	insertBlock(requester.UuidUserId, reciprocalBlocked.UuidUserId)
+	time.Sleep(20 * time.Millisecond)
+	insertBlock(requester.UuidUserId, ownBlocked.UuidUserId)
+	insertBlock(reciprocalBlocked.UuidUserId, requester.UuidUserId)
+
+	blocks, err := profileSvc.GetUserBlocks(ctx, requester.UuidUserId)
+	require.NoError(t, err)
+	require.Len(t, blocks, 4)
+	assert.Equal(t, ownBlocked.UuidUserId, blocks[0].BlockedUserID)
+	assert.Equal(t, reciprocalBlocked.UuidUserId, blocks[1].BlockedUserID)
+	assert.Equal(t, privateTarget.UuidUserId, blocks[2].BlockedUserID)
+	assert.Equal(t, adminBlocked.UuidUserId, blocks[3].BlockedUserID)
+	assert.True(t, blocks[0].CreatedAt.After(blocks[1].CreatedAt))
+	assert.True(t, blocks[1].CreatedAt.After(blocks[2].CreatedAt))
+	assert.True(t, blocks[2].CreatedAt.After(blocks[3].CreatedAt))
+
+	profiles, err := profileSvc.GetBlockListProfilesForViewer(ctx, requester.UuidUserId, []uuid.UUID{
+		ownBlocked.UuidUserId,
+		reciprocalBlocked.UuidUserId,
+		privateTarget.UuidUserId,
+		adminBlocked.UuidUserId,
+	})
+	require.NoError(t, err)
+
+	ownProfile, ok := profiles[ownBlocked.UuidUserId]
+	require.True(t, ok)
+	assert.Equal(t, "Own Blocked", ownProfile.Name)
+	assert.Equal(t, "user", ownProfile.Username)
+	assert.Equal(t, "public", ownProfile.ProfileType)
+	require.NotNil(t, ownProfile.Bio)
+	assert.Equal(t, ownBio, *ownProfile.Bio)
+
+	reciprocalProfile, ok := profiles[reciprocalBlocked.UuidUserId]
+	require.True(t, ok)
+	assert.Equal(t, "Reciprocal Blocked", reciprocalProfile.Name)
+	assert.Equal(t, "user", reciprocalProfile.Username)
+	assert.Equal(t, "public", reciprocalProfile.ProfileType)
+	assert.Nil(t, reciprocalProfile.Bio)
+	assert.Nil(t, reciprocalProfile.AvatarURL)
+	assert.Nil(t, reciprocalProfile.AvatarFileId)
+
+	assert.NotContains(t, profiles, privateTarget.UuidUserId)
+	assert.NotContains(t, profiles, adminBlocked.UuidUserId)
 }

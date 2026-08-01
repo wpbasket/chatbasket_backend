@@ -196,6 +196,111 @@ func (q *Queries) GetAvatarFileID(ctx context.Context, userID uuid.UUID) (*strin
 	return file_id, err
 }
 
+const getBlockListProfilesForViewer = `-- name: GetBlockListProfilesForViewer :many
+SELECT
+    u.id,
+    u.name,
+    u.b64_cipher_chacha20poly1305_username AS username,
+    u.bio,
+    u.profile_type,
+    a.file_id,
+    a.token_id,
+    a.token_secret,
+    a.token_expiry,
+    COALESCE(ugr.restrict_profile, FALSE) AS global_restrict_profile,
+    COALESCE(ugr.restrict_avatar, FALSE) AS global_restrict_avatar,
+    COALESCE(ugre.exception_profile, FALSE) AS exception_global_profile,
+    COALESCE(ugre.exception_avatar, FALSE) AS exception_global_avatar,
+    COALESCE(ur.restrict_profile, FALSE) AS user_restrict_profile,
+    COALESCE(ur.restrict_avatar, FALSE) AS user_restrict_avatar,
+    EXISTS (
+        SELECT 1
+        FROM user_blocks ub
+        WHERE ub.blocker_user_id = u.id
+          AND ub.blocked_user_id = $1
+    ) AS target_blocked_viewer
+FROM
+    users u
+    LEFT JOIN avatars a ON u.id = a.user_id
+    AND a.avatar_type = 'profile'
+    LEFT JOIN user_global_restrictions ugr ON u.id = ugr.user_id
+    LEFT JOIN user_global_restriction_exemptions ugre ON u.id = ugre.user_id
+    AND ugre.exempted_user_id = $1
+    LEFT JOIN user_restrictions ur ON u.id = ur.user_id
+    AND ur.restricted_user_id = $1
+WHERE
+    u.id = ANY (
+        $2::uuid []
+    )
+    AND u.is_admin_blocked IS FALSE
+    AND u.profile_type != 'private'
+ORDER BY u.id
+`
+
+type GetBlockListProfilesForViewerParams struct {
+	ViewerUserID  uuid.UUID   `json:"viewer_user_id"`
+	TargetUserIds []uuid.UUID `json:"target_user_ids"`
+}
+
+type GetBlockListProfilesForViewerRow struct {
+	ID                     uuid.UUID  `json:"id"`
+	Name                   string     `json:"name"`
+	Username               string     `json:"username"`
+	Bio                    *string    `json:"bio"`
+	ProfileType            string     `json:"profile_type"`
+	FileID                 *string    `json:"file_id"`
+	TokenID                *string    `json:"token_id"`
+	TokenSecret            *string    `json:"token_secret"`
+	TokenExpiry            *time.Time `json:"token_expiry"`
+	GlobalRestrictProfile  bool       `json:"global_restrict_profile"`
+	GlobalRestrictAvatar   bool       `json:"global_restrict_avatar"`
+	ExceptionGlobalProfile bool       `json:"exception_global_profile"`
+	ExceptionGlobalAvatar  bool       `json:"exception_global_avatar"`
+	UserRestrictProfile    bool       `json:"user_restrict_profile"`
+	UserRestrictAvatar     bool       `json:"user_restrict_avatar"`
+	TargetBlockedViewer    bool       `json:"target_blocked_viewer"`
+}
+
+// Fetches profiles for the block list. Admin-blocked and private targets are
+// omitted as whole items; a target-side block is returned so the service can
+// retain identity fields while hiding bio and avatar fields.
+func (q *Queries) GetBlockListProfilesForViewer(ctx context.Context, arg GetBlockListProfilesForViewerParams) ([]GetBlockListProfilesForViewerRow, error) {
+	rows, err := q.db.Query(ctx, getBlockListProfilesForViewer, arg.ViewerUserID, arg.TargetUserIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetBlockListProfilesForViewerRow
+	for rows.Next() {
+		var i GetBlockListProfilesForViewerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Username,
+			&i.Bio,
+			&i.ProfileType,
+			&i.FileID,
+			&i.TokenID,
+			&i.TokenSecret,
+			&i.TokenExpiry,
+			&i.GlobalRestrictProfile,
+			&i.GlobalRestrictAvatar,
+			&i.ExceptionGlobalProfile,
+			&i.ExceptionGlobalAvatar,
+			&i.UserRestrictProfile,
+			&i.UserRestrictAvatar,
+			&i.TargetBlockedViewer,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getContactableProfilesForViewer = `-- name: GetContactableProfilesForViewer :many
 SELECT
     u.id,
@@ -347,11 +452,10 @@ type GetContactableUserIDsParams struct {
 }
 
 // Returns just the subset of target_user_ids that pass the contactable
-// filter. Same exclusion contract as GetContactableProfilesForViewer
-// (admin-blocked / private profile / user-blocked either way), but
-// returns only the IDs — callers that don't need the full profile
-// (e.g. "is this user allowed to send me a message?") use this lighter
-// query instead of fetching the full row.
+// filter for chat message filtering. It uses the same bidirectional block
+// exclusion as GetContactableProfilesForViewer; the chat endpoint needs to
+// hide messages from users blocked in either direction.
+// Also excludes admin-blocked users.
 func (q *Queries) GetContactableUserIDs(ctx context.Context, arg GetContactableUserIDsParams) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, getContactableUserIDs, arg.TargetUserIds, arg.ViewerUserID)
 	if err != nil {
@@ -365,6 +469,39 @@ func (q *Queries) GetContactableUserIDs(ctx context.Context, arg GetContactableU
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserBlocks = `-- name: GetUserBlocks :many
+SELECT blocked_user_id, created_at
+FROM user_blocks
+WHERE blocker_user_id = $1
+ORDER BY created_at DESC
+`
+
+type GetUserBlocksRow struct {
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// Returns the users blocked by a given blocker, newest first.
+func (q *Queries) GetUserBlocks(ctx context.Context, blockerUserID uuid.UUID) ([]GetUserBlocksRow, error) {
+	rows, err := q.db.Query(ctx, getUserBlocks, blockerUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserBlocksRow
+	for rows.Next() {
+		var i GetUserBlocksRow
+		if err := rows.Scan(&i.BlockedUserID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -67,6 +67,9 @@ const (
 	// ContactServiceBlockUserProcedure is the fully-qualified name of the ContactService's BlockUser
 	// RPC.
 	ContactServiceBlockUserProcedure = "/rpc_personal_contact.v1.ContactService/BlockUser"
+	// ContactServiceGetBlocksProcedure is the fully-qualified name of the ContactService's GetBlocks
+	// RPC.
+	ContactServiceGetBlocksProcedure = "/rpc_personal_contact.v1.ContactService/GetBlocks"
 )
 
 // These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
@@ -83,6 +86,7 @@ var (
 	contactServiceUpdateContactNicknameMethodDescriptor = contactServiceServiceDescriptor.Methods().ByName("UpdateContactNickname")
 	contactServiceRemoveContactNicknameMethodDescriptor = contactServiceServiceDescriptor.Methods().ByName("RemoveContactNickname")
 	contactServiceBlockUserMethodDescriptor             = contactServiceServiceDescriptor.Methods().ByName("BlockUser")
+	contactServiceGetBlocksMethodDescriptor             = contactServiceServiceDescriptor.Methods().ByName("GetBlocks")
 )
 
 // ContactServiceClient is a client for the rpc_personal_contact.v1.ContactService service.
@@ -98,6 +102,7 @@ type ContactServiceClient interface {
 	UpdateContactNickname(context.Context, *connect.Request[personal_contact.UpdateContactNicknameRequest]) (*connect.Response[model.StatusOkay], error)
 	RemoveContactNickname(context.Context, *connect.Request[personal_contact.RemoveContactNicknameRequest]) (*connect.Response[model.StatusOkay], error)
 	BlockUser(context.Context, *connect.Request[personal_contact.BlockUserRequest]) (*connect.Response[personal_contact.BlockUserResponse], error)
+	GetBlocks(context.Context, *connect.Request[personal_contact.GetBlocksRequest]) (*connect.Response[personal_contact.GetBlocksResponse], error)
 }
 
 // NewContactServiceClient constructs a client for the rpc_personal_contact.v1.ContactService
@@ -176,6 +181,12 @@ func NewContactServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(contactServiceBlockUserMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
+		getBlocks: connect.NewClient[personal_contact.GetBlocksRequest, personal_contact.GetBlocksResponse](
+			httpClient,
+			baseURL+ContactServiceGetBlocksProcedure,
+			connect.WithSchema(contactServiceGetBlocksMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -192,6 +203,7 @@ type contactServiceClient struct {
 	updateContactNickname *connect.Client[personal_contact.UpdateContactNicknameRequest, model.StatusOkay]
 	removeContactNickname *connect.Client[personal_contact.RemoveContactNicknameRequest, model.StatusOkay]
 	blockUser             *connect.Client[personal_contact.BlockUserRequest, personal_contact.BlockUserResponse]
+	getBlocks             *connect.Client[personal_contact.GetBlocksRequest, personal_contact.GetBlocksResponse]
 }
 
 // GetContacts calls rpc_personal_contact.v1.ContactService.GetContacts.
@@ -249,6 +261,11 @@ func (c *contactServiceClient) BlockUser(ctx context.Context, req *connect.Reque
 	return c.blockUser.CallUnary(ctx, req)
 }
 
+// GetBlocks calls rpc_personal_contact.v1.ContactService.GetBlocks.
+func (c *contactServiceClient) GetBlocks(ctx context.Context, req *connect.Request[personal_contact.GetBlocksRequest]) (*connect.Response[personal_contact.GetBlocksResponse], error) {
+	return c.getBlocks.CallUnary(ctx, req)
+}
+
 // ContactServiceHandler is an implementation of the rpc_personal_contact.v1.ContactService service.
 type ContactServiceHandler interface {
 	GetContacts(context.Context, *connect.Request[personal_contact.GetContactsRequest]) (*connect.Response[personal_contact.GetContactsResponse], error)
@@ -262,6 +279,7 @@ type ContactServiceHandler interface {
 	UpdateContactNickname(context.Context, *connect.Request[personal_contact.UpdateContactNicknameRequest]) (*connect.Response[model.StatusOkay], error)
 	RemoveContactNickname(context.Context, *connect.Request[personal_contact.RemoveContactNicknameRequest]) (*connect.Response[model.StatusOkay], error)
 	BlockUser(context.Context, *connect.Request[personal_contact.BlockUserRequest]) (*connect.Response[personal_contact.BlockUserResponse], error)
+	GetBlocks(context.Context, *connect.Request[personal_contact.GetBlocksRequest]) (*connect.Response[personal_contact.GetBlocksResponse], error)
 }
 
 // NewContactServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -336,6 +354,12 @@ func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect.Handler
 		connect.WithSchema(contactServiceBlockUserMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
+	contactServiceGetBlocksHandler := connect.NewUnaryHandler(
+		ContactServiceGetBlocksProcedure,
+		svc.GetBlocks,
+		connect.WithSchema(contactServiceGetBlocksMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/rpc_personal_contact.v1.ContactService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ContactServiceGetContactsProcedure:
@@ -360,6 +384,8 @@ func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect.Handler
 			contactServiceRemoveContactNicknameHandler.ServeHTTP(w, r)
 		case ContactServiceBlockUserProcedure:
 			contactServiceBlockUserHandler.ServeHTTP(w, r)
+		case ContactServiceGetBlocksProcedure:
+			contactServiceGetBlocksHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -411,4 +437,8 @@ func (UnimplementedContactServiceHandler) RemoveContactNickname(context.Context,
 
 func (UnimplementedContactServiceHandler) BlockUser(context.Context, *connect.Request[personal_contact.BlockUserRequest]) (*connect.Response[personal_contact.BlockUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_contact.v1.ContactService.BlockUser is not implemented"))
+}
+
+func (UnimplementedContactServiceHandler) GetBlocks(context.Context, *connect.Request[personal_contact.GetBlocksRequest]) (*connect.Response[personal_contact.GetBlocksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_contact.v1.ContactService.GetBlocks is not implemented"))
 }

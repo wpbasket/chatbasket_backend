@@ -26,6 +26,10 @@ type Querier interface {
 	GetActiveAvatar(ctx context.Context, userID uuid.UUID) (GetActiveAvatarRow, error)
 	// Fetches the storage file_id for the main profile avatar
 	GetAvatarFileID(ctx context.Context, userID uuid.UUID) (*string, error)
+	// Fetches profiles for the block list. Admin-blocked and private targets are
+	// omitted as whole items; a target-side block is returned so the service can
+	// retain identity fields while hiding bio and avatar fields.
+	GetBlockListProfilesForViewer(ctx context.Context, arg GetBlockListProfilesForViewerParams) ([]GetBlockListProfilesForViewerRow, error)
 	// GetContactableProfilesForViewer fetches profiles for contact enrichment with
 	// privacy filtering. The returned rows are used by the chat list, contact list,
 	// contact requests, and other surfaces to populate the "other user" identity
@@ -57,12 +61,13 @@ type Querier interface {
 	//                                                  the other.
 	GetContactableProfilesForViewer(ctx context.Context, arg GetContactableProfilesForViewerParams) ([]GetContactableProfilesForViewerRow, error)
 	// Returns just the subset of target_user_ids that pass the contactable
-	// filter. Same exclusion contract as GetContactableProfilesForViewer
-	// (admin-blocked / private profile / user-blocked either way), but
-	// returns only the IDs — callers that don't need the full profile
-	// (e.g. "is this user allowed to send me a message?") use this lighter
-	// query instead of fetching the full row.
+	// filter for chat message filtering. It uses the same bidirectional block
+	// exclusion as GetContactableProfilesForViewer; the chat endpoint needs to
+	// hide messages from users blocked in either direction.
+	// Also excludes admin-blocked users.
 	GetContactableUserIDs(ctx context.Context, arg GetContactableUserIDsParams) ([]uuid.UUID, error)
+	// Returns the users blocked by a given blocker, newest first.
+	GetUserBlocks(ctx context.Context, blockerUserID uuid.UUID) ([]GetUserBlocksRow, error)
 	GetUserByHashedUsernameForContact(ctx context.Context, hmacSha256HexUsername string) (User, error)
 	// Fetches minimal user info for eligibility checks
 	GetUserCoreProfile(ctx context.Context, id uuid.UUID) (GetUserCoreProfileRow, error)

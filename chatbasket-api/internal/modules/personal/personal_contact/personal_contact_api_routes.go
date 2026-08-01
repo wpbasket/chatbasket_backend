@@ -14,7 +14,7 @@ func Register(personalGroup *echo.Group, contactService *contactService) {
 
 	// Contact Routes
 	contacts := personalGroup.Group("/contacts")
-	
+
 	contacts.GET("/get", handler.GetContacts)
 	contacts.POST("/check-existence", handler.CheckContactExistance)
 	contacts.POST("/create", handler.CreateContact)
@@ -24,8 +24,12 @@ func Register(personalGroup *echo.Group, contactService *contactService) {
 	contacts.POST("/requests/reject", handler.RejectContactRequest)
 	contacts.POST("/requests/undo", handler.UndoContactRequest)
 	contacts.POST("/update-nickname", handler.UpdateContactNickname)
-	contacts.POST("/block", handler.BlockUser)
 	contacts.POST("/remove-nickname", handler.RemoveContactNickname)
+
+	// Block Routes
+	blocks := contacts.Group("/blocks")
+	blocks.GET("/get", handler.GetBlocks)
+	blocks.POST("/create", handler.BlockUser)
 
 	// Connect RPC Routes
 	connectServer := newContactConnectServer(contactService)
@@ -34,4 +38,3 @@ func Register(personalGroup *echo.Group, contactService *contactService) {
 	)
 	personalGroup.Any(path+"*", echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)))
 }
-

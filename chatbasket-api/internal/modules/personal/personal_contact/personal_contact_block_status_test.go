@@ -38,6 +38,10 @@ func (p *blockStatusProfileProvider) GetContactableProfilesForViewer(context.Con
 	return nil, nil
 }
 
+func (p *blockStatusProfileProvider) GetBlockListProfilesForViewer(context.Context, uuid.UUID, []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error) {
+	return nil, nil
+}
+
 func (p *blockStatusProfileProvider) FindContactableUserByUsername(context.Context, uuid.UUID, string) (*personal_profile.ContactLookupResult, error) {
 	return &personal_profile.ContactLookupResult{ID: p.targetID, Exists: true}, nil
 }
@@ -46,17 +50,21 @@ func (p *blockStatusProfileProvider) CreateUserBlock(context.Context, uuid.UUID,
 	return nil
 }
 
+func (p *blockStatusProfileProvider) GetUserBlocks(context.Context, uuid.UUID) ([]personal_profile.UserBlock, error) {
+	return nil, nil
+}
+
 func (p *blockStatusProfileProvider) IsEitherBlocked(context.Context, uuid.UUID, uuid.UUID) (int32, error) {
 	return 0, nil
 }
 
 func (p *blockStatusProfileProvider) IsBlockedBetweenUsers(context.Context, uuid.UUID, uuid.UUID) (*personal_profile.BlockStatusResult, error) {
 	return &personal_profile.BlockStatusResult{
-		IsBlocked:                       p.requesterAdmin || p.targetAdmin || p.requesterUserBlockedByTarget || p.targetUserBlockedByRequester || p.targetProfilePrivate,
-		IsRequesterAdminBlocked:         p.requesterAdmin,
-		IsTargetAdminBlocked:            p.targetAdmin,
-		IsRequesterUserBlockedByTarget:  p.requesterUserBlockedByTarget,
-		IsTargetUserBlockedByRequester:  p.targetUserBlockedByRequester,
+		IsBlocked:                      p.requesterAdmin || p.targetAdmin || p.requesterUserBlockedByTarget || p.targetUserBlockedByRequester || p.targetProfilePrivate,
+		IsRequesterAdminBlocked:        p.requesterAdmin,
+		IsTargetAdminBlocked:           p.targetAdmin,
+		IsRequesterUserBlockedByTarget: p.requesterUserBlockedByTarget,
+		IsTargetUserBlockedByRequester: p.targetUserBlockedByRequester,
 		IsTargetProfilePrivate:         p.targetProfilePrivate,
 	}, nil
 }
@@ -66,13 +74,13 @@ func (p *blockStatusProfileProvider) IsBlockedBetweenUsersBatch(_ context.Contex
 	results := make([]*personal_profile.BlockStatusResult, len(targetIDs))
 	for i, id := range targetIDs {
 		results[i] = &personal_profile.BlockStatusResult{
-			IsBlocked:                       p.requesterAdmin || p.targetAdmin || p.requesterUserBlockedByTarget || p.targetUserBlockedByRequester || p.targetProfilePrivate,
-			IsRequesterAdminBlocked:         p.requesterAdmin,
-			IsTargetAdminBlocked:            p.targetAdmin,
-			IsRequesterUserBlockedByTarget:  p.requesterUserBlockedByTarget,
-			IsTargetUserBlockedByRequester:  p.targetUserBlockedByRequester,
+			IsBlocked:                      p.requesterAdmin || p.targetAdmin || p.requesterUserBlockedByTarget || p.targetUserBlockedByRequester || p.targetProfilePrivate,
+			IsRequesterAdminBlocked:        p.requesterAdmin,
+			IsTargetAdminBlocked:           p.targetAdmin,
+			IsRequesterUserBlockedByTarget: p.requesterUserBlockedByTarget,
+			IsTargetUserBlockedByRequester: p.targetUserBlockedByRequester,
 			IsTargetProfilePrivate:         p.targetProfilePrivate,
-			TargetID:                        id,
+			TargetID:                       id,
 		}
 	}
 	return results, nil
@@ -136,8 +144,8 @@ func TestContactEndpointsRejectBlockedPairs(t *testing.T) {
 	userID := kit.UserId{UuidUserId: requesterID}
 
 	tests := []struct {
-		name           string
-		call           func() error
+		name            string
+		call            func() error
 		expectedMessage string
 	}{
 		{

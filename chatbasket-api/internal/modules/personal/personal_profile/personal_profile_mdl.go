@@ -1,6 +1,7 @@
 package personal_profile
 
 import (
+	"chatbasket-api/internal/modules/personal/personal_profile/internal/personal_profile_store"
 	"github.com/google/uuid"
 )
 
@@ -9,6 +10,9 @@ type UserCoreProfile struct {
 	IsAdminBlocked bool      `json:"is_admin_blocked"`
 	ProfileType    string    `json:"profile_type"`
 }
+
+// UserBlock exposes the generated SQLC row returned by GetUserBlocks.
+type UserBlock = personal_profile_store.GetUserBlocksRow
 
 // BlockStatusResult is returned by IsBlockedBetweenUsers and indicates whether a
 // block exists between two users and which conditions are true. TargetID is

@@ -273,3 +273,17 @@ func (s *contactConnectServer) BlockUser(ctx context.Context, req *connect.Reque
 
 	return connect.NewResponse(res), nil
 }
+
+func (s *contactConnectServer) GetBlocks(ctx context.Context, req *connect.Request[rpc_personal_contactv1.GetBlocksRequest]) (*connect.Response[rpc_personal_contactv1.GetBlocksResponse], error) {
+	userID, err := kit.GetConnectRpcUserID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	res, err := s.contactService.GetBlocks(ctx, userID)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	return connect.NewResponse(res), nil
+}

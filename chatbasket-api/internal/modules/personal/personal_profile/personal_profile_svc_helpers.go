@@ -228,9 +228,9 @@ func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UU
 // GetContactableProfilesForViewer fetches profiles for contact enrichment with
 // privacy filtering. The returned map only contains users that pass every
 // privacy-exclusion check (not admin-blocked, public/personal profile type,
-// not user-blocked in either direction). Users that fail any check are
-// omitted from the map entirely — the wire payload the caller builds for
-// them will have name/username/profile_type as `""` and
+// and not blocked in either direction). Users that fail any check are omitted
+// from the map entirely — the wire payload the
+// caller builds for them will have name/username/profile_type as `""` and
 // bio/avatar_url/avatar_file_id as `null`.
 //
 // This binary per-user exclusion is the wire contract. The frontend
@@ -317,7 +317,74 @@ func (ps *profileService) GetContactableProfilesForViewer(
 	return result, nil
 }
 
-// GetContactableUserIDs checks which target user IDs are contactable for a viewer (not blocked, not admin-blocked).
+// GetBlockListProfilesForViewer fetches profiles eligible for the block list.
+// Admin-blocked and private targets are excluded; a target-side block keeps the
+// identity fields but hides bio and avatar fields.
+func (ps *profileService) GetBlockListProfilesForViewer(
+	ctx context.Context,
+	viewerID uuid.UUID,
+	targetIDs []uuid.UUID,
+) (map[uuid.UUID]*ContactProfileView, error) {
+	if len(targetIDs) == 0 {
+		return map[uuid.UUID]*ContactProfileView{}, nil
+	}
+
+	rows, err := ps.PostgresQueries.GetBlockListProfilesForViewer(ctx, personal_profile_store.GetBlockListProfilesForViewerParams{
+		ViewerUserID:  viewerID,
+		TargetUserIds: targetIDs,
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to fetch block-list profiles: "+kit.GetPostgresError(err).Message)
+	}
+
+	result := make(map[uuid.UUID]*ContactProfileView, len(rows))
+	for _, row := range rows {
+		username, err := DecryptUsername(row.Username, ps.PersonalUsernameKey)
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt username")
+		}
+
+		var avatarURL *string
+		var avatarFileID *string
+		if !row.TargetBlockedViewer && ShouldExposeAvatar(
+			row.GlobalRestrictProfile,
+			row.ExceptionGlobalProfile,
+			row.GlobalRestrictAvatar,
+			row.ExceptionGlobalAvatar,
+			row.UserRestrictProfile,
+			row.UserRestrictAvatar,
+		) {
+			url, err := ps.GetAvatarURL(ctx, row.FileID)
+			if err != nil {
+				return nil, err
+			}
+			avatarURL = url
+			avatarFileID = row.FileID
+		}
+
+		bio := row.Bio
+		if row.TargetBlockedViewer {
+			bio = nil
+		}
+
+		result[row.ID] = &ContactProfileView{
+			ID:           row.ID,
+			Name:         row.Name,
+			Username:     username,
+			Bio:          bio,
+			AvatarURL:    avatarURL,
+			AvatarFileId: avatarFileID,
+			ProfileType:  row.ProfileType,
+		}
+	}
+
+	return result, nil
+}
+
+// GetContactableUserIDs checks which target user IDs are contactable for a viewer.
+// It applies the same bidirectional block exclusion as
+// GetContactableProfilesForViewer, but returns only IDs for chat message
+// filtering. It also excludes admin-blocked users.
 func (ps *profileService) GetContactableUserIDs(
 	ctx context.Context,
 	viewerID uuid.UUID,
@@ -337,3 +404,10 @@ func (ps *profileService) GetContactableUserIDs(
 	return ids, nil
 }
 
+func (ps *profileService) GetUserBlocks(ctx context.Context, blockerID uuid.UUID) ([]UserBlock, error) {
+	rows, err := ps.PostgresQueries.GetUserBlocks(ctx, blockerID)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+	return rows, nil
+}

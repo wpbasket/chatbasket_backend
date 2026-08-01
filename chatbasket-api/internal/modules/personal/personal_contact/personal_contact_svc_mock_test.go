@@ -2,7 +2,10 @@ package personal_contact
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -22,10 +25,22 @@ import (
 )
 
 type mockContactProfileProvider struct {
-	coreProfile     *personal_profile.UserCoreProfile
-	contactProfiles map[uuid.UUID]*personal_profile.ContactProfileView
-	blockStatus     *personal_profile.BlockStatusResult
-	isEitherBlocked int32
+	coreProfile                 *personal_profile.UserCoreProfile
+	contactProfiles             map[uuid.UUID]*personal_profile.ContactProfileView
+	blockListProfiles           map[uuid.UUID]*personal_profile.ContactProfileView
+	userBlocks                  []personal_profile.UserBlock
+	getUserBlocksErr            error
+	getUserBlocksCalls          int
+	lastBlockerID               uuid.UUID
+	getContactableProfilesCalls int
+	lastContactableViewerID     uuid.UUID
+	lastContactableTargetIDs    []uuid.UUID
+	getBlockListProfilesErr     error
+	getBlockListProfilesCalls   int
+	lastBlockListViewerID       uuid.UUID
+	lastBlockListTargetIDs      []uuid.UUID
+	blockStatus                 *personal_profile.BlockStatusResult
+	isEitherBlocked             int32
 }
 
 func (m *mockContactProfileProvider) IsUserAdminBlocked(context.Context, uuid.UUID) (bool, error) {
@@ -39,11 +54,27 @@ func (m *mockContactProfileProvider) GetUserCoreProfile(_ context.Context, userI
 	return &personal_profile.UserCoreProfile{ID: userID, ProfileType: "public"}, nil
 }
 
-func (m *mockContactProfileProvider) GetContactableProfilesForViewer(context.Context, uuid.UUID, []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error) {
+func (m *mockContactProfileProvider) GetContactableProfilesForViewer(_ context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error) {
+	m.getContactableProfilesCalls++
+	m.lastContactableViewerID = viewerID
+	m.lastContactableTargetIDs = append([]uuid.UUID(nil), targetIDs...)
 	if m.contactProfiles == nil {
 		return map[uuid.UUID]*personal_profile.ContactProfileView{}, nil
 	}
 	return m.contactProfiles, nil
+}
+
+func (m *mockContactProfileProvider) GetBlockListProfilesForViewer(_ context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error) {
+	m.getBlockListProfilesCalls++
+	m.lastBlockListViewerID = viewerID
+	m.lastBlockListTargetIDs = append([]uuid.UUID(nil), targetIDs...)
+	if m.getBlockListProfilesErr != nil {
+		return nil, m.getBlockListProfilesErr
+	}
+	if m.blockListProfiles == nil {
+		return map[uuid.UUID]*personal_profile.ContactProfileView{}, nil
+	}
+	return m.blockListProfiles, nil
 }
 
 func (m *mockContactProfileProvider) FindContactableUserByUsername(context.Context, uuid.UUID, string) (*personal_profile.ContactLookupResult, error) {
@@ -52,6 +83,15 @@ func (m *mockContactProfileProvider) FindContactableUserByUsername(context.Conte
 
 func (m *mockContactProfileProvider) CreateUserBlock(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error {
 	return nil
+}
+
+func (m *mockContactProfileProvider) GetUserBlocks(_ context.Context, blockerID uuid.UUID) ([]personal_profile.UserBlock, error) {
+	m.getUserBlocksCalls++
+	m.lastBlockerID = blockerID
+	if m.getUserBlocksErr != nil {
+		return nil, m.getUserBlocksErr
+	}
+	return m.userBlocks, nil
 }
 
 func (m *mockContactProfileProvider) IsEitherBlocked(context.Context, uuid.UUID, uuid.UUID) (int32, error) {
@@ -295,6 +335,252 @@ func TestGetContacts_DecryptsNickname(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetBlocks_Empty(t *testing.T) {
+	blockerID := uuid.New()
+	profile := &mockContactProfileProvider{}
+	service, _ := newMockContactService(t, profile)
+
+	res, err := service.GetBlocks(context.Background(), kit.UserId{UuidUserId: blockerID})
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.Empty(t, res.BlockedUsers)
+	assert.Equal(t, 1, profile.getUserBlocksCalls)
+	assert.Equal(t, blockerID, profile.lastBlockerID)
+	assert.Zero(t, profile.getContactableProfilesCalls)
+	assert.Zero(t, profile.getBlockListProfilesCalls)
+}
+
+func TestGetBlocks_PropagatesBlockRowError(t *testing.T) {
+	blockerID := uuid.New()
+	wantErr := errors.New("block rows unavailable")
+	profile := &mockContactProfileProvider{getUserBlocksErr: wantErr}
+	service, _ := newMockContactService(t, profile)
+
+	res, err := service.GetBlocks(context.Background(), kit.UserId{UuidUserId: blockerID})
+
+	assert.Nil(t, res)
+	require.ErrorIs(t, err, wantErr)
+	assert.Zero(t, profile.getBlockListProfilesCalls)
+}
+
+func TestGetBlocks_PropagatesProfileEnrichmentError(t *testing.T) {
+	blockerID := uuid.New()
+	blockedID := uuid.New()
+	wantErr := errors.New("block-list profiles unavailable")
+	profile := &mockContactProfileProvider{
+		userBlocks:              []personal_profile.UserBlock{{BlockedUserID: blockedID, CreatedAt: time.Now()}},
+		getBlockListProfilesErr: wantErr,
+	}
+	service, _ := newMockContactService(t, profile)
+
+	res, err := service.GetBlocks(context.Background(), kit.UserId{UuidUserId: blockerID})
+
+	assert.Nil(t, res)
+	require.ErrorIs(t, err, wantErr)
+	assert.Equal(t, 1, profile.getBlockListProfilesCalls)
+}
+
+func TestGetBlocks_EnrichesProfilesAndPreservesBlockTimes(t *testing.T) {
+	blockerID := uuid.New()
+	firstBlockedID := uuid.New()
+	secondBlockedID := uuid.New()
+	firstBlockedAt := time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
+	secondBlockedAt := time.Date(2025, time.December, 31, 12, 0, 0, 0, time.UTC)
+	bio := "First bio"
+	avatarURL := "https://example.com/avatar"
+	avatarFileID := "avatar-file-id"
+	profile := &mockContactProfileProvider{
+		userBlocks: []personal_profile.UserBlock{
+			{BlockedUserID: firstBlockedID, CreatedAt: firstBlockedAt},
+			{BlockedUserID: secondBlockedID, CreatedAt: secondBlockedAt},
+		},
+		blockListProfiles: map[uuid.UUID]*personal_profile.ContactProfileView{
+			firstBlockedID: {
+				ID:           firstBlockedID,
+				Name:         "First User",
+				Username:     "FIRST123",
+				Bio:          &bio,
+				AvatarURL:    &avatarURL,
+				AvatarFileId: &avatarFileID,
+				ProfileType:  "public",
+			},
+			secondBlockedID: {
+				ID:          secondBlockedID,
+				Name:        "Second User",
+				Username:    "SECOND123",
+				ProfileType: "personal",
+			},
+		},
+	}
+	service, _ := newMockContactService(t, profile)
+
+	res, err := service.GetBlocks(context.Background(), kit.UserId{UuidUserId: blockerID})
+
+	require.NoError(t, err)
+	require.Len(t, res.BlockedUsers, 2)
+	assert.Equal(t, firstBlockedID.String(), res.BlockedUsers[0].Id)
+	assert.Equal(t, "First User", res.BlockedUsers[0].Name)
+	assert.Equal(t, "FIRST123", res.BlockedUsers[0].Username)
+	assert.Equal(t, &bio, res.BlockedUsers[0].Bio)
+	assert.Equal(t, &avatarURL, res.BlockedUsers[0].AvatarUrl)
+	assert.Equal(t, &avatarFileID, res.BlockedUsers[0].AvatarFileId)
+	assert.Equal(t, "public", res.BlockedUsers[0].ProfileType)
+	assert.Equal(t, firstBlockedAt, res.BlockedUsers[0].BlockedAt.AsTime())
+	assert.Equal(t, secondBlockedID.String(), res.BlockedUsers[1].Id)
+	assert.Equal(t, secondBlockedAt, res.BlockedUsers[1].BlockedAt.AsTime())
+	assert.Nil(t, res.BlockedUsers[1].Bio)
+	assert.Nil(t, res.BlockedUsers[1].AvatarUrl)
+	assert.Nil(t, res.BlockedUsers[1].AvatarFileId)
+	assert.Equal(t, blockerID, profile.lastBlockerID)
+	assert.Equal(t, blockerID, profile.lastBlockListViewerID)
+	assert.Equal(t, []uuid.UUID{firstBlockedID, secondBlockedID}, profile.lastBlockListTargetIDs)
+}
+
+func TestGetBlocks_ReciprocalBlockKeepsIdentityAndHidesSensitiveFields(t *testing.T) {
+	blockerID := uuid.New()
+	blockedID := uuid.New()
+	blockedAt := time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
+	profile := &mockContactProfileProvider{
+		userBlocks: []personal_profile.UserBlock{
+			{BlockedUserID: blockedID, CreatedAt: blockedAt},
+		},
+		blockListProfiles: map[uuid.UUID]*personal_profile.ContactProfileView{
+			blockedID: {
+				ID:          blockedID,
+				Name:        "Reciprocal User",
+				Username:    "RECIPROCAL1",
+				ProfileType: "public",
+			},
+		},
+	}
+	service, _ := newMockContactService(t, profile)
+
+	res, err := service.GetBlocks(context.Background(), kit.UserId{UuidUserId: blockerID})
+
+	require.NoError(t, err)
+	require.Len(t, res.BlockedUsers, 1)
+	assert.Equal(t, blockedID.String(), res.BlockedUsers[0].Id)
+	assert.Equal(t, "Reciprocal User", res.BlockedUsers[0].Name)
+	assert.Equal(t, "RECIPROCAL1", res.BlockedUsers[0].Username)
+	assert.Equal(t, "public", res.BlockedUsers[0].ProfileType)
+	assert.Equal(t, blockedAt, res.BlockedUsers[0].BlockedAt.AsTime())
+	assert.Nil(t, res.BlockedUsers[0].Bio)
+	assert.Nil(t, res.BlockedUsers[0].AvatarUrl)
+	assert.Nil(t, res.BlockedUsers[0].AvatarFileId)
+	assert.Equal(t, 1, profile.getBlockListProfilesCalls)
+	assert.Equal(t, blockerID, profile.lastBlockListViewerID)
+	assert.Equal(t, []uuid.UUID{blockedID}, profile.lastBlockListTargetIDs)
+}
+
+func TestGetBlocks_OmitsProfilesExcludedByEnrichment(t *testing.T) {
+	blockerID := uuid.New()
+	visibleID := uuid.New()
+	omittedID := uuid.New()
+	profile := &mockContactProfileProvider{
+		userBlocks: []personal_profile.UserBlock{
+			{BlockedUserID: visibleID, CreatedAt: time.Now()},
+			{BlockedUserID: omittedID, CreatedAt: time.Now()},
+		},
+		blockListProfiles: map[uuid.UUID]*personal_profile.ContactProfileView{
+			visibleID: {ID: visibleID, Name: "Visible", Username: "VISIBLE123", ProfileType: "public"},
+		},
+	}
+	service, _ := newMockContactService(t, profile)
+
+	res, err := service.GetBlocks(context.Background(), kit.UserId{UuidUserId: blockerID})
+
+	require.NoError(t, err)
+	require.Len(t, res.BlockedUsers, 1)
+	assert.Equal(t, visibleID.String(), res.BlockedUsers[0].Id)
+	assert.Equal(t, []uuid.UUID{visibleID, omittedID}, profile.lastBlockListTargetIDs)
+}
+
+func TestContactHTTPGetBlocksUsesAuthenticatedUser(t *testing.T) {
+	userID := uuid.New()
+	blockedID := uuid.New()
+	profile := &mockContactProfileProvider{
+		userBlocks: []personal_profile.UserBlock{{BlockedUserID: blockedID, CreatedAt: time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)}},
+		blockListProfiles: map[uuid.UUID]*personal_profile.ContactProfileView{
+			blockedID: {ID: blockedID, Name: "Blocked User", Username: "BLOCKED1", ProfileType: "public"},
+		},
+	}
+	service, _ := newMockContactService(t, profile)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/personal/contacts/blocks/get", nil)
+	recorder := httptest.NewRecorder()
+	ctx := e.NewContext(req, recorder)
+	ctx.Set("userId", userID.String())
+	ctx.Set("uuidUserId", userID)
+
+	err := newContactHandler(service).GetBlocks(ctx)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	var payload struct {
+		BlockedUsers []struct {
+			ID string `json:"id"`
+		} `json:"blockedUsers"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.Len(t, payload.BlockedUsers, 1)
+	assert.Equal(t, blockedID.String(), payload.BlockedUsers[0].ID)
+	assert.Equal(t, userID, profile.lastBlockerID)
+}
+
+func TestContactHTTPGetBlocksRequiresAuthentication(t *testing.T) {
+	profile := &mockContactProfileProvider{}
+	service, _ := newMockContactService(t, profile)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/personal/contacts/blocks/get", nil)
+	recorder := httptest.NewRecorder()
+	ctx := e.NewContext(req, recorder)
+
+	err := newContactHandler(service).GetBlocks(ctx)
+
+	var processedErr kit.ProcessedError
+	require.ErrorAs(t, err, &processedErr)
+	assert.Equal(t, http.StatusUnauthorized, processedErr.Status())
+	assert.Zero(t, profile.getUserBlocksCalls)
+}
+
+func TestContactConnectServerGetBlocksUsesAuthenticatedUser(t *testing.T) {
+	userID := uuid.New()
+	blockedID := uuid.New()
+	profile := &mockContactProfileProvider{
+		userBlocks: []personal_profile.UserBlock{{BlockedUserID: blockedID, CreatedAt: time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)}},
+		blockListProfiles: map[uuid.UUID]*personal_profile.ContactProfileView{
+			blockedID: {ID: blockedID, Name: "Blocked User", Username: "BLOCKED1", ProfileType: "public"},
+		},
+	}
+	service, _ := newMockContactService(t, profile)
+	server := &contactConnectServer{contactService: service}
+	ctx := context.WithValue(context.Background(), kit.CtxSessionData, kit.SessionData{
+		UserID:     userID.String(),
+		UUIDUserID: userID,
+	})
+
+	res, err := server.GetBlocks(ctx, connect.NewRequest(&rpc_personal_contactv1.GetBlocksRequest{}))
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.Len(t, res.Msg.BlockedUsers, 1)
+	assert.Equal(t, blockedID.String(), res.Msg.BlockedUsers[0].Id)
+	assert.Equal(t, userID, profile.lastBlockerID)
+}
+
+func TestContactConnectServerGetBlocksRequiresAuthentication(t *testing.T) {
+	profile := &mockContactProfileProvider{}
+	service, _ := newMockContactService(t, profile)
+	server := &contactConnectServer{contactService: service}
+
+	res, err := server.GetBlocks(context.Background(), connect.NewRequest(&rpc_personal_contactv1.GetBlocksRequest{}))
+
+	assert.Nil(t, res)
+	assert.Equal(t, connect.CodeUnauthenticated, connect.CodeOf(err))
+	assert.Zero(t, profile.getUserBlocksCalls)
+}
+
 func TestContactConnectServerCreateContactRejectsEmptyPayload(t *testing.T) {
 	userID := uuid.New()
 	ctx := context.WithValue(context.Background(), kit.CtxSessionData, kit.SessionData{
@@ -324,6 +610,7 @@ func TestContactRoutesRegister(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/personal/contacts/get",
+		"/api/personal/contacts/blocks/get",
 		"/api/personal/contacts/check-existence",
 		"/api/personal/contacts/create",
 		"/api/personal/contacts/delete",
@@ -333,7 +620,7 @@ func TestContactRoutesRegister(t *testing.T) {
 		"/api/personal/contacts/requests/undo",
 		"/api/personal/contacts/update-nickname",
 		"/api/personal/contacts/remove-nickname",
-		"/api/personal/contacts/block",
+		"/api/personal/contacts/blocks/create",
 	} {
 		assert.Truef(t, paths[path], "missing route %s", path)
 	}

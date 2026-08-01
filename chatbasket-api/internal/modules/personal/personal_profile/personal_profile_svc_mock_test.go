@@ -268,6 +268,132 @@ func TestGetProfile_Mock_Success(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetUserBlocks_Mock_Empty(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	store := personal_profile_store.New(mock)
+	svc := &profileService{PostgresQueries: store}
+	blockerID := uuid.New()
+
+	mock.ExpectQuery(`SELECT blocked_user_id, created_at`).
+		WithArgs(blockerID).
+		WillReturnRows(pgxmock.NewRows([]string{"blocked_user_id", "created_at"}))
+
+	blocks, err := svc.GetUserBlocks(context.Background(), blockerID)
+	require.NoError(t, err)
+	assert.Empty(t, blocks)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetUserBlocks_Mock_Populated(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	store := personal_profile_store.New(mock)
+	svc := &profileService{PostgresQueries: store}
+	blockerID := uuid.New()
+	firstBlockedID := uuid.New()
+	secondBlockedID := uuid.New()
+	firstBlockedAt := time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
+	secondBlockedAt := time.Date(2025, time.December, 31, 12, 0, 0, 0, time.UTC)
+
+	mock.ExpectQuery(`SELECT blocked_user_id, created_at`).
+		WithArgs(blockerID).
+		WillReturnRows(pgxmock.NewRows([]string{"blocked_user_id", "created_at"}).
+			AddRow(firstBlockedID, firstBlockedAt).
+			AddRow(secondBlockedID, secondBlockedAt))
+
+	blocks, err := svc.GetUserBlocks(context.Background(), blockerID)
+	require.NoError(t, err)
+	assert.Equal(t, []UserBlock{
+		{BlockedUserID: firstBlockedID, CreatedAt: firstBlockedAt},
+		{BlockedUserID: secondBlockedID, CreatedAt: secondBlockedAt},
+	}, blocks)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetBlockListProfilesForViewer_HidesOnlySensitiveFieldsForReciprocalBlock(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	store := personal_profile_store.New(mock)
+	viewerID := uuid.New()
+	reciprocalID := uuid.New()
+	visibleID := uuid.New()
+	usernameKey := []byte("test-username-key-32bytes-long!!")
+	reciprocalUsername, err := EncryptUsername("RECIPROCAL1", usernameKey, reciprocalID.String())
+	require.NoError(t, err)
+	visibleUsername, err := EncryptUsername("VISIBLE123", usernameKey, visibleID.String())
+	require.NoError(t, err)
+	reciprocalBio := "reciprocal bio"
+	visibleBio := "visible bio"
+
+	mock.ExpectQuery(`SELECT\s+u\.id,\s+u\.name`).
+		WithArgs(viewerID, []uuid.UUID{reciprocalID, visibleID}).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"id", "name", "username", "bio", "profile_type", "file_id", "token_id", "token_secret", "token_expiry",
+			"global_restrict_profile", "global_restrict_avatar", "exception_global_profile", "exception_global_avatar",
+			"user_restrict_profile", "user_restrict_avatar", "target_blocked_viewer",
+		}).
+			AddRow(reciprocalID, "Reciprocal User", reciprocalUsername, &reciprocalBio, "public", nil, nil, nil, nil, false, false, false, false, false, false, true).
+			AddRow(visibleID, "Visible User", visibleUsername, &visibleBio, "personal", nil, nil, nil, nil, false, false, false, false, false, false, false))
+
+	svc := &profileService{
+		PostgresQueries:     store,
+		AuthProvider:        &mockAuthProviderProfile{},
+		PersonalUsernameKey: usernameKey,
+	}
+	profiles, err := svc.GetBlockListProfilesForViewer(context.Background(), viewerID, []uuid.UUID{reciprocalID, visibleID})
+
+	require.NoError(t, err)
+	require.Len(t, profiles, 2)
+	assert.Equal(t, "Reciprocal User", profiles[reciprocalID].Name)
+	assert.Equal(t, "RECIPROCAL1", profiles[reciprocalID].Username)
+	assert.Equal(t, "public", profiles[reciprocalID].ProfileType)
+	assert.Nil(t, profiles[reciprocalID].Bio)
+	assert.Nil(t, profiles[reciprocalID].AvatarURL)
+	assert.Nil(t, profiles[reciprocalID].AvatarFileId)
+	assert.Equal(t, "Visible User", profiles[visibleID].Name)
+	assert.Equal(t, "VISIBLE123", profiles[visibleID].Username)
+	assert.Equal(t, &visibleBio, profiles[visibleID].Bio)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestBlockFilterQueryContracts(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	store := personal_profile_store.New(mock)
+	viewerID := uuid.New()
+	targetID := uuid.New()
+	targetIDs := []uuid.UUID{targetID}
+
+	mock.ExpectQuery(`ub\.blocker_user_id = u\.id AND ub\.blocked_user_id = \$1`).
+		WithArgs(viewerID, targetIDs).
+		WillReturnError(errors.New("profile filter contract"))
+	_, err = store.GetContactableProfilesForViewer(context.Background(), personal_profile_store.GetContactableProfilesForViewerParams{
+		ViewerUserID:  viewerID,
+		TargetUserIds: targetIDs,
+	})
+	require.Error(t, err)
+
+	mock.ExpectQuery(`(?s)ub\.blocker_user_id = \$2.*ub\.blocked_user_id = u\.id.*OR.*ub\.blocker_user_id = u\.id.*ub\.blocked_user_id = \$2`).
+		WithArgs(targetIDs, viewerID).
+		WillReturnError(errors.New("chat filter contract"))
+	_, err = store.GetContactableUserIDs(context.Background(), personal_profile_store.GetContactableUserIDsParams{
+		TargetUserIds: targetIDs,
+		ViewerUserID:  viewerID,
+	})
+	require.Error(t, err)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUpdateUserProfile_Mock_Success(t *testing.T) {
 	mock, err := pgxmock.NewPool()
 	require.NoError(t, err)
@@ -337,7 +463,7 @@ func TestPresignAvatarUpload_Mock_Success(t *testing.T) {
 
 	userID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
 	res, err := svc.PresignAvatarUpload(context.Background(), userID)
-	
+
 	// Since client GenerateUploadURL will try to hit the AWS SDK S3 client config and signature logic,
 	// which does not make external requests for presigned URLs, it should succeed without real credentials.
 	// But let's handle case where it might succeed or error gracefully.
