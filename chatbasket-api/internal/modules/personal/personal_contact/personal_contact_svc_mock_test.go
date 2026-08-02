@@ -85,6 +85,14 @@ func (m *mockContactProfileProvider) CreateUserBlock(context.Context, uuid.UUID,
 	return nil
 }
 
+func (m *mockContactProfileProvider) DeleteUserBlock(context.Context, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+
+func (m *mockContactProfileProvider) IsBlockedByAdminOrPrivate(context.Context, uuid.UUID, uuid.UUID) (*personal_profile.AdminOrPrivateBlockStatus, error) {
+	return &personal_profile.AdminOrPrivateBlockStatus{}, nil
+}
+
 func (m *mockContactProfileProvider) GetUserBlocks(_ context.Context, blockerID uuid.UUID) ([]personal_profile.UserBlock, error) {
 	m.getUserBlocksCalls++
 	m.lastBlockerID = blockerID
@@ -621,6 +629,7 @@ func TestContactRoutesRegister(t *testing.T) {
 		"/api/personal/contacts/update-nickname",
 		"/api/personal/contacts/remove-nickname",
 		"/api/personal/contacts/blocks/create",
+		"/api/personal/contacts/blocks/delete",
 	} {
 		assert.Truef(t, paths[path], "missing route %s", path)
 	}

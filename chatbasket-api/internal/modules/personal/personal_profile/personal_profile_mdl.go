@@ -27,6 +27,13 @@ type BlockStatusResult struct {
 	TargetID                       uuid.UUID `json:"targetId,omitempty"`
 }
 
+type AdminOrPrivateBlockStatus struct {
+	IsBlocked               bool `json:"isBlocked"`
+	IsRequesterAdminBlocked bool `json:"isRequesterAdminBlocked"`
+	IsTargetAdminBlocked    bool `json:"isTargetAdminBlocked"`
+	IsTargetProfilePrivate  bool `json:"isTargetProfilePrivate"`
+}
+
 // BlockStatusFlags mirrors the block-status queries. It is sent to the frontend inside the
 // ApiError.Details field so clients can branch on the exact condition.
 type BlockStatusFlags struct {

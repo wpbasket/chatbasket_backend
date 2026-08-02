@@ -459,14 +459,6 @@ func (ps *profileService) deleteAvatarFromR2(ctx context.Context, fileID string)
 	return client.DeleteFile(ctx, client.ProfileBucket(), objectKey)
 }
 
-func (ps *profileService) CreateUserBlock(ctx context.Context, id, blockerID, blockedID uuid.UUID) error {
-	return ps.PostgresQueries.CreateUserBlock(ctx, personal_profile_store.CreateUserBlockParams{
-		ID:            id,
-		BlockerUserID: blockerID,
-		BlockedUserID: blockedID,
-	})
-}
-
 func (ps *profileService) IsEitherBlocked(ctx context.Context, user1ID, user2ID uuid.UUID) (int32, error) {
 	status, err := ps.PostgresQueries.IsEitherBlocked(ctx, personal_profile_store.IsEitherBlockedParams{
 		BlockerUserID: user1ID,

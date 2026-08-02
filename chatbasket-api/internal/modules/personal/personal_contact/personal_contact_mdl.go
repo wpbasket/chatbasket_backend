@@ -35,6 +35,10 @@ type RemoveContactNicknamePayload struct {
 }
 
 type BlockUserPayload struct {
-	BlockedUserId string `json:"blocked_user_id" validate:"required,uuid"`
+	BlockedUserId string `json:"blockedUserId" validate:"required,uuid"`
+}
+
+type UnblockUserPayload struct {
+	BlockedUserId string `json:"blockedUserId" validate:"required,uuid"`
 }
 

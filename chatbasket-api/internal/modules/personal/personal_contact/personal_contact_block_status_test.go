@@ -50,6 +50,14 @@ func (p *blockStatusProfileProvider) CreateUserBlock(context.Context, uuid.UUID,
 	return nil
 }
 
+func (p *blockStatusProfileProvider) DeleteUserBlock(context.Context, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+
+func (p *blockStatusProfileProvider) IsBlockedByAdminOrPrivate(context.Context, uuid.UUID, uuid.UUID) (*personal_profile.AdminOrPrivateBlockStatus, error) {
+	return &personal_profile.AdminOrPrivateBlockStatus{}, nil
+}
+
 func (p *blockStatusProfileProvider) GetUserBlocks(context.Context, uuid.UUID) ([]personal_profile.UserBlock, error) {
 	return nil, nil
 }

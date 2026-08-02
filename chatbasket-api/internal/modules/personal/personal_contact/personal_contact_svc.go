@@ -26,9 +26,11 @@ type personalProfilePersonalContactProvider interface {
 	GetBlockListProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	FindContactableUserByUsername(ctx context.Context, viewerID uuid.UUID, username string) (*personal_profile.ContactLookupResult, error)
 	CreateUserBlock(ctx context.Context, id, blockerID, blockedID uuid.UUID) error
+	DeleteUserBlock(ctx context.Context, blockerID, blockedID uuid.UUID) error
 	GetUserBlocks(ctx context.Context, blockerID uuid.UUID) ([]personal_profile.UserBlock, error)
 	IsEitherBlocked(ctx context.Context, user1ID, user2ID uuid.UUID) (int32, error)
 	IsBlockedBetweenUsers(ctx context.Context, requesterID, targetID uuid.UUID) (*personal_profile.BlockStatusResult, error)
+	IsBlockedByAdminOrPrivate(ctx context.Context, requesterID, targetID uuid.UUID) (*personal_profile.AdminOrPrivateBlockStatus, error)
 	IsBlockedBetweenUsersBatch(ctx context.Context, requesterID uuid.UUID, targetIDs []uuid.UUID) ([]*personal_profile.BlockStatusResult, error)
 }
 
@@ -78,6 +80,24 @@ func (ps *contactService) checkBlockStatus(ctx context.Context, requesterID, tar
 		IsTargetUserBlockedByRequester: status.IsTargetUserBlockedByRequester,
 		IsTargetProfilePrivate:         status.IsTargetProfilePrivate,
 	})
+}
+
+func (ps *contactService) checkUnblockStatus(ctx context.Context, requesterID, targetID uuid.UUID) error {
+	status, err := ps.personalProfilePersonalContactProvider.IsBlockedByAdminOrPrivate(ctx, requesterID, targetID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return kit.NewError(http.StatusNotFound, "not_found", "block_entry_does_not_exist")
+		}
+		return kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+	if status.IsBlocked {
+		return kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", &rpc_common_modelv1.BlockStatusFlags{
+			IsRequesterAdminBlocked: status.IsRequesterAdminBlocked,
+			IsTargetAdminBlocked:    status.IsTargetAdminBlocked,
+			IsTargetProfilePrivate:  status.IsTargetProfilePrivate,
+		})
+	}
+	return nil
 }
 
 func (ps *contactService) GetContacts(ctx context.Context, userId kit.UserId) (*rpc_personal_contactv1.GetContactsResponse, error) {
@@ -915,6 +935,32 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 	}
 
 	return &rpc_personal_contactv1.BlockUserResponse{Blocked: true}, nil
+}
+
+func (ps *contactService) UnblockUser(ctx context.Context, payload *UnblockUserPayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
+	if payload == nil || payload.BlockedUserId == "" {
+		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
+	}
+
+	blockedUUID, err := uuid.Parse(payload.BlockedUserId)
+	if err != nil {
+		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid blockedUserId")
+	}
+
+	if blockedUUID == userId.UuidUserId {
+		return nil, kit.NewError(http.StatusConflict, "conflict", "self_unblock_not_allowed")
+	}
+
+	if err := ps.checkUnblockStatus(ctx, userId.UuidUserId, blockedUUID); err != nil {
+		return nil, err
+	}
+
+	err = ps.personalProfilePersonalContactProvider.DeleteUserBlock(ctx, userId.UuidUserId, blockedUUID)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+
+	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "user_unblocked"}, nil
 }
 
 // GetBlocks lists the requester's own blocks with block-list profile enrichment.

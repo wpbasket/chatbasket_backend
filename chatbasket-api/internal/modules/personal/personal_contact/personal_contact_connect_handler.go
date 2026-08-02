@@ -274,6 +274,28 @@ func (s *contactConnectServer) BlockUser(ctx context.Context, req *connect.Reque
 	return connect.NewResponse(res), nil
 }
 
+func (s *contactConnectServer) UnblockUser(ctx context.Context, req *connect.Request[rpc_personal_contactv1.UnblockUserRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
+	userID, err := kit.GetConnectRpcUserID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	if req == nil || req.Msg == nil {
+		return nil, kit.ParseIntoRpcError(ErrInvalidPayload)
+	}
+
+	payload := &UnblockUserPayload{
+		BlockedUserId: req.Msg.BlockedUserId,
+	}
+
+	res, err := s.contactService.UnblockUser(ctx, payload, userID)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	return connect.NewResponse(res), nil
+}
+
 func (s *contactConnectServer) GetBlocks(ctx context.Context, req *connect.Request[rpc_personal_contactv1.GetBlocksRequest]) (*connect.Response[rpc_personal_contactv1.GetBlocksResponse], error) {
 	userID, err := kit.GetConnectRpcUserID(ctx)
 	if err != nil {

@@ -183,6 +183,25 @@ func (ps *profileService) IsBlockedBetweenUsers(ctx context.Context, requesterID
 	return blockStatusFromRow(row.RequesterAdminBlocked, row.TargetAdminBlocked, row.RequesterUserBlockedByTarget, row.TargetUserBlockedByRequester, row.IsTargetProfilePrivate, uuid.Nil), nil
 }
 
+func (ps *profileService) IsBlockedByAdminOrPrivate(ctx context.Context, requesterID, targetID uuid.UUID) (*AdminOrPrivateBlockStatus, error) {
+	row, err := ps.PostgresQueries.IsBlockedByAdminOrPrivate(ctx, personal_profile_store.IsBlockedByAdminOrPrivateParams{
+		RequesterUserID: requesterID,
+		TargetUserID:    targetID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	isBlocked := row.RequesterAdminBlocked || row.TargetAdminBlocked || row.IsTargetProfilePrivate
+
+	return &AdminOrPrivateBlockStatus{
+		IsBlocked:               isBlocked,
+		IsRequesterAdminBlocked: row.RequesterAdminBlocked,
+		IsTargetAdminBlocked:    row.TargetAdminBlocked,
+		IsTargetProfilePrivate:  row.IsTargetProfilePrivate,
+	}, nil
+}
+
 // IsBlockedBetweenUsersBatch checks a requester against multiple target users in one query.
 // Returns a BlockStatusResult per target user, preserving the input order.
 func (ps *profileService) IsBlockedBetweenUsersBatch(ctx context.Context, requesterID uuid.UUID, targetIDs []uuid.UUID) ([]*BlockStatusResult, error) {
@@ -410,4 +429,19 @@ func (ps *profileService) GetUserBlocks(ctx context.Context, blockerID uuid.UUID
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 	return rows, nil
+}
+
+func (ps *profileService) CreateUserBlock(ctx context.Context, id, blockerID, blockedID uuid.UUID) error {
+	return ps.PostgresQueries.CreateUserBlock(ctx, personal_profile_store.CreateUserBlockParams{
+		ID:            id,
+		BlockerUserID: blockerID,
+		BlockedUserID: blockedID,
+	})
+}
+
+func (ps *profileService) DeleteUserBlock(ctx context.Context, blockerID, blockedID uuid.UUID) error {
+	return ps.PostgresQueries.DeleteUserBlock(ctx, personal_profile_store.DeleteUserBlockParams{
+		BlockerUserID: blockerID,
+		BlockedUserID: blockedID,
+	})
 }

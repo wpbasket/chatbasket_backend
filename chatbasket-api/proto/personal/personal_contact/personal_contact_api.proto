@@ -109,11 +109,15 @@ message RemoveContactNicknameRequest {
 }
 
 message BlockUserRequest {
-  string blocked_user_id = 1;
+  string blockedUserId = 1;
 }
 
 message BlockUserResponse {
   bool blocked = 1;
+}
+
+message UnblockUserRequest {
+  string blockedUserId = 1;
 }
 
 message GetBlocksRequest {}
@@ -145,5 +149,6 @@ service ContactService {
   rpc UpdateContactNickname(UpdateContactNicknameRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc RemoveContactNickname(RemoveContactNicknameRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc BlockUser(BlockUserRequest) returns (BlockUserResponse);
+  rpc UnblockUser(UnblockUserRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc GetBlocks(GetBlocksRequest) returns (GetBlocksResponse);
 }

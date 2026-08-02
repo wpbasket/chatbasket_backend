@@ -247,6 +247,10 @@ INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
 VALUES ($1, $2, $3)
 ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING;
 
+-- name: DeleteUserBlock :exec
+DELETE FROM user_blocks
+WHERE blocker_user_id = $1 AND blocked_user_id = $2;
+
 -- name: IsEitherBlocked :one
 -- Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
 SELECT (CASE
@@ -258,17 +262,20 @@ END)::INT;
 -- name: IsBlockedBetweenUsers :one
 -- Returns block status flags between two users as individual boolean columns.
 SELECT
-    (SELECT u.is_admin_blocked FROM users u WHERE u.id = sqlc.arg(requester_user_id)) AS requester_admin_blocked,
-    (SELECT u.is_admin_blocked FROM users u WHERE u.id = sqlc.arg(target_user_id)) AS target_admin_blocked,
-    (COALESCE((SELECT u.profile_type FROM users u WHERE u.id = sqlc.arg(target_user_id)), '') = 'private') AS is_target_profile_private,
-    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = sqlc.arg(target_user_id) AND ub.blocked_user_id = sqlc.arg(requester_user_id)) AS requester_user_blocked_by_target,
-    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = sqlc.arg(requester_user_id) AND ub.blocked_user_id = sqlc.arg(target_user_id)) AS target_user_blocked_by_requester;
+    u_req.is_admin_blocked                                                                                                                         AS requester_admin_blocked,
+    u_tgt.is_admin_blocked                                                                                                                         AS target_admin_blocked,
+    (u_tgt.profile_type = 'private')                                                                                                               AS is_target_profile_private,
+    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = sqlc.arg(target_user_id)    AND ub.blocked_user_id = sqlc.arg(requester_user_id)) AS requester_user_blocked_by_target,
+    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = sqlc.arg(requester_user_id) AND ub.blocked_user_id = sqlc.arg(target_user_id))    AS target_user_blocked_by_requester
+FROM users u_req
+JOIN users u_tgt ON u_tgt.id = sqlc.arg(target_user_id)
+WHERE u_req.id = sqlc.arg(requester_user_id);
 
 -- name: IsBlockedBetweenUsersBatch :many
 -- Returns block status flags per target user for a requester and target user list.
 SELECT
     t.target_id::uuid AS target_id,
-    (SELECT u.is_admin_blocked FROM users u WHERE u.id = sqlc.arg(requester_user_id)) AS requester_admin_blocked,
+    COALESCE(u_req.is_admin_blocked, FALSE) AS requester_admin_blocked,
     COALESCE(u_target.is_admin_blocked, FALSE) AS target_admin_blocked,
     (COALESCE(u_target.profile_type, '') = 'private') AS is_target_profile_private,
     EXISTS (
@@ -282,4 +289,15 @@ SELECT
           AND ub.blocked_user_id = t.target_id
     ) AS target_user_blocked_by_requester
 FROM unnest(sqlc.arg(target_user_ids)::uuid[]) AS t(target_id)
+LEFT JOIN users u_req ON u_req.id = sqlc.arg(requester_user_id)
 LEFT JOIN users u_target ON u_target.id = t.target_id;
+
+-- name: IsBlockedByAdminOrPrivate :one
+-- Returns block status for target user. Returns no rows if target user does not exist.
+SELECT
+    u_req.is_admin_blocked AS requester_admin_blocked,
+    u_tgt.is_admin_blocked AS target_admin_blocked,
+    (u_tgt.profile_type = 'private') AS is_target_profile_private
+FROM users u_req
+JOIN users u_tgt ON u_tgt.id = sqlc.arg(target_user_id)
+WHERE u_req.id = sqlc.arg(requester_user_id);

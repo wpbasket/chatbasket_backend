@@ -30,6 +30,7 @@ func Register(personalGroup *echo.Group, contactService *contactService) {
 	blocks := contacts.Group("/blocks")
 	blocks.GET("/get", handler.GetBlocks)
 	blocks.POST("/create", handler.BlockUser)
+	blocks.POST("/delete", handler.UnblockUser)
 
 	// Connect RPC Routes
 	connectServer := newContactConnectServer(contactService)

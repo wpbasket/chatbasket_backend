@@ -400,13 +400,18 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   - **Normal Profile Listing/Enrichment**: `GetContactableProfilesForViewer` filters out admin-blocked users, private profiles, and users blocked in either direction. The block-list endpoint uses a separate enrichment contract.
   - **Chat Pending Messages**: `GetContactableUserIDs` filters user blocks in both directions because messages from either side of a block must be hidden.
 
-### 5.3.1 Blocked-user List
-- Endpoint: `GET /api/personal/contacts/blocks/get`
-- The authenticated requester is used as the blocker; no request body is required.
-- Block rows are ordered newest first and provide `blockedAt` from the block record.
-- Admin-blocked and private targets are omitted as whole items.
-- A target who blocked the requester remains in the list with `id`, `blockedAt`, `name`, `username`, and `profileType`; only `bio`, `avatarUrl`, and `avatarFileId` are hidden.
-- A target blocked only by the requester is fully enriched, subject to normal avatar visibility restrictions.
+### 5.3.1 Block & Unblock Endpoints
+- **List Blocks**: `GET /api/personal/contacts/blocks/get`
+  - The authenticated requester is used as the blocker; no request body is required.
+  - Block rows are ordered newest first and provide `blockedAt` from the block record.
+  - Admin-blocked and private targets are omitted as whole items.
+  - A target who blocked the requester remains in the list with `id`, `blockedAt`, `name`, `username`, and `profileType`; only `bio`, `avatarUrl`, and `avatarFileId` are hidden.
+  - A target blocked only by the requester is fully enriched, subject to normal avatar visibility restrictions.
+- **Create Block**: `POST /api/personal/contacts/blocks/create`
+  - Request body: `{ "blockedUserId": "<uuid>" }` (camelCase).
+- **Delete Block (Unblock)**: `POST /api/personal/contacts/blocks/delete`
+  - Request body: `{ "blockedUserId": "<uuid>" }` (camelCase).
+  - Returns `rpc_common_model.v1.StatusOkay` (`{ "status": true, "message": "user_unblocked" }`).
 
 ### 5.4 Message Cleanup on Block
 - System automatically deletes message sync actions between users in both directions

@@ -22,6 +22,7 @@ type Querier interface {
 	CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error
 	// Deletes the main profile avatar for a user (called from ConfirmAvatarUpload tx when replacing)
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
+	DeleteUserBlock(ctx context.Context, arg DeleteUserBlockParams) error
 	// Fetches the id and file_id for the main profile avatar
 	GetActiveAvatar(ctx context.Context, userID uuid.UUID) (GetActiveAvatarRow, error)
 	// Fetches the storage file_id for the main profile avatar
@@ -77,6 +78,8 @@ type Querier interface {
 	IsBlockedBetweenUsers(ctx context.Context, arg IsBlockedBetweenUsersParams) (IsBlockedBetweenUsersRow, error)
 	// Returns block status flags per target user for a requester and target user list.
 	IsBlockedBetweenUsersBatch(ctx context.Context, arg IsBlockedBetweenUsersBatchParams) ([]IsBlockedBetweenUsersBatchRow, error)
+	// Returns block status for target user. Returns no rows if target user does not exist.
+	IsBlockedByAdminOrPrivate(ctx context.Context, arg IsBlockedByAdminOrPrivateParams) (IsBlockedByAdminOrPrivateRow, error)
 	// Returns 0 if no block, 1 if blocker is $1 (requester blocked target), 2 if blocker is $2 (target blocked requester)
 	IsEitherBlocked(ctx context.Context, arg IsEitherBlockedParams) (int32, error)
 	// Returns true if the user is admin-blocked

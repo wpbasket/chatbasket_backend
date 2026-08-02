@@ -167,6 +167,21 @@ func (q *Queries) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
 	return err
 }
 
+const deleteUserBlock = `-- name: DeleteUserBlock :exec
+DELETE FROM user_blocks
+WHERE blocker_user_id = $1 AND blocked_user_id = $2
+`
+
+type DeleteUserBlockParams struct {
+	BlockerUserID uuid.UUID `json:"blocker_user_id"`
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+}
+
+func (q *Queries) DeleteUserBlock(ctx context.Context, arg DeleteUserBlockParams) error {
+	_, err := q.db.Exec(ctx, deleteUserBlock, arg.BlockerUserID, arg.BlockedUserID)
+	return err
+}
+
 const getActiveAvatar = `-- name: GetActiveAvatar :one
 SELECT id, file_id FROM avatars WHERE user_id = $1 AND avatar_type = 'profile'
 `
@@ -606,16 +621,19 @@ func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProf
 
 const isBlockedBetweenUsers = `-- name: IsBlockedBetweenUsers :one
 SELECT
-    (SELECT u.is_admin_blocked FROM users u WHERE u.id = $1) AS requester_admin_blocked,
-    (SELECT u.is_admin_blocked FROM users u WHERE u.id = $2) AS target_admin_blocked,
-    (COALESCE((SELECT u.profile_type FROM users u WHERE u.id = $2), '') = 'private') AS is_target_profile_private,
-    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = $2 AND ub.blocked_user_id = $1) AS requester_user_blocked_by_target,
-    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = $1 AND ub.blocked_user_id = $2) AS target_user_blocked_by_requester
+    u_req.is_admin_blocked                                                                                                                         AS requester_admin_blocked,
+    u_tgt.is_admin_blocked                                                                                                                         AS target_admin_blocked,
+    (u_tgt.profile_type = 'private')                                                                                                               AS is_target_profile_private,
+    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = $1    AND ub.blocked_user_id = $2) AS requester_user_blocked_by_target,
+    EXISTS (SELECT 1 FROM user_blocks ub WHERE ub.blocker_user_id = $2 AND ub.blocked_user_id = $1)    AS target_user_blocked_by_requester
+FROM users u_req
+JOIN users u_tgt ON u_tgt.id = $1
+WHERE u_req.id = $2
 `
 
 type IsBlockedBetweenUsersParams struct {
-	RequesterUserID uuid.UUID `json:"requester_user_id"`
 	TargetUserID    uuid.UUID `json:"target_user_id"`
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
 }
 
 type IsBlockedBetweenUsersRow struct {
@@ -628,7 +646,7 @@ type IsBlockedBetweenUsersRow struct {
 
 // Returns block status flags between two users as individual boolean columns.
 func (q *Queries) IsBlockedBetweenUsers(ctx context.Context, arg IsBlockedBetweenUsersParams) (IsBlockedBetweenUsersRow, error) {
-	row := q.db.QueryRow(ctx, isBlockedBetweenUsers, arg.RequesterUserID, arg.TargetUserID)
+	row := q.db.QueryRow(ctx, isBlockedBetweenUsers, arg.TargetUserID, arg.RequesterUserID)
 	var i IsBlockedBetweenUsersRow
 	err := row.Scan(
 		&i.RequesterAdminBlocked,
@@ -643,7 +661,7 @@ func (q *Queries) IsBlockedBetweenUsers(ctx context.Context, arg IsBlockedBetwee
 const isBlockedBetweenUsersBatch = `-- name: IsBlockedBetweenUsersBatch :many
 SELECT
     t.target_id::uuid AS target_id,
-    (SELECT u.is_admin_blocked FROM users u WHERE u.id = $1) AS requester_admin_blocked,
+    COALESCE(u_req.is_admin_blocked, FALSE) AS requester_admin_blocked,
     COALESCE(u_target.is_admin_blocked, FALSE) AS target_admin_blocked,
     (COALESCE(u_target.profile_type, '') = 'private') AS is_target_profile_private,
     EXISTS (
@@ -657,6 +675,7 @@ SELECT
           AND ub.blocked_user_id = t.target_id
     ) AS target_user_blocked_by_requester
 FROM unnest($2::uuid[]) AS t(target_id)
+LEFT JOIN users u_req ON u_req.id = $1
 LEFT JOIN users u_target ON u_target.id = t.target_id
 `
 
@@ -700,6 +719,35 @@ func (q *Queries) IsBlockedBetweenUsersBatch(ctx context.Context, arg IsBlockedB
 		return nil, err
 	}
 	return items, nil
+}
+
+const isBlockedByAdminOrPrivate = `-- name: IsBlockedByAdminOrPrivate :one
+SELECT
+    u_req.is_admin_blocked AS requester_admin_blocked,
+    u_tgt.is_admin_blocked AS target_admin_blocked,
+    (u_tgt.profile_type = 'private') AS is_target_profile_private
+FROM users u_req
+JOIN users u_tgt ON u_tgt.id = $1
+WHERE u_req.id = $2
+`
+
+type IsBlockedByAdminOrPrivateParams struct {
+	TargetUserID    uuid.UUID `json:"target_user_id"`
+	RequesterUserID uuid.UUID `json:"requester_user_id"`
+}
+
+type IsBlockedByAdminOrPrivateRow struct {
+	RequesterAdminBlocked  bool `json:"requester_admin_blocked"`
+	TargetAdminBlocked     bool `json:"target_admin_blocked"`
+	IsTargetProfilePrivate bool `json:"is_target_profile_private"`
+}
+
+// Returns block status for target user. Returns no rows if target user does not exist.
+func (q *Queries) IsBlockedByAdminOrPrivate(ctx context.Context, arg IsBlockedByAdminOrPrivateParams) (IsBlockedByAdminOrPrivateRow, error) {
+	row := q.db.QueryRow(ctx, isBlockedByAdminOrPrivate, arg.TargetUserID, arg.RequesterUserID)
+	var i IsBlockedByAdminOrPrivateRow
+	err := row.Scan(&i.RequesterAdminBlocked, &i.TargetAdminBlocked, &i.IsTargetProfilePrivate)
+	return i, err
 }
 
 const isEitherBlocked = `-- name: IsEitherBlocked :one

@@ -227,6 +227,24 @@ func (h *contactHandler) BlockUser(c *echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
+func (h *contactHandler) UnblockUser(c *echo.Context) error {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	var payload UnblockUserPayload
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
+	}
+
+	res, err := h.Service.UnblockUser(c.Request().Context(), &payload, userID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
 func (h *contactHandler) GetBlocks(c *echo.Context) error {
 	userID, err := kit.ExtractUserID(c)
 	if err != nil {
