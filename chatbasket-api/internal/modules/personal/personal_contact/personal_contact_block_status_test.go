@@ -24,6 +24,7 @@ type blockStatusProfileProvider struct {
 	targetProfilePrivate         bool
 	targetID                     uuid.UUID
 	batchCalls                   int
+	deleteUserBlockRows          int64
 }
 
 func (p *blockStatusProfileProvider) IsUserAdminBlocked(context.Context, uuid.UUID) (bool, error) {
@@ -50,8 +51,8 @@ func (p *blockStatusProfileProvider) CreateUserBlock(context.Context, uuid.UUID,
 	return nil
 }
 
-func (p *blockStatusProfileProvider) DeleteUserBlock(context.Context, uuid.UUID, uuid.UUID) error {
-	return nil
+func (p *blockStatusProfileProvider) DeleteUserBlock(context.Context, uuid.UUID, uuid.UUID) (int64, error) {
+	return p.deleteUserBlockRows, nil
 }
 
 func (p *blockStatusProfileProvider) IsBlockedByAdminOrPrivate(context.Context, uuid.UUID, uuid.UUID) (*personal_profile.AdminOrPrivateBlockStatus, error) {
@@ -230,4 +231,37 @@ func TestContactEndpointsRejectBlockedPairs(t *testing.T) {
 	if provider.batchCalls != 1 {
 		t.Fatalf("batch block-status checks = %d, want 1 for DeleteContact", provider.batchCalls)
 	}
+}
+
+func TestUnblockUser_Success(t *testing.T) {
+	requesterID := uuid.New()
+	targetID := uuid.New()
+	provider := &blockStatusProfileProvider{targetID: targetID, deleteUserBlockRows: 1}
+	service := &contactService{
+		personalProfilePersonalContactProvider: provider,
+	}
+	userID := kit.UserId{UuidUserId: requesterID}
+
+	res, err := service.UnblockUser(context.Background(), &UnblockUserPayload{BlockedUserId: targetID.String()}, userID)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.True(t, res.Status)
+	assert.Equal(t, "user_unblocked", res.Message)
+}
+
+func TestUnblockUser_MissingBlockEntry(t *testing.T) {
+	requesterID := uuid.New()
+	targetID := uuid.New()
+	provider := &blockStatusProfileProvider{targetID: targetID, deleteUserBlockRows: 0}
+	service := &contactService{
+		personalProfilePersonalContactProvider: provider,
+	}
+	userID := kit.UserId{UuidUserId: requesterID}
+
+	_, err := service.UnblockUser(context.Background(), &UnblockUserPayload{BlockedUserId: targetID.String()}, userID)
+	require.Error(t, err)
+	var processed kit.ProcessedError
+	require.True(t, errors.As(err, &processed))
+	assert.Equal(t, http.StatusNotFound, processed.Status())
+	assert.Equal(t, "block_entry_does_not_exist", processed.Error())
 }

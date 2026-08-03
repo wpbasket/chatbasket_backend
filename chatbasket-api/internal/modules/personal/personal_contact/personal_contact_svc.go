@@ -26,7 +26,7 @@ type personalProfilePersonalContactProvider interface {
 	GetBlockListProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	FindContactableUserByUsername(ctx context.Context, viewerID uuid.UUID, username string) (*personal_profile.ContactLookupResult, error)
 	CreateUserBlock(ctx context.Context, id, blockerID, blockedID uuid.UUID) error
-	DeleteUserBlock(ctx context.Context, blockerID, blockedID uuid.UUID) error
+	DeleteUserBlock(ctx context.Context, blockerID, blockedID uuid.UUID) (int64, error)
 	GetUserBlocks(ctx context.Context, blockerID uuid.UUID) ([]personal_profile.UserBlock, error)
 	IsEitherBlocked(ctx context.Context, user1ID, user2ID uuid.UUID) (int32, error)
 	IsBlockedBetweenUsers(ctx context.Context, requesterID, targetID uuid.UUID) (*personal_profile.BlockStatusResult, error)
@@ -86,7 +86,7 @@ func (ps *contactService) checkUnblockStatus(ctx context.Context, requesterID, t
 	status, err := ps.personalProfilePersonalContactProvider.IsBlockedByAdminOrPrivate(ctx, requesterID, targetID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return kit.NewError(http.StatusNotFound, "not_found", "block_entry_does_not_exist")
+			return kit.NewError(http.StatusNotFound, "not_found", "user_not_found")
 		}
 		return kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
@@ -955,9 +955,12 @@ func (ps *contactService) UnblockUser(ctx context.Context, payload *UnblockUserP
 		return nil, err
 	}
 
-	err = ps.personalProfilePersonalContactProvider.DeleteUserBlock(ctx, userId.UuidUserId, blockedUUID)
+	rows, err := ps.personalProfilePersonalContactProvider.DeleteUserBlock(ctx, userId.UuidUserId, blockedUUID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+	if rows == 0 {
+		return nil, kit.NewError(http.StatusNotFound, "not_found", "block_entry_does_not_exist")
 	}
 
 	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "user_unblocked"}, nil

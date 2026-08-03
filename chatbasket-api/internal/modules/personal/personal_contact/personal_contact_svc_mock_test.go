@@ -85,8 +85,8 @@ func (m *mockContactProfileProvider) CreateUserBlock(context.Context, uuid.UUID,
 	return nil
 }
 
-func (m *mockContactProfileProvider) DeleteUserBlock(context.Context, uuid.UUID, uuid.UUID) error {
-	return nil
+func (m *mockContactProfileProvider) DeleteUserBlock(context.Context, uuid.UUID, uuid.UUID) (int64, error) {
+	return 1, nil
 }
 
 func (m *mockContactProfileProvider) IsBlockedByAdminOrPrivate(context.Context, uuid.UUID, uuid.UUID) (*personal_profile.AdminOrPrivateBlockStatus, error) {

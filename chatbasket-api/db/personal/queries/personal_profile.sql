@@ -247,7 +247,7 @@ INSERT INTO user_blocks (id, blocker_user_id, blocked_user_id)
 VALUES ($1, $2, $3)
 ON CONFLICT (blocker_user_id, blocked_user_id) DO NOTHING;
 
--- name: DeleteUserBlock :exec
+-- name: DeleteUserBlock :execrows
 DELETE FROM user_blocks
 WHERE blocker_user_id = $1 AND blocked_user_id = $2;
 

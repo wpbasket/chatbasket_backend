@@ -167,7 +167,7 @@ func (q *Queries) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
 	return err
 }
 
-const deleteUserBlock = `-- name: DeleteUserBlock :exec
+const deleteUserBlock = `-- name: DeleteUserBlock :execrows
 DELETE FROM user_blocks
 WHERE blocker_user_id = $1 AND blocked_user_id = $2
 `
@@ -177,9 +177,12 @@ type DeleteUserBlockParams struct {
 	BlockedUserID uuid.UUID `json:"blocked_user_id"`
 }
 
-func (q *Queries) DeleteUserBlock(ctx context.Context, arg DeleteUserBlockParams) error {
-	_, err := q.db.Exec(ctx, deleteUserBlock, arg.BlockerUserID, arg.BlockedUserID)
-	return err
+func (q *Queries) DeleteUserBlock(ctx context.Context, arg DeleteUserBlockParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserBlock, arg.BlockerUserID, arg.BlockedUserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getActiveAvatar = `-- name: GetActiveAvatar :one

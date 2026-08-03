@@ -22,7 +22,7 @@ type Querier interface {
 	CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error
 	// Deletes the main profile avatar for a user (called from ConfirmAvatarUpload tx when replacing)
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
-	DeleteUserBlock(ctx context.Context, arg DeleteUserBlockParams) error
+	DeleteUserBlock(ctx context.Context, arg DeleteUserBlockParams) (int64, error)
 	// Fetches the id and file_id for the main profile avatar
 	GetActiveAvatar(ctx context.Context, userID uuid.UUID) (GetActiveAvatarRow, error)
 	// Fetches the storage file_id for the main profile avatar

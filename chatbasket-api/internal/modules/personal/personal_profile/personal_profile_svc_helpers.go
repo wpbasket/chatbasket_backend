@@ -439,7 +439,7 @@ func (ps *profileService) CreateUserBlock(ctx context.Context, id, blockerID, bl
 	})
 }
 
-func (ps *profileService) DeleteUserBlock(ctx context.Context, blockerID, blockedID uuid.UUID) error {
+func (ps *profileService) DeleteUserBlock(ctx context.Context, blockerID, blockedID uuid.UUID) (int64, error) {
 	return ps.PostgresQueries.DeleteUserBlock(ctx, personal_profile_store.DeleteUserBlockParams{
 		BlockerUserID: blockerID,
 		BlockedUserID: blockedID,
