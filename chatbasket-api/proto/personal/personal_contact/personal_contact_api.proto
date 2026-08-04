@@ -120,6 +120,14 @@ message UnblockUserRequest {
   string blockedUserId = 1;
 }
 
+message UnblockUserResponse {
+  bool status = 1;
+  string message = 2;
+  bool isInContacts = 3;
+  bool isInPeopleWhoAddedYou = 4;
+  optional Contact contact = 5;
+}
+
 message GetBlocksRequest {}
 
 message BlockedUser {
@@ -149,6 +157,6 @@ service ContactService {
   rpc UpdateContactNickname(UpdateContactNicknameRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc RemoveContactNickname(RemoveContactNicknameRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc BlockUser(BlockUserRequest) returns (BlockUserResponse);
-  rpc UnblockUser(UnblockUserRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc UnblockUser(UnblockUserRequest) returns (UnblockUserResponse);
   rpc GetBlocks(GetBlocksRequest) returns (GetBlocksResponse);
 }

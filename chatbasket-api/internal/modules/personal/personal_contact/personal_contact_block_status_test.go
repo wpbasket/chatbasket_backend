@@ -5,13 +5,17 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
+	"chatbasket-api/internal/modules/personal/personal_contact/internal/personal_contact_store"
 	"chatbasket-api/internal/modules/personal/personal_profile"
 	"chatbasket-api/internal/platform/kit"
 
 	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/pashagolub/pgxmock/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -237,9 +241,22 @@ func TestUnblockUser_Success(t *testing.T) {
 	requesterID := uuid.New()
 	targetID := uuid.New()
 	provider := &blockStatusProfileProvider{targetID: targetID, deleteUserBlockRows: 1}
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	t.Cleanup(func() { mock.Close() })
+	store := personal_contact_store.New(mock)
 	service := &contactService{
+		PostgresQuerier:                        store,
+		PostgresQueries:                        store,
 		personalProfilePersonalContactProvider: provider,
+		PersonalContactKey:                     make([]byte, 32),
 	}
+	mock.ExpectQuery(`SELECT\s+uc\.contact_user_id AS id`).
+		WithArgs(requesterID, targetID).
+		WillReturnError(pgx.ErrNoRows)
+	mock.ExpectQuery(`SELECT\s+uc\.contact_user_id AS id`).
+		WithArgs(targetID, requesterID).
+		WillReturnError(pgx.ErrNoRows)
 	userID := kit.UserId{UuidUserId: requesterID}
 
 	res, err := service.UnblockUser(context.Background(), &UnblockUserPayload{BlockedUserId: targetID.String()}, userID)
@@ -247,6 +264,56 @@ func TestUnblockUser_Success(t *testing.T) {
 	require.NotNil(t, res)
 	assert.True(t, res.Status)
 	assert.Equal(t, "user_unblocked", res.Message)
+	assert.False(t, res.IsInContacts)
+	assert.False(t, res.IsInPeopleWhoAddedYou)
+	assert.Nil(t, res.Contact)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUnblockUser_ReturnsContactRelationship(t *testing.T) {
+	requesterID := uuid.New()
+	targetID := uuid.New()
+	createdAt := time.Date(2026, time.January, 2, 12, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(time.Hour)
+	profile := &mockContactProfileProvider{
+		contactProfiles: map[uuid.UUID]*personal_profile.ContactProfileView{
+			targetID: {
+				ID:          targetID,
+				Name:        "Unblocked User",
+				Username:    "UNBLOCK123",
+				ProfileType: "public",
+			},
+		},
+	}
+	service, mock := newMockContactService(t, profile)
+	nickname := "Saved name"
+	encryptedNickname, err := service.EncryptNickname(nickname, requesterID, targetID)
+	require.NoError(t, err)
+	mock.ExpectQuery(`SELECT\s+uc\.contact_user_id AS id`).
+		WithArgs(requesterID, targetID).
+		WillReturnRows(pgxmock.NewRows([]string{"id", "nickname", "contact_created_at", "contact_updated_at"}).
+			AddRow(targetID, &encryptedNickname, createdAt, updatedAt))
+	mock.ExpectQuery(`SELECT\s+uc\.contact_user_id AS id`).
+		WithArgs(targetID, requesterID).
+		WillReturnRows(pgxmock.NewRows([]string{"id", "nickname", "contact_created_at", "contact_updated_at"}).
+			AddRow(requesterID, nil, createdAt, updatedAt))
+
+	res, err := service.UnblockUser(context.Background(), &UnblockUserPayload{BlockedUserId: targetID.String()}, kit.UserId{UuidUserId: requesterID})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.True(t, res.Status)
+	assert.True(t, res.IsInContacts)
+	assert.True(t, res.IsInPeopleWhoAddedYou)
+	require.NotNil(t, res.Contact)
+	assert.Equal(t, targetID.String(), res.Contact.Id)
+	assert.Equal(t, "Unblocked User", res.Contact.Name)
+	assert.Equal(t, "UNBLOCK123", res.Contact.Username)
+	assert.Equal(t, nickname, res.Contact.GetNickname())
+	assert.True(t, res.Contact.IsMutual)
+	assert.Equal(t, createdAt, res.Contact.CreatedAt.AsTime())
+	assert.Equal(t, updatedAt, res.Contact.UpdatedAt.AsTime())
+	assert.Equal(t, 1, profile.getContactableProfilesCalls)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestUnblockUser_MissingBlockEntry(t *testing.T) {

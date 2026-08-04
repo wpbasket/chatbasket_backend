@@ -106,7 +106,7 @@ type ContactServiceClient interface {
 	UpdateContactNickname(context.Context, *connect.Request[personal_contact.UpdateContactNicknameRequest]) (*connect.Response[model.StatusOkay], error)
 	RemoveContactNickname(context.Context, *connect.Request[personal_contact.RemoveContactNicknameRequest]) (*connect.Response[model.StatusOkay], error)
 	BlockUser(context.Context, *connect.Request[personal_contact.BlockUserRequest]) (*connect.Response[personal_contact.BlockUserResponse], error)
-	UnblockUser(context.Context, *connect.Request[personal_contact.UnblockUserRequest]) (*connect.Response[model.StatusOkay], error)
+	UnblockUser(context.Context, *connect.Request[personal_contact.UnblockUserRequest]) (*connect.Response[personal_contact.UnblockUserResponse], error)
 	GetBlocks(context.Context, *connect.Request[personal_contact.GetBlocksRequest]) (*connect.Response[personal_contact.GetBlocksResponse], error)
 }
 
@@ -186,7 +186,7 @@ func NewContactServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(contactServiceBlockUserMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
-		unblockUser: connect.NewClient[personal_contact.UnblockUserRequest, model.StatusOkay](
+		unblockUser: connect.NewClient[personal_contact.UnblockUserRequest, personal_contact.UnblockUserResponse](
 			httpClient,
 			baseURL+ContactServiceUnblockUserProcedure,
 			connect.WithSchema(contactServiceUnblockUserMethodDescriptor),
@@ -214,7 +214,7 @@ type contactServiceClient struct {
 	updateContactNickname *connect.Client[personal_contact.UpdateContactNicknameRequest, model.StatusOkay]
 	removeContactNickname *connect.Client[personal_contact.RemoveContactNicknameRequest, model.StatusOkay]
 	blockUser             *connect.Client[personal_contact.BlockUserRequest, personal_contact.BlockUserResponse]
-	unblockUser           *connect.Client[personal_contact.UnblockUserRequest, model.StatusOkay]
+	unblockUser           *connect.Client[personal_contact.UnblockUserRequest, personal_contact.UnblockUserResponse]
 	getBlocks             *connect.Client[personal_contact.GetBlocksRequest, personal_contact.GetBlocksResponse]
 }
 
@@ -274,7 +274,7 @@ func (c *contactServiceClient) BlockUser(ctx context.Context, req *connect.Reque
 }
 
 // UnblockUser calls rpc_personal_contact.v1.ContactService.UnblockUser.
-func (c *contactServiceClient) UnblockUser(ctx context.Context, req *connect.Request[personal_contact.UnblockUserRequest]) (*connect.Response[model.StatusOkay], error) {
+func (c *contactServiceClient) UnblockUser(ctx context.Context, req *connect.Request[personal_contact.UnblockUserRequest]) (*connect.Response[personal_contact.UnblockUserResponse], error) {
 	return c.unblockUser.CallUnary(ctx, req)
 }
 
@@ -296,7 +296,7 @@ type ContactServiceHandler interface {
 	UpdateContactNickname(context.Context, *connect.Request[personal_contact.UpdateContactNicknameRequest]) (*connect.Response[model.StatusOkay], error)
 	RemoveContactNickname(context.Context, *connect.Request[personal_contact.RemoveContactNicknameRequest]) (*connect.Response[model.StatusOkay], error)
 	BlockUser(context.Context, *connect.Request[personal_contact.BlockUserRequest]) (*connect.Response[personal_contact.BlockUserResponse], error)
-	UnblockUser(context.Context, *connect.Request[personal_contact.UnblockUserRequest]) (*connect.Response[model.StatusOkay], error)
+	UnblockUser(context.Context, *connect.Request[personal_contact.UnblockUserRequest]) (*connect.Response[personal_contact.UnblockUserResponse], error)
 	GetBlocks(context.Context, *connect.Request[personal_contact.GetBlocksRequest]) (*connect.Response[personal_contact.GetBlocksResponse], error)
 }
 
@@ -465,7 +465,7 @@ func (UnimplementedContactServiceHandler) BlockUser(context.Context, *connect.Re
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_contact.v1.ContactService.BlockUser is not implemented"))
 }
 
-func (UnimplementedContactServiceHandler) UnblockUser(context.Context, *connect.Request[personal_contact.UnblockUserRequest]) (*connect.Response[model.StatusOkay], error) {
+func (UnimplementedContactServiceHandler) UnblockUser(context.Context, *connect.Request[personal_contact.UnblockUserRequest]) (*connect.Response[personal_contact.UnblockUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_contact.v1.ContactService.UnblockUser is not implemented"))
 }
 

@@ -897,7 +897,18 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 		return nil, kit.NewError(http.StatusConflict, "conflict", "self_block_not_allowed")
 	}
 
-	// Check if target exists and is not admin-blocked
+	// Check if requester is admin-blocked
+	isMeAdminBlocked, err := ps.personalProfilePersonalContactProvider.IsUserAdminBlocked(ctx, userId.UuidUserId)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+	if isMeAdminBlocked {
+		return nil, kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", &rpc_common_modelv1.BlockStatusFlags{
+			IsRequesterAdminBlocked: true,
+		})
+	}
+
+	// Check if target exists, is not admin-blocked, and is not private
 	targetProfile, err := ps.personalProfilePersonalContactProvider.GetUserCoreProfile(ctx, blockedUUID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -907,7 +918,15 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 	}
 
 	if targetProfile.IsAdminBlocked {
-		return nil, kit.NewError(http.StatusForbidden, "forbidden", "user_admin_blocked")
+		return nil, kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", &rpc_common_modelv1.BlockStatusFlags{
+			IsTargetAdminBlocked: true,
+		})
+	}
+
+	if targetProfile.ProfileType == "private" {
+		return nil, kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", &rpc_common_modelv1.BlockStatusFlags{
+			IsTargetProfilePrivate: true,
+		})
 	}
 
 	// Check if already blocked (to match original fidelity and prevent duplicate entry errors)
@@ -937,7 +956,7 @@ func (ps *contactService) BlockUser(ctx context.Context, payload *BlockUserPaylo
 	return &rpc_personal_contactv1.BlockUserResponse{Blocked: true}, nil
 }
 
-func (ps *contactService) UnblockUser(ctx context.Context, payload *UnblockUserPayload, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
+func (ps *contactService) UnblockUser(ctx context.Context, payload *UnblockUserPayload, userId kit.UserId) (*rpc_personal_contactv1.UnblockUserResponse, error) {
 	if payload == nil || payload.BlockedUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
@@ -963,7 +982,71 @@ func (ps *contactService) UnblockUser(ctx context.Context, payload *UnblockUserP
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "block_entry_does_not_exist")
 	}
 
-	return &rpc_common_modelv1.StatusOkay{Status: true, Message: "user_unblocked"}, nil
+	ownContact, ownErr := ps.PostgresQueries.GetSingleUserContactLite(ctx, personal_contact_store.GetSingleUserContactLiteParams{
+		OwnerUserID:   userId.UuidUserId,
+		ContactUserID: blockedUUID,
+	})
+	if ownErr != nil && ownErr != pgx.ErrNoRows {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(ownErr).Message)
+	}
+	isInContacts := ownErr == nil
+
+	addedContact, addedErr := ps.PostgresQueries.GetSingleUserContactLite(ctx, personal_contact_store.GetSingleUserContactLiteParams{
+		OwnerUserID:   blockedUUID,
+		ContactUserID: userId.UuidUserId,
+	})
+	if addedErr != nil && addedErr != pgx.ErrNoRows {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(addedErr).Message)
+	}
+	isInPeopleWhoAddedYou := addedErr == nil
+
+	response := &rpc_personal_contactv1.UnblockUserResponse{
+		Status:                true,
+		Message:               "user_unblocked",
+		IsInContacts:          isInContacts,
+		IsInPeopleWhoAddedYou: isInPeopleWhoAddedYou,
+	}
+
+	if isInContacts || isInPeopleWhoAddedYou {
+		profiles, err := ps.personalProfilePersonalContactProvider.GetContactableProfilesForViewer(ctx, userId.UuidUserId, []uuid.UUID{blockedUUID})
+		if err != nil {
+			return nil, err
+		}
+		profile, ok := profiles[blockedUUID]
+		if ok {
+			var nickname *string
+			if isInContacts && ownContact.Nickname != nil {
+				decrypted, err := ps.DecryptNickname(ownContact.Nickname, userId.UuidUserId, blockedUUID)
+				if err != nil {
+					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt contact nickname")
+				}
+				nickname = decrypted
+			}
+
+			createdAt := ownContact.ContactCreatedAt
+			updatedAt := ownContact.ContactUpdatedAt
+			if !isInContacts {
+				createdAt = addedContact.ContactCreatedAt
+				updatedAt = addedContact.ContactUpdatedAt
+			}
+
+			response.Contact = &rpc_personal_contactv1.Contact{
+				Id:           profile.ID.String(),
+				Name:         profile.Name,
+				Username:     profile.Username,
+				Bio:          profile.Bio,
+				Nickname:     nickname,
+				CreatedAt:    timestamppb.New(createdAt),
+				UpdatedAt:    timestamppb.New(updatedAt),
+				AvatarUrl:    profile.AvatarURL,
+				AvatarFileId: profile.AvatarFileId,
+				IsMutual:     isInContacts && isInPeopleWhoAddedYou,
+				ProfileType:  profile.ProfileType,
+			}
+		}
+	}
+
+	return response, nil
 }
 
 // GetBlocks lists the requester's own blocks with block-list profile enrichment.
