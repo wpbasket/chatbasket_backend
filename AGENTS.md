@@ -1,3 +1,7 @@
+# Language
+
+Use **English only** for all user-visible output. Do not reply in any other language.
+
 ### Core Principles
 
 1. **Think Before Coding**: Don't assume. Don't hide confusion. Surface tradeoffs.
@@ -90,7 +94,7 @@ GitNexus utilizes a hybrid search index combining **BM25 keyword matching** and 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **chatbasket_backend** (6037 symbols, 14121 relationships, 284 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **chatbasket_backend** (6059 symbols, 14221 relationships, 284 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -135,6 +139,12 @@ This repository is listed under GitNexus **group(s): cb-group** (see `~/.gitnexu
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+## Workflow Command Files
+
+When the user asks to run any workflow file, **check `/personaldata/cb/.agents/commands/` first** — it holds the predefined command files. Follow the file.
+
+List the folder first to find the exact workflow file.
 ---
 name: gitnexus-debugging
 description: "Use when the user is debugging a bug, tracing an error, or asking why something fails. Examples: \"Why is X failing?\", \"Where does this error come from?\", \"Trace this bug\""
