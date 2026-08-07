@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package rpc_core_email.v1;
+
+option go_package = "chatbasket-api/gen/proto/core/core_email;rpc_core_emailv1";
+
+// SendEmailRequest is the payload handed to the Heroku mail gateway.
+//
+// `body`      - HTML body (required, max 500KB).
+// `text_body` - Optional plain-text alternative. When empty the gateway
+// derives one from the HTML body so every outgoing message is a proper
+// multipart/alternative message.
+// `ref_id`    - Optional opaque identifier echoed back via the
+// `X-Entity-Ref-ID` header. Use a category (e.g. "otp-login") to help
+// deliverability and downstream tracing without leaking PII.
+message SendEmailRequest {
+  repeated string to = 1;
+  string subject = 2;
+  string body = 3;
+  string text_body = 4;
+  string ref_id = 5;
+}
+
+// SendEmailResponse acknowledges that the message was accepted onto the
+// gateway's worker queue. Delivery itself happens asynchronously.
+message SendEmailResponse {
+  bool queued = 1;
+  int32 queue_depth = 2;
+  int32 queue_capacity = 3;
+}
+
+// EmailService is served by the Heroku mail gateway and is consumed only by
+// the backend (server-to-server). Every request carries an HMAC-SHA256
+// signature in the `X-Relay-Timestamp`, `X-Relay-Nonce` and
+// `X-Relay-Signature` headers, verified by the gateway before the body is
+// read; the shared key never crosses the wire. The signing scheme is
+// documented in `heroku-mail-relay/README.md`.
+service EmailService {
+  rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+}

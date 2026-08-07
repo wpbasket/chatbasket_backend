@@ -33,7 +33,7 @@ graph TD
     
     subgraph "Secure Zone"
     API -->|Auth/Persistence| DB[("PostgreSQL")]
-    API -->|Email| Gateway["Heroku Email Gateway<br>(Worker Pool)"]
+    API -->|Signed Connect RPC| Gateway["Heroku Email Gateway<br>(Worker Pool)"]
     Gateway -->|SMTP| Zoho["Zoho Mail"]
     end
 
@@ -114,7 +114,7 @@ We choose tools that offer **Control** and **Predictability**.
 | **Core Logic** | ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat-square&logo=go&logoColor=white) | **The System Backbone**: Powers the **Secure Gateway**, **Clean Architecture**, and the resilient **Dual-Transport** chat engine. It leverages Go's native concurrency and the **coder/websocket** library to provide high-performance real-time synchronization alongside robust REST endpoints for fallbacks. |
 | **API Framework** | ![Echo](https://img.shields.io/badge/Echo_v5-00ADD8?style=flat-square&logoColor=white) | **Highly Customizable & Fast**: Zero-allocation router that is highly customizable and significantly faster than Gin or Fiber in our benchmarks. |
 | **Database** | ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=flat-square&logo=postgresql&logoColor=white) | **Primary Hub**: Handles all User Data, Custom Auth Sessions, and Relations with ACID compliance. |
-| **Email Gateway** | ![Go](https://img.shields.io/badge/Heroku_Gateway-00ADD8?style=flat-square&logo=go&logoColor=white) | **High Reliability**: A dedicated Go-based **HTTP-to-SMTP Gateway** featuring a **Worker Pool** and **Fire-and-Forget** asynchronous logic to bypass primary infrastructure port restrictions. |
+| **Email Gateway** | ![Go](https://img.shields.io/badge/Heroku_Gateway-00ADD8?style=flat-square&logo=go&logoColor=white) | **High Reliability**: A dedicated Go-based **RPC-to-SMTP Gateway** featuring a **Worker Pool** and **Fire-and-Forget** asynchronous logic to bypass primary infrastructure port restrictions. The API talks to it over **Connect RPC** on a single pooled connection, so a typed contract replaces hand-written JSON and every OTP no longer pays for a fresh TLS handshake. Every call is **HMAC-signed** with a timestamp and a single-use nonce, so the shared secret never crosses the wire and a captured request cannot be replayed. |
 | **Object Storage** | ![Cloudflare R2](https://img.shields.io/badge/Cloudflare_R2-F38020?style=flat-square&logo=Cloudflare&logoColor=white) | **Secure Media Storage**: Safely handles all media uploads and file storage. |
 | **Edge Security** | ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=flat-square&logo=Cloudflare&logoColor=white) | **Zero Trust Gateway**: Acts as an mTLS firewall (Authenticated Origin Pulls) and enforces strict end-to-end encryption. |
 | **CI/CD** | ![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=flat-square&logo=githubactions&logoColor=white) | **Zero-Touch Deploy**: Commits to `main` automatically build and swap containers on both Heroku and Oracle VM. |

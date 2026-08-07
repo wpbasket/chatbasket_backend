@@ -183,10 +183,14 @@ chatbasket_backend/
 │   │       │   └── model/
 │   │       │       └── model.pb.go
 │   │       ├── core/
-│   │       │   └── core_auth/
-│   │       │       ├── rpc_core_authv1connect/
-│   │       │       │   └── core_auth_api.connect.go
-│   │       │       └── core_auth_api.pb.go
+│   │       │   ├── core_auth/
+│   │       │   │   ├── rpc_core_authv1connect/
+│   │       │   │   │   └── core_auth_api.connect.go
+│   │       │   │   └── core_auth_api.pb.go
+│   │       │   └── core_email/
+│   │       │       ├── rpc_core_emailv1connect/
+│   │       │       │   └── core_email_api.connect.go
+│   │       │       └── core_email_api.pb.go
 │   │       └── personal/
 │   │           ├── personal_chat/
 │   │           │   ├── rpc_personal_chatv1connect/
@@ -319,6 +323,7 @@ chatbasket_backend/
 │   │       ├── clients/
 │   │       │   ├── cosmos.go
 │   │       │   ├── email.go
+│   │       │   ├── email_test.go
 │   │       │   ├── firebase.go
 │   │       │   ├── postgres.go
 │   │       │   ├── r2.go
@@ -354,8 +359,10 @@ chatbasket_backend/
 │   │   │   └── model/
 │   │   │       └── model.proto
 │   │   ├── core/
-│   │   │   └── core_auth/
-│   │   │       └── core_auth_api.proto
+│   │   │   ├── core_auth/
+│   │   │   │   └── core_auth_api.proto
+│   │   │   └── core_email/
+│   │   │       └── core_email_api.proto
 │   │   └── personal/
 │   │       ├── personal_chat/
 │   │       │   └── personal_chat_api.proto
@@ -539,9 +546,21 @@ chatbasket_backend/
 │       └── pgx-testing.md
 ├── heroku-mail-relay/
 │   ├── app/
-│   │   └── main.go
+│   │   ├── main.go
+│   │   ├── main_test.go
+│   │   └── security.go
+│   ├── gen/
+│   │   └── proto/
+│   │       └── core/
+│   │           └── core_email/
+│   │               ├── rpc_core_emailv1connect/
+│   │               │   └── core_email_api.connect.go
+│   │               └── core_email_api.pb.go
 │   ├── Dockerfile
-│   └── go.mod
+│   ├── README.md
+│   ├── buf.gen.yaml
+│   ├── go.mod
+│   └── go.sum
 ├── .gitignore
 ├── .gitnexusignore
 ├── AGENTS.md

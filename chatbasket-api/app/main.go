@@ -56,6 +56,9 @@ func main() {
 	secretClient := clients.NewSecretClient(cfg.Security)
 	_ = secretClient // satisfy compiler for now
 
+	// Initialize the Connect RPC client for the Heroku mail relay
+	clients.InitEmailClient(cfg.Email)
+
 	// Initialize R2 Client Pool (mandatory — fatal if no accounts configured)
 	r2Pool, err := clients.NewR2ClientPool(cfg.R2)
 	if err != nil {
