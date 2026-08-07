@@ -1,0 +1,20 @@
+# The email contract is owned by chatbasket-api. This gateway regenerates its
+# own self-contained copy because `heroku container:push` builds from inside
+# heroku-mail-relay/ and cannot see ../chatbasket-api.
+#
+# To regenerate the gateway's protobuf and Connect RPC files, run
+# `cd /personaldata/cb/chatbasket_backend/heroku-mail-relay && buf generate ../chatbasket-api --path ../chatbasket-api/proto/core/core_email`.
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package
+      path: proto/core/core_email/core_email_api.proto
+      value: heroku-mail-relay/gen/proto/core/core_email;rpc_core_emailv1
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.34.2
+    out: gen
+    opt: paths=source_relative
+  - remote: buf.build/connectrpc/go:v1.16.2
+    out: gen
+    opt: paths=source_relative

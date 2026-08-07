@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"crypto/tls"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"html"
 	"log"
@@ -25,9 +23,15 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	rpc_core_emailv1 "heroku-mail-relay/gen/proto/core/core_email"
+	rpc_core_emailv1connect "heroku-mail-relay/gen/proto/core/core_email/rpc_core_emailv1connect"
+
+	"connectrpc.com/connect"
 )
 
-// EmailRequest represents the incoming JSON structure.
+// emailJob is the internal queue element, built from an inbound
+// SendEmailRequest.
 //
 // `Body`     - HTML body (required).
 // `TextBody` - Optional plain-text alternative. If omitted, a plain-text
@@ -37,17 +41,18 @@ import (
 // `RefID`    - Optional opaque identifier echoed back via the
 // `X-Entity-Ref-ID` header. Helps with tracking & dedup on the recipient
 // side and lowers hash-similarity spam scoring.
-type EmailRequest struct {
-	To       []string `json:"to"`
-	Subject  string   `json:"subject"`
-	Body     string   `json:"body"`
-	TextBody string   `json:"text_body,omitempty"`
-	RefID    string   `json:"ref_id,omitempty"`
+type emailJob struct {
+	To       []string
+	Subject  string
+	Body     string
+	TextBody string
+	RefID    string
 }
 
 // Config holds the relay configuration
 type Config struct {
 	Secret       string
+	AllowedIPs   []*net.IPNet
 	SMTPHost     string
 	SMTPPort     string
 	SMTPUser     string
@@ -57,7 +62,7 @@ type Config struct {
 }
 
 var (
-	jobQueue = make(chan EmailRequest, 200) // Buffer for request spikes
+	jobQueue = make(chan emailJob, 200) // Buffer for request spikes
 	wg       sync.WaitGroup
 )
 
@@ -83,13 +88,30 @@ func main() {
 	}
 
 	// 3. Setup HTTP Server
+	//
+	// EmailService is served over the Connect protocol, which is a plain
+	// HTTP/1.1 POST — Heroku's router terminates HTTP/2 and forwards
+	// HTTP/1.1 to the dyno, so no h2c or gRPC support is required here.
+	// relayGuard authenticates the caller before Connect reads the body.
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", makeHandler(config))
+	emailPath, emailHandler := rpc_core_emailv1connect.NewEmailServiceHandler(
+		&emailServer{},
+		connect.WithReadMaxBytes(maxRequestBytes),
+	)
+	mux.Handle(emailPath, relayGuard(config, emailHandler))
 	mux.HandleFunc("/health", healthCheckHandler)
 
 	server := &http.Server{
 		Addr:    ":" + port,
 		Handler: mux,
+		// Timeouts keep a slow or stalled peer from pinning a connection
+		// on the dyno. IdleTimeout stays above the router's own keep-alive
+		// so the router never reuses a socket we just closed.
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    16 << 10,
 	}
 
 	// 4. Graceful Shutdown Handling
@@ -119,6 +141,12 @@ func main() {
 		os.Exit(0)
 	}()
 
+	if len(config.AllowedIPs) > 0 {
+		log.Printf("Source address allowlist active (%d entries)", len(config.AllowedIPs))
+	} else {
+		log.Println("Source address allowlist is not configured - set MAIL_RELAY_ALLOWED_IPS to restrict callers")
+	}
+
 	log.Printf("Relay version 2.0 (Worker Pool) listening on port %s", port)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server failed: %v", err)
@@ -144,8 +172,15 @@ func loadConfig() Config {
 		log.Fatal("SMTP configuration incomplete: SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, and SMTP_FROM must all be set")
 	}
 
+	// Optional: when set, only these addresses may call the RPC.
+	allowedIPs, err := parseAllowedIPs(os.Getenv("MAIL_RELAY_ALLOWED_IPS"))
+	if err != nil {
+		log.Fatalf("MAIL_RELAY_ALLOWED_IPS is invalid: %v", err)
+	}
+
 	return Config{
 		Secret:       secret,
+		AllowedIPs:   allowedIPs,
 		SMTPHost:     smtpHost,
 		SMTPPort:     smtpPort,
 		SMTPUser:     smtpUser,
@@ -162,101 +197,85 @@ func sanitizeHeader(s string) string {
 	return s
 }
 
-// validateEmailRequest validates the email request payload
-func validateEmailRequest(req EmailRequest) error {
+// validateEmailJob validates the queued email payload
+func validateEmailJob(job emailJob) error {
 	// Check To array is not empty
-	if len(req.To) == 0 {
+	if len(job.To) == 0 {
 		return fmt.Errorf("to array cannot be empty")
 	}
 
 	// Validate each email address
-	for _, addr := range req.To {
+	for _, addr := range job.To {
 		if _, err := mail.ParseAddress(addr); err != nil {
 			return fmt.Errorf("invalid email address: %s", addr)
 		}
 	}
 
 	// Check length limits
-	if len(req.Subject) > 998 { // RFC 2822 line length limit
+	if len(job.Subject) > 998 { // RFC 2822 line length limit
 		return fmt.Errorf("subject too long (max 998 characters)")
 	}
 
-	if len(req.Body) > 500000 { // 500KB limit for body
+	if len(job.Body) > 500000 { // 500KB limit for body
 		return fmt.Errorf("body too long (max 500KB)")
 	}
 
+	if len(job.TextBody) > 500000 { // same ceiling as the HTML body
+		return fmt.Errorf("text body too long (max 500KB)")
+	}
+
 	// Limit number of recipients
-	if len(req.To) > 50 {
+	if len(job.To) > 50 {
 		return fmt.Errorf("too many recipients (max 50)")
 	}
 
 	return nil
 }
 
-func makeHandler(cfg Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+// emailServer implements rpc_core_emailv1connect.EmailServiceHandler.
+type emailServer struct{}
 
-		// Auth - use constant-time comparison
-		providedSecret := r.Header.Get("X-Relay-Secret")
-		if subtle.ConstantTimeCompare([]byte(cfg.Secret), []byte(providedSecret)) != 1 {
-			log.Printf("Unauthorized access from %s - User-Agent: %s - Secret prefix: %s",
-				r.RemoteAddr,
-				r.UserAgent(),
-				truncateSecret(providedSecret))
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Limit request body size to 1MB
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-
-		// Parse
-		var req EmailRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			log.Printf("Invalid JSON from %s: %v", r.RemoteAddr, err)
-			http.Error(w, "Invalid body", http.StatusBadRequest)
-			return
-		}
-
-		// Validate request
-		if err := validateEmailRequest(req); err != nil {
-			log.Printf("Validation failed from %s: %v", r.RemoteAddr, err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Push to Queue
-		select {
-		case jobQueue <- req:
-			w.WriteHeader(http.StatusAccepted)
-			fmt.Fprint(w, "Queued")
-		default:
-			queueDepth := len(jobQueue)
-			log.Printf("ALERT: Queue full (%d/200), rejecting request from %s", queueDepth, r.RemoteAddr)
-			w.Header().Set("Retry-After", "5")
-			http.Error(w, "Service busy", http.StatusServiceUnavailable)
-		}
+// SendEmail validates the message and hands it to the worker pool. Delivery
+// is asynchronous: a successful response only means the job was queued.
+func (s *emailServer) SendEmail(
+	ctx context.Context,
+	req *connect.Request[rpc_core_emailv1.SendEmailRequest],
+) (*connect.Response[rpc_core_emailv1.SendEmailResponse], error) {
+	job := emailJob{
+		To:       req.Msg.GetTo(),
+		Subject:  req.Msg.GetSubject(),
+		Body:     req.Msg.GetBody(),
+		TextBody: req.Msg.GetTextBody(),
+		RefID:    req.Msg.GetRefId(),
 	}
-}
 
-// truncateSecret returns first 4 chars of secret for logging (or less if shorter)
-func truncateSecret(s string) string {
-	if len(s) > 4 {
-		return s[:4] + "..."
+	if err := validateEmailJob(job); err != nil {
+		log.Printf("Validation failed from %s: %v", req.Peer().Addr, err)
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	if len(s) == 0 {
-		return "(empty)"
+
+	// Push to Queue
+	select {
+	case jobQueue <- job:
+		return connect.NewResponse(&rpc_core_emailv1.SendEmailResponse{
+			Queued:        true,
+			QueueDepth:    int32(len(jobQueue)),
+			QueueCapacity: int32(cap(jobQueue)),
+		}), nil
+	default:
+		queueDepth := len(jobQueue)
+		log.Printf("ALERT: Queue full (%d/%d), rejecting request from %s", queueDepth, cap(jobQueue), req.Peer().Addr)
+		cerr := connect.NewError(connect.CodeResourceExhausted,
+			fmt.Errorf("queue full (%d/%d)", queueDepth, cap(jobQueue)))
+		cerr.Meta().Set("Retry-After", "5")
+		return nil, cerr
 	}
-	return s + "..."
 }
 
 // healthCheckHandler provides a health check endpoint
 func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	queueDepth := len(jobQueue)
+	w.Header().Set("Content-Type", "application/json")
 	if queueDepth > 180 { // 90% full
 		w.WriteHeader(http.StatusServiceUnavailable)
 		fmt.Fprintf(w, `{"status":"degraded","queue":%d,"capacity":200}`, queueDepth)
@@ -278,13 +297,13 @@ func emailWorker(ctx context.Context, id int, cfg Config) {
 		case <-ctx.Done():
 			log.Printf("Worker %d shutting down...", id)
 			return
-		case req := <-jobQueue:
+		case job := <-jobQueue:
 			// Only send to first recipient (as per original logic).
-			// mail.ParseAddress already validated it in the HTTP handler,
+			// mail.ParseAddress already validated it in the RPC handler,
 			// but defend-in-depth: sanitize once more to strip CR/LF.
-			toAddr := sanitizeHeader(req.To[0])
+			toAddr := sanitizeHeader(job.To[0])
 
-			msg, err := buildMIMEMessage(cfg, toAddr, req.Subject, req.Body, req.TextBody, req.RefID)
+			msg, err := buildMIMEMessage(cfg, toAddr, job.Subject, job.Body, job.TextBody, job.RefID)
 			if err != nil {
 				log.Printf("Worker %d Build Error for %v: %v", id, toAddr, err)
 				continue
@@ -293,7 +312,7 @@ func emailWorker(ctx context.Context, id int, cfg Config) {
 			if err := sendMail(addr, auth, cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, []string{toAddr}, msg); err != nil {
 				log.Printf("Worker %d Error for %v: %v", id, toAddr, err)
 			} else {
-				log.Printf("Worker %d Success: Email sent to %v (Subject: %q)", id, toAddr, sanitizeHeader(req.Subject))
+				log.Printf("Worker %d Success: Email sent to %v (Subject: %q)", id, toAddr, sanitizeHeader(job.Subject))
 			}
 		}
 	}
@@ -370,7 +389,9 @@ func buildMIMEMessage(cfg Config, to, subject, htmlBody, textBody, refID string)
 	buf.WriteString("This is a multi-part message in MIME format.\r\n")
 
 	// --- text/plain part -------------------------------------------------
-	buf.WriteString("--" + boundary + "\r\n")
+	buf.WriteString("--")
+	buf.WriteString(boundary)
+	buf.WriteString("\r\n")
 	buf.WriteString("Content-Type: text/plain; charset=\"UTF-8\"\r\n")
 	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
 	if err := writeQuotedPrintable(&buf, textBody); err != nil {
@@ -379,7 +400,9 @@ func buildMIMEMessage(cfg Config, to, subject, htmlBody, textBody, refID string)
 	buf.WriteString("\r\n")
 
 	// --- text/html part --------------------------------------------------
-	buf.WriteString("--" + boundary + "\r\n")
+	buf.WriteString("--")
+	buf.WriteString(boundary)
+	buf.WriteString("\r\n")
 	buf.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n")
 	buf.WriteString("Content-Transfer-Encoding: quoted-printable\r\n\r\n")
 	if err := writeQuotedPrintable(&buf, htmlBody); err != nil {
@@ -388,7 +411,9 @@ func buildMIMEMessage(cfg Config, to, subject, htmlBody, textBody, refID string)
 	buf.WriteString("\r\n")
 
 	// Closing boundary.
-	buf.WriteString("--" + boundary + "--\r\n")
+	buf.WriteString("--")
+	buf.WriteString(boundary)
+	buf.WriteString("--\r\n")
 
 	return buf.Bytes(), nil
 }
