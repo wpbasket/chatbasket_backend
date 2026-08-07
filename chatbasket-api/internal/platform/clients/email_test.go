@@ -4,6 +4,7 @@ import (
 	"bytes"
 	appconfig "chatbasket-api/internal/platform/config"
 	"context"
+	"crypto/tls"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,11 @@ import (
 )
 
 const testRelaySecret = "test-relay-secret"
+
+func TestEmailTransport_AllowsTLS12(t *testing.T) {
+	require.NotNil(t, emailTransport.TLSClientConfig)
+	assert.Equal(t, uint16(tls.VersionTLS12), emailTransport.TLSClientConfig.MinVersion)
+}
 
 // recordingEmailHandler stands in for the Heroku mail gateway and captures
 // everything the backend puts on the wire.

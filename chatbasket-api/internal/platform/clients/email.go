@@ -58,7 +58,7 @@ var (
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 20 * time.Second,
 		ExpectContinueTimeout: time.Second,
-		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS13},
+		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 
 	// emailClient talks to the gateway over Connect RPC. It stays nil when
