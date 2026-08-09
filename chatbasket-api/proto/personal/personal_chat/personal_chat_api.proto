@@ -239,6 +239,15 @@ message DownloadHistorySyncResponse {
   string payloadCipher = 1;
 }
 
+// ChatSsePayload wraps all chat-related SSE events.
+// Each module owns its SSE event definitions independently.
+// message ChatSsePayload {
+//   oneof event {
+//     Message new_message = 1;
+//     SyncAction sync_action = 2;
+//   }
+// }
+
 service ChatService {
   rpc CheckEligibility(CheckEligibilityRequest) returns (CheckEligibilityResponse);
   rpc CreateChat(CreateChatRequest) returns (CreateChatResponse);

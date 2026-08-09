@@ -7,6 +7,7 @@ import (
 	"chatbasket-api/internal/modules/personal/personal_contact"
 	"chatbasket-api/internal/modules/personal/personal_profile"
 	"chatbasket-api/internal/modules/personal/personal_setting"
+	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/config"
 	"chatbasket-api/internal/platform/kit"
@@ -83,6 +84,10 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	personalGroup := apiGroup.Group("/personal")
 	personalGroup.Use(middleware.AuthSessionMiddleware(authService, true, wsHub))
 
+	// 2.1 Personal SSE Stream Infrastructure
+	_ = personal_sse.Register(personalGroup, r.Pool)
+
+	// 2.2 Profile Module
 	profileService := personal_profile.NewProfileService(
 		globalService, r.Pool, authService,
 		r.Config.Security.PersonalUsernameKey,
@@ -90,11 +95,11 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	)
 	personal_profile.Register(personalGroup, profileService)
 
-
+	// 2.3 Contact Module
 	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey, r.Config.Security.PersonalContactKey)
 	personal_contact.Register(personalGroup, contactService)
 
-	// 3. Chat Module
+	// 2.4 Chat Module
 	chatService := personal_chat.NewChatService(
 		globalService,
 		r.Pool, authService, profileService, contactService,
@@ -103,11 +108,11 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	personal_chat.Register(personalGroup, chatService, wsHub)
 	contactService.RegisterChatCleanupProvider(chatService)
 
-	// 4. Settings Module
+	// 2.5 Settings Module
 	settingService := personal_setting.NewSettingService(authService)
 	personal_setting.Register(personalGroup, settingService, wsHub)
 
-	// 5. Start Background Cleanup Jobs (after all modules are registered)
+	// 3. Start Background Cleanup Jobs (after all modules are registered)
 	pending_uploads.StartCleanupJob(pendingUploadsSvc, 15*time.Minute)
 	personal_chat.StartMessageCleanupJob(chatService, 1*time.Hour)
 	personal_chat.StartDatabaseCleanupJob(chatService, 1*time.Hour)

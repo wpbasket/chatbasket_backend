@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package rpc_personal_sse.v1;
+
+option go_package = "chatbasket-api/gen/proto/personal/personal_sse;rpc_personal_ssev1";
+
+import "google/protobuf/timestamp.proto";
+import "proto/common/model/model.proto";
+import "proto/personal/personal_chat/personal_chat_api.proto";
+
+message PersonalSseEventsRequest {
+  // Optional: Reserved for future stream reconnection replay.
+  // Currently unused (default 0). Will be passed by client on reconnect to request missed events.
+  uint64 last_sequence_id = 1;
+}
+
+message PersonalSseEvent {
+  // Server emission timestamp (envelope header).
+  google.protobuf.Timestamp timestamp = 1;
+
+  // Optional: Reserved for future event ordering and deduplication.
+  // Currently unused (default 0). Will hold a monotonically increasing event sequence ID.
+  uint64 sequence_id = 2;
+
+  oneof payload {
+    // ⚙️ Base Status
+    rpc_common_model.v1.StatusOkay status_okay = 3;
+
+    // 💬 Chat Module (module-owned payload)
+    // rpc_personal_chat.v1.ChatSsePayload chat = 4;
+  }
+}
+
+service PersonalSseService {
+  rpc StreamEvents(PersonalSseEventsRequest) returns (stream PersonalSseEvent);
+}
