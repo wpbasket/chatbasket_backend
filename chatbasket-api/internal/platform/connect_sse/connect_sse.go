@@ -52,12 +52,13 @@ func (m *Manager[T]) Register(userID uuid.UUID, sessionUUID uuid.UUID, isPrimary
 		m.conns[userID] = userConns
 	}
 
-	if len(userConns) >= maxConnsPerUser {
-		if old, ok := userConns[sessionUUID]; ok {
-			old.Close()
-		} else {
-			return nil, false
-		}
+	// Strict 1 Session = 1 SSE Stream rule:
+	// If an SSE stream for this exact SessionUUID already exists (e.g. client reconnected or IP changed),
+	// forcibly close the previous connection immediately before registering the new one.
+	if old, ok := userConns[sessionUUID]; ok {
+		old.Close()
+	} else if len(userConns) >= maxConnsPerUser {
+		return nil, false
 	}
 
 	conn := &Conn[T]{
