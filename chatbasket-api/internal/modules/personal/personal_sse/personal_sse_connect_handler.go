@@ -3,6 +3,7 @@ package personal_sse
 import (
 	"context"
 	"net/http"
+	"time"
 
 	rpc_personal_ssev1 "chatbasket-api/gen/proto/personal/personal_sse"
 	rpc_personal_ssev1connect "chatbasket-api/gen/proto/personal/personal_sse/rpc_personal_ssev1connect"
@@ -12,6 +13,9 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// Shared immutable 0-byte payload heartbeat event across all active streams (zero heap allocations per ping)
+var ssePingEvent = &rpc_personal_ssev1.PersonalSseEvent{}
 
 type personalSseConnectHandler struct {
 	rpc_personal_ssev1connect.UnimplementedPersonalSseServiceHandler
@@ -60,10 +64,19 @@ func (s *personalSseConnectHandler) StreamEvents(ctx context.Context, req *conne
 		return kit.ParseIntoRpcError(err)
 	}
 
+	// 30-second heartbeat ticker prevents Cloudflare (125s idle limit) and carrier NAT timeouts
+	heartbeatTicker := time.NewTicker(30 * time.Second)
+	defer heartbeatTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+
+		case <-heartbeatTicker.C:
+			if err := stream.Send(ssePingEvent); err != nil {
+				return kit.ParseIntoRpcError(err)
+			}
 
 		case msg, open := <-conn.Send:
 			if !open {
