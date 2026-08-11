@@ -24,22 +24,23 @@ func newPersonalSseConnectHandler(sm *Manager) rpc_personal_ssev1connect.Persona
 	}
 }
 
-func (s *personalSseConnectHandler) StreamEvents(
-	ctx context.Context,
-	req *connect.Request[rpc_personal_ssev1.PersonalSseEventsRequest],
-	stream *connect.ServerStream[rpc_personal_ssev1.PersonalSseEvent],
-) error {
+func (s *personalSseConnectHandler) StreamEvents(ctx context.Context, req *connect.Request[rpc_personal_ssev1.PersonalSseEventsRequest], stream *connect.ServerStream[rpc_personal_ssev1.PersonalSseEvent]) error {
 	userID, err := kit.GetConnectRpcUserID(ctx)
 	if err != nil {
 		return kit.ParseIntoRpcError(err)
 	}
-
-	sessionID, _ := kit.GetConnectRpcSessionID(ctx)
-	if sessionID == "" {
-		sessionID = uuid.New().String()
+	if userID.UuidUserId == uuid.Nil {
+		return kit.ParseIntoRpcError(kit.NewError(http.StatusUnauthorized, "unauthorized", "user ID is required to open an SSE stream"))
 	}
+
 	sessionUUID, _ := kit.GetConnectRpcSessionUUID(ctx)
-	isPrimary, _ := kit.GetConnectRpcIsPrimary(ctx)
+	if sessionUUID == uuid.Nil {
+		return kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "missing_session", "session UUID is required to open an SSE stream"))
+	}
+	isPrimary, err := kit.GetConnectRpcIsPrimary(ctx)
+	if err != nil {
+		return kit.ParseIntoRpcError(err)
+	}
 
 	if s.personalSseManager == nil {
 		return kit.ParseIntoRpcError(kit.NewError(http.StatusInternalServerError, "internal_error", "stream manager unavailable"))
@@ -56,7 +57,7 @@ func (s *personalSseConnectHandler) StreamEvents(
 		Timestamp: timestamppb.Now(),
 	}
 	if err := stream.Send(initEvent); err != nil {
-		return err
+		return kit.ParseIntoRpcError(err)
 	}
 
 	for {
@@ -69,7 +70,7 @@ func (s *personalSseConnectHandler) StreamEvents(
 				return nil
 			}
 			if err := stream.Send(msg); err != nil {
-				return err
+				return kit.ParseIntoRpcError(err)
 			}
 		}
 	}

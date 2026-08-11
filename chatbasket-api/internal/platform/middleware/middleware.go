@@ -19,12 +19,14 @@ func Register(e *echo.Echo, corsOrigin string) {
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		Level: 5,
 		Skipper: func(c *echo.Context) bool {
-			// Skip Gzip for WebSocket upgrades and Connect/gRPC RPCs (which manage their own compression)
+			// Skip Gzip for WebSocket upgrades, Connect/gRPC RPCs, and SSE streams
 			ct := c.Request().Header.Get("Content-Type")
 			return c.Request().Header.Get("Upgrade") == "websocket" ||
 				strings.HasPrefix(ct, "application/grpc") ||
 				strings.HasPrefix(ct, "application/connect") ||
-				strings.HasPrefix(ct, "application/proto")
+				strings.HasPrefix(ct, "application/proto") ||
+				strings.Contains(c.Path(), "personal_sse") ||
+				strings.Contains(c.Path(), "StreamEvents")
 		},
 	}))
 	e.Use(middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
@@ -42,7 +44,9 @@ func Register(e *echo.Echo, corsOrigin string) {
 			// Skip timeout for WebSockets and Connect/gRPC streams
 			return c.Request().Header.Get("Upgrade") == "websocket" ||
 				strings.HasPrefix(ct, "application/connect") ||
-				strings.HasPrefix(ct, "application/grpc")
+				strings.HasPrefix(ct, "application/grpc") ||
+				strings.Contains(c.Path(), "personal_sse") ||
+				strings.Contains(c.Path(), "StreamEvents")
 		},
 	}))
 

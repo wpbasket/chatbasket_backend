@@ -100,7 +100,7 @@ func main() {
 		BeforeServeFunc: func(s *http.Server) error {
 			s.ReadHeaderTimeout = 10 * time.Second
 			s.ReadTimeout = 600 * time.Second
-			s.WriteTimeout = 600 * time.Second
+			s.WriteTimeout = 0 // Disabled: Allows long-lived SSE / ConnectRPC streams
 			s.IdleTimeout = 120 * time.Second
 
 			// Enable native HTTP/2 cleartext (h2c) support directly in the standard library (Go 1.24+)

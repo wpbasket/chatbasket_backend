@@ -1,7 +1,6 @@
 package connect_sse
 
 import (
-	"log"
 	"sync"
 
 	"github.com/google/uuid"
@@ -38,6 +37,7 @@ func NewManager[T any]() *Manager[T] {
 	}
 }
 
+// Register registers a new SSE stream connection for a user session.
 func (m *Manager[T]) Register(userID uuid.UUID, sessionUUID uuid.UUID, isPrimary bool) (*Conn[T], bool) {
 	if sessionUUID == uuid.Nil {
 		sessionUUID = uuid.New()
@@ -72,6 +72,7 @@ func (m *Manager[T]) Register(userID uuid.UUID, sessionUUID uuid.UUID, isPrimary
 	return conn, true
 }
 
+// Unregister unregisters and closes an active SSE connection.
 func (m *Manager[T]) Unregister(conn *Conn[T]) {
 	if conn == nil {
 		return
@@ -95,6 +96,8 @@ func (m *Manager[T]) Unregister(conn *Conn[T]) {
 	}
 }
 
+// UnregisterUserConnections closes and unregisters all active SSE connections for a user.
+// WS Equivalent: WSHub.CloseUserConnections(userID uuid.UUID)
 func (m *Manager[T]) UnregisterUserConnections(userID uuid.UUID) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -111,6 +114,8 @@ func (m *Manager[T]) UnregisterUserConnections(userID uuid.UUID) {
 	delete(m.conns, userID)
 }
 
+// UnregisterSession closes and unregisters a specific session connection for a user.
+// WS Equivalent: WSHub.CloseSessionConnection(userID uuid.UUID, sessionID string)
 func (m *Manager[T]) UnregisterSession(userID uuid.UUID, sessionUUID uuid.UUID) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -148,6 +153,7 @@ func (m *Manager[T]) IsSessionActive(userID uuid.UUID, sessionUUID uuid.UUID) bo
 	return active
 }
 
+// BroadcastToUser sends an SSE event to ALL connected sessions of a user on this node.
 func (m *Manager[T]) BroadcastToUser(userID uuid.UUID, event T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -157,15 +163,15 @@ func (m *Manager[T]) BroadcastToUser(userID uuid.UUID, event T) {
 		return
 	}
 
-	for suid, conn := range userConns {
+	for _, conn := range userConns {
 		select {
 		case conn.Send <- event:
 		default:
-			log.Printf("[connect_sse] Buffer full for sessionUUID=%s (user=%s), event dropped", suid, userID)
 		}
 	}
 }
 
+// BroadcastToUserExcept sends an SSE event to all connected sessions of a user EXCEPT excludeSessionUUID.
 func (m *Manager[T]) BroadcastToUserExcept(userID uuid.UUID, excludeSessionUUID uuid.UUID, event T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -182,11 +188,11 @@ func (m *Manager[T]) BroadcastToUserExcept(userID uuid.UUID, excludeSessionUUID 
 		select {
 		case conn.Send <- event:
 		default:
-			log.Printf("[connect_sse] Buffer full for sessionUUID=%s (user=%s), event dropped", suid, userID)
 		}
 	}
 }
 
+// BroadcastToUserSession sends an SSE event directly to a single specific session of a user.
 func (m *Manager[T]) BroadcastToUserSession(userID uuid.UUID, targetSessionUUID uuid.UUID, event T) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -204,6 +210,5 @@ func (m *Manager[T]) BroadcastToUserSession(userID uuid.UUID, targetSessionUUID 
 	select {
 	case conn.Send <- event:
 	default:
-		log.Printf("[connect_sse] Buffer full for sessionUUID=%s (user=%s), event dropped", targetSessionUUID, userID)
 	}
 }
