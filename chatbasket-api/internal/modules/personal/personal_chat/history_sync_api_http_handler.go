@@ -1,12 +1,15 @@
 package personal_chat
 
 import (
-	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
 	"net/http"
+
+	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
+	rpc_personal_ssev1 "chatbasket-api/gen/proto/personal/personal_sse"
+	"chatbasket-api/internal/platform/kit"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type HistorySyncRequestPayload struct {
@@ -54,26 +57,28 @@ func (h *chatHandler) RequestHistorySync(c *echo.Context) error {
 		sessionUUIDVal,
 		req.ChatsCipher,
 		req.UsedPrimaryKey,
-		func(uid uuid.UUID, sid uuid.UUID) bool {
-			return h.hub.IsSessionActive(uid, sid)
-		},
 	)
 	if err != nil {
 		return err
 	}
 
-	// Send WS event to primary device
-	if primarySessionID != uuid.Nil {
-		wsPayload := HistorySyncRequestedPayload{
-			RequestID:          requestID,
-			RequesterSessionID: sessionUUIDVal,
-			RequesterPublicKey: requesterPubKey,
-			ChatsCipher:        req.ChatsCipher,
+	// SSE Broadcast: RequestHistorySyncSseEvent to primary device
+	if h.personalSseManager != nil && primarySessionID != uuid.Nil {
+		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_RequestHistorySyncSseEvent{
+						RequestHistorySyncSseEvent: &rpc_personal_chatv1.RequestHistorySyncSsePayload{
+							RequestId:          requestID.String(),
+							RequesterPublicKey: requesterPubKey,
+							ChatsCipher:        req.ChatsCipher,
+						},
+					},
+				},
+			},
 		}
-		go h.hub.BroadcastToUserSession(userID.UuidUserId, primarySessionID.String(), websocket.WSEvent{
-			Type:    WSEventHistorySyncRequested,
-			Payload: wsPayload,
-		})
+		go h.personalSseManager.BroadcastToUserSession(userID.UuidUserId, primarySessionID, sseEvent)
 	}
 
 	return c.JSON(http.StatusOK, HistorySyncRequestResponse{
@@ -102,14 +107,22 @@ func (h *chatHandler) UploadHistorySync(c *echo.Context) error {
 		return err
 	}
 
-	// Notify the requesting secondary device that it's ready
-	wsPayload := HistorySyncReadyPayload{
-		RequestID: req.RequestID,
+	// SSE Broadcast: UploadHistorySyncSseEvent to requesting secondary device
+	if h.personalSseManager != nil {
+		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_UploadHistorySyncSseEvent{
+						UploadHistorySyncSseEvent: &rpc_personal_chatv1.UploadHistorySyncSsePayload{
+							RequestId: req.RequestID.String(),
+						},
+					},
+				},
+			},
+		}
+		go h.personalSseManager.BroadcastToUserSession(userID.UuidUserId, requesterSessionID, sseEvent)
 	}
-	go h.hub.BroadcastToUserSession(userID.UuidUserId, requesterSessionID.String(), websocket.WSEvent{
-		Type:    WSEventHistorySyncReady,
-		Payload: wsPayload,
-	})
 
 	return c.JSON(http.StatusOK, kit.StatusOkay{Status: true})
 }

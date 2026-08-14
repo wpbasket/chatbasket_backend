@@ -85,7 +85,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	personalGroup.Use(middleware.AuthSessionMiddleware(authService, true, wsHub))
 
 	// 2.1 Personal SSE Stream Infrastructure
-	_ = personal_sse.Register(personalGroup, r.Pool)
+	personalSseManager := personal_sse.Register(personalGroup, r.Pool)
 
 	// 2.2 Profile Module
 	profileService := personal_profile.NewProfileService(
@@ -105,7 +105,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 		r.Pool, authService, profileService, contactService,
 		pendingUploadsSvc, r.R2Pool,
 	)
-	personal_chat.Register(personalGroup, chatService, wsHub)
+	personal_chat.Register(personalGroup, chatService, wsHub, personalSseManager)
 	contactService.RegisterChatCleanupProvider(chatService)
 
 	// 2.5 Settings Module

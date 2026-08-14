@@ -103,7 +103,7 @@ func TestHistorySync_FullIntegration_EdgeCases(t *testing.T) {
 	chatsCipher := "\"encrypted-chats\""
 
 	// 1. RequestHistorySync Success
-	reqID, pSession, key, err := svc.RequestHistorySync(ctx, userID, sessionID, chatsCipher, pubKey, func(uid uuid.UUID, sid uuid.UUID) bool { return true })
+	reqID, pSession, key, err := svc.RequestHistorySync(ctx, userID, sessionID, chatsCipher, pubKey)
 	require.NoError(t, err)
 	assert.NotEqual(t, uuid.Nil, reqID)
 	assert.Equal(t, primarySessionID, pSession)
@@ -188,7 +188,7 @@ func TestHistorySync_UpsertReplace(t *testing.T) {
 		AuthProvider:    mockAuth,
 	}
 
-	reqID, _, _, err := svc.RequestHistorySync(ctx, userID, sessionID, "\"chats1\"", pubKey, func(uid uuid.UUID, sid uuid.UUID) bool { return true })
+	reqID, _, _, err := svc.RequestHistorySync(ctx, userID, sessionID, "\"chats1\"", pubKey)
 	require.NoError(t, err)
 
 	// Verify the request exists in DB

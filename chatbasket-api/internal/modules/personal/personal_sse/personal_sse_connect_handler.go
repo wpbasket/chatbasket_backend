@@ -17,6 +17,9 @@ import (
 // Shared immutable 0-byte payload heartbeat event across all active streams (zero heap allocations per ping)
 var ssePingEvent = &rpc_personal_ssev1.PersonalSseEvent{}
 
+// Heartbeat interval in seconds to prevent Cloudflare (125s idle limit) and cellular carrier NAT drops (30-60s)
+const sseHeartbeatSeconds = 30
+
 type personalSseConnectHandler struct {
 	rpc_personal_ssev1connect.UnimplementedPersonalSseServiceHandler
 	personalSseManager *Manager
@@ -64,8 +67,8 @@ func (s *personalSseConnectHandler) StreamEvents(ctx context.Context, req *conne
 		return kit.ParseIntoRpcError(err)
 	}
 
-	// 30-second heartbeat ticker prevents Cloudflare (125s idle limit) and carrier NAT timeouts
-	heartbeatTicker := time.NewTicker(30 * time.Second)
+	// Heartbeat ticker prevents Cloudflare (125s idle limit) and carrier NAT timeouts
+	heartbeatTicker := time.NewTicker(sseHeartbeatSeconds * time.Second)
 	defer heartbeatTicker.Stop()
 
 	for {

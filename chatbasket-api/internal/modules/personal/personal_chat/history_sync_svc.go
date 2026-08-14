@@ -10,31 +10,16 @@ import (
 	"github.com/google/uuid"
 )
 
-type HistorySyncRequestedPayload struct {
-	RequestID          uuid.UUID `json:"requestId"`
-	RequesterSessionID uuid.UUID `json:"requesterSessionId"`
-	RequesterPublicKey string    `json:"requesterPublicKey"`
-	ChatsCipher        string    `json:"chatsCipher"`
-}
-
-type HistorySyncReadyPayload struct {
-	RequestID uuid.UUID `json:"requestId"`
-}
 
 // RequestHistorySync handles step ①: secondary requests sync
-func (s *chatService) RequestHistorySync(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, chatsCipher string, usedPrimaryKey string, isPrimaryActive func(uuid.UUID, uuid.UUID) bool) (uuid.UUID, uuid.UUID, string, error) {
+func (s *chatService) RequestHistorySync(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, chatsCipher string, usedPrimaryKey string) (uuid.UUID, uuid.UUID, string, error) {
 	// 1. Find the primary session
 	primarySessionID, err := s.AuthProvider.GetUserPrimarySessionID(ctx, userID)
 	if err != nil || primarySessionID == uuid.Nil {
 		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusServiceUnavailable, "primary_offline", "Primary device is not connected")
 	}
 
-	// 2. Check if primary is actively connected to the WebSocket
-	if isPrimaryActive != nil && !isPrimaryActive(userID, primarySessionID) {
-		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusServiceUnavailable, "primary_offline", "Primary device is not connected")
-	}
-
-	// 3. Validate that the secondary device is using the correct primary key
+	// 2. Validate that the secondary device is using the correct primary key
 	primaryPublicKey, err := s.AuthProvider.GetSessionE2EEPublicKey(ctx, primarySessionID)
 	if err == nil && primaryPublicKey != nil && *primaryPublicKey != usedPrimaryKey {
 		return uuid.Nil, uuid.Nil, "", kit.NewError(http.StatusConflict, "key_mismatch", "Primary key mismatch. Please refresh your keys.")

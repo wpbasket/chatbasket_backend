@@ -2,6 +2,7 @@ package personal_chat
 
 import (
 	rpc_personal_chatv1connect "chatbasket-api/gen/proto/personal/personal_chat/rpc_personal_chatv1connect"
+	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/middleware"
 	"chatbasket-api/internal/platform/websocket"
 
@@ -10,8 +11,8 @@ import (
 )
 
 // Register initializes the Chat module dependencies and registers its routes.
-func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WSHub) {
-	handler := newChatHandler(chatSvc, hub)
+func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WSHub, personalSseManager *personal_sse.Manager) {
+	handler := newChatHandler(chatSvc, hub, personalSseManager)
 
 	// Chat Routes
 	chat := personalGroup.Group("/chat")
@@ -26,6 +27,7 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WS
 	chat.GET("/messages", handler.GetMessages)
 	chat.GET("/pending", handler.GetPendingMessages)
 	chat.POST("/ack", handler.AcknowledgeDelivery)
+	chat.POST("/ack-batch", handler.AcknowledgeDeliveryBatch)
 
 	// File messaging
 	chat.POST("/presign", handler.PresignUpload)
@@ -50,7 +52,7 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, hub *websocket.WS
 	chat.GET("/ws", handler.WebSocketUpgrade)
 
 	// Connect RPC Routes
-	connectServer := newChatConnectServer(chatSvc, hub)
+	connectServer := newChatConnectServer(chatSvc, hub, personalSseManager)
 	path, connectHandler := rpc_personal_chatv1connect.NewChatServiceHandler(connectServer)
 	personalGroup.Any(path+"*", echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)))
 }

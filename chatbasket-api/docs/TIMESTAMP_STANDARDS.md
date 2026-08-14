@@ -63,21 +63,25 @@ readAtStr := chat.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")
 ## 3. Frontend Guidelines (TypeScript / React Native)
 
 ### A. Converting Protobuf Timestamp to Application State
-All modules use the central utilities from `src/utils/commonUtils/util.date.ts`:
+All modules MUST use the central date utilities from `src/utils/commonUtils/util.date.ts`.
 
 ```typescript
 import { mapTimestamp, mapOptionalTimestamp } from "@/utils/commonUtils/util.date";
-
-// Required Timestamp field -> Returns ISO-8601 string
-createdAt: mapTimestamp(protoMsg.createdAt),
-
-// Optional Timestamp field -> Returns ISO-8601 string or null
-lastReadAt: mapOptionalTimestamp(protoChat.otherUserLastReadAt),
 ```
 
-### B. Why `mapTimestamp()` is Universal
-- Converts `{ seconds, nanos }` into a standard ISO string: `"2026-08-11T05:45:00.123Z"`.
-- Standard ISO strings work seamlessly with `new Date()`, SQLite, MMKV, and UI date formatters (`formatDateTime()`) across all platforms (iOS, Android, Web).
+### B. Exact Decision Guide: `mapTimestamp` vs `mapOptionalTimestamp`
+
+| Function | Return Type | When to Use | Failure / Absent Behavior | Real-World Examples |
+| :--- | :--- | :--- | :--- | :--- |
+| **`mapTimestamp(ts)`** *(Direct / Mandatory)* | `string` | For fields that are **mandatory** by wire contract or business domain. The event or entity cannot validly exist without this timestamp. | **Fails fast & Throws**: Throws `Error('mapTimestamp: received undefined timestamp from server')`. Missing values indicate server data integrity bugs that must NOT be silently masked. | • `Message.createdAt`<br>• `Contact.createdAt`<br>• `PersonalSseEvent.timestamp`<br>• `AcknowledgeDeliverySsePayload.deliveredAt` |
+| **`mapOptionalTimestamp(ts)`** *(Optional / Nullable)* | `string \| null` | For fields that are **legitimately nullable** in business domain (e.g., action has not happened yet) or declared `optional` in schema. | **Returns `null`**: Absence is an expected business state, not an error. | • `Chat.otherUserLastReadAt` (unread chat)<br>• `Chat.otherUserLastDeliveredAt` (undelivered chat)<br>• `Message.expiresAt` (disappearing messages disabled) |
+
+> [!CAUTION]
+> **Do NOT use `mapOptionalTimestamp` for required fields**: Using `mapOptionalTimestamp` on mandatory fields silently converts server contract bugs into `null`, causing silent UI bugs and invalid SQLite/state entries downstream.
+
+### C. Why `mapTimestamp()` is Universal
+- Converts `{ seconds, nanos }` into a standard UTC ISO-8601 string: `"2026-08-11T05:45:00.123Z"`.
+- Standard ISO strings work seamlessly with `new Date()`, SQLite, MMKV, Legend-State, and UI formatters (`formatDateTime()`) across all platforms (iOS, Android, Web).
 
 ---
 

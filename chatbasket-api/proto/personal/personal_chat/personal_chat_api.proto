@@ -132,6 +132,15 @@ message AcknowledgeDeliveryResponse {
   bool acknowledged = 1;
 }
 
+message AckDeliveryBatchPayload {
+  repeated string messageIds = 1;
+  string acknowledgedBy = 2;
+}
+
+message AckDeliveryBatchResponse {
+  int32 acknowledgedCount = 1;
+}
+
 message PresignChatUploadRequest {
   string recipientId = 1;
   string messageType = 2;
@@ -239,14 +248,53 @@ message DownloadHistorySyncResponse {
   string payloadCipher = 1;
 }
 
+message AcknowledgeDeliverySsePayload {
+  string chatId = 1;
+  repeated string messageIds = 2;
+  google.protobuf.Timestamp deliveredAt = 3;
+}
+
+message MarkChatReadSsePayload {
+  string chatId = 1;
+  string readerId = 2;
+  string readAt = 3;
+}
+
+message UnsendMessageSsePayload {
+  string chatId = 1;
+  repeated string messageIds = 2;
+  string senderId = 3;
+}
+
+message DeleteMessageForMeSsePayload {
+  string chatId = 1;
+  repeated string messageIds = 2;
+}
+
+message RequestHistorySyncSsePayload {
+  string requestId = 1;
+  string requesterPublicKey = 2;
+  string chatsCipher = 3;
+}
+
+message UploadHistorySyncSsePayload {
+  string requestId = 1;
+}
+
 // ChatSsePayload wraps all chat-related SSE events.
 // Each module owns its SSE event definitions independently.
-// message ChatSsePayload {
-//   oneof event {
-//     Message new_message = 1;
-//     SyncAction sync_action = 2;
-//   }
-// }
+message ChatSsePayload {
+  oneof event {
+    Message SendMessageSseEvent = 1;
+    AcknowledgeDeliverySsePayload AcknowledgeDeliverySseEvent = 2;
+    MarkChatReadSsePayload MarkChatReadSseEvent = 3;
+    UnsendMessageSsePayload UnsendMessageSseEvent = 4;
+    DeleteMessageForMeSsePayload DeleteMessageForMeSseEvent = 5;
+    Message ConfirmFileMessageUploadSseEvent = 6;
+    RequestHistorySyncSsePayload RequestHistorySyncSseEvent = 7;
+    UploadHistorySyncSsePayload UploadHistorySyncSseEvent = 8;
+  }
+}
 
 service ChatService {
   rpc CheckEligibility(CheckEligibilityRequest) returns (CheckEligibilityResponse);
@@ -256,6 +304,7 @@ service ChatService {
   rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse);
   rpc GetPendingMessages(GetPendingMessagesRequest) returns (GetPendingMessagesResponse);
   rpc AcknowledgeDelivery(AcknowledgeDeliveryRequest) returns (AcknowledgeDeliveryResponse);
+  rpc AcknowledgeDeliveryBatch(AckDeliveryBatchPayload) returns (AckDeliveryBatchResponse);
   rpc PresignUpload(PresignChatUploadRequest) returns (PresignChatUploadResponse);
   rpc ConfirmUpload(ConfirmChatUploadRequest) returns (ConfirmChatUploadResponse);
   rpc GetFileURL(GetFileURLRequest) returns (GetFileURLResponse);

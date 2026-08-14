@@ -1,25 +1,31 @@
 package personal_chat
 
 import (
-	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
-	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
-	"log"
+	"errors"
 	"net/http"
 	"time"
 
+	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
+	rpc_personal_ssev1 "chatbasket-api/gen/proto/personal/personal_sse"
+	"chatbasket-api/internal/modules/personal/personal_sse"
+	"chatbasket-api/internal/platform/kit"
+	"chatbasket-api/internal/platform/websocket"
+
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v5"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type chatHandler struct {
-	Service *chatService
-	hub     *websocket.WSHub
+	Service            *chatService
+	hub                *websocket.WSHub
+	personalSseManager *personal_sse.Manager
 }
 
-func newChatHandler(service *chatService, hub *websocket.WSHub) *chatHandler {
-	return &chatHandler{Service: service, hub: hub}
+func newChatHandler(service *chatService, hub *websocket.WSHub, personalSseManager *personal_sse.Manager) *chatHandler {
+	return &chatHandler{Service: service, hub: hub, personalSseManager: personalSseManager}
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -34,6 +40,11 @@ func extractSessionId(c *echo.Context) string {
 func extractIsPrimary(c *echo.Context) bool {
 	isPrimary, _ := c.Get("isPrimary").(bool)
 	return isPrimary
+}
+
+func extractSessionUUID(c *echo.Context) uuid.UUID {
+	sessionUUID, _ := c.Get("sessionUUID").(uuid.UUID)
+	return sessionUUID
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -93,32 +104,40 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 		return svcErr
 	}
 
-	// ——— WS Broadcast: new_message ————————————————————————————————————————————————————————————————
-	if h.hub != nil {
+	// SSE Broadcast: SendMessageSseEvent to recipient and sender's other devices
+	if h.personalSseManager != nil {
 		sessionId := extractSessionId(c)
+		sessionUUID, _ := uuid.Parse(sessionId)
 		recipientUUID, _ := uuid.Parse(resp.RecipientId)
 
-		log.Printf("[WS Broadcast] SendMessage: msgID=%s chatID=%s sender=%s recipient=%s sessionId=%s",
-			resp.MessageId, resp.ChatId, userID.StringUserId, resp.RecipientId, sessionId)
-
-		// For recipient: is_from_me = false
+		// To recipient: is_from_me = false
 		recipientPayload := proto.Clone(resp).(*rpc_personal_chatv1.Message)
 		recipientPayload.IsFromMe = false
-		log.Printf("[WS Broadcast] SendMessage: pushing new_message to RECIPIENT=%s (is_from_me=false)", recipientUUID)
-		go h.hub.BroadcastToUser(recipientUUID, websocket.WSEvent{
-			Type:    WSEventNewMessage,
-			Payload: recipientPayload,
-		})
 
-		// For sender's OTHER devices: is_from_me = true (sync)
-		log.Printf("[WS Broadcast] SendMessage: pushing new_message to SENDER=%s other devices (excluding session=%s)",
-			userID.StringUserId, sessionId)
-		go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, websocket.WSEvent{
-			Type:    WSEventNewMessage,
-			Payload: resp,
-		})
-	} else {
-		log.Printf("[WS Broadcast] SendMessage: WSHub is NIL, skipping broadcast")
+		recipientSseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_SendMessageSseEvent{
+						SendMessageSseEvent: recipientPayload,
+					},
+				},
+			},
+		}
+		go h.personalSseManager.BroadcastToUser(recipientUUID, recipientSseEvent)
+
+		// To sender's other devices: is_from_me = true
+		senderSseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_SendMessageSseEvent{
+						SendMessageSseEvent: resp,
+					},
+				},
+			},
+		}
+		go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, senderSseEvent)
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -159,40 +178,110 @@ func (h *chatHandler) AcknowledgeDelivery(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
+	messageID, parseErr := uuid.Parse(payload.MessageID)
+	if parseErr != nil {
+		return kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message_id")
+	}
+
+	// 1. Fetch message info BEFORE acknowledgment (it might be deleted from relay during ACK)
+	message, msgErr := h.Service.PostgresQueries.GetMessageByID(c.Request().Context(), messageID)
+	if errors.Is(msgErr, pgx.ErrNoRows) {
+		// Idempotency: Message already fully acknowledged and deleted from relay table.
+		return c.JSON(http.StatusOK, &rpc_personal_chatv1.AcknowledgeDeliveryResponse{Acknowledged: true})
+	} else if msgErr != nil {
+		return kit.NewError(http.StatusInternalServerError, "internal_server_error", "Internal server error")
+	}
+
 	resp, svcErr := h.Service.AcknowledgeDeliveryHandler(c.Request().Context(), &payload, userID, sessionId)
 	if svcErr != nil {
 		return svcErr
 	}
 
-	// ——— WS Broadcast: delivery_ack ———————————————————————————————————————————————————————————————
-	if h.hub != nil && resp.Acknowledged && payload.AcknowledgedBy == "recipient" {
-		log.Printf("[WS Broadcast] AckDelivery: msgID=%s acknowledged_by=%s user=%s → looking up sender",
-			payload.MessageID, payload.AcknowledgedBy, userID.StringUserId)
-		msgUUID, parseErr := uuid.Parse(payload.MessageID)
-		if parseErr == nil {
-			msg, lookupErr := h.Service.PostgresQueries.GetMessageByID(c.Request().Context(), msgUUID)
-			if lookupErr == nil {
-				log.Printf("[WS Broadcast] AckDelivery: pushing delivery_ack to SENDER=%s for msgID=%s chatID=%s",
-					msg.SenderID, payload.MessageID, msg.ChatID)
-				go h.hub.BroadcastToUser(msg.SenderID, websocket.WSEvent{
-					Type: WSEventDeliveryAck,
-					Payload: DeliveryAckEventPayload{
-						MessageIDs: []string{payload.MessageID},
-						ChatID:     msg.ChatID.String(),
+	// 2. SSE Broadcast: AcknowledgeDeliverySseEvent to sender (if acknowledgedBy == "recipient")
+	if payload.AcknowledgedBy == "recipient" && h.personalSseManager != nil {
+		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_AcknowledgeDeliverySseEvent{
+						AcknowledgeDeliverySseEvent: &rpc_personal_chatv1.AcknowledgeDeliverySsePayload{
+							ChatId:      message.ChatID.String(),
+							MessageIds:  []string{payload.MessageID},
+							DeliveredAt: timestamppb.New(message.CreatedAt),
+						},
 					},
-				})
-			} else {
-				log.Printf("[WS Broadcast] AckDelivery: GetMessageByID FAILED for msgID=%s: %v", payload.MessageID, lookupErr)
-			}
-		} else {
-			log.Printf("[WS Broadcast] AckDelivery: parse msgID FAILED: %s → %v", payload.MessageID, parseErr)
+				},
+			},
 		}
-	} else if h.hub != nil {
-		log.Printf("[WS Broadcast] AckDelivery: SKIPPED (acknowledged=%v, acknowledged_by=%s)",
-			resp.Acknowledged, payload.AcknowledgedBy)
+		go h.personalSseManager.BroadcastToUser(message.SenderID, sseEvent)
 	}
 
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *chatHandler) AcknowledgeDeliveryBatch(c *echo.Context) error {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+	sessionId := extractSessionId(c)
+
+	var payload AckDeliveryBatchPayload
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
+	}
+
+	var chatID uuid.UUID
+	var senderID uuid.UUID
+	var latestCreatedAt time.Time
+	acknowledgedCount := 0
+
+	// 1. Fetch info and perform acknowledgments
+	for i, msgIDStr := range payload.MessageIDs {
+		messageID, parseErr := uuid.Parse(msgIDStr)
+		if parseErr != nil {
+			continue
+		}
+
+		// Fetch message info BEFORE it's potentially deleted
+		if msg, msgErr := h.Service.PostgresQueries.GetMessageByID(c.Request().Context(), messageID); msgErr == nil {
+			if i == 0 {
+				chatID = msg.ChatID
+				senderID = msg.SenderID
+			}
+			if msg.CreatedAt.After(latestCreatedAt) {
+				latestCreatedAt = msg.CreatedAt
+			}
+		}
+
+		ackErr := h.Service.AcknowledgeDelivery(c.Request().Context(), messageID, payload.AcknowledgedBy, sessionId, userID)
+		if ackErr == nil {
+			acknowledgedCount++
+		}
+	}
+
+	// 2. SSE Broadcast: single delivery_ack with all message_ids (strict DB timestamp only)
+	if payload.AcknowledgedBy == "recipient" && h.personalSseManager != nil && chatID != uuid.Nil && senderID != uuid.Nil && !latestCreatedAt.IsZero() {
+		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_AcknowledgeDeliverySseEvent{
+						AcknowledgeDeliverySseEvent: &rpc_personal_chatv1.AcknowledgeDeliverySsePayload{
+							ChatId:      chatID.String(),
+							MessageIds:  payload.MessageIDs,
+							DeliveredAt: timestamppb.New(latestCreatedAt),
+						},
+					},
+				},
+			},
+		}
+		go h.personalSseManager.BroadcastToUser(senderID, sseEvent)
+	}
+
+	return c.JSON(http.StatusOK, AckDeliveryBatchResponse{
+		AcknowledgedCount: acknowledgedCount,
+	})
 }
 
 func (h *chatHandler) GetUserChats(c *echo.Context) error {
@@ -274,10 +363,8 @@ func (h *chatHandler) MarkChatRead(c *echo.Context) error {
 		return svcErr
 	}
 
-	// ——— WS Broadcast: read_receipt ———————————————————————————————————————————————————————————————
-	if h.hub != nil {
-		log.Printf("[WS Broadcast] MarkChatRead: chatID=%s reader=%s → looking up other participant",
-			payload.ChatID, userID.StringUserId)
+	// SSE Broadcast: MarkChatReadSseEvent to other participant
+	if h.personalSseManager != nil {
 		chatUUID, _ := uuid.Parse(payload.ChatID)
 		chat, chatErr := h.Service.PostgresQueries.GetChatByID(c.Request().Context(), chatUUID)
 		if chatErr == nil {
@@ -288,19 +375,21 @@ func (h *chatHandler) MarkChatRead(c *echo.Context) error {
 				otherUserID = chat.Participant1ID
 			}
 
-			readAt := time.Now().UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
-			log.Printf("[WS Broadcast] MarkChatRead: pushing read_receipt to OTHER_USER=%s for chatID=%s read_at=%s",
-				otherUserID, payload.ChatID, readAt)
-			go h.hub.BroadcastToUser(otherUserID, websocket.WSEvent{
-				Type: WSEventReadReceipt,
-				Payload: ReadReceiptEventPayload{
-					ChatID:   payload.ChatID,
-					ReaderID: userID.StringUserId,
-					ReadAt:   readAt,
+			sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+				Timestamp: timestamppb.Now(),
+				Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+					ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+						Event: &rpc_personal_chatv1.ChatSsePayload_MarkChatReadSseEvent{
+							MarkChatReadSseEvent: &rpc_personal_chatv1.MarkChatReadSsePayload{
+								ChatId:   payload.ChatID,
+								ReaderId: userID.StringUserId,
+								ReadAt:   chat.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+							},
+						},
+					},
 				},
-			})
-		} else {
-			log.Printf("[WS Broadcast] MarkChatRead: GetChatByID FAILED for chatID=%s: %v", payload.ChatID, chatErr)
+			}
+			go h.personalSseManager.BroadcastToUser(otherUserID, sseEvent)
 		}
 	}
 
@@ -324,13 +413,11 @@ func (h *chatHandler) UnsendMessage(c *echo.Context) error {
 		return svcErr
 	}
 
-	// ——— WS Broadcast: unsend —————————————————————————————————————————————————————————————————————
-	if h.hub != nil {
-		log.Printf("[WS Broadcast] Unsend: chatID=%s sender=%s messageIDs=%v → looking up recipient",
-			payload.ChatID, userID.StringUserId, payload.MessageIDs)
+	// SSE Broadcast: UnsendMessageSseEvent to recipient and sender's other devices
+	if h.personalSseManager != nil {
 		chatUUID, _ := uuid.Parse(payload.ChatID)
-		chat, chatErr := h.Service.PostgresQueries.GetChatByID(c.Request().Context(), chatUUID)
-		if chatErr == nil {
+		chat, err := h.Service.PostgresQueries.GetChatByID(c.Request().Context(), chatUUID)
+		if err == nil {
 			var recipientID uuid.UUID
 			if chat.Participant1ID == userID.UuidUserId {
 				recipientID = chat.Participant2ID
@@ -338,26 +425,25 @@ func (h *chatHandler) UnsendMessage(c *echo.Context) error {
 				recipientID = chat.Participant1ID
 			}
 
-			unsendEvent := websocket.WSEvent{
-				Type: WSEventUnsend,
-				Payload: UnsendEventPayload{
-					ChatID:     payload.ChatID,
-					MessageIDs: payload.MessageIDs,
-					SenderID:   userID.StringUserId,
+			sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+				Timestamp: timestamppb.Now(),
+				Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+					ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+						Event: &rpc_personal_chatv1.ChatSsePayload_UnsendMessageSseEvent{
+							UnsendMessageSseEvent: &rpc_personal_chatv1.UnsendMessageSsePayload{
+								ChatId:     payload.ChatID,
+								MessageIds: payload.MessageIDs,
+								SenderId:   userID.StringUserId,
+							},
+						},
+					},
 				},
 			}
 
-			// Notify recipient (all devices)
-			log.Printf("[WS Broadcast] Unsend: pushing unsend to RECIPIENT=%s", recipientID)
-			go h.hub.BroadcastToUser(recipientID, unsendEvent)
+			sessionUUID := extractSessionUUID(c)
 
-			// Notify sender's other devices (for sync)
-			sessionId := extractSessionId(c)
-			log.Printf("[WS Broadcast] Unsend: pushing unsend to SENDER=%s other devices (excluding session=%s)",
-				userID.StringUserId, sessionId)
-			go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, unsendEvent)
-		} else {
-			log.Printf("[WS Broadcast] Unsend: GetChatByID FAILED for chatID=%s: %v", payload.ChatID, chatErr)
+			go h.personalSseManager.BroadcastToUser(recipientID, sseEvent)
+			go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, sseEvent)
 		}
 	}
 
@@ -381,11 +467,8 @@ func (h *chatHandler) DeleteMessageForMe(c *echo.Context) error {
 		return svcErr
 	}
 
-	// ——— WS Broadcast: delete_for_me ——————————————————————————————————————————————————————————————
-	if h.hub != nil {
-		sessionId := extractSessionId(c)
-
-		// Resolve chat_id from the first message so the frontend can clear the preview
+	// SSE Broadcast: DeleteMessageForMeSseEvent to sender's other devices
+	if h.personalSseManager != nil {
 		var chatID string
 		if len(payload.MessageIDs) > 0 {
 			if msgUUID, parseErr := uuid.Parse(payload.MessageIDs[0]); parseErr == nil {
@@ -395,15 +478,22 @@ func (h *chatHandler) DeleteMessageForMe(c *echo.Context) error {
 			}
 		}
 
-		log.Printf("[WS Broadcast] DeleteForMe: user=%s messageIDs=%v chatID=%s → pushing to other devices (excluding session=%s)",
-			userID.StringUserId, payload.MessageIDs, chatID, sessionId)
-		go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, websocket.WSEvent{
-			Type: WSEventDeleteForMe,
-			Payload: DeleteForMeEventPayload{
-				MessageIDs: payload.MessageIDs,
-				ChatID:     chatID,
+		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_DeleteMessageForMeSseEvent{
+						DeleteMessageForMeSseEvent: &rpc_personal_chatv1.DeleteMessageForMeSsePayload{
+							ChatId:     chatID,
+							MessageIds: payload.MessageIDs,
+						},
+					},
+				},
 			},
-		})
+		}
+
+		sessionUUID := extractSessionUUID(c)
+		go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, sseEvent)
 	}
 
 	return c.JSON(http.StatusOK, kit.StatusOkay{Status: true, Message: "success"})
@@ -509,25 +599,6 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 	}
 	viewURL, downloadURL, _ := h.Service.GenerateMessageFileURLs(c.Request().Context(), *message, userID)
 	senderKeysRevision := h.Service.getSenderKeysRevision(c.Request().Context(), message.SenderID)
-	msgInfo := &MessageResponse{
-		MessageID:             message.ID.String(),
-		ChatID:                message.ChatID.String(),
-		RecipientID:           message.RecipientID.String(),
-		SenderKeysRevision:    senderKeysRevision,
-		Content:               message.Content,
-		MessageType:           message.MessageType,
-		DeliveredToRecipient:  false,
-		SyncedToSenderPrimary: message.SyncedToSenderPrimary,
-		CreatedAt:             message.CreatedAt,
-		ExpiresAt:             message.ExpiresAt,
-		IsFromMe:              true,
-		FileID:                message.FileID,
-		FileName:              message.FileName,
-		FileSize:              message.FileSize,
-		FileMimeType:          message.FileMimeType,
-		ViewURL:               viewURL,
-		DownloadURL:           downloadURL,
-	}
 	confirmResponse := &ConfirmChatUploadResponse{
 		MessageID:          message.ID.String(),
 		ChatID:             message.ChatID.String(),
@@ -540,13 +611,57 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 		CreatedAt:          message.CreatedAt,
 		ExpiresAt:          message.ExpiresAt,
 	}
-	if h.hub != nil {
-		sessionId := extractSessionId(c)
-		recipientUUID, _ := uuid.Parse(msgInfo.RecipientID)
-		recipientPayload := *msgInfo
+	// SSE Broadcast: ConfirmFileMessageUploadSseEvent to recipient and sender's other devices
+	if h.personalSseManager != nil {
+		protoMsg := &rpc_personal_chatv1.Message{
+			MessageId:             message.ID.String(),
+			ChatId:                message.ChatID.String(),
+			RecipientId:           message.RecipientID.String(),
+			SenderKeysRevision:    senderKeysRevision,
+			Content:               message.Content,
+			MessageType:           message.MessageType,
+			DeliveredToRecipient:  false,
+			SyncedToSenderPrimary: message.SyncedToSenderPrimary,
+			CreatedAt:             timestamppb.New(message.CreatedAt),
+			ExpiresAt:             timestamppb.New(message.ExpiresAt),
+			IsFromMe:              true,
+			FileId:                message.FileID,
+			FileName:              message.FileName,
+			FileSize:              message.FileSize,
+			FileMimeType:          message.FileMimeType,
+			ViewUrl:               viewURL,
+			DownloadUrl:           downloadURL,
+		}
+
+		recipientUUID, _ := uuid.Parse(protoMsg.RecipientId)
+		recipientPayload := proto.Clone(protoMsg).(*rpc_personal_chatv1.Message)
 		recipientPayload.IsFromMe = false
-		go h.hub.BroadcastToUser(recipientUUID, websocket.WSEvent{Type: WSEventNewMessage, Payload: recipientPayload})
-		go h.hub.BroadcastToUserExcept(userID.UuidUserId, sessionId, websocket.WSEvent{Type: WSEventNewMessage, Payload: msgInfo})
+
+		recipientSseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_ConfirmFileMessageUploadSseEvent{
+						ConfirmFileMessageUploadSseEvent: recipientPayload,
+					},
+				},
+			},
+		}
+
+		senderSseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_ConfirmFileMessageUploadSseEvent{
+						ConfirmFileMessageUploadSseEvent: protoMsg,
+					},
+				},
+			},
+		}
+
+		sessionUUID := extractSessionUUID(c)
+		go h.personalSseManager.BroadcastToUser(recipientUUID, recipientSseEvent)
+		go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, senderSseEvent)
 	}
 	return c.JSON(http.StatusOK, confirmResponse)
 }
