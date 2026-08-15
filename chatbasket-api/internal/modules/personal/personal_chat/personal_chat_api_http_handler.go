@@ -106,8 +106,7 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 
 	// SSE Broadcast: SendMessageSseEvent to recipient and sender's other devices
 	if h.personalSseManager != nil {
-		sessionId := extractSessionId(c)
-		sessionUUID, _ := uuid.Parse(sessionId)
+		sessionUUID := extractSessionUUID(c)
 		recipientUUID, _ := uuid.Parse(resp.RecipientId)
 
 		// To recipient: is_from_me = false

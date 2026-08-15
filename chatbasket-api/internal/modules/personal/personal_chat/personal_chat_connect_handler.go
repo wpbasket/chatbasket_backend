@@ -105,8 +105,7 @@ func (s *chatConnectServer) SendMessage(ctx context.Context, req *connect.Reques
 
 	// SSE Broadcast: SendMessageSseEvent to recipient and sender's other devices
 	if s.personalSseManager != nil {
-		sessionID, _ := kit.GetConnectRpcSessionID(ctx)
-		sessionUUID, _ := uuid.Parse(sessionID)
+		sessionUUID, _ := kit.GetConnectRpcSessionUUID(ctx)
 		recipientUUID, _ := uuid.Parse(res.RecipientId)
 
 		// To recipient: is_from_me = false
