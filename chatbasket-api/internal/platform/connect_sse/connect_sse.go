@@ -97,7 +97,6 @@ func (m *Manager[T]) Unregister(conn *Conn[T]) {
 }
 
 // UnregisterUserConnections closes and unregisters all active SSE connections for a user.
-// WS Equivalent: WSHub.CloseUserConnections(userID uuid.UUID)
 func (m *Manager[T]) UnregisterUserConnections(userID uuid.UUID) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -115,7 +114,6 @@ func (m *Manager[T]) UnregisterUserConnections(userID uuid.UUID) {
 }
 
 // UnregisterSession closes and unregisters a specific session connection for a user.
-// WS Equivalent: WSHub.CloseSessionConnection(userID uuid.UUID, sessionID string)
 func (m *Manager[T]) UnregisterSession(userID uuid.UUID, sessionUUID uuid.UUID) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

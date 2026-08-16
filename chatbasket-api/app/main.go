@@ -7,7 +7,6 @@ import (
 	"chatbasket-api/internal/platform/logger"
 	"chatbasket-api/internal/platform/middleware"
 	"chatbasket-api/internal/platform/router"
-	"chatbasket-api/internal/platform/websocket"
 	"context"
 	"log/slog"
 	"net/http"
@@ -47,10 +46,6 @@ func main() {
 		slog.Info("Firebase initialized successfully")
 	}
 	firebaseCancel()
-
-	// Initialize WebSocket Hub
-	hub := websocket.NewWSHub()
-	slog.Info("WebSocket Hub initialized", "active_connections", hub.ConnectionCount())
 
 	// Initialize Secret Client (Domain Keys)
 	secretClient := clients.NewSecretClient(cfg.Security)

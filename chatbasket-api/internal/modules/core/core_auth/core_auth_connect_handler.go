@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
 
 	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
 	rpc_core_authv1 "chatbasket-api/gen/proto/core/core_auth"
@@ -17,16 +17,16 @@ import (
 )
 
 type authConnectServer struct {
-	authService *AuthService
-	hub         *websocket.WSHub
-	qrHub       *QRHub
+	authService        *AuthService
+	personalSseManager *personal_sse.Manager
+	qrHub              *QRHub
 }
 
-func newAuthConnectServer(authService *AuthService, hub *websocket.WSHub, qrHub *QRHub) rpc_core_authv1connect.AuthServiceHandler {
+func newAuthConnectServer(authService *AuthService, personalSseManager *personal_sse.Manager, qrHub *QRHub) rpc_core_authv1connect.AuthServiceHandler {
 	return &authConnectServer{
-		authService: authService,
-		hub:         hub,
-		qrHub:       qrHub,
+		authService:        authService,
+		personalSseManager: personalSseManager,
+		qrHub:              qrHub,
 	}
 }
 
@@ -289,11 +289,16 @@ func (s *authConnectServer) Logout(ctx context.Context, req *connect.Request[rpc
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	if s.hub != nil {
+	if s.personalSseManager != nil {
 		if payload.AllSessions {
-			s.hub.CloseUserConnections(userID.UuidUserId)
+			s.personalSseManager.UnregisterUserConnections(userID.UuidUserId)
 		} else {
-			s.hub.CloseSessionConnection(userID.UuidUserId, sessionId)
+			// Only the single-session branch needs the session row id. Looked up here (and
+			// skipped on failure) so a missing value can never abort an otherwise successful
+			// logout — identical to the REST twin in core_auth_api_common_http_handler.go.
+			if sessionUUID, uuidErr := kit.GetConnectRpcSessionUUID(ctx); uuidErr == nil {
+				s.personalSseManager.UnregisterSession(userID.UuidUserId, sessionUUID)
+			}
 		}
 	}
 

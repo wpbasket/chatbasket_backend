@@ -4,14 +4,14 @@ import (
 	"net/http"
 
 	rpc_personal_settingv1connect "chatbasket-api/gen/proto/personal/personal_setting/rpc_personal_settingv1connect"
-	"chatbasket-api/internal/platform/websocket"
+	"chatbasket-api/internal/modules/personal/personal_sse"
 
 	"github.com/labstack/echo/v5"
 )
 
 // Register initializes the Setting module dependencies and registers its routes.
-func Register(personalGroup *echo.Group, settingService *settingService, hub *websocket.WSHub) {
-	handler := newSettingHandler(settingService, hub)
+func Register(personalGroup *echo.Group, settingService *settingService, personalSseManager *personal_sse.Manager) {
+	handler := newSettingHandler(settingService, personalSseManager)
 
 	// Settings HTTP Routes
 	settings := personalGroup.Group("/settings")
@@ -19,7 +19,7 @@ func Register(personalGroup *echo.Group, settingService *settingService, hub *we
 	settings.POST("/session/notification-token", handler.updateSessionNotificationToken)
 
 	// Connect RPC Routes
-	connectServer := newSettingConnectServer(settingService, hub)
+	connectServer := newSettingConnectServer(settingService, personalSseManager)
 	path, connectHandler := rpc_personal_settingv1connect.NewSettingServiceHandler(
 		connectServer,
 	)

@@ -10,13 +10,16 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-// Register initializes the Personal SSE module, instantiates its manager, starts Postgres listener, and registers ConnectRPC routes.
-func Register(personalGroup *echo.Group, pool *pgxpool.Pool) *Manager {
+// Register initializes the Personal SSE module: instantiates its manager and starts the Postgres listener.
+func Register(pool *pgxpool.Pool) *Manager {
 	personalSseManager := NewManager(pool)
 	go StartPostgresListener(context.Background(), pool, personalSseManager)
+	return personalSseManager
+}
 
-	connectHandler := newPersonalSseConnectHandler(personalSseManager)
+// RegisterRoutes registers the Personal SSE ConnectRPC routes on the given group.
+func RegisterRoutes(personalGroup *echo.Group, manager *Manager) {
+	connectHandler := newPersonalSseConnectHandler(manager)
 	path, handler := rpc_personal_ssev1connect.NewPersonalSseServiceHandler(connectHandler)
 	personalGroup.Any(path+"*", echo.WrapHandler(http.StripPrefix("/api/personal", handler)))
-	return personalSseManager
 }

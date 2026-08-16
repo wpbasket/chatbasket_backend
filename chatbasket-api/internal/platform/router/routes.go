@@ -13,7 +13,6 @@ import (
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/middleware"
 	"chatbasket-api/internal/platform/services"
-	"chatbasket-api/internal/platform/websocket"
 	"context"
 	"net/http"
 	"time"
@@ -71,21 +70,21 @@ func (r *Router) RegisterGlobalRoutes() *echo.Group {
 // RegisterModuleRoutes orchestrates registration of all domain modules.
 func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	globalService := services.NewGlobalService(r.Config.CORSOrigin)
-	wsHub := websocket.NewWSHub()
 
 	// Instantiate shared pending_uploads service (used by chat + profile).
 	pendingUploadsSvc := pending_uploads.NewService(r.Pool, r.R2Pool)
 
-	// 1. Auth Module
+	// 1. Auth Service
 	authService := core_auth.NewAuthService(globalService, r.Pool, r.Config.Security.AuthSecret)
-	core_auth.Register(apiGroup, authService, wsHub)
 
-	// 2. Personal Category
+	// 2. Personal Category & SSE Stream Infrastructure
 	personalGroup := apiGroup.Group("/personal")
-	personalGroup.Use(middleware.AuthSessionMiddleware(authService, true, wsHub))
+	personalSseManager := personal_sse.Register(r.Pool)
+	personalGroup.Use(middleware.AuthSessionMiddleware(authService, true, personalSseManager))
+	personal_sse.RegisterRoutes(personalGroup, personalSseManager)
 
-	// 2.1 Personal SSE Stream Infrastructure
-	personalSseManager := personal_sse.Register(personalGroup, r.Pool)
+	// Register Auth Routes
+	core_auth.Register(apiGroup, authService, personalSseManager)
 
 	// 2.2 Profile Module
 	profileService := personal_profile.NewProfileService(
@@ -105,12 +104,12 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 		r.Pool, authService, profileService, contactService,
 		pendingUploadsSvc, r.R2Pool,
 	)
-	personal_chat.Register(personalGroup, chatService, wsHub, personalSseManager)
+	personal_chat.Register(personalGroup, chatService, personalSseManager)
 	contactService.RegisterChatCleanupProvider(chatService)
 
 	// 2.5 Settings Module
 	settingService := personal_setting.NewSettingService(authService)
-	personal_setting.Register(personalGroup, settingService, wsHub)
+	personal_setting.Register(personalGroup, settingService, personalSseManager)
 
 	// 3. Start Background Cleanup Jobs (after all modules are registered)
 	pending_uploads.StartCleanupJob(pendingUploadsSvc, 15*time.Minute)

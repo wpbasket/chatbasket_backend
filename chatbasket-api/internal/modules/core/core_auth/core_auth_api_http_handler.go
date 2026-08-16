@@ -5,23 +5,23 @@ import (
 	"net/http"
 	"time"
 
+	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
 	"github.com/labstack/echo/v5"
 	"strings"
 )
 
 type authHandler struct {
-	Service *AuthService
-	hub     *websocket.WSHub
-	qrHub   *QRHub
+	Service            *AuthService
+	personalSseManager *personal_sse.Manager
+	qrHub              *QRHub
 }
 
-func newAuthHandler(authService *AuthService, hub *websocket.WSHub, qrHub *QRHub) *authHandler {
+func newAuthHandler(authService *AuthService, personalSseManager *personal_sse.Manager, qrHub *QRHub) *authHandler {
 	return &authHandler{
-		Service: authService,
-		hub:     hub,
-		qrHub:   qrHub,
+		Service:            authService,
+		personalSseManager: personalSseManager,
+		qrHub:              qrHub,
 	}
 }
 

@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/middleware"
-	"chatbasket-api/internal/platform/websocket"
 
 	rpc_core_authv1connect "chatbasket-api/gen/proto/core/core_auth/rpc_core_authv1connect"
 
@@ -14,7 +15,7 @@ import (
 )
 
 // Register initializes the Auth module dependencies and registers its routes.
-func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub) {
+func Register(group *echo.Group, authService *AuthService, personalSseManager *personal_sse.Manager) {
 	qrHub := NewQRHub()
 	// Start Postgres listener for QR WebRTC syncing
 	go StartPostgresListener(context.Background(), authService.Pool, qrHub)
@@ -27,7 +28,7 @@ func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub)
 		}
 	}()
 
-	handler := newAuthHandler(authService, hub, qrHub)
+	handler := newAuthHandler(authService, personalSseManager, qrHub)
 
 	// Auth Routes (shared across domains)
 	auth := group.Group("/auth")
@@ -40,7 +41,7 @@ func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub)
 	
 	// Mobile (requires auth)
 	qrAuth := qr.Group("")
-	qrAuth.Use(middleware.AuthSessionMiddleware(authService, true, hub))
+	qrAuth.Use(middleware.AuthSessionMiddleware(authService, true, personalSseManager))
 	qrAuth.POST("/approve", handler.QRApprove)
 	auth.POST("/signup", handler.Signup)
 	auth.POST("/signup-verification", handler.AccountVerification)
@@ -52,7 +53,7 @@ func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub)
 
 	// Common Auth Routes (logout works for both modes)
 	common := group.Group("/common")
-	common.Use(middleware.AuthSessionMiddleware(authService, true, hub))
+	common.Use(middleware.AuthSessionMiddleware(authService, true, personalSseManager))
 	common.POST("/logout", handler.Logout)
 	common.GET("/me", handler.GetUser)
 
@@ -64,16 +65,16 @@ func Register(group *echo.Group, authService *AuthService, hub *websocket.WSHub)
 	settings.POST("/email/confirm", handler.ConfirmEmailUpdate)
 
 	// Connect RPC Routes
-	connectServer := newAuthConnectServer(authService, hub, qrHub)
+	connectServer := newAuthConnectServer(authService, personalSseManager, qrHub)
 	path, connectHandler := rpc_core_authv1connect.NewAuthServiceHandler(connectServer)
 	
 	group.Any(
 		"/personal"+path+"*",
 		echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)),
 		middleware.AuthSessionMiddlewareWithConfig(middleware.AuthSessionConfig{
-			AuthProvider:    authService,
-			RequireVerified: true,
-			Hub:             hub,
+			AuthProvider:       authService,
+			RequireVerified:    true,
+			PersonalSseManager: personalSseManager,
 			Skipper: func(c *echo.Context) bool {
 				p := c.Request().URL.Path
 				return strings.HasSuffix(p, "/Signup") ||

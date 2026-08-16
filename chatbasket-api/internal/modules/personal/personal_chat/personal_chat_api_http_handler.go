@@ -9,7 +9,6 @@ import (
 	rpc_personal_ssev1 "chatbasket-api/gen/proto/personal/personal_sse"
 	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -20,12 +19,11 @@ import (
 
 type chatHandler struct {
 	Service            *chatService
-	hub                *websocket.WSHub
 	personalSseManager *personal_sse.Manager
 }
 
-func newChatHandler(service *chatService, hub *websocket.WSHub, personalSseManager *personal_sse.Manager) *chatHandler {
-	return &chatHandler{Service: service, hub: hub, personalSseManager: personalSseManager}
+func newChatHandler(service *chatService, personalSseManager *personal_sse.Manager) *chatHandler {
+	return &chatHandler{Service: service, personalSseManager: personalSseManager}
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -40,11 +38,6 @@ func extractSessionId(c *echo.Context) string {
 func extractIsPrimary(c *echo.Context) bool {
 	isPrimary, _ := c.Get("isPrimary").(bool)
 	return isPrimary
-}
-
-func extractSessionUUID(c *echo.Context) uuid.UUID {
-	sessionUUID, _ := c.Get("sessionUUID").(uuid.UUID)
-	return sessionUUID
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -106,7 +99,7 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 
 	// SSE Broadcast: SendMessageSseEvent to recipient and sender's other devices
 	if h.personalSseManager != nil {
-		sessionUUID := extractSessionUUID(c)
+		sessionUUID, _ := kit.ExtractSessionUUID(c)
 		recipientUUID, _ := uuid.Parse(resp.RecipientId)
 
 		// To recipient: is_from_me = false
@@ -439,7 +432,7 @@ func (h *chatHandler) UnsendMessage(c *echo.Context) error {
 				},
 			}
 
-			sessionUUID := extractSessionUUID(c)
+			sessionUUID, _ := kit.ExtractSessionUUID(c)
 
 			go h.personalSseManager.BroadcastToUser(recipientID, sseEvent)
 			go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, sseEvent)
@@ -491,7 +484,7 @@ func (h *chatHandler) DeleteMessageForMe(c *echo.Context) error {
 			},
 		}
 
-		sessionUUID := extractSessionUUID(c)
+		sessionUUID, _ := kit.ExtractSessionUUID(c)
 		go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, sseEvent)
 	}
 
@@ -658,7 +651,7 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 			},
 		}
 
-		sessionUUID := extractSessionUUID(c)
+		sessionUUID, _ := kit.ExtractSessionUUID(c)
 		go h.personalSseManager.BroadcastToUser(recipientUUID, recipientSseEvent)
 		go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, senderSseEvent)
 	}

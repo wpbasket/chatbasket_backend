@@ -55,7 +55,7 @@ The Go API acts as a strict **Security Gateway**. It manages proprietary Authent
 - **Centralized Error Handling**: A unified error pipeline ensures that every failure is caught and translated into a consistent JSON structure with actionable codes, preventing internal system leaks.
 
 #### 4. Social Systems & Chat Engine
-The application implements an **Ephemeral Relay System** and a high-performance **End-to-End Encrypted Chat Engine** designed for privacy-centric, low-latency communication and seamless multi-device synchronization using a **Dual-Transport (WebSocket/REST) fallback** strategy.
+The application implements an **Ephemeral Relay System** and a high-performance **End-to-End Encrypted Chat Engine** designed for privacy-centric, low-latency communication and seamless multi-device synchronization using a **ConnectSSE (Server-Sent Events) real-time streaming** strategy.
 - **E2E Encryption**: All messages are strictly end-to-end encrypted on the client side before transmission, ensuring the backend operates as a pure zero-knowledge relay.
 - **Documentation**: All core architectural decisions regarding social mechanics and the real-time sync lifecycle are comprehensively maintained within the [docs/](./docs) folder.
 
@@ -111,7 +111,7 @@ We choose tools that offer **Control** and **Predictability**.
 
 | Component | Technology | Rationale (Why?) |
 |-----------|------------|------------------|
-| **Core Logic** | ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat-square&logo=go&logoColor=white) | **The System Backbone**: Powers the **Secure Gateway**, **Clean Architecture**, and the resilient **Dual-Transport** chat engine. It leverages Go's native concurrency and the **coder/websocket** library to provide high-performance real-time synchronization alongside robust REST endpoints for fallbacks. |
+| **Core Logic** | ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat-square&logo=go&logoColor=white) | **The System Backbone**: Powers the **Secure Gateway**, **Clean Architecture**, and the resilient **ConnectSSE** real-time streaming engine. It leverages Go's native concurrency and ConnectRPC Server-Sent Events to provide high-performance, clustered real-time event delivery. |
 | **API Framework** | ![Echo](https://img.shields.io/badge/Echo_v5-00ADD8?style=flat-square&logoColor=white) | **Highly Customizable & Fast**: Zero-allocation router that is highly customizable and significantly faster than Gin or Fiber in our benchmarks. |
 | **Database** | ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=flat-square&logo=postgresql&logoColor=white) | **Primary Hub**: Handles all User Data, Custom Auth Sessions, and Relations with ACID compliance. |
 | **Email Gateway** | ![Go](https://img.shields.io/badge/Heroku_Gateway-00ADD8?style=flat-square&logo=go&logoColor=white) | **High Reliability**: A dedicated Go-based **RPC-to-SMTP Gateway** featuring a **Worker Pool** and **Fire-and-Forget** asynchronous logic to bypass primary infrastructure port restrictions. The API talks to it over **Connect RPC** on a single pooled connection, so a typed contract replaces hand-written JSON and every OTP no longer pays for a fresh TLS handshake. Every call is **HMAC-signed** with a timestamp and a single-use nonce, so the shared secret never crosses the wire and a captured request cannot be replayed. |

@@ -227,128 +227,6 @@ func TestStaleKeysError_HTTPResponse_BothStale(t *testing.T) {
 }
 
 // ============================================================================
-// WebSocket Error Response Tests
-// ============================================================================
-
-func TestToWSError_IncludesDetails(t *testing.T) {
-	details := &rpc_common_modelv1.StaleKeysErrorDetails{
-		StaleSide:             string(StaleSideRecipient),
-		RecipientKeysRevision: 7,
-		RecipientActiveKeys:   []string{"key1", "key2"},
-	}
-
-	err := newStaleKeysError(details)
-	wsErr := toWSError(err)
-
-	assert.Equal(t, 409, wsErr.Code)
-	assert.Equal(t, "keys_stale", wsErr.Type)
-	assert.Contains(t, wsErr.Message, "keys_revision is stale")
-
-	assert.NotNil(t, wsErr.Details, "details should not be nil")
-
-	returnedDetails, ok := wsErr.Details.(*rpc_common_modelv1.StaleKeysErrorDetails)
-	require.True(t, ok, "details should be *rpc_common_modelv1.StaleKeysErrorDetails")
-	assert.Equal(t, string(StaleSideRecipient), returnedDetails.StaleSide)
-	assert.Equal(t, int32(7), returnedDetails.RecipientKeysRevision)
-	assert.Equal(t, []string{"key1", "key2"}, returnedDetails.RecipientActiveKeys)
-}
-
-func TestToWSError_RegularError_NoDetails(t *testing.T) {
-	err := kit.NewError(404, "not_found", "User not found")
-	wsErr := toWSError(err)
-
-	assert.Equal(t, 404, wsErr.Code)
-	assert.Equal(t, "not_found", wsErr.Type)
-	assert.Equal(t, "User not found", wsErr.Message)
-	assert.Nil(t, wsErr.Details, "details should be nil for regular errors")
-}
-
-func TestToWSError_JSONSerialization_IncludesDetails(t *testing.T) {
-	details := &rpc_common_modelv1.StaleKeysErrorDetails{
-		StaleSide:             string(StaleSideRecipient),
-		RecipientKeysRevision: 7,
-		RecipientActiveKeys:   []string{"key1"},
-	}
-
-	err := newStaleKeysError(details)
-	wsErr := toWSError(err)
-
-	jsonBytes, marshalErr := json.Marshal(wsErr)
-	require.NoError(t, marshalErr)
-
-	var result map[string]interface{}
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
-
-	assert.Equal(t, float64(409), result["code"])
-	assert.Equal(t, "keys_stale", result["type"])
-	assert.Contains(t, result["message"], "keys_revision is stale")
-
-	detailsMap, ok := result["details"].(map[string]interface{})
-	require.True(t, ok, "details field should exist and be a map")
-	assert.Equal(t, "recipient", detailsMap["staleSide"])
-	assert.Equal(t, float64(7), detailsMap["recipientKeysRevision"])
-}
-
-func TestToWSError_RegularError_JSONSerialization_OmitsDetails(t *testing.T) {
-	err := kit.NewError(400, "bad_request", "Invalid input")
-	wsErr := toWSError(err)
-
-	jsonBytes, marshalErr := json.Marshal(wsErr)
-	require.NoError(t, marshalErr)
-
-	var result map[string]interface{}
-	require.NoError(t, json.Unmarshal(jsonBytes, &result))
-
-	_, hasDetails := result["details"]
-	assert.False(t, hasDetails, "details field should be omitted for regular errors")
-}
-
-// ============================================================================
-// Backward Compatibility Tests
-// ============================================================================
-
-func TestExistingErrors_StillWork_NoDetails(t *testing.T) {
-	testCases := []struct {
-		name string
-		err  error
-	}{
-		{"NotFoundError", kit.NewError(404, "not_found", "Resource not found")},
-		{"BadRequestError", kit.NewError(400, "bad_request", "Invalid input")},
-		{"UnauthorizedError", kit.NewError(401, "unauthorized", "Not authorized")},
-		{"InternalError", kit.NewError(500, "internal_error", "Something went wrong")},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var pe kit.ProcessedError
-			require.True(t, errors.As(tc.err, &pe))
-
-			apiErr := kit.ApiError{
-				Code:    pe.Status(),
-				Type:    pe.Kind(),
-				Message: pe.Error(),
-			}
-
-			if dpe, ok := pe.(kit.DetailedProcessedError); ok {
-				apiErr.Details = dpe.Details()
-			}
-
-			jsonBytes, err := json.Marshal(apiErr)
-			require.NoError(t, err)
-
-			var result map[string]interface{}
-			require.NoError(t, json.Unmarshal(jsonBytes, &result))
-
-			_, hasDetails := result["details"]
-			assert.False(t, hasDetails, "existing errors should not have details field")
-
-			wsErr := toWSError(tc.err)
-			assert.Nil(t, wsErr.Details, "existing errors should have nil details in WS")
-		})
-	}
-}
-
-// ============================================================================
 // Edge Cases
 // ============================================================================
 
@@ -360,10 +238,13 @@ func TestStaleKeysError_EmptyKeys(t *testing.T) {
 	}
 
 	err := newStaleKeysError(details)
-	wsErr := toWSError(err)
 
-	assert.NotNil(t, wsErr.Details)
-	returnedDetails := wsErr.Details.(*rpc_common_modelv1.StaleKeysErrorDetails)
+	var dpe kit.DetailedProcessedError
+	require.True(t, errors.As(err, &dpe))
+	assert.NotNil(t, dpe.Details())
+
+	returnedDetails, ok := dpe.Details().(*rpc_common_modelv1.StaleKeysErrorDetails)
+	require.True(t, ok, "Details should be *rpc_common_modelv1.StaleKeysErrorDetails")
 	assert.Equal(t, int32(0), returnedDetails.RecipientKeysRevision)
 	assert.Empty(t, returnedDetails.RecipientActiveKeys)
 }
@@ -376,8 +257,11 @@ func TestStaleKeysError_MultipleKeys(t *testing.T) {
 	}
 
 	err := newStaleKeysError(details)
-	wsErr := toWSError(err)
 
-	returnedDetails := wsErr.Details.(*rpc_common_modelv1.StaleKeysErrorDetails)
+	var dpe kit.DetailedProcessedError
+	require.True(t, errors.As(err, &dpe))
+
+	returnedDetails, ok := dpe.Details().(*rpc_common_modelv1.StaleKeysErrorDetails)
+	require.True(t, ok, "Details should be *rpc_common_modelv1.StaleKeysErrorDetails")
 	assert.Len(t, returnedDetails.RecipientActiveKeys, 5)
 }

@@ -6,21 +6,21 @@ import (
 	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
 	rpc_personal_settingv1 "chatbasket-api/gen/proto/personal/personal_setting"
 	rpc_personal_settingv1connect "chatbasket-api/gen/proto/personal/personal_setting/rpc_personal_settingv1connect"
+	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
 
 	"connectrpc.com/connect"
 )
 
 type settingConnectServer struct {
-	settingService *settingService
-	hub            *websocket.WSHub
+	settingService     *settingService
+	personalSseManager *personal_sse.Manager
 }
 
-func newSettingConnectServer(service *settingService, hub *websocket.WSHub) rpc_personal_settingv1connect.SettingServiceHandler {
+func newSettingConnectServer(service *settingService, personalSseManager *personal_sse.Manager) rpc_personal_settingv1connect.SettingServiceHandler {
 	return &settingConnectServer{
-		settingService: service,
-		hub:            hub,
+		settingService:     service,
+		personalSseManager: personalSseManager,
 	}
 }
 
@@ -40,8 +40,8 @@ func (s *settingConnectServer) SetCentralDevice(ctx context.Context, req *connec
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	if s.hub != nil {
-		s.hub.CloseUserConnections(userID.UuidUserId)
+	if s.personalSseManager != nil {
+		s.personalSseManager.UnregisterUserConnections(userID.UuidUserId)
 	}
 
 	return connect.NewResponse(res), nil

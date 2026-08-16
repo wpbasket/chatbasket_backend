@@ -1,8 +1,8 @@
 package middleware
 
 import (
+	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
 	"context"
 	"net/http"
 	"strings"
@@ -39,10 +39,10 @@ type AuthSessionProvider interface {
 
 // AuthSessionConfig defines the configuration for AuthSessionMiddleware.
 type AuthSessionConfig struct {
-	AuthProvider    AuthSessionProvider
-	RequireVerified bool
-	Hub             *websocket.WSHub
-	Skipper         func(c *echo.Context) bool
+	AuthProvider       AuthSessionProvider
+	RequireVerified    bool
+	PersonalSseManager *personal_sse.Manager
+	Skipper            func(c *echo.Context) bool
 }
 
 var connectErrorWriter = connect.NewErrorWriter()
@@ -56,11 +56,11 @@ func writeAuthError(c *echo.Context, err error) error {
 
 // AuthSessionMiddleware verifies the session token and populates the context.
 // Ported from legacy middleware/session.go with modular adjustments.
-func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified bool, hub *websocket.WSHub) echo.MiddlewareFunc {
+func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified bool, personalSseManager *personal_sse.Manager) echo.MiddlewareFunc {
 	return AuthSessionMiddlewareWithConfig(AuthSessionConfig{
-		AuthProvider:    authProvider,
-		RequireVerified: requireVerified,
-		Hub:             hub,
+		AuthProvider:       authProvider,
+		RequireVerified:    requireVerified,
+		PersonalSseManager: personalSseManager,
 	})
 }
 
@@ -70,9 +70,9 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 		config.Skipper = func(c *echo.Context) bool { return false }
 	}
 
-	closeSessionConnection := func(userID uuid.UUID, sessionID string) {
-		if config.Hub != nil && sessionID != "" {
-			config.Hub.CloseSessionConnection(userID, sessionID)
+	closeSessionConnection := func(userID uuid.UUID, sessionUUID uuid.UUID) {
+		if config.PersonalSseManager != nil && sessionUUID != uuid.Nil {
+			config.PersonalSseManager.UnregisterSession(userID, sessionUUID)
 		}
 	}
 
@@ -97,7 +97,7 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 					sessionId, userId = parts[0], parts[1]
 				}
 			} else if tokenParam := c.QueryParam("token"); tokenParam != "" {
-				// WebSocket auth via query param (?token=sessionId:userId)
+				// Query param auth (?token=sessionId:userId)
 				platform = "native"
 				parts := strings.SplitN(tokenParam, ":", 2)
 				if len(parts) == 2 {
@@ -142,7 +142,6 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 			if err != nil {
 				// Distinguish between legitimate auth errors and infrastructure errors
 				if err == pgx.ErrNoRows {
-					closeSessionConnection(uuidVal, sessionId)
 					return writeAuthError(c, kit.NewError(http.StatusUnauthorized, "session_invalid", "Invalid or expired session"))
 				}
 				// Database connection error or other infrastructure issue
@@ -150,7 +149,7 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 			}
 
 			if session.ExpiresAt.Before(time.Now()) {
-				closeSessionConnection(uuidVal, sessionId)
+				closeSessionConnection(uuidVal, session.ID)
 				return writeAuthError(c, kit.NewError(http.StatusUnauthorized, "session_invalid", "Session expired"))
 			}
 
@@ -158,7 +157,7 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 			authUser, err := config.AuthProvider.GetAuthUserByID(ctx, uuidVal)
 			if err != nil {
 				if err == pgx.ErrNoRows {
-					closeSessionConnection(uuidVal, sessionId)
+					closeSessionConnection(uuidVal, session.ID)
 					return writeAuthError(c, kit.NewError(http.StatusUnauthorized, "user_not_found", "User not found"))
 				}
 				return writeAuthError(c, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to fetch user: "+kit.GetPostgresError(err).Message))
@@ -166,7 +165,7 @@ func AuthSessionMiddlewareWithConfig(config AuthSessionConfig) echo.MiddlewareFu
 
 			// 5. Check Verification (if required)
 			if config.RequireVerified && !authUser.IsEmailVerified {
-				closeSessionConnection(uuidVal, sessionId)
+				closeSessionConnection(uuidVal, session.ID)
 				return writeAuthError(c, kit.NewError(http.StatusForbidden, "unverified_email", "Email must be verified to perform this action"))
 			}
 

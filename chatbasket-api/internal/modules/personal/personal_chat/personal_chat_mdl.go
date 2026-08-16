@@ -8,21 +8,6 @@ import (
 )
 
 // ──────────────────────────────────────────────────────────────────────────────
-// WS Event Type Constants
-// ──────────────────────────────────────────────────────────────────────────────
-
-const (
-	WSEventNewMessage  = "newMessage"
-	WSEventDeliveryAck = "deliveryAck"
-	WSEventReadReceipt = "readReceipt"
-	WSEventUnsend      = "unsend"
-	WSEventDeleteForMe = "deleteForMe"
-	WSEventSyncAction  = "syncAction"
-	WSEventHistorySyncRequested = "historySyncRequested"
-	WSEventHistorySyncReady     = "historySyncReady"
-)
-
-// ──────────────────────────────────────────────────────────────────────────────
 // Service Constants
 // ──────────────────────────────────────────────────────────────────────────────
 

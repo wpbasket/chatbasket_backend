@@ -114,17 +114,17 @@ chatbasket_backend/
 │       └── deploy_web.yml
 ├── .gitnexus/
 │   ├── parse-cache/
-│   │   ├── 108258dbbdd104bc29336a440e82a8fe11b0ee7a7eb410216c60639db7393548.json
+│   │   ├── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92.json
 │   │   └── index.json
 │   ├── parsedfile-cache/
-│   │   ├── 108258dbbdd104bc29336a440e82a8fe11b0ee7a7eb410216c60639db7393548/
-│   │   │   ├── 108258dbbdd104bc29336a440e82a8fe11b0ee7a7eb410216c60639db7393548-w1-0.json
-│   │   │   └── 108258dbbdd104bc29336a440e82a8fe11b0ee7a7eb410216c60639db7393548-w1-1.json
+│   │   ├── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92/
+│   │   │   ├── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92-w1-0.json
+│   │   │   ├── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92-w1-1.json
+│   │   │   └── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92-w1-2.json
 │   │   └── index.json
 │   ├── .gitignore
 │   ├── gitnexus.json
 │   ├── lbug
-│   ├── lbug.wal.missing-shadow.1781598046694-ombdqhuclvl
 │   ├── meta.json
 │   └── run.cjs
 ├── chatbasket-api/
@@ -175,6 +175,8 @@ chatbasket_backend/
 │   │   └── public/
 │   │       └── queries/
 │   │           └── placeholder.sql
+│   ├── docs/
+│   │   └── TIMESTAMP_STANDARDS.md
 │   ├── gen/
 │   │   └── proto/
 │   │       ├── common/
@@ -200,11 +202,20 @@ chatbasket_backend/
 │   │           │   ├── rpc_personal_contactv1connect/
 │   │           │   │   └── personal_contact_api.connect.go
 │   │           │   └── personal_contact_api.pb.go
-│   │           └── personal_profile/
-│   │               ├── rpc_personal_profilev1connect/
-│   │               │   └── personal_profile_base_api.connect.go
-│   │               └── personal_profile_base_api.pb.go
+│   │           ├── personal_profile/
+│   │           │   ├── rpc_personal_profilev1connect/
+│   │           │   │   └── personal_profile_base_api.connect.go
+│   │           │   └── personal_profile_base_api.pb.go
+│   │           ├── personal_setting/
+│   │           │   ├── rpc_personal_settingv1connect/
+│   │           │   │   └── personal_setting_api.connect.go
+│   │           │   └── personal_setting_api.pb.go
+│   │           └── personal_sse/
+│   │               ├── rpc_personal_ssev1connect/
+│   │               │   └── personal_sse_api.connect.go
+│   │               └── personal_sse_api.pb.go
 │   ├── internal/
+│   │   ├── handlers/
 │   │   ├── modules/
 │   │   │   ├── core/
 │   │   │   │   ├── core_auth/
@@ -266,8 +277,6 @@ chatbasket_backend/
 │   │   │       │   ├── history_sync_svc_integration_test.go
 │   │   │       │   ├── personal_chat_api_http_handler.go
 │   │   │       │   ├── personal_chat_api_routes.go
-│   │   │       │   ├── personal_chat_api_ws_handler.go
-│   │   │       │   ├── personal_chat_api_ws_router.go
 │   │   │       │   ├── personal_chat_connect_handler.go
 │   │   │       │   ├── personal_chat_errors.go
 │   │   │       │   ├── personal_chat_mdl.go
@@ -293,8 +302,10 @@ chatbasket_backend/
 │   │   │       │   ├── personal_contact_delete_integration_test.go
 │   │   │       │   ├── personal_contact_errors.go
 │   │   │       │   ├── personal_contact_mdl.go
+│   │   │       │   ├── personal_contact_request_integration_test.go
 │   │   │       │   ├── personal_contact_svc.go
-│   │   │       │   └── personal_contact_svc_helpers.go
+│   │   │       │   ├── personal_contact_svc_helpers.go
+│   │   │       │   └── personal_contact_svc_mock_test.go
 │   │   │       ├── personal_profile/
 │   │   │       │   ├── internal/
 │   │   │       │   │   └── personal_profile_store/
@@ -313,12 +324,18 @@ chatbasket_backend/
 │   │   │       │   ├── personal_profile_svc_e2ee_integration_test.go
 │   │   │       │   ├── personal_profile_svc_helpers.go
 │   │   │       │   └── personal_profile_svc_mock_test.go
-│   │   │       └── personal_setting/
-│   │   │           ├── personal_setting_api_http_handler.go
-│   │   │           ├── personal_setting_api_routes.go
-│   │   │           ├── personal_setting_errors.go
-│   │   │           ├── personal_setting_mdl.go
-│   │   │           └── personal_setting_svc.go
+│   │   │       ├── personal_setting/
+│   │   │       │   ├── personal_setting_api_http_handler.go
+│   │   │       │   ├── personal_setting_api_routes.go
+│   │   │       │   ├── personal_setting_connect_handler.go
+│   │   │       │   ├── personal_setting_errors.go
+│   │   │       │   ├── personal_setting_mdl.go
+│   │   │       │   └── personal_setting_svc.go
+│   │   │       └── personal_sse/
+│   │   │           ├── personal_sse_api_routes.go
+│   │   │           ├── personal_sse_connect_handler.go
+│   │   │           ├── personal_sse_manager.go
+│   │   │           └── personal_sse_postgres_listener.go
 │   │   └── platform/
 │   │       ├── clients/
 │   │       │   ├── cosmos.go
@@ -332,6 +349,10 @@ chatbasket_backend/
 │   │       │   └── secrets.go
 │   │       ├── config/
 │   │       │   └── config.go
+│   │       ├── connect_sse/
+│   │       │   ├── connect_sse.go
+│   │       │   ├── connect_sse_test.go
+│   │       │   └── race_required_test.go
 │   │       ├── kit/
 │   │       │   ├── concurrent_delete.go
 │   │       │   ├── connect_rpc.go
@@ -348,10 +369,8 @@ chatbasket_backend/
 │   │       │   └── middleware.go
 │   │       ├── router/
 │   │       │   └── routes.go
-│   │       ├── services/
-│   │       │   └── services.go
-│   │       └── websocket/
-│   │           └── websocket.go
+│   │       └── services/
+│   │           └── services.go
 │   ├── proto/
 │   │   ├── common/
 │   │   │   ├── error/
@@ -363,13 +382,18 @@ chatbasket_backend/
 │   │   │   │   └── core_auth_api.proto
 │   │   │   └── core_email/
 │   │   │       └── core_email_api.proto
-│   │   └── personal/
-│   │       ├── personal_chat/
-│   │       │   └── personal_chat_api.proto
-│   │       ├── personal_contact/
-│   │       │   └── personal_contact_api.proto
-│   │       └── personal_profile/
-│   │           └── personal_profile_base_api.proto
+│   │   ├── personal/
+│   │   │   ├── personal_chat/
+│   │   │   │   └── personal_chat_api.proto
+│   │   │   ├── personal_contact/
+│   │   │   │   └── personal_contact_api.proto
+│   │   │   ├── personal_profile/
+│   │   │   │   └── personal_profile_base_api.proto
+│   │   │   ├── personal_setting/
+│   │   │   │   └── personal_setting_api.proto
+│   │   │   └── personal_sse/
+│   │   │       └── personal_sse_api.proto
+│   │   └── README.md
 │   ├── .env
 │   ├── .gitignore
 │   ├── Dockerfile
@@ -378,162 +402,6 @@ chatbasket_backend/
 │   ├── go.mod
 │   ├── go.sum
 │   └── sqlc.yaml
-├── chatbasket-api-legacy/
-│   ├── app/
-│   │   ├── README.md
-│   │   └── main.go
-│   ├── appwriteinternal/
-│   │   ├── APPWRITE_FILE_SYSTEM_REFERENCE.md
-│   │   ├── README.md
-│   │   ├── service.go
-│   │   ├── service_session.go
-│   │   └── service_storage.go
-│   ├── common/
-│   │   ├── commonhandler/
-│   │   │   ├── auth_handler.go
-│   │   │   └── setting_handler.go
-│   │   ├── commonmodel/
-│   │   │   └── commonModel.go
-│   │   └── commonservice/
-│   │       ├── auth_service.go
-│   │       ├── service.go
-│   │       └── setting_service.go
-│   ├── db/
-│   │   ├── auth/
-│   │   │   ├── migrations/
-│   │   │   │   ├── 001_auth_init.down.sql
-│   │   │   │   └── 001_auth_init.up.sql
-│   │   │   ├── queries/
-│   │   │   │   └── auth.sql
-│   │   │   └── sqlc.yaml
-│   │   ├── personal/
-│   │   │   ├── migrations/
-│   │   │   │   ├── 001_personal_init.down.sql
-│   │   │   │   ├── 001_personal_init.up.sql
-│   │   │   │   ├── 002_personal_user_contacts.down.sql
-│   │   │   │   ├── 002_personal_user_contacts.up.sql
-│   │   │   │   ├── 003_personal_user_restrictions.down.sql
-│   │   │   │   ├── 003_personal_user_restrictions.up.sql
-│   │   │   │   ├── 004_personal_user_blocks.down.sql
-│   │   │   │   ├── 004_personal_user_blocks.up.sql
-│   │   │   │   ├── 005_personal_global_restrictions.down.sql
-│   │   │   │   ├── 005_personal_global_restrictions.up.sql
-│   │   │   │   ├── 006_personal_contact_requests.down.sql
-│   │   │   │   ├── 006_personal_contact_requests.up.sql
-│   │   │   │   ├── 007_personal_tokens.down.sql
-│   │   │   │   ├── 007_personal_tokens.up.sql
-│   │   │   │   ├── 008_personal_chat_system.down.sql
-│   │   │   │   └── 008_personal_chat_system.up.sql
-│   │   │   ├── queries/
-│   │   │   │   ├── personal_chat.sql
-│   │   │   │   ├── personal_contacts.sql
-│   │   │   │   └── personal_user.sql
-│   │   │   └── sqlc.yaml
-│   │   ├── public/
-│   │   │   ├── migrations/
-│   │   │   │   └── 001_public_init.up.sql
-│   │   │   ├── queries/
-│   │   │   │   └── .gitkeep
-│   │   │   └── sqlc.yaml
-│   │   ├── README.md
-│   │   ├── config.go
-│   │   ├── cosmos_client.go
-│   │   ├── cosmos_config.go
-│   │   └── pool.go
-│   ├── handler/
-│   │   ├── README.md
-│   │   └── user_handler.go
-│   ├── internal/
-│   │   └── db/
-│   │       ├── auth/
-│   │       │   ├── auth.sql.go
-│   │       │   ├── db.go
-│   │       │   └── models.go
-│   │       └── personal/
-│   │           ├── db.go
-│   │           ├── models.go
-│   │           ├── personal_chat.sql.go
-│   │           ├── personal_contacts.sql.go
-│   │           └── personal_user.sql.go
-│   ├── middleware/
-│   │   ├── README.md
-│   │   └── session.go
-│   ├── model/
-│   │   ├── base.go
-│   │   ├── block.go
-│   │   ├── comment.go
-│   │   ├── error.go
-│   │   ├── follow.go
-│   │   ├── follow_request.go
-│   │   ├── like.go
-│   │   ├── post.go
-│   │   ├── profile.go
-│   │   ├── resend_otp.go
-│   │   ├── settings.go
-│   │   ├── token.go
-│   │   └── user.go
-│   ├── personal/
-│   │   ├── personalhandler/
-│   │   │   ├── chat_handler.go
-│   │   │   ├── contact_handler.go
-│   │   │   ├── profile_handler.go
-│   │   │   ├── setting_handler.go
-│   │   │   └── ws_handler.go
-│   │   ├── personalmodel/
-│   │   │   ├── chat_models.go
-│   │   │   ├── contactPersModel.go
-│   │   │   └── profilePersModel.go
-│   │   ├── personalservice/
-│   │   │   ├── chat_file_service.go
-│   │   │   ├── chat_service.go
-│   │   │   ├── contact_service.go
-│   │   │   ├── profile_service.go
-│   │   │   ├── service.go
-│   │   │   ├── setting_service.go
-│   │   │   ├── ws_hub.go
-│   │   │   └── ws_router.go
-│   │   └── personalutils/
-│   │       ├── message_cleanup.go
-│   │       └── usernamePersUtils.go
-│   ├── public/
-│   │   ├── publichandler/
-│   │   │   └── profile_handler.go
-│   │   ├── publicmodel/
-│   │   │   └── README.md
-│   │   ├── publicservice/
-│   │   │   ├── profile_service.go
-│   │   │   └── service.go
-│   │   └── publicutils/
-│   │       └── README.md
-│   ├── routes/
-│   │   ├── common_routes.go
-│   │   ├── config.go
-│   │   ├── personal_routes.go
-│   │   ├── public_routes.go
-│   │   └── routes.go
-│   ├── services/
-│   │   ├── README.md
-│   │   ├── auth_base_service.go
-│   │   ├── base_service.go
-│   │   ├── fcm_service.go
-│   │   ├── upload.go
-│   │   └── user_service.go
-│   ├── utils/
-│   │   ├── README.md
-│   │   ├── auth_flow_utils.go
-│   │   ├── baseUtils.go
-│   │   ├── emailUtils.go
-│   │   ├── errorUtils.go
-│   │   ├── firebase_config.go
-│   │   ├── hashingTextUtils.go
-│   │   ├── otpUtils.go
-│   │   ├── passwordUtils.go
-│   │   └── toInputFileUtils.go
-│   ├── .dockerignore
-│   ├── .gitignore
-│   ├── Dockerfile
-│   ├── go.mod
-│   └── go.sum
 ├── deployment/
 │   ├── docker-compose.yml
 │   └── nginx.conf
@@ -561,6 +429,7 @@ chatbasket_backend/
 │   ├── buf.gen.yaml
 │   ├── go.mod
 │   └── go.sum
+├── scripts/
 ├── .gitignore
 ├── .gitnexusignore
 ├── AGENTS.md
@@ -761,13 +630,13 @@ chatbasket/
 │       └── deploy-web.yml
 ├── .gitnexus/
 │   ├── parse-cache/
-│   │   ├── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d.json
+│   │   ├── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4.json
 │   │   └── index.json
 │   ├── parsedfile-cache/
-│   │   ├── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d/
-│   │   │   ├── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d-w1-0.json
-│   │   │   ├── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d-w1-1.json
-│   │   │   └── dcd424b5b09acad3af566b080514b616c6fb27cd3b336790546f598feba8335d-w1-2.json
+│   │   ├── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4/
+│   │   │   ├── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4-w1-0.json
+│   │   │   ├── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4-w1-1.json
+│   │   │   └── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4-w1-2.json
 │   │   └── index.json
 │   ├── .gitignore
 │   ├── gitnexus.json
@@ -804,6 +673,20 @@ chatbasket/
 │       ├── react-logo@2x.png
 │       ├── react-logo@3x.png
 │       └── splash-icon.png
+├── coverage/
+│   ├── lcov-report/
+│   │   ├── base.css
+│   │   ├── block-navigation.js
+│   │   ├── chat.sse.subscriber.ts.html
+│   │   ├── favicon.png
+│   │   ├── index.html
+│   │   ├── prettify.css
+│   │   ├── prettify.js
+│   │   ├── sort-arrow-sprite.png
+│   │   └── sorter.js
+│   ├── clover.xml
+│   ├── coverage-final.json
+│   └── lcov.info
 ├── docs/
 │   ├── CHANGE_POLICY.md
 │   ├── KEYBOARD_VIEW.md
@@ -838,19 +721,33 @@ chatbasket/
 │   └── _headers
 ├── scripts/
 │   ├── fix-cloudflare-pages.ts
-│   └── prune-pages-deployments.ts
+│   ├── prune-pages-deployments.ts
+│   └── verify-build.ts
 ├── src/
 │   ├── __tests__/
 │   │   ├── components/
 │   │   │   └── privacy_avatar.test.ts
 │   │   ├── lib/
+│   │   │   ├── chat/
+│   │   │   │   └── chat.recovery.test.ts
+│   │   │   ├── clients/
+│   │   │   │   └── connect_error_details.test.ts
 │   │   │   ├── e2ee/
 │   │   │   │   ├── e2ee_recipient_key_validation.test.ts
 │   │   │   │   ├── e2ee_v3_download_pipeline.test.ts
 │   │   │   │   ├── e2ee_v3_envelope.test.ts
 │   │   │   │   └── e2ee_v3_service_multikey.test.ts
-│   │   │   └── outbox/
-│   │   │       └── outbox.preparing.test.ts
+│   │   │   ├── outbox/
+│   │   │   │   ├── outbox.live_server.probe.test.ts
+│   │   │   │   └── outbox.preparing.test.ts
+│   │   │   ├── sse/
+│   │   │   │   ├── chat.sse.subscriber.e2ee_v3.test.ts
+│   │   │   │   ├── chat.sse.subscriber.failures.test.ts
+│   │   │   │   ├── chat.sse.subscriber.test.ts
+│   │   │   │   ├── personal.api.sse.test.ts
+│   │   │   │   ├── personal.sse.module.base.test.ts
+│   │   │   │   └── sse.live_server.network_pause.probe.test.ts
+│   │   │   └── personal.session.coordinator.recovery.test.ts
 │   │   ├── state/
 │   │   │   ├── chat/
 │   │   │   │   ├── ack_race_condition.test.ts
@@ -858,10 +755,12 @@ chatbasket/
 │   │   │   │   ├── history_sync.test.ts
 │   │   │   │   ├── is_contactable.test.ts
 │   │   │   │   ├── pending_preview_heal.test.ts
-│   │   │   │   ├── ui_sort_local_seq.test.ts
-│   │   │   │   └── ws.e2ee_v3_bridge.test.ts
+│   │   │   │   ├── sync_catchup_rerun.test.ts
+│   │   │   │   └── ui_sort_local_seq.test.ts
 │   │   │   ├── contacts/
 │   │   │   │   └── personal.state.contacts.test.ts
+│   │   │   ├── network/
+│   │   │   │   └── state.network.online_verify.test.ts
 │   │   │   ├── personalState/
 │   │   │   │   └── profile_avatar.test.ts
 │   │   │   └── userProfiles/
@@ -869,6 +768,7 @@ chatbasket/
 │   │   │       └── user_profiles_store.test.ts
 │   │   ├── storage/
 │   │   │   ├── auth.e2ee_revision.test.ts
+│   │   │   ├── auth.logout_stream_stop.test.ts
 │   │   │   ├── chat.storage.localSeq.test.ts
 │   │   │   ├── sqlite_key.test.ts
 │   │   │   └── storage_init.e2ee_seed.test.ts
@@ -884,6 +784,8 @@ chatbasket/
 │   │   │   └── index.tsx
 │   │   ├── personal/
 │   │   │   ├── contacts/
+│   │   │   │   ├── blocks/
+│   │   │   │   │   └── index.tsx
 │   │   │   │   ├── chat/
 │   │   │   │   │   ├── user/
 │   │   │   │   │   │   └── [user_id].tsx
@@ -985,7 +887,8 @@ chatbasket/
 │   │   ├── +not-found.tsx
 │   │   ├── README_ROOT_ARCHITECTURE.md
 │   │   ├── _layout.tsx
-│   │   └── index.tsx
+│   │   ├── index.tsx
+│   │   └── stream-test-manager.tsx
 │   ├── components/
 │   │   ├── header/
 │   │   │   └── Header.tsx
@@ -1071,8 +974,12 @@ chatbasket/
 │   │           │   └── personal_chat_api_pb.ts
 │   │           ├── personal_contact/
 │   │           │   └── personal_contact_api_pb.ts
-│   │           └── personal_profile/
-│   │               └── personal_profile_base_api_pb.ts
+│   │           ├── personal_profile/
+│   │           │   └── personal_profile_base_api_pb.ts
+│   │           ├── personal_setting/
+│   │           │   └── personal_setting_api_pb.ts
+│   │           └── personal_sse/
+│   │               └── personal_sse_api_pb.ts
 │   ├── hooks/
 │   │   ├── commonHooks/
 │   │   │   ├── hooks.notificationPermission.ts
@@ -1109,17 +1016,19 @@ chatbasket/
 │   │   │   └── index.ts
 │   │   ├── personalLib/
 │   │   │   ├── chatApi/
+│   │   │   │   ├── chat.recovery.ts
+│   │   │   │   ├── chat.sse.subscriber.ts
 │   │   │   │   ├── chat.transport.ts
 │   │   │   │   ├── connection.watcher.ts
 │   │   │   │   ├── history.sync.ts
 │   │   │   │   ├── outbox.errors.ts
 │   │   │   │   ├── outbox.queue.ts
-│   │   │   │   ├── personal.api.chat.ts
-│   │   │   │   └── ws.client.ts
+│   │   │   │   └── personal.api.chat.ts
 │   │   │   ├── constant/
 │   │   │   │   └── constant.chat.ts
 │   │   │   ├── contactApi/
-│   │   │   │   └── personal.api.contact.ts
+│   │   │   │   ├── personal.api.contact.ts
+│   │   │   │   └── personal.api.error.block.ts
 │   │   │   ├── e2ee/
 │   │   │   │   ├── e2ee.crypto.ts
 │   │   │   │   ├── e2ee.keys.ts
@@ -1141,7 +1050,11 @@ chatbasket/
 │   │   │   │   └── profile.service.ts
 │   │   │   ├── settingApi/
 │   │   │   │   └── personal.api.setting.ts
-│   │   │   └── index.ts
+│   │   │   ├── sseApi/
+│   │   │   │   ├── personal.api.sse.ts
+│   │   │   │   └── personal.sse.module.base.ts
+│   │   │   ├── index.ts
+│   │   │   └── personal.session.coordinator.ts
 │   │   ├── publicLib/
 │   │   │   ├── models/
 │   │   │   │   ├── public.model.profile.ts
@@ -1195,10 +1108,11 @@ chatbasket/
 │   │   ├── modals/
 │   │   │   └── state.modals.ts
 │   │   ├── personalState/
+│   │   │   ├── blocks/
+│   │   │   │   └── personal.state.blocks.ts
 │   │   │   ├── chat/
 │   │   │   │   ├── personal.state.chat.ts
-│   │   │   │   ├── personal.state.sync.ts
-│   │   │   │   └── ws.event.bridge.ts
+│   │   │   │   └── personal.state.sync.ts
 │   │   │   ├── contacts/
 │   │   │   │   └── personal.state.contacts.ts
 │   │   │   ├── home/
@@ -1206,6 +1120,8 @@ chatbasket/
 │   │   │   ├── profile/
 │   │   │   │   ├── personal.state.profile.createProfile.ts
 │   │   │   │   └── personal.state.profile.updateProfile.ts
+│   │   │   ├── sse/
+│   │   │   │   └── personal.state.sse.ts
 │   │   │   ├── user/
 │   │   │   │   └── personal.state.user.ts
 │   │   │   └── userProfiles/
@@ -1227,6 +1143,7 @@ chatbasket/
 │   │   │   ├── README_THEME.md
 │   │   │   └── state.theme.ts
 │   │   ├── tools/
+│   │   │   ├── state.appState.ts
 │   │   │   └── state.network.ts
 │   │   ├── ui/
 │   │   │   └── state.ui.ts
@@ -1246,6 +1163,7 @@ chatbasket/
 │   │   │   │   ├── README.md
 │   │   │   │   ├── logger.config.ts
 │   │   │   │   └── logger.ts
+│   │   │   ├── personal.util.blocks.ts
 │   │   │   ├── personal.util.chatActions.ts
 │   │   │   ├── personal.util.contactActions.ts
 │   │   │   ├── personal.util.contacts.ts

@@ -24,8 +24,8 @@ A sender **can send a message** to a recipient only if all are true:
 The system operates as a **primary-device-centric relay**. The backend acts as a **temporary bridge**, not a permanent message vault.
 
 - **Native (Primary Device)**: The authoritative source of truth. Each primary native platform (iOS/Android) stores the full, encrypted chat history. It is responsible for acknowledging receipt to the backend to trigger relay purging and for serving P2P sync requests to secondary devices.
-- **Secondary Devices (Web/Native)**: Additional sessions that provide a window into the account. They receive real-time updates via WebSockets but rely on P2P sync with the Primary Device for history already purged from the relay.
-- **Backend (Relay)**: Messages are stored temporarily and pushed to **all online devices** via WebSockets. The relay row is only purged after explicit acknowledgement from the **Primary devices of both participants**.
+- **Secondary Devices (Web/Native)**: Additional sessions that provide a window into the account. They receive real-time updates via ConnectSSE streams but rely on P2P sync with the Primary Device for history already purged from the relay.
+- **Backend (Relay)**: Messages are stored temporarily and pushed to **all online devices** via ConnectSSE. The relay row is only purged after explicit acknowledgement from the **Primary devices of both participants**.
 
 
 ### 2.2 Message Delivery & Backend Relay
@@ -33,7 +33,7 @@ The system operates as a **primary-device-centric relay**. The backend acts as a
 The system prioritizes real-time delivery while ensuring Primary devices maintain an authoritative history.
 
 #### 2.2.1 Delivery Paths
-1.  **WebSocket Push**: When a message is sent, the backend immediately broadcasts it to **all active WebSocket connections** for both the sender and recipient (including all Primary and Secondary devices).
+1.  **ConnectSSE Push**: When a message is sent, the backend immediately broadcasts it to **all active SSE stream connections** for both the sender and recipient (including all Primary and Secondary devices).
 2.  **Relay Fetch**: If a device (Primary or Secondary) was offline during the push, it can fetch missed messages directly from the backend **as long as the message remains in the relay**.
 3.  **P2P Sync**: Once a message is purged from the relay, secondary devices can **only** retrieve it by requesting a P2P sync from their respective Primary device via WebRTC.
 
@@ -166,7 +166,7 @@ To reduce backend bandwidth and latency, secondary devices (web/other native) sy
 
 **Secondary device initiates:**
 ```
-1. Secondary connects to WebSocket signaling server
+1. Secondary connects to signaling stream / initiates request
 2. Backend authenticates session
 3. Backend checks if user has active primary device
 4. If primary online:
@@ -180,7 +180,7 @@ To reduce backend bandwidth and latency, secondary devices (web/other native) sy
 
 **Primary device responsibilities:**
 ```
-1. Maintain persistent WebSocket connection to signaling server
+1. Maintain persistent connection / stream to receive signaling
 2. Listen for WebRTC offers from secondary devices
 3. Respond with WebRTC answers
 4. Maintain P2P data channels with all connected secondaries

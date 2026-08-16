@@ -38,11 +38,13 @@ func (h *authHandler) Logout(c *echo.Context) error {
 		return err
 	}
 
-	if h.hub != nil {
+	if h.personalSseManager != nil {
 		if payload.AllSessions {
-			h.hub.CloseUserConnections(uuidUserId)
+			h.personalSseManager.UnregisterUserConnections(uuidUserId)
 		} else {
-			h.hub.CloseSessionConnection(uuidUserId, sessionId)
+			if sessionUUIDVal, err := kit.ExtractSessionUUID(c); err == nil {
+				h.personalSseManager.UnregisterSession(uuidUserId, sessionUUIDVal)
+			}
 		}
 	}
 

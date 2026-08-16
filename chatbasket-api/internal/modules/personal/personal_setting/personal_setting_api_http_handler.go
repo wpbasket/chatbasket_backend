@@ -1,8 +1,8 @@
 package personal_setting
 
 import (
+	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -10,14 +10,14 @@ import (
 )
 
 type settingHandler struct {
-	service *settingService
-	hub     *websocket.WSHub
+	service            *settingService
+	personalSseManager *personal_sse.Manager
 }
 
-func newSettingHandler(service *settingService, hub *websocket.WSHub) *settingHandler {
+func newSettingHandler(service *settingService, personalSseManager *personal_sse.Manager) *settingHandler {
 	return &settingHandler{
-		service: service,
-		hub:     hub,
+		service:            service,
+		personalSseManager: personalSseManager,
 	}
 }
 
@@ -40,10 +40,10 @@ func (h *settingHandler) updateSessionCentral(c *echo.Context) error {
 		return err // Echo GlobalErrorHandler takes over
 	}
 
-	// 3. Invalidate all active WebSocket connections for this user so they reconnect
+	// 3. Invalidate all active SSE connections for this user so they reconnect
 	//    and pick up the updated session.IsCentral state from the auth middleware.
-	if h.hub != nil {
-		h.hub.CloseUserConnections(userID)
+	if h.personalSseManager != nil {
+		h.personalSseManager.UnregisterUserConnections(userID)
 	}
 
 	return c.JSON(http.StatusOK, okResponse)

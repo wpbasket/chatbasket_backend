@@ -12,7 +12,6 @@ import (
 	rpc_personal_ssev1 "chatbasket-api/gen/proto/personal/personal_sse"
 	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/kit"
-	"chatbasket-api/internal/platform/websocket"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -24,14 +23,12 @@ import (
 type chatConnectServer struct {
 	rpc_personal_chatv1connect.UnimplementedChatServiceHandler
 	chatService        *chatService
-	hub                *websocket.WSHub
 	personalSseManager *personal_sse.Manager
 }
 
-func newChatConnectServer(service *chatService, hub *websocket.WSHub, personalSseManager *personal_sse.Manager) rpc_personal_chatv1connect.ChatServiceHandler {
+func newChatConnectServer(service *chatService, personalSseManager *personal_sse.Manager) rpc_personal_chatv1connect.ChatServiceHandler {
 	return &chatConnectServer{
 		chatService:        service,
-		hub:                hub,
 		personalSseManager: personalSseManager,
 	}
 }
