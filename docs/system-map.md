@@ -112,21 +112,6 @@ chatbasket_backend/
 │   └── workflows/
 │       ├── deploy_relay.yml
 │       └── deploy_web.yml
-├── .gitnexus/
-│   ├── parse-cache/
-│   │   ├── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92.json
-│   │   └── index.json
-│   ├── parsedfile-cache/
-│   │   ├── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92/
-│   │   │   ├── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92-w1-0.json
-│   │   │   ├── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92-w1-1.json
-│   │   │   └── dcb8a3d4bbc1c2e7cdc42bc7ad8d7c6488b6d2ca9334b394999967c6fb604a92-w1-2.json
-│   │   └── index.json
-│   ├── .gitignore
-│   ├── gitnexus.json
-│   ├── lbug
-│   ├── meta.json
-│   └── run.cjs
 ├── chatbasket-api/
 │   ├── app/
 │   │   └── main.go
@@ -215,7 +200,6 @@ chatbasket_backend/
 │   │               │   └── personal_sse_api.connect.go
 │   │               └── personal_sse_api.pb.go
 │   ├── internal/
-│   │   ├── handlers/
 │   │   ├── modules/
 │   │   │   ├── core/
 │   │   │   │   ├── core_auth/
@@ -394,7 +378,6 @@ chatbasket_backend/
 │   │   │   └── personal_sse/
 │   │   │       └── personal_sse_api.proto
 │   │   └── README.md
-│   ├── .env
 │   ├── .gitignore
 │   ├── Dockerfile
 │   ├── buf.gen.yaml
@@ -628,21 +611,6 @@ chatbasket/
 ├── .github/
 │   └── workflows/
 │       └── deploy-web.yml
-├── .gitnexus/
-│   ├── parse-cache/
-│   │   ├── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4.json
-│   │   └── index.json
-│   ├── parsedfile-cache/
-│   │   ├── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4/
-│   │   │   ├── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4-w1-0.json
-│   │   │   ├── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4-w1-1.json
-│   │   │   └── 0102a7757a6837bf097a4775cdc98296052827d7bb5b12140226d5fa2db314d4-w1-2.json
-│   │   └── index.json
-│   ├── .gitignore
-│   ├── gitnexus.json
-│   ├── lbug
-│   ├── meta.json
-│   └── run.cjs
 ├── .vscode/
 │   ├── extensions.json
 │   └── settings.json
@@ -675,9 +643,47 @@ chatbasket/
 │       └── splash-icon.png
 ├── coverage/
 │   ├── lcov-report/
+│   │   ├── gen/
+│   │   │   └── proto/
+│   │   │       ├── common/
+│   │   │       │   └── model/
+│   │   │       │       ├── index.html
+│   │   │       │       └── model_pb.ts.html
+│   │   │       └── personal/
+│   │   │           └── personal_chat/
+│   │   │               ├── index.html
+│   │   │               └── personal_chat_api_pb.ts.html
+│   │   ├── lib/
+│   │   │   ├── personalLib/
+│   │   │   │   ├── chatApi/
+│   │   │   │   │   ├── chat.recovery.ts.html
+│   │   │   │   │   ├── chat.sse.subscriber.ts.html
+│   │   │   │   │   └── index.html
+│   │   │   │   ├── e2ee/
+│   │   │   │   │   ├── e2ee.crypto.ts.html
+│   │   │   │   │   ├── e2ee.log.ts.html
+│   │   │   │   │   ├── e2ee.service.ts.html
+│   │   │   │   │   └── index.html
+│   │   │   │   ├── models/
+│   │   │   │   │   ├── index.html
+│   │   │   │   │   └── personal.model.chat.ts.html
+│   │   │   │   └── sseApi/
+│   │   │   │       ├── index.html
+│   │   │   │       └── personal.sse.module.base.ts.html
+│   │   │   └── storage/
+│   │   │       └── personalStorage/
+│   │   │           └── chat/
+│   │   │               ├── chat.storage.schema.ts.html
+│   │   │               └── index.html
+│   │   ├── utils/
+│   │   │   ├── commonUtils/
+│   │   │   │   ├── index.html
+│   │   │   │   └── util.date.ts.html
+│   │   │   └── personalUtils/
+│   │   │       ├── index.html
+│   │   │       └── util.chatPreview.ts.html
 │   │   ├── base.css
 │   │   ├── block-navigation.js
-│   │   ├── chat.sse.subscriber.ts.html
 │   │   ├── favicon.png
 │   │   ├── index.html
 │   │   ├── prettify.css
@@ -727,6 +733,9 @@ chatbasket/
 │   ├── __tests__/
 │   │   ├── components/
 │   │   │   └── privacy_avatar.test.ts
+│   │   ├── helpers/
+│   │   │   ├── expoSqliteNode.ts
+│   │   │   └── tombstoneScenarios.ts
 │   │   ├── lib/
 │   │   │   ├── chat/
 │   │   │   │   └── chat.recovery.test.ts
@@ -738,7 +747,6 @@ chatbasket/
 │   │   │   │   ├── e2ee_v3_envelope.test.ts
 │   │   │   │   └── e2ee_v3_service_multikey.test.ts
 │   │   │   ├── outbox/
-│   │   │   │   ├── outbox.live_server.probe.test.ts
 │   │   │   │   └── outbox.preparing.test.ts
 │   │   │   ├── sse/
 │   │   │   │   ├── chat.sse.subscriber.e2ee_v3.test.ts
@@ -746,7 +754,8 @@ chatbasket/
 │   │   │   │   ├── chat.sse.subscriber.test.ts
 │   │   │   │   ├── personal.api.sse.test.ts
 │   │   │   │   ├── personal.sse.module.base.test.ts
-│   │   │   │   └── sse.live_server.network_pause.probe.test.ts
+│   │   │   │   ├── tombstone.sse_race.test.ts
+│   │   │   │   └── unread_badge.sse_race.test.ts
 │   │   │   └── personal.session.coordinator.recovery.test.ts
 │   │   ├── state/
 │   │   │   ├── chat/
@@ -755,6 +764,7 @@ chatbasket/
 │   │   │   │   ├── history_sync.test.ts
 │   │   │   │   ├── is_contactable.test.ts
 │   │   │   │   ├── pending_preview_heal.test.ts
+│   │   │   │   ├── setmessages_tombstone.test.ts
 │   │   │   │   ├── sync_catchup_rerun.test.ts
 │   │   │   │   └── ui_sort_local_seq.test.ts
 │   │   │   ├── contacts/
@@ -771,7 +781,10 @@ chatbasket/
 │   │   │   ├── auth.logout_stream_stop.test.ts
 │   │   │   ├── chat.storage.localSeq.test.ts
 │   │   │   ├── sqlite_key.test.ts
-│   │   │   └── storage_init.e2ee_seed.test.ts
+│   │   │   ├── storage_init.e2ee_seed.test.ts
+│   │   │   ├── tombstone.storage.native.test.ts
+│   │   │   ├── tombstone.storage.web.test.ts
+│   │   │   └── tombstone.web_upgrade.test.ts
 │   │   └── utils/
 │   │       ├── personalUtils/
 │   │       │   ├── util.contactErrors.test.ts
@@ -887,8 +900,7 @@ chatbasket/
 │   │   ├── +not-found.tsx
 │   │   ├── README_ROOT_ARCHITECTURE.md
 │   │   ├── _layout.tsx
-│   │   ├── index.tsx
-│   │   └── stream-test-manager.tsx
+│   │   └── index.tsx
 │   ├── components/
 │   │   ├── header/
 │   │   │   └── Header.tsx
@@ -958,6 +970,7 @@ chatbasket/
 │   ├── constants/
 │   │   ├── Colors.ts
 │   │   ├── fonts.ts
+│   │   ├── radii.ts
 │   │   └── theme.ts
 │   ├── gen/
 │   │   └── proto/
@@ -1180,7 +1193,6 @@ chatbasket/
 │   │   └── publicUtils/
 │   │       └── public.util.profile.ts
 │   └── global.css
-├── .env
 ├── .gitignore
 ├── .gitnexusignore
 ├── AGENTS.md
