@@ -40,7 +40,24 @@ Use **English only** for all user-visible output. Do not reply in any other lang
      Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 5. **Semantic Preference**: Utilize tools with **semantic embeddings** (e.g., GitNexus `query`) for conceptual discovery whenever the specific task permits (see the [GitNexus Semantic & Embedding Query Guide](#gitnexus-semantic--embedding-query-guide) below).
 6. **Tiered Repository Discovery**: Utilize **group-level queries** (e.g., `gitnexus_group_query`) against **`cb-group`** for global discovery and cross-repo architectural queries. For deep implementation, refactoring, or impact analysis, switch to the specific **sub-repo index** (e.g., `chatbasket_backend`) to ensure maximum precision and local context.
-7. **Manual Route Overrides**: Due to GitNexus Go parser limitations (Echo struct method handlers) and custom React Native HTTP client wrappers, automatic API contract linking is skipped. When adding new backend/frontend endpoints, you **MUST** manually add them as overrides in `~/.gitnexus/groups/cb-group/group.yaml` under `links:` and run `npx gitnexus group sync cb-group --allow-stale`.
+7. **Manual Route Overrides (required for every new endpoint)**: Auto-extraction does NOT detect the frontend ConnectRPC `createClient(Service, rpcApiClient)` pattern (`chatbasket`) nor cross-repo links without a manifest — every proto `rpc` and any custom `fetch`/Echo handler needs a manual entry in `~/.gitnexus/groups/cb-group/group.yaml` under `links:`, then `npx gitnexus group sync cb-group --allow-stale`. Existing file already contains 59 `grpc` links covering all current protos; new endpoints must follow the same shape.
+   - gRPC (most common): `contract` is `package.Service/Method` exactly as in the `.proto` (`from` = provider, `to` = consumer, keep `role: provider`):
+     ```yaml
+     links:
+       - from: chatbasket_backend
+         to: chatbasket
+         type: grpc
+         contract: rpc_personal_contact.v1.ContactService/MyNewMethod
+         role: provider
+     ```
+   - HTTP (Echo / fetch wrappers): `contract` is `[METHOD::]path` (explicit method preferred):
+     ```yaml
+       - from: chatbasket_backend
+         to: chatbasket
+         type: http
+         contract: GET::/api/personal/my-route
+         role: provider
+     ```
 
 
 ---
