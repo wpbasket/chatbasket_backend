@@ -4,8 +4,9 @@ Use **English only** for all user-visible output. Do not reply in any other lang
 
 ### Core Principles
 
-1. **Think Before Coding**: Don't assume. Don't hide confusion. Surface tradeoffs.
-   - State your assumptions explicitly. If uncertain, ask.
+1. **Think Before Coding & Zero Assumptions**: Don't assume. Verify facts. Surface tradeoffs.
+   - Strictly NO assumptions: inspect and double-check code, types, and dependencies directly from source files before acting.
+   - State your assumptions explicitly. If uncertain, ask before guessing.
    - If multiple interpretations exist, present them - don't pick silently.
    - If a simpler approach exists, say so. Push back when warranted.
    - If something is unclear, stop. Name what's confusing. Ask.
@@ -16,21 +17,30 @@ Use **English only** for all user-visible output. Do not reply in any other lang
    - No error handling for impossible scenarios.
    - If you write 200 lines and it could be 50, rewrite it.
    - Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-3. **Surgical Changes**: Touch only what you must. Clean up only your own mess.
+3. **Surgical Changes**: Touch only what you must, but own the full ripple effects.
    - When editing existing code:
      - Don't "improve" adjacent code, comments, or formatting.
-     - Don't refactor things that aren't broken.
+     - Don't refactor things that aren't broken (but DO update callers/dependents affected by your changes).
      - Match existing style, even if you'd do it differently.
      - If you notice unrelated dead code, mention it - don't delete it.
-   - When your changes create orphans:
+   - When your changes create orphans or breaks:
+     - Fix all callers and downstream references broken by your change.
      - Remove imports/variables/functions that YOUR changes made unused.
      - Don't remove pre-existing dead code unless asked.
-   - The test: Every changed line should trace directly to the user's request.
-4. **Goal-Driven Execution**: Define success criteria. Loop until verified.
-   - Transform tasks into verifiable goals:
-     - "Add validation" → "Write tests for invalid inputs, then make them pass"
-     - "Fix the bug" → "Write a test that reproduces it, then make it pass"
-     - "Refactor X" → "Ensure tests pass before and after"
+   - The test: Every changed line must trace directly to fulfilling the user's request and handling its direct blast radius.
+4. **Goal-Driven Execution & Strict Verification**: Two-phase verification. Real tests only. Zero regressions.
+   - **Strict Two-Phase Verification Protocol**:
+     - **Phase 1 (Before change / Baseline)**:
+       - For bugs: First write a test reproducing the exact failure against existing/old code and verify it fails for the expected reason.
+       - For features/refactoring: Run existing tests first to establish a clean, passing baseline before touching code.
+     - **Phase 2 (After change / Verification)**:
+       - Verify the new test passes against the modified code.
+       - Actively test against your changes to verify nothing is broken across affected callers and downstream modules.
+       - Run existing tests and build checks to confirm zero regressions before considering the work done.
+   - **Strict Test Quality Standards**:
+     - STRICTLY NO dummy, superficial, mock-everything, or trivial pass-through tests. Write actual verifying tests that validate logic under real conditions.
+     - Tests must assert real logic, edge cases, error conditions, and realistic payload behaviors.
+     - Never consider a task done unless both the targeted new tests and the regression suite pass cleanly.
    - For multi-step tasks, state a brief plan:
      ```
      1. [Step] → verify: [check]
