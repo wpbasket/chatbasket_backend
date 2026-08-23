@@ -10,13 +10,11 @@ Use **English only** for all user-visible output. Do not reply in any other lang
    - If multiple interpretations exist, present them - don't pick silently.
    - If a simpler approach exists, say so. Push back when warranted.
    - If something is unclear, stop. Name what's confusing. Ask.
-2. **Simplicity First**: Minimum code that solves the problem. Nothing speculative.
-   - No features beyond what was asked.
-   - No abstractions for single-use code.
-   - No "flexibility" or "configurability" that wasn't requested.
-   - No error handling for impossible scenarios.
-   - If you write 200 lines and it could be 50, rewrite it.
-   - Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+2. **Simplicity First**: Direct, complete solutions without unnecessary bloat.
+   - Fully solve the problem and handle all real domain edge cases, but do not add unrequested features.
+   - Avoid premature abstractions, generic wrappers, or extra config layers for single-use code.
+   - Handle realistic state and failure modes; avoid speculative defensive layers for states impossible in the system model.
+   - Clear and direct beats clever and over-engineered.
 3. **Surgical Changes**: Touch only what you must, but own the full ripple effects.
    - When editing existing code:
      - Don't "improve" adjacent code, comments, or formatting.
@@ -28,18 +26,25 @@ Use **English only** for all user-visible output. Do not reply in any other lang
      - Remove imports/variables/functions that YOUR changes made unused.
      - Don't remove pre-existing dead code unless asked.
    - The test: Every changed line must trace directly to fulfilling the user's request and handling its direct blast radius.
-4. **Goal-Driven Execution & Strict Verification**: Two-phase verification. Real tests only. Zero regressions.
-   - **Strict Two-Phase Verification Protocol**:
-     - **Phase 1 (Before change / Baseline)**:
-       - For bugs: First write a test reproducing the exact failure against existing/old code and verify it fails for the expected reason.
-       - For features/refactoring: Run existing tests first to establish a clean, passing baseline before touching code.
-     - **Phase 2 (After change / Verification)**:
-       - Verify the new test passes against the modified code.
-       - Actively test against your changes to verify nothing is broken across affected callers and downstream modules.
-       - Run existing tests and build checks to confirm zero regressions before considering the work done.
-   - **Strict Test Quality Standards**:
+4. **Goal-Driven Execution & Strict Verification**: Two-phase verification. Immediate compiler/typecheck verification. Real tests only. Zero regressions.
+   - **MANDATORY Immediate Compiler/Typecheck Rule**:
+     - Whenever you edit or create ANY source or test file in any language or project, you MUST run the appropriate project compiler / typechecker / build verification command (auto-discovered from project configuration, toolchain configs, etc.) **IMMEDIATELY** after saving the edit, and **BEFORE** executing test runners or any subsequent action.
+     - Never run test commands on un-typechecked or un-compiled code. If compiler/typecheck verification fails, fix errors first.
+   - **Strict Two-Phase Bug Verification Protocol**:
+     - **Phase 1 (Before change / Baseline Failure Reproduction)**:
+       1. Write a real, non-trivial test asserting the desired behavior/filter/fix against existing code.
+       2. Run the project's typecheck / compiler check to verify test types and syntax are 100% valid.
+       3. Run the project's test command against the old/buggy production code to confirm it **fails for the expected reason**.
+       4. Keep the test in place — do NOT delete or revert tests.
+     - **Phase 2 (After change / Verification & Zero Regressions)**:
+       1. Modify or implement the production code to resolve the issue or fulfill the requirement.
+       2. Run the project's typecheck / compiler check immediately to verify 0 compilation/type errors.
+       3. Run the targeted test command to confirm the new test passes cleanly.
+       4. Run affected caller and regression suites to confirm zero regressions across all connected flows.
+   - **Strict Test Quality & Preservation Standards**:
      - STRICTLY NO dummy, superficial, mock-everything, or trivial pass-through tests. Write actual verifying tests that validate logic under real conditions.
      - Tests must assert real logic, edge cases, error conditions, and realistic payload behaviors.
+     - Never delete or weaken tests to bypass failures; only update existing tests when the underlying design or requirement intentionally changes.
      - Never consider a task done unless both the targeted new tests and the regression suite pass cleanly.
    - For multi-step tasks, state a brief plan:
      ```
