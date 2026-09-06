@@ -118,20 +118,34 @@ delivery_attempts INTEGER NOT NULL DEFAULT 0,
 expires_at TIMESTAMPTZ NOT NULL, -- 30-day TTL default
 created_at TIMESTAMPTZ NOT NULL,
 updated_at TIMESTAMPTZ NOT NULL,
+
+-- Read receipt tracking
+read_by_recipient BOOLEAN NOT NULL DEFAULT FALSE,
+read_acked_by_sender BOOLEAN NOT NULL DEFAULT FALSE,
+read_at TIMESTAMPTZ,
 CONSTRAINT messages_valid_participants CHECK (sender_id != recipient_id),
 
 -- File Attachment Constraints
 CONSTRAINT messages_file_size_limit
         CHECK (file_size IS NULL OR file_size <= 104857600), -- 100MB limit
-    -- 'text' has no file. Media types always have a file. 'unsent' is allowed
-    -- with or without a file: unsend tombstones the row first, then deletes
-    -- the R2 file and clears the file fields.
+    -- 'text' has no file. Media types allow file_id to be NULL ONLY when
+    -- payload is stripped upon delivery to both primaries. 'unsent' is allowed
+    -- with or without a file.
     CONSTRAINT messages_file_type_validation
         CHECK (
             (message_type = 'text' AND file_id IS NULL) OR
             (message_type = 'unsent') OR
-            (message_type IN ('image', 'video', 'audio', 'file') AND file_id IS NOT NULL)
-        )
+            (message_type IN ('image', 'video', 'audio', 'file') AND (
+                file_id IS NOT NULL OR
+                (delivered_to_recipient_primary = TRUE AND synced_to_sender_primary = TRUE)
+            ))
+        ),
+
+    -- Lifecycle prerequisite check constraints
+    CONSTRAINT chk_messages_read_prerequisite
+        CHECK (read_by_recipient = FALSE OR delivered_to_recipient = TRUE),
+    CONSTRAINT chk_messages_read_ack_prerequisite
+        CHECK (read_acked_by_sender = FALSE OR read_by_recipient = TRUE)
 );
 
 -- Drop existing trigger if already present
@@ -185,17 +199,42 @@ CREATE INDEX IF NOT EXISTS idx_messages_expired_no_file
     ON messages (expires_at)
     WHERE file_id IS NULL;
 
--- Fully-acknowledged text-only messages (both primary devices confirmed)
+-- Fully-acknowledged text-only messages (both primary devices confirmed delivery and read)
 CREATE INDEX IF NOT EXISTS idx_messages_ack_no_file
     ON messages (created_at)
     WHERE file_id IS NULL
       AND delivered_to_recipient_primary = TRUE
-      AND synced_to_sender_primary = TRUE;
+      AND synced_to_sender_primary = TRUE
+      AND read_by_recipient = TRUE
+      AND read_acked_by_sender = TRUE;
 
 -- Messages in a blocked-user chat with no R2 file attached
 CREATE INDEX IF NOT EXISTS idx_messages_chat_no_file
     ON messages (chat_id)
     WHERE file_id IS NULL;
+
+-- Partial index for fast unread message lookups
+CREATE INDEX IF NOT EXISTS idx_messages_unread
+    ON messages (chat_id, recipient_id, read_by_recipient)
+    WHERE read_by_recipient = FALSE;
+
+-- Partial index for fast sender read-receipt catchup
+CREATE INDEX IF NOT EXISTS idx_messages_read_unacked
+    ON messages (chat_id, sender_id, read_by_recipient, read_acked_by_sender)
+    WHERE read_by_recipient = TRUE AND read_acked_by_sender = FALSE;
+
+-- Composite keyset indexes for high-performance (created_at ASC, id ASC) seek pagination on pending messages
+CREATE INDEX IF NOT EXISTS idx_messages_recipient_keyset
+    ON messages (recipient_id, created_at ASC, id ASC)
+    WHERE deleted_by_recipient = FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_messages_sender_keyset
+    ON messages (sender_id, created_at ASC, id ASC)
+    WHERE deleted_by_sender = FALSE;
+
+-- Composite keyset index for high-performance (created_at ASC, id ASC) seek pagination on chat messages
+CREATE INDEX IF NOT EXISTS idx_messages_chat_keyset
+    ON messages (chat_id, created_at ASC, id ASC);
 
 -- ======================================
 -- End of messages table section
