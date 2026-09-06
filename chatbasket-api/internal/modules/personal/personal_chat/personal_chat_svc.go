@@ -1133,14 +1133,20 @@ func (s *chatService) AcknowledgeAndReadBatch(ctx context.Context, payload *AckA
 			return nil, uuid.Nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to commit tx")
 		}
 
-		// Async relay cleanup for this specific chat
-		go func(cID uuid.UUID) {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// Async relay cleanup for this specific chat: strip/delete delivered messages from both primaries
+		go func(cID uuid.UUID, ids []uuid.UUID) {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
+			for _, msgID := range ids {
+				msg, err := s.PostgresQueries.GetMessageByID(cleanupCtx, msgID)
+				if err == nil && msg.DeliveredToRecipientPrimary && msg.SyncedToSenderPrimary {
+					s.deleteMessageFromRelay(cleanupCtx, msg)
+				}
+			}
 			if err := s.PostgresQueries.CleanupFullyAcknowledgedReadMessagesInChat(cleanupCtx, cID); err != nil {
 				log.Printf("[AckAndReadBatch] Async CleanupFullyAcknowledgedReadMessagesInChat ERROR for chat %s: %v", cID, err)
 			}
-		}(targetChatID)
+		}(targetChatID, validIDs)
 	}
 
 	// 3. Build Read Receipts: Newly read, Already read, Purged from DB
