@@ -194,27 +194,44 @@ func TestGetPendingMessagesHandler_BlockFiltering(t *testing.T) {
 		"delivered_to_recipient", "delivered_to_recipient_primary", "synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient", "delivery_attempts",
 		"expires_at", "created_at", "updated_at",
+		"read_by_recipient", "read_acked_by_sender", "read_at",
 	}).AddRow(
 		uuid.New(), uuid.New(), senderA, userID,
 		msgAContent, msgAType, nil, nil,
 		nil, nil, nil, nil,
 		nil, nil, nil, nil,
-		false, nil, false,
+		false, false, false,
 		false, false, int32(0),
-		nowTime.Add(1*time.Hour), nowTime, nowTime,
+		nowTime.Add(1*time.Hour), nowTime, nowTime, false, false, nil,
 	).AddRow(
 		uuid.New(), uuid.New(), senderB, userID,
 		msgBContent, msgBType, nil, nil,
 		nil, nil, nil, nil,
 		nil, nil, nil, nil,
-		false, nil, false,
+		false, false, false,
 		false, false, int32(0),
-		nowTime.Add(1*time.Hour), nowTime.Add(1*time.Second), nowTime,
+		nowTime.Add(1*time.Hour), nowTime.Add(1*time.Second), nowTime, false, false, nil,
 	)
 
+	// Recipient stream: fetched up to maxTotalCapacity (2x limit) with a nil
+	// keyset cursor on first page — 5 args in the new keyset query.
 	mockPool.ExpectQuery("SELECT (.+) FROM messages").
-		WithArgs(userID, int32(100), sessionCreatedAt).
+		WithArgs(userID, int32(200), sessionCreatedAt, (*time.Time)(nil), (*uuid.UUID)(nil)).
 		WillReturnRows(rows)
+
+	// Sender stream: always fetched now (not only on primary) — empty here.
+	mockPool.ExpectQuery("SELECT (.+) FROM messages").
+		WithArgs(userID, int32(200), sessionCreatedAt, (*time.Time)(nil), (*uuid.UUID)(nil)).
+		WillReturnRows(pgxmock.NewRows([]string{
+			"id", "chat_id", "sender_id", "recipient_id",
+			"content", "message_type", "file_id", "file_name",
+			"file_size", "file_mime_type", "file_token_id", "file_token_secret",
+			"file_token_expiry", "thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
+			"delivered_to_recipient", "delivered_to_recipient_primary", "synced_to_sender_primary",
+			"deleted_by_sender", "deleted_by_recipient", "delivery_attempts",
+			"expires_at", "created_at", "updated_at",
+			"read_by_recipient", "read_acked_by_sender", "read_at",
+		}))
 
 	ctx := context.Background()
 	payload := &GetPendingMessagesPayload{Limit: 100}

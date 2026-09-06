@@ -12,9 +12,7 @@ import (
 
 type Querier interface {
 	CheckMessageExists(ctx context.Context, id uuid.UUID) (bool, error)
-	// Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
-	// and are older than or equal to a specific timestamp, but ONLY if they are plain text.
-	CleanupOlderFullyAcknowledgedMessages(ctx context.Context, arg CleanupOlderFullyAcknowledgedMessagesParams) error
+	CleanupFullyAcknowledgedReadMessagesInChat(ctx context.Context, chatID uuid.UUID) error
 	// Bounded cleanup batch: deletes sync actions for chats between blocked users.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	CleanupSyncActionsForBlockedUsersBatch(ctx context.Context, batchSize int32) (int64, error)
@@ -51,9 +49,10 @@ type Querier interface {
 	// Bounded cleanup batch: deletes expired messages without attached files.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteExpiredMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
-	// Bounded cleanup batch: deletes text-only messages fully acknowledged by both primaries.
+	// Bounded cleanup batch: deletes text-only messages fully acknowledged by both primaries, read, and read ACKed by sender.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteFullyAcknowledgedMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
+	DeleteHistorySync(ctx context.Context, arg DeleteHistorySyncParams) (int64, error)
 	DeleteMessage(ctx context.Context, id uuid.UUID) error
 	DeleteMessagesByChatID(ctx context.Context, chatID uuid.UUID) error
 	// Bounded cleanup batch: deletes sync actions older than 30 days.
@@ -66,6 +65,7 @@ type Querier interface {
 	GetHistorySyncForDownload(ctx context.Context, arg GetHistorySyncForDownloadParams) ([]byte, error)
 	GetHistorySyncMeta(ctx context.Context, id uuid.UUID) (GetHistorySyncMetaRow, error)
 	GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error)
+	GetMessagesByIds(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesByIdsRow, error)
 	GetMessagesWithFilesByChatID(ctx context.Context, chatID uuid.UUID) ([]Message, error)
 	// ===========================================
 	// Block Cleanup Operations (Background Worker)
@@ -86,17 +86,17 @@ type Querier interface {
 	// Messaging Eligibility Checks
 	// ===========================================
 	IsChatParticipant(ctx context.Context, arg IsChatParticipantParams) (bool, error)
-	MarkChatMessagesAsRead(ctx context.Context, arg MarkChatMessagesAsReadParams) error
-	MarkChatMessagesAsReadPrimary(ctx context.Context, arg MarkChatMessagesAsReadPrimaryParams) error
 	MarkMessageDeletedByRecipient(ctx context.Context, arg MarkMessageDeletedByRecipientParams) error
 	MarkMessageDeletedBySender(ctx context.Context, arg MarkMessageDeletedBySenderParams) error
 	MarkMessageDeliveredToRecipient(ctx context.Context, id uuid.UUID) error
 	MarkMessageDeliveredToRecipientPrimary(ctx context.Context, id uuid.UUID) error
 	MarkMessageSyncedToSenderPrimary(ctx context.Context, id uuid.UUID) error
-	// Marks all messages in a chat as delivered to primary if they are older than a specific message
-	// and are of type 'text' (plain messages). This prevents relay bloat.
-	MarkOlderMessagesAsDeliveredToRecipientPrimary(ctx context.Context, arg MarkOlderMessagesAsDeliveredToRecipientPrimaryParams) error
+	MarkMessagesAsRead(ctx context.Context, arg MarkMessagesAsReadParams) ([]MarkMessagesAsReadRow, error)
+	MarkMessagesDeliveredToRecipientBatch(ctx context.Context, arg MarkMessagesDeliveredToRecipientBatchParams) ([]MarkMessagesDeliveredToRecipientBatchRow, error)
+	MarkMessagesDeliveredToRecipientPrimaryBatch(ctx context.Context, arg MarkMessagesDeliveredToRecipientPrimaryBatchParams) ([]MarkMessagesDeliveredToRecipientPrimaryBatchRow, error)
+	MarkMessagesReadAckedBySender(ctx context.Context, arg MarkMessagesReadAckedBySenderParams) ([]uuid.UUID, error)
 	ResetChatReadStatus(ctx context.Context, arg ResetChatReadStatusParams) error
+	StripDeliveredMessagePayload(ctx context.Context, id uuid.UUID) error
 	UpdateChatLastDeliveredAt(ctx context.Context, arg UpdateChatLastDeliveredAtParams) error
 	// ===========================================
 	// Chat Status Update Operations (Phase 2b)

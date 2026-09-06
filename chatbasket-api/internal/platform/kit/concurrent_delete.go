@@ -22,13 +22,13 @@ import (
 //     into chunks of 1,000 instead of single deletes, achieving ~1-2s per 1,000 files
 //     vs the current ~5s per 100 files (50× speedup at scale).
 //
-// 20 is chosen as a conservative default that:
-//   - Gives ~20× throughput vs sequential deletes
+// 50 is chosen as a conservative default that:
+//   - Gives ~50× throughput vs sequential deletes
 //   - Stays well under any plausible R2 limit
 //   - Keeps network sockets + memory bounded
 //
 // For 100+ files/cycle, consider switching to batch DeleteObjects (see comment above).
-const MaxConcurrentDeletes = 20
+const MaxConcurrentDeletes = 50
 
 // PerDeleteTimeout caps each individual R2 delete call to prevent slow operations
 // from blocking the cleanup loop indefinitely.
@@ -43,7 +43,7 @@ type DeleteFunc func(ctx context.Context, fileID string) error
 // R2 confirmed success (or "not found" handled by the underlying idempotent DeleteFile).
 //
 // Why concurrency: R2 DELETE is the bottleneck (~100ms per call). Sequential
-// processing of 100 files = 10 seconds. With 20-way concurrency = ~500ms.
+// processing of 100 files = 10 seconds. With 50-way concurrency = ~200ms.
 //
 // Why semaphore: avoid overwhelming R2 rate limits or local resources.
 // MaxConcurrentDeletes caps concurrent in-flight deletes.

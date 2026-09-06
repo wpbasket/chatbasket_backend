@@ -183,7 +183,7 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 		FileTokenExpiry:             nil,
 		ExpiresAt:                   expiresAt,
 		SyncedToSenderPrimary:       params.IsPrimary,
-		DeliveredToRecipientPrimary: new(bool),
+		DeliveredToRecipientPrimary: false,
 	})
 	if dbErr != nil {
 		// Handle PK duplicate key violation (race condition: concurrent confirm requests)

@@ -149,15 +149,27 @@ func (s *chatConnectServer) GetMessages(ctx context.Context, req *connect.Reques
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
+	isPrimary, err := kit.GetConnectRpcIsPrimary(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
 	if req == nil || req.Msg == nil {
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
+	var afterCreatedAt *time.Time
+	if req.Msg.AfterCreatedAt != nil {
+		t := req.Msg.AfterCreatedAt.AsTime()
+		afterCreatedAt = &t
+	}
+
 	res, err := s.chatService.GetMessagesHandler(ctx, &GetMessagesPayload{
-		ChatID: req.Msg.ChatId,
-		Limit:  req.Msg.Limit,
-		Offset: req.Msg.Offset,
-	}, userID, sessionCreatedAt)
+		ChatID:         req.Msg.ChatId,
+		Limit:          req.Msg.Limit,
+		AfterCreatedAt: afterCreatedAt,
+		AfterMessageID: req.Msg.AfterMessageId,
+	}, userID, sessionCreatedAt, isPrimary)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
@@ -237,7 +249,7 @@ func (s *chatConnectServer) AcknowledgeDeliveryBatch(ctx context.Context, req *c
 	var chatID uuid.UUID
 	var senderID uuid.UUID
 	var latestCreatedAt time.Time
-	acknowledgedCount := 0
+	var acknowledgedMessageIds []string
 
 	// 1. Fetch info and perform acknowledgments
 	for i, msgIDStr := range req.Msg.MessageIds {
@@ -259,12 +271,12 @@ func (s *chatConnectServer) AcknowledgeDeliveryBatch(ctx context.Context, req *c
 
 		ackErr := s.chatService.AcknowledgeDelivery(ctx, messageID, req.Msg.AcknowledgedBy, sessionID, userID)
 		if ackErr == nil {
-			acknowledgedCount++
+			acknowledgedMessageIds = append(acknowledgedMessageIds, msgIDStr)
 		}
 	}
 
 	// 2. SSE Broadcast: single delivery_ack with all message_ids (strict DB timestamp only)
-	if req.Msg.AcknowledgedBy == "recipient" && s.personalSseManager != nil && chatID != uuid.Nil && senderID != uuid.Nil && !latestCreatedAt.IsZero() {
+	if req.Msg.AcknowledgedBy == "recipient" && s.personalSseManager != nil && chatID != uuid.Nil && senderID != uuid.Nil && !latestCreatedAt.IsZero() && len(acknowledgedMessageIds) > 0 {
 		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
 			Timestamp: timestamppb.Now(),
 			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
@@ -272,7 +284,7 @@ func (s *chatConnectServer) AcknowledgeDeliveryBatch(ctx context.Context, req *c
 					Event: &rpc_personal_chatv1.ChatSsePayload_AcknowledgeDeliverySseEvent{
 						AcknowledgeDeliverySseEvent: &rpc_personal_chatv1.AcknowledgeDeliverySsePayload{
 							ChatId:      chatID.String(),
-							MessageIds:  req.Msg.MessageIds,
+							MessageIds:  acknowledgedMessageIds,
 							DeliveredAt: timestamppb.New(latestCreatedAt),
 						},
 					},
@@ -283,8 +295,90 @@ func (s *chatConnectServer) AcknowledgeDeliveryBatch(ctx context.Context, req *c
 	}
 
 	return connect.NewResponse(&rpc_personal_chatv1.AckDeliveryBatchResponse{
-		AcknowledgedCount: int32(acknowledgedCount),
+		AcknowledgedCount:      int32(len(acknowledgedMessageIds)),
+		AcknowledgedMessageIds: acknowledgedMessageIds,
 	}), nil
+}
+
+func (s *chatConnectServer) AcknowledgeReadReceiptBatch(ctx context.Context, req *connect.Request[rpc_personal_chatv1.AckReadReceiptBatchRequest]) (*connect.Response[rpc_personal_chatv1.AckReadReceiptBatchResponse], error) {
+	userID, err := kit.GetConnectRpcUserID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+	isPrimary, err := kit.GetConnectRpcIsPrimary(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	if req == nil || req.Msg == nil {
+		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
+	}
+
+	res, err := s.chatService.AcknowledgeReadReceiptBatch(ctx, &AckReadReceiptBatchPayload{
+		ChatID:     req.Msg.ChatId,
+		MessageIDs: req.Msg.MessageIds,
+	}, userID, isPrimary)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+	return connect.NewResponse(res), nil
+}
+
+func (s *chatConnectServer) AcknowledgeAndReadBatch(ctx context.Context, req *connect.Request[rpc_personal_chatv1.AckAndReadBatchPayload]) (*connect.Response[rpc_personal_chatv1.AckAndReadBatchResponse], error) {
+	userID, err := kit.GetConnectRpcUserID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	isPrimary, err := kit.GetConnectRpcIsPrimary(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	if req == nil || req.Msg == nil {
+		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
+	}
+
+	res, chatID, svcErr := s.chatService.AcknowledgeAndReadBatch(ctx, &AckAndReadBatchPayload{
+		MessageIDs: req.Msg.MessageIds,
+	}, userID, isPrimary)
+	if svcErr != nil {
+		return nil, kit.ParseIntoRpcError(svcErr)
+	}
+
+	// SSE Broadcast: MarkChatReadSseEvent to other participant
+	if s.personalSseManager != nil && chatID != uuid.Nil && len(res.ReadMessages) > 0 {
+		if chat, chatErr := s.chatService.PostgresQueries.GetChatByID(ctx, chatID); chatErr == nil {
+			var otherUserID uuid.UUID
+			if chat.Participant1ID == userID.UuidUserId {
+				otherUserID = chat.Participant2ID
+			} else if chat.Participant2ID == userID.UuidUserId {
+				otherUserID = chat.Participant1ID
+			}
+
+			if otherUserID != uuid.Nil {
+				readAtStr := chat.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")
+				sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+					Timestamp: timestamppb.Now(),
+					Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+						ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+							Event: &rpc_personal_chatv1.ChatSsePayload_MarkChatReadSseEvent{
+								MarkChatReadSseEvent: &rpc_personal_chatv1.MarkChatReadSsePayload{
+									ChatId:       chatID.String(),
+									ReaderId:     userID.StringUserId,
+									ReadAt:       readAtStr,
+									ReadMessages: res.ReadMessages,
+								},
+							},
+						},
+					},
+				}
+				go s.personalSseManager.BroadcastToUser(otherUserID, sseEvent)
+			}
+		}
+	}
+
+	return connect.NewResponse(res), nil
 }
 
 func (s *chatConnectServer) GetUserChats(ctx context.Context, req *connect.Request[rpc_personal_chatv1.GetUserChatsRequest]) (*connect.Response[rpc_personal_chatv1.GetUserChatsResponse], error) {
@@ -326,8 +420,24 @@ func (s *chatConnectServer) GetPendingMessages(ctx context.Context, req *connect
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
+	var afterRecipientCreatedAt *time.Time
+	if req.Msg.AfterRecipientCreatedAt != nil {
+		t := req.Msg.AfterRecipientCreatedAt.AsTime()
+		afterRecipientCreatedAt = &t
+	}
+
+	var afterSenderCreatedAt *time.Time
+	if req.Msg.AfterSenderCreatedAt != nil {
+		t := req.Msg.AfterSenderCreatedAt.AsTime()
+		afterSenderCreatedAt = &t
+	}
+
 	res, err := s.chatService.GetPendingMessagesHandler(ctx, &GetPendingMessagesPayload{
-		Limit: req.Msg.Limit,
+		Limit:                   req.Msg.Limit,
+		AfterRecipientCreatedAt: afterRecipientCreatedAt,
+		AfterRecipientMessageID: req.Msg.AfterRecipientMessageId,
+		AfterSenderCreatedAt:    afterSenderCreatedAt,
+		AfterSenderMessageID:    req.Msg.AfterSenderMessageId,
 	}, userID, sessionCreatedAt, isPrimary)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
@@ -356,7 +466,7 @@ func (s *chatConnectServer) GetFileURL(ctx context.Context, req *connect.Request
 	return connect.NewResponse(res), nil
 }
 
-func (s *chatConnectServer) MarkChatRead(ctx context.Context, req *connect.Request[rpc_personal_chatv1.MarkChatReadRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
+func (s *chatConnectServer) MarkChatRead(ctx context.Context, req *connect.Request[rpc_personal_chatv1.MarkChatReadRequest]) (*connect.Response[rpc_personal_chatv1.MarkChatReadResponse], error) {
 	userID, err := kit.GetConnectRpcUserID(ctx)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
@@ -371,44 +481,54 @@ func (s *chatConnectServer) MarkChatRead(ctx context.Context, req *connect.Reque
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
-	svcErr := s.chatService.MarkChatReadHandler(ctx, &MarkChatReadPayload{
-		ChatID: req.Msg.ChatId,
+	readReceipts, svcErr := s.chatService.MarkChatRead(ctx, &MarkChatReadPayload{
+		ChatID:     req.Msg.ChatId,
+		MessageIDs: req.Msg.MessageIds,
 	}, userID, isPrimary)
 	if svcErr != nil {
 		return nil, kit.ParseIntoRpcError(svcErr)
 	}
 
-	// SSE Broadcast: MarkChatReadSseEvent to other participant
-	if s.personalSseManager != nil {
-		chatUUID, _ := uuid.Parse(req.Msg.ChatId)
-		chat, chatErr := s.chatService.PostgresQueries.GetChatByID(ctx, chatUUID)
-		if chatErr == nil {
+	chatUUID, _ := uuid.Parse(req.Msg.ChatId)
+	chat, chatErr := s.chatService.PostgresQueries.GetChatByID(ctx, chatUUID)
+	readAtStr := ""
+	if chatErr == nil && len(readReceipts) > 0 {
+		readAtStr = chat.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")
+		// SSE Broadcast: MarkChatReadSseEvent to other participant
+		if s.personalSseManager != nil {
 			var otherUserID uuid.UUID
 			if chat.Participant1ID == userID.UuidUserId {
 				otherUserID = chat.Participant2ID
-			} else {
+			} else if chat.Participant2ID == userID.UuidUserId {
 				otherUserID = chat.Participant1ID
 			}
 
-			sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
-				Timestamp: timestamppb.Now(),
-				Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
-					ChatModule: &rpc_personal_chatv1.ChatSsePayload{
-						Event: &rpc_personal_chatv1.ChatSsePayload_MarkChatReadSseEvent{
-							MarkChatReadSseEvent: &rpc_personal_chatv1.MarkChatReadSsePayload{
-								ChatId:   req.Msg.ChatId,
-								ReaderId: userID.StringUserId,
-								ReadAt:   chat.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+			if otherUserID != uuid.Nil {
+				sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+					Timestamp: timestamppb.Now(),
+					Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+						ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+							Event: &rpc_personal_chatv1.ChatSsePayload_MarkChatReadSseEvent{
+								MarkChatReadSseEvent: &rpc_personal_chatv1.MarkChatReadSsePayload{
+									ChatId:       req.Msg.ChatId,
+									ReaderId:     userID.StringUserId,
+									ReadAt:       readAtStr,
+									ReadMessages: readReceipts,
+								},
 							},
 						},
 					},
-				},
+				}
+				go s.personalSseManager.BroadcastToUser(otherUserID, sseEvent)
 			}
-			go s.personalSseManager.BroadcastToUser(otherUserID, sseEvent)
 		}
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{Status: true, Message: "success"}), nil
+	return connect.NewResponse(&rpc_personal_chatv1.MarkChatReadResponse{
+		Status:       true,
+		ReadAt:       readAtStr,
+		ReadMessages: readReceipts,
+	}), nil
 }
 
 func (s *chatConnectServer) UnsendMessage(ctx context.Context, req *connect.Request[rpc_personal_chatv1.UnsendMessageRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -674,6 +794,9 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 			FileMimeType:          message.FileMimeType,
 			ViewUrl:               viewURL,
 			DownloadUrl:           downloadURL,
+			ReadByRecipient:       message.ReadByRecipient,
+			ReadAckedBySender:     message.ReadAckedBySender,
+			ReadAt:                kit.OptionalTimestamp(message.ReadAt),
 		}
 
 		recipientUUID, _ := uuid.Parse(protoMsg.RecipientId)
@@ -846,4 +969,31 @@ func (s *chatConnectServer) DownloadHistorySync(ctx context.Context, req *connec
 	return connect.NewResponse(&rpc_personal_chatv1.DownloadHistorySyncResponse{
 		PayloadCipher: payload,
 	}), nil
+}
+
+func (s *chatConnectServer) AcknowledgeHistorySync(ctx context.Context, req *connect.Request[rpc_personal_chatv1.AcknowledgeHistorySyncRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
+	userID, err := kit.GetConnectRpcUserID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	sessionUUIDVal, err := kit.GetConnectRpcSessionUUID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	if req == nil || req.Msg == nil {
+		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
+	}
+
+	requestID, err := uuid.Parse(req.Msg.RequestId)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "missing or invalid request_id"))
+	}
+
+	if svcErr := s.chatService.AcknowledgeHistorySync(ctx, userID.UuidUserId, sessionUUIDVal, requestID); svcErr != nil {
+		return nil, kit.ParseIntoRpcError(svcErr)
+	}
+
+	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{Status: true}), nil
 }

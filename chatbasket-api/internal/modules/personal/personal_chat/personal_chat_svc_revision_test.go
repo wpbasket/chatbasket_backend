@@ -238,7 +238,8 @@ func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
 		"delivered_to_recipient", "delivered_to_recipient_primary",
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
-		"delivery_attempts", "expires_at", "created_at", "updated_at"}
+		"delivery_attempts", "expires_at", "created_at", "updated_at",
+		"read_by_recipient", "read_acked_by_sender", "read_at"}
 	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
@@ -246,10 +247,10 @@ func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
-			false, nil,
+			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
 		),
 	)
 
@@ -345,7 +346,8 @@ func TestSendMessage_RevisionStaleness_AcceptsZeroRevision(t *testing.T) {
 		"delivered_to_recipient", "delivered_to_recipient_primary",
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
-		"delivery_attempts", "expires_at", "created_at", "updated_at"}
+		"delivery_attempts", "expires_at", "created_at", "updated_at",
+		"read_by_recipient", "read_acked_by_sender", "read_at"}
 	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
@@ -353,10 +355,10 @@ func TestSendMessage_RevisionStaleness_AcceptsZeroRevision(t *testing.T) {
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
-			false, nil,
+			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
 		),
 	)
 	mockPool.ExpectExec(`UPDATE.*chats`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))

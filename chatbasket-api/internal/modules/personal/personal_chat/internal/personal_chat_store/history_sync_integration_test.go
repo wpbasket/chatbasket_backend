@@ -110,4 +110,17 @@ func TestHistorySyncStore_Integration(t *testing.T) {
 	// 6. Check it still exists after download (SQLC only SELECTs)
 	_, err = queries.GetHistorySyncMeta(ctx, reqID)
 	assert.NoError(t, err)
+
+	// 7. DeleteHistorySync deletes row upon ACK
+	deletedRows, err := queries.DeleteHistorySync(ctx, personal_chat_store.DeleteHistorySyncParams{
+		ID:        reqID,
+		UserID:    userID,
+		SessionID: sessionID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deletedRows)
+
+	// 8. Verify it no longer exists
+	_, err = queries.GetHistorySyncMeta(ctx, reqID)
+	assert.Error(t, err)
 }

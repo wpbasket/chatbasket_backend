@@ -1,6 +1,7 @@
 package personal_chat
 
 import (
+	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
 	"chatbasket-api/internal/platform/kit"
 	"time"
 
@@ -70,6 +71,10 @@ type MessageResponse struct {
 	FileMimeType                *string    `json:"fileMimeType"`
 	ViewURL                     string     `json:"viewUrl,omitempty"`
 	DownloadURL                 string     `json:"downloadUrl,omitempty"`
+	ReadByRecipient             bool       `json:"readByRecipient"`
+	ReadAckedBySender           bool       `json:"readAckedBySender"`
+	ReadAt                      *time.Time `json:"readAt,omitempty"`
+	IsConsumed                  bool       `json:"isConsumed"`
 }
 
 type MessagingEligibilityResponse struct {
@@ -94,7 +99,19 @@ type AcknowledgeDeliveryResponse struct {
 }
 
 type AckDeliveryBatchResponse struct {
-	AcknowledgedCount int `json:"acknowledgedCount"`
+	AcknowledgedCount      int      `json:"acknowledgedCount"`
+	AcknowledgedMessageIds []string `json:"acknowledgedMessageIds"`
+}
+
+type AckReadReceiptBatchResponse struct {
+	AcknowledgedCount      int      `json:"acknowledgedCount"`
+	AcknowledgedMessageIds []string `json:"acknowledgedMessageIds"`
+}
+
+type MarkChatReadResponse struct {
+	Status       bool                              `json:"status"`
+	ReadAt       string                            `json:"readAt"`
+	ReadMessages []*rpc_personal_chatv1.MessageReadReceipt `json:"readMessages"`
 }
 
 type GetFileURLResponse struct {
@@ -201,13 +218,19 @@ type AcknowledgeDeliveryPayload struct {
 }
 
 type GetMessagesPayload struct {
-	ChatID string `query:"chatId" validate:"required,uuid"`
-	Limit  int32  `query:"limit"`
-	Offset int32  `query:"offset"`
+	ChatID         string     `query:"chatId" validate:"required,uuid"`
+	Limit          int32      `query:"limit"`
+	AfterCreatedAt *time.Time `query:"afterCreatedAt"`
+	AfterMessageID *string    `query:"afterMessageId" validate:"omitempty,uuid"`
+}
+
+type AckAndReadBatchPayload struct {
+	MessageIDs []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
 }
 
 type MarkChatReadPayload struct {
-	ChatID string `json:"chatId" validate:"required,uuid"`
+	ChatID     string   `json:"chatId" validate:"required,uuid"`
+	MessageIDs []string `json:"messageIds" validate:"omitempty,dive,uuid"`
 }
 
 type GetFileURLPayload struct {
@@ -228,7 +251,11 @@ type GetSyncActionsPayload struct {
 }
 
 type GetPendingMessagesPayload struct {
-	Limit int32 `query:"limit"`
+	Limit                   int32      `query:"limit"`
+	AfterRecipientCreatedAt *time.Time `query:"afterRecipientCreatedAt"`
+	AfterRecipientMessageID *string    `query:"afterRecipientMessageId"`
+	AfterSenderCreatedAt    *time.Time `query:"afterSenderCreatedAt"`
+	AfterSenderMessageID    *string    `query:"afterSenderMessageId"`
 }
 
 type AcknowledgeSyncActionPayload struct {
@@ -238,6 +265,11 @@ type AcknowledgeSyncActionPayload struct {
 type AckDeliveryBatchPayload struct {
 	MessageIDs     []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
 	AcknowledgedBy string   `json:"acknowledgedBy" validate:"required,oneof=recipient sender"`
+}
+
+type AckReadReceiptBatchPayload struct {
+	ChatID     string   `json:"chatId" validate:"required,uuid"`
+	MessageIDs []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

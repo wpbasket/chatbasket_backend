@@ -156,7 +156,11 @@ WHERE
     AND deleted_by_recipient = FALSE
     AND expires_at > now()
     AND created_at >= sqlc.arg('session_created_at')
-ORDER BY created_at ASC
+    AND (
+        sqlc.narg('after_created_at')::timestamptz IS NULL
+        OR (created_at, id) > (sqlc.narg('after_created_at'), sqlc.narg('after_message_id')::uuid)
+    )
+ORDER BY created_at ASC, id ASC
 LIMIT $2;
 
 -- name: GetPendingSenderSyncMessages :many
@@ -165,10 +169,13 @@ FROM messages
 WHERE
     sender_id = $1
     AND deleted_by_sender = FALSE
-    AND synced_to_sender_primary = FALSE
     AND expires_at > now()
     AND created_at >= sqlc.arg('session_created_at')
-ORDER BY created_at ASC
+    AND (
+        sqlc.narg('after_created_at')::timestamptz IS NULL
+        OR (created_at, id) > (sqlc.narg('after_created_at'), sqlc.narg('after_message_id')::uuid)
+    )
+ORDER BY created_at ASC, id ASC
 LIMIT $2;
 
 
@@ -181,6 +188,17 @@ WHERE
     id = $1
     AND delivered_to_recipient = FALSE;
 
+-- name: MarkMessagesDeliveredToRecipientBatch :many
+UPDATE messages
+SET
+    delivered_to_recipient = TRUE,
+    updated_at = now()
+WHERE
+    id = ANY(sqlc.arg('message_ids')::uuid[])
+    AND recipient_id = $1
+    AND delivered_to_recipient = FALSE
+RETURNING id, chat_id, sender_id, created_at;
+
 -- name: MarkMessageDeliveredToRecipientPrimary :exec
 UPDATE messages
 SET
@@ -191,20 +209,36 @@ WHERE
     id = $1
     AND delivered_to_recipient_primary = FALSE;
 
--- name: MarkOlderMessagesAsDeliveredToRecipientPrimary :exec
--- Marks all messages in a chat as delivered to primary if they are older than a specific message
--- and are of type 'text' (plain messages). This prevents relay bloat.
+-- name: MarkMessagesDeliveredToRecipientPrimaryBatch :many
 UPDATE messages
 SET
-    delivered_to_recipient_primary = TRUE,
     delivered_to_recipient = TRUE,
+    delivered_to_recipient_primary = TRUE,
     updated_at = now()
 WHERE
-    chat_id = $1
-    AND recipient_id = $2
-    AND created_at <= $3
-    AND message_type = 'text'
-    AND delivered_to_recipient_primary = FALSE;
+    id = ANY(sqlc.arg('message_ids')::uuid[])
+    AND recipient_id = $1
+    AND delivered_to_recipient_primary = FALSE
+RETURNING id, chat_id, sender_id, created_at;
+
+-- name: StripDeliveredMessagePayload :exec
+UPDATE messages
+SET
+    content = '',
+    file_id = NULL,
+    file_name = NULL,
+    file_size = NULL,
+    file_mime_type = NULL,
+    file_token_id = NULL,
+    file_token_secret = NULL,
+    file_token_expiry = NULL,
+    thumbnail_file_id = NULL,
+    thumbnail_token_id = NULL,
+    thumbnail_token_secret = NULL
+WHERE
+    id = $1
+    AND delivered_to_recipient_primary = TRUE
+    AND synced_to_sender_primary = TRUE;
 
 -- name: MarkMessageSyncedToSenderPrimary :exec
 UPDATE messages
@@ -262,38 +296,46 @@ WHERE
     id = $1
     AND recipient_id = $2;
 
--- name: MarkChatMessagesAsRead :exec
+-- name: MarkMessagesAsRead :many
 UPDATE messages
 SET
-    delivered_to_recipient = TRUE,
-    updated_at = now()
+    read_by_recipient = TRUE,
+    read_at = now()
 WHERE
     chat_id = $1
     AND recipient_id = $2
-    AND delivered_to_recipient = FALSE;
+    AND id = ANY(sqlc.arg('message_ids')::uuid[])
+    AND delivered_to_recipient = TRUE
+    AND read_by_recipient = FALSE
+RETURNING id, read_at;
 
--- name: MarkChatMessagesAsReadPrimary :exec
+-- name: MarkMessagesReadAckedBySender :many
 UPDATE messages
 SET
-    delivered_to_recipient_primary = TRUE,
-    delivered_to_recipient = TRUE, -- Implicitly true
-    updated_at = now()
+    read_acked_by_sender = TRUE
 WHERE
     chat_id = $1
-    AND recipient_id = $2
-    AND delivered_to_recipient_primary = FALSE;
+    AND sender_id = $2
+    AND id = ANY(sqlc.arg('message_ids')::uuid[])
+    AND read_by_recipient = TRUE
+    AND read_acked_by_sender = FALSE
+RETURNING id;
 
+-- name: GetMessagesByIds :many
+SELECT id, chat_id, sender_id, recipient_id, read_by_recipient, read_at, read_acked_by_sender
+FROM messages
+WHERE id = ANY(sqlc.arg('message_ids')::uuid[]);
 
--- name: CleanupOlderFullyAcknowledgedMessages :exec
--- Deletes all messages in a chat that are fully acknowledged (both primary flags TRUE)
--- and are older than or equal to a specific timestamp, but ONLY if they are plain text.
+-- name: CleanupFullyAcknowledgedReadMessagesInChat :exec
 DELETE FROM messages
 WHERE
     chat_id = $1
-    AND created_at <= $2
-    AND message_type = 'text'
+    AND read_by_recipient = TRUE
+    AND read_acked_by_sender = TRUE
     AND delivered_to_recipient_primary = TRUE
-    AND synced_to_sender_primary = TRUE;
+    AND synced_to_sender_primary = TRUE
+    AND file_id IS NULL;
+
 
 
 -- name: GetChatMessages :many
@@ -305,18 +347,20 @@ WHERE
     AND created_at >= sqlc.arg('session_created_at')
     AND (
         (
-            sender_id = $4
+            sender_id = sqlc.arg('user_id')::uuid
             AND deleted_by_sender = FALSE
         )
         OR (
-            recipient_id = $4
+            recipient_id = sqlc.arg('user_id')::uuid
             AND deleted_by_recipient = FALSE
         )
     )
-ORDER BY created_at DESC
-LIMIT $2
-OFFSET
-    $3;
+    AND (
+        sqlc.narg('after_created_at')::timestamptz IS NULL
+        OR (created_at, id) > (sqlc.narg('after_created_at')::timestamptz, sqlc.narg('after_message_id')::uuid)
+    )
+ORDER BY created_at ASC, id ASC
+LIMIT $2;
 
 
 
@@ -618,6 +662,10 @@ SELECT payload
 FROM history_sync 
 WHERE id = $1 AND session_id = $2;
 
+-- name: DeleteHistorySync :execrows
+DELETE FROM history_sync
+WHERE id = $1 AND user_id = $2 AND session_id = $3;
+
 
 
 -- name: DeleteExpiredMessagesWithoutFilesBatch :execrows
@@ -634,11 +682,15 @@ USING batch
 WHERE m.id = batch.id;
 
 -- name: DeleteFullyAcknowledgedMessagesWithoutFilesBatch :execrows
--- Bounded cleanup batch: deletes text-only messages fully acknowledged by both primaries.
+-- Bounded cleanup batch: deletes text-only messages fully acknowledged by both primaries, read, and read ACKed by sender.
 -- Controlled from Go with a batch_size parameter and a time budget.
 WITH batch AS (
   SELECT id FROM messages
-  WHERE file_id IS NULL AND delivered_to_recipient_primary = TRUE AND synced_to_sender_primary = TRUE
+  WHERE file_id IS NULL 
+    AND delivered_to_recipient_primary = TRUE 
+    AND synced_to_sender_primary = TRUE 
+    AND read_by_recipient = TRUE 
+    AND read_acked_by_sender = TRUE
   FOR UPDATE SKIP LOCKED
   LIMIT sqlc.arg('batch_size')
 )

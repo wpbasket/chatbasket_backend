@@ -34,8 +34,9 @@ The system prioritizes real-time delivery while ensuring Primary devices maintai
 
 #### 2.2.1 Delivery Paths
 1.  **ConnectSSE Push**: When a message is sent, the backend immediately broadcasts it to **all active SSE stream connections** for both the sender and recipient (including all Primary and Secondary devices).
-2.  **Relay Fetch**: If a device (Primary or Secondary) was offline during the push, it can fetch missed messages directly from the backend **as long as the message remains in the relay**.
-3.  **P2P Sync**: Once a message is purged from the relay, secondary devices can **only** retrieve it by requesting a P2P sync from their respective Primary device via WebRTC.
+2.  **Relay Fetch (`/pending`)**: If a device (Primary or Secondary) was offline during the push, it can fetch missed messages directly from the backend **as long as the message remains in the relay**. Both Primary and Secondary devices fetch all available relay messages for their user account.
+3.  **Client ACK Boundaries**: The client application manages `isPrimary` (`isCentral`) on launch. Primary devices issue sender-sync ACKs (`synced_to_sender_primary`) and primary-recipient ACKs; Secondary devices consume and display relay messages without issuing primary-only ACKs.
+4.  **P2P Sync / History Sync**: Once a message is purged from the relay, secondary devices retrieve historical messages via P2P sync (WebRTC) or Encrypted History Sync with their Primary device.
 
 #### 2.2.2 Backend Purging Rules (Double-Primary Acknowledgement)
 The backend relay is governed by strict "Double-Primary Acknowledgement" rules:

@@ -377,7 +377,7 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 		MessageType:                 params.MessageType,
 		ExpiresAt:                   expiresAt,
 		SyncedToSenderPrimary:       params.IsPrimary,
-		DeliveredToRecipientPrimary: new(bool),
+		DeliveredToRecipientPrimary: false,
 	})
 	if dbErr != nil {
 		// Handle PK duplicate key violation (race condition: both WS and REST passed CheckMessageExists)
@@ -451,6 +451,9 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		FileName:              message.FileName,
 		FileSize:              message.FileSize,
 		FileMimeType:          message.FileMimeType,
+		ReadByRecipient:       message.ReadByRecipient,
+		ReadAckedBySender:     message.ReadAckedBySender,
+		ReadAt:                kit.OptionalTimestamp(message.ReadAt),
 	}, nil
 }
 
@@ -461,9 +464,10 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UUID, acknowledgedBy string, sessionId string, userID kit.UserId) error {
 	message, err := s.PostgresQueries.GetMessageByID(ctx, messageID)
 	if err != nil {
-		// Idempotency: If the message is not found, it may have already been fully acknowledged and deleted from the relay.
-		log.Printf("[ACK] Message %s not found (likely already fully acknowledged and deleted). Treating as success.", messageID)
-		return nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 	isCentral, centralErr := s.AuthProvider.IsSessionCentral(ctx, userID.UuidUserId, sessionId)
 	if centralErr != nil {
@@ -474,8 +478,11 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 	}
 
 	if acknowledgedBy == "recipient" {
+		if message.RecipientID != userID.UuidUserId {
+			return kit.NewError(http.StatusForbidden, "forbidden", "Forbidden: You are not the recipient of this message")
+		}
 		if err := s.PostgresQueries.MarkMessageDeliveredToRecipient(ctx, messageID); err != nil {
-			return kit.NewError(http.StatusInternalServerError, "ack_failed_basic", kit.GetPostgresError(err).Message)
+			return kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 		}
 		_ = s.PostgresQueries.UpdateChatLastDeliveredAt(ctx, personal_chat_store.UpdateChatLastDeliveredAtParams{
 			ChatID:          message.ChatID,
@@ -484,14 +491,7 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 		})
 		if isCentral {
 			if err := s.PostgresQueries.MarkMessageDeliveredToRecipientPrimary(ctx, messageID); err != nil {
-				log.Printf("[ACK] MarkMessageDeliveredToRecipientPrimary ERROR: %v", err)
-			}
-			if err := s.PostgresQueries.MarkOlderMessagesAsDeliveredToRecipientPrimary(ctx, personal_chat_store.MarkOlderMessagesAsDeliveredToRecipientPrimaryParams{
-				ChatID:      message.ChatID,
-				RecipientID: userID.UuidUserId,
-				CreatedAt:   message.CreatedAt,
-			}); err != nil {
-				log.Printf("[ACK] MarkOlderMessagesAsDeliveredToRecipientPrimary ERROR: %v", err)
+				return kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 			}
 		}
 	} else {
@@ -502,22 +502,19 @@ func (s *chatService) AcknowledgeDelivery(ctx context.Context, messageID uuid.UU
 			return kit.NewError(http.StatusForbidden, "forbidden", "Forbidden: You are not the sender of this message")
 		}
 		if err := s.PostgresQueries.MarkMessageSyncedToSenderPrimary(ctx, messageID); err != nil {
-			log.Printf("[ACK] MarkMessageSyncedToSenderPrimary ERROR: %v", err)
+			return kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 		}
 	}
 
 	updatedMessage, err := s.PostgresQueries.GetMessageByID(ctx, messageID)
 	if err == nil {
-		recipientPrimaryDelivered := updatedMessage.DeliveredToRecipientPrimary != nil && *updatedMessage.DeliveredToRecipientPrimary
+		recipientPrimaryDelivered := updatedMessage.DeliveredToRecipientPrimary
 		senderPrimarySynced := updatedMessage.SyncedToSenderPrimary
 		if recipientPrimaryDelivered && senderPrimarySynced {
 			s.deleteMessageFromRelay(ctx, updatedMessage)
 		}
-		if err := s.PostgresQueries.CleanupOlderFullyAcknowledgedMessages(ctx, personal_chat_store.CleanupOlderFullyAcknowledgedMessagesParams{
-			ChatID:    updatedMessage.ChatID,
-			CreatedAt: updatedMessage.CreatedAt,
-		}); err != nil {
-			log.Printf("[ACK] CleanupOlderFullyAcknowledgedMessages ERROR: %v", err)
+		if err := s.PostgresQueries.CleanupFullyAcknowledgedReadMessagesInChat(ctx, updatedMessage.ChatID); err != nil {
+			log.Printf("[ACK] CleanupFullyAcknowledgedReadMessagesInChat ERROR: %v", err)
 		}
 	}
 	return nil
@@ -541,13 +538,20 @@ func (s *chatService) AcknowledgeDeliveryHandler(ctx context.Context, payload *A
 // Message Queries
 // ──────────────────────────────────────────────────────────────────────────────
 
-func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, userID kit.UserId, limit, offset int32, sessionCreatedAt time.Time) ([]personal_chat_store.Message, error) {
+func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, userID kit.UserId, limit int32, afterCreatedAt *time.Time, afterMessageID *uuid.UUID, sessionCreatedAt time.Time) ([]personal_chat_store.Message, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 200 {
+		limit = 200
+	}
 	messages, err := s.PostgresQueries.GetChatMessages(ctx, personal_chat_store.GetChatMessagesParams{
 		ChatID:           chatID,
 		Limit:            limit,
-		Offset:           offset,
-		SenderID:         userID.UuidUserId,
+		UserID:           userID.UuidUserId,
 		SessionCreatedAt: sessionCreatedAt,
+		AfterCreatedAt:   afterCreatedAt,
+		AfterMessageID:   afterMessageID,
 	})
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
@@ -555,60 +559,132 @@ func (s *chatService) GetChatMessages(ctx context.Context, chatID uuid.UUID, use
 	return messages, nil
 }
 
-func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_chat_store.Message, userID kit.UserId) MessageResponse {
-	viewURL, downloadURL := "", ""
-	if msg.FileID != nil && *msg.FileID != "" {
-		var fileErr error
-		viewURL, downloadURL, fileErr = s.GenerateMessageFileURLs(ctx, msg, userID)
-		if fileErr != nil {
-			log.Printf("[buildMessageResponse] Failed to generate URLs for message %s: %v", msg.ID, fileErr)
+func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_chat_store.Message, userID kit.UserId, isPrimary bool, senderKeyRevision int32) MessageResponse {
+	isFromMe := msg.SenderID == userID.UuidUserId
+
+	var isConsumed bool
+	switch {
+	case !isPrimary:
+		// Secondary device: consumed if DB payload was already stripped
+		isConsumed = (msg.Content == "")
+	case isFromMe:
+		// Primary sender phone: consumed if already synced to primary phone
+		isConsumed = msg.SyncedToSenderPrimary
+	default:
+		// Primary recipient phone: consumed if already delivered to primary phone
+		isConsumed = msg.DeliveredToRecipientPrimary
+	}
+
+	var content string
+	var fileID, fileName, fileMimeType *string
+	var fileSize *int64
+	var viewURL, downloadURL string
+
+	if isConsumed {
+		// Stripped payload on the wire for bandwidth saving / already consumed
+		content = ""
+		fileID = nil
+		fileName = nil
+		fileSize = nil
+		fileMimeType = nil
+		viewURL = ""
+		downloadURL = ""
+	} else {
+		// Full encrypted payload
+		content = msg.Content
+		fileID = msg.FileID
+		fileName = msg.FileName
+		fileSize = msg.FileSize
+		fileMimeType = msg.FileMimeType
+		if msg.FileID != nil && *msg.FileID != "" {
+			var fileErr error
+			viewURL, downloadURL, fileErr = s.GenerateMessageFileURLs(ctx, msg, userID)
+			if fileErr != nil {
+				log.Printf("[buildMessageResponse] Failed to generate URLs for message %s: %v", msg.ID, fileErr)
+			}
 		}
 	}
-	deliveredToRecipientPrimary := false
-	if msg.DeliveredToRecipientPrimary != nil {
-		deliveredToRecipientPrimary = *msg.DeliveredToRecipientPrimary
-	}
+
 	return MessageResponse{
 		MessageID:                   msg.ID.String(),
 		ChatID:                      msg.ChatID.String(),
-		IsFromMe:                    msg.SenderID == userID.UuidUserId,
+		IsFromMe:                    isFromMe,
 		RecipientID:                 msg.RecipientID.String(),
-		SenderKeysRevision:          s.getSenderKeysRevision(ctx, msg.SenderID),
-		Content:                     msg.Content,
+		SenderKeysRevision:          senderKeyRevision,
+		Content:                     content,
 		MessageType:                 msg.MessageType,
 		DeliveredToRecipient:        msg.DeliveredToRecipient,
-		DeliveredToRecipientPrimary: deliveredToRecipientPrimary,
+		DeliveredToRecipientPrimary: msg.DeliveredToRecipientPrimary,
 		SyncedToSenderPrimary:       msg.SyncedToSenderPrimary,
 		CreatedAt:                   msg.CreatedAt,
 		ExpiresAt:                   msg.ExpiresAt,
-		FileID:                      msg.FileID,
-		FileName:                    msg.FileName,
-		FileSize:                    msg.FileSize,
-		FileMimeType:                msg.FileMimeType,
+		FileID:                      fileID,
+		FileName:                    fileName,
+		FileSize:                    fileSize,
+		FileMimeType:                fileMimeType,
 		ViewURL:                     viewURL,
 		DownloadURL:                 downloadURL,
+		ReadByRecipient:             msg.ReadByRecipient,
+		ReadAckedBySender:           msg.ReadAckedBySender,
+		ReadAt:                      msg.ReadAt,
+		IsConsumed:                  isConsumed,
 	}
 }
 
-func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time) (*rpc_personal_chatv1.GetMessagesResponse, error) {
+func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessagesPayload, userID kit.UserId, sessionCreatedAt time.Time, isPrimary bool) (*rpc_personal_chatv1.GetMessagesResponse, error) {
 	chatID, err := uuid.Parse(payload.ChatID)
 	if err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_chat_id", "Invalid chat ID")
 	}
-	isParticipant, partErr := s.IsChatParticipant(ctx, chatID, userID.UuidUserId)
-	if partErr != nil {
-		return nil, partErr
+
+	// 1. Fetch chat metadata FIRST (combines existence check, participant authorization & other user timestamps in 1 query)
+	chat, chatErr := s.PostgresQueries.GetChatByID(ctx, chatID)
+	if chatErr != nil {
+		if errors.Is(chatErr, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusForbidden, "forbidden", "You are not a participant in this chat")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", "Failed to fetch chat")
 	}
-	if !isParticipant {
+	if chat.Participant1ID != userID.UuidUserId && chat.Participant2ID != userID.UuidUserId {
 		return nil, kit.NewError(http.StatusForbidden, "forbidden", "You are not a participant in this chat")
 	}
-	messages, err := s.GetChatMessages(ctx, chatID, userID, payload.Limit, payload.Offset, sessionCreatedAt)
+
+	hasCreatedAt := payload.AfterCreatedAt != nil
+	hasMsgID := payload.AfterMessageID != nil && *payload.AfterMessageID != ""
+	if hasCreatedAt != hasMsgID {
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_cursor", "Both after_created_at and after_message_id must be provided together")
+	}
+	var afterMsgUUID *uuid.UUID
+	if hasMsgID {
+		parsed, parseErr := uuid.Parse(*payload.AfterMessageID)
+		if parseErr != nil {
+			return nil, kit.NewError(http.StatusBadRequest, "invalid_cursor", "Invalid after_message_id format")
+		}
+		afterMsgUUID = &parsed
+	}
+
+	// 2. Fetch paginated chat messages bounded by session epoch and keyset seek
+	messages, err := s.GetChatMessages(ctx, chatID, userID, payload.Limit, payload.AfterCreatedAt, afterMsgUUID, sessionCreatedAt)
 	if err != nil {
 		return nil, err
 	}
+
+	// 3. Memoize sender key revisions for the chat participants (eliminates N+1 lookups)
+	revisionMap := make(map[uuid.UUID]int32, 2)
+	getRevision := func(senderID uuid.UUID) int32 {
+		if rev, ok := revisionMap[senderID]; ok {
+			return rev
+		}
+		rev := s.getSenderKeysRevision(ctx, senderID)
+		revisionMap[senderID] = rev
+		return rev
+	}
+
+	// 4. Build message responses directly
 	msgResponses := make([]*rpc_personal_chatv1.Message, 0, len(messages))
 	for _, msg := range messages {
-		messageResponse := s.buildMessageResponse(ctx, msg, userID)
+		rev := getRevision(msg.SenderID)
+		messageResponse := s.buildMessageResponse(ctx, msg, userID, isPrimary, rev)
 		msgResponses = append(msgResponses, &rpc_personal_chatv1.Message{
 			MessageId:                   messageResponse.MessageID,
 			ChatId:                      messageResponse.ChatID,
@@ -628,12 +704,15 @@ func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessag
 			FileMimeType:                messageResponse.FileMimeType,
 			ViewUrl:                     messageResponse.ViewURL,
 			DownloadUrl:                 messageResponse.DownloadURL,
+			ReadByRecipient:             messageResponse.ReadByRecipient,
+			ReadAckedBySender:           messageResponse.ReadAckedBySender,
+			ReadAt:                      kit.OptionalTimestamp(messageResponse.ReadAt),
+			IsConsumed:                  messageResponse.IsConsumed,
 		})
 	}
-	chat, chatErr := s.PostgresQueries.GetChatByID(ctx, chatID)
-	if chatErr != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", "Failed to fetch chat")
-	}
+
+	nextCreatedAt, nextMessageID := extractNextCursor(messages)
+
 	var otherReadAt, otherDeliveredAt time.Time
 	if chat.Participant1ID == userID.UuidUserId {
 		otherReadAt = kit.DerefTime(chat.P2LastReadAt)
@@ -647,6 +726,8 @@ func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessag
 		Count:                    int32(len(msgResponses)),
 		OtherUserLastReadAt:      timestamppb.New(otherReadAt),
 		OtherUserLastDeliveredAt: timestamppb.New(otherDeliveredAt),
+		NextCreatedAt:            nextCreatedAt,
+		NextMessageId:            nextMessageID,
 	}, nil
 }
 
@@ -815,46 +896,404 @@ func (s *chatService) IsChatParticipant(ctx context.Context, chatID, userID uuid
 // Mark Read
 // ──────────────────────────────────────────────────────────────────────────────
 
-func (s *chatService) MarkChatRead(ctx context.Context, userID kit.UserId, chatID uuid.UUID, isPrimary bool) error {
+func (s *chatService) MarkChatRead(ctx context.Context, payload *MarkChatReadPayload, userID kit.UserId, isPrimary bool) ([]*rpc_personal_chatv1.MessageReadReceipt, error) {
+	chatID, err := uuid.Parse(payload.ChatID)
+	if err != nil {
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_request", "Invalid chat ID")
+	}
+
+	chat, err := s.PostgresQueries.GetChatByID(ctx, chatID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "chat not found")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
+	}
+	if chat.Participant1ID != userID.UuidUserId && chat.Participant2ID != userID.UuidUserId {
+		return nil, kit.NewError(http.StatusForbidden, "forbidden", "You are not a participant in this chat")
+	}
+
+	msgUUIDs := make([]uuid.UUID, 0, len(payload.MessageIDs))
+	for _, idStr := range payload.MessageIDs {
+		if u, err := uuid.Parse(idStr); err == nil {
+			msgUUIDs = append(msgUUIDs, u)
+		}
+	}
+
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to begin tx")
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to begin tx")
 	}
 	defer tx.Rollback(ctx)
 	qtx := s.PostgresQueries.WithTx(tx)
+
 	if err := qtx.ResetChatReadStatus(ctx, personal_chat_store.ResetChatReadStatusParams{
 		ID:             chatID,
 		Participant1ID: userID.UuidUserId,
 	}); err != nil {
-		return kit.NewError(http.StatusInternalServerError, "mark_read_failed", kit.GetPostgresError(err).Message)
+		return nil, kit.NewError(http.StatusInternalServerError, "mark_read_failed", kit.GetPostgresError(err).Message)
 	}
-	if isPrimary {
-		if err := qtx.MarkChatMessagesAsReadPrimary(ctx, personal_chat_store.MarkChatMessagesAsReadPrimaryParams{
+
+	var readRows []personal_chat_store.MarkMessagesAsReadRow
+	if len(msgUUIDs) > 0 {
+		var markErr error
+		readRows, markErr = qtx.MarkMessagesAsRead(ctx, personal_chat_store.MarkMessagesAsReadParams{
 			ChatID:      chatID,
 			RecipientID: userID.UuidUserId,
-		}); err != nil {
-			return kit.NewError(http.StatusInternalServerError, "mark_read_failed", kit.GetPostgresError(err).Message)
-		}
-	} else {
-		if err := qtx.MarkChatMessagesAsRead(ctx, personal_chat_store.MarkChatMessagesAsReadParams{
-			ChatID:      chatID,
-			RecipientID: userID.UuidUserId,
-		}); err != nil {
-			return kit.NewError(http.StatusInternalServerError, "mark_read_failed", kit.GetPostgresError(err).Message)
+			MessageIds:  msgUUIDs,
+		})
+		if markErr != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "mark_read_failed", kit.GetPostgresError(markErr).Message)
 		}
 	}
+
 	if err := tx.Commit(ctx); err != nil {
-		return kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to commit")
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to commit")
 	}
-	return nil
+
+	// Async relay cleanup: delete fully acknowledged, read messages with no pending files in this chat without blocking response
+	go func(cID uuid.UUID) {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.PostgresQueries.CleanupFullyAcknowledgedReadMessagesInChat(cleanupCtx, cID); err != nil {
+			log.Printf("[MarkChatRead] Async CleanupFullyAcknowledgedReadMessagesInChat ERROR for chat %s: %v", cID, err)
+		}
+	}(chatID)
+
+	readReceipts := make([]*rpc_personal_chatv1.MessageReadReceipt, 0, len(msgUUIDs))
+	readMap := make(map[uuid.UUID]bool, len(readRows))
+	for _, r := range readRows {
+		readMap[r.ID] = true
+		receipt := &rpc_personal_chatv1.MessageReadReceipt{
+			MessageId: r.ID.String(),
+		}
+		if r.ReadAt != nil {
+			receipt.ReadAt = timestamppb.New(*r.ReadAt)
+		}
+		readReceipts = append(readReceipts, receipt)
+	}
+
+	var remainingIDs []uuid.UUID
+	for _, id := range msgUUIDs {
+		if !readMap[id] {
+			remainingIDs = append(remainingIDs, id)
+		}
+	}
+
+	if len(remainingIDs) > 0 {
+		existingRows, getErr := s.PostgresQueries.GetMessagesByIds(ctx, remainingIDs)
+		if getErr != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "lookup_failed", kit.GetPostgresError(getErr).Message)
+		}
+
+		existingMap := make(map[uuid.UUID]personal_chat_store.GetMessagesByIdsRow, len(existingRows))
+		for _, row := range existingRows {
+			existingMap[row.ID] = row
+		}
+
+		now := time.Now()
+		for _, id := range remainingIDs {
+			row, exists := existingMap[id]
+			if !exists {
+				// Message already deleted from relay table (Stage 2 complete) -> Idempotent Confirmation
+				readReceipts = append(readReceipts, &rpc_personal_chatv1.MessageReadReceipt{
+					MessageId: id.String(),
+					ReadAt:    timestamppb.New(now),
+				})
+				continue
+			}
+			// Message exists in DB: confirm if caller is recipient in the same chat AND message is read
+			if row.RecipientID == userID.UuidUserId && row.ChatID == chatID && row.ReadByRecipient {
+				rAt := now
+				if row.ReadAt != nil {
+					rAt = *row.ReadAt
+				}
+				readReceipts = append(readReceipts, &rpc_personal_chatv1.MessageReadReceipt{
+					MessageId: id.String(),
+					ReadAt:    timestamppb.New(rAt),
+				})
+			}
+		}
+	}
+
+	return readReceipts, nil
 }
 
-func (s *chatService) MarkChatReadHandler(ctx context.Context, payload *MarkChatReadPayload, userID kit.UserId, isPrimary bool) error {
+func (s *chatService) AcknowledgeAndReadBatch(ctx context.Context, payload *AckAndReadBatchPayload, userID kit.UserId, isPrimary bool) (*rpc_personal_chatv1.AckAndReadBatchResponse, uuid.UUID, error) {
+	if payload == nil || len(payload.MessageIDs) == 0 {
+		return &rpc_personal_chatv1.AckAndReadBatchResponse{
+			AcknowledgedCount: 0,
+			ReadMessages:      []*rpc_personal_chatv1.MessageReadReceipt{},
+		}, uuid.Nil, nil
+	}
+
+	msgUUIDs := make([]uuid.UUID, 0, len(payload.MessageIDs))
+	for _, idStr := range payload.MessageIDs {
+		if u, err := uuid.Parse(idStr); err == nil {
+			msgUUIDs = append(msgUUIDs, u)
+		}
+	}
+	if len(msgUUIDs) == 0 {
+		return &rpc_personal_chatv1.AckAndReadBatchResponse{
+			AcknowledgedCount: 0,
+			ReadMessages:      []*rpc_personal_chatv1.MessageReadReceipt{},
+		}, uuid.Nil, nil
+	}
+
+	// 1. Upfront Pre-Validation: Validate chat consistency BEFORE opening any write transaction
+	existingRows, getErr := s.PostgresQueries.GetMessagesByIds(ctx, msgUUIDs)
+	if getErr != nil {
+		return nil, uuid.Nil, kit.NewError(http.StatusInternalServerError, "lookup_failed", kit.GetPostgresError(getErr).Message)
+	}
+
+	var targetChatID uuid.UUID
+	var latestCreatedAt time.Time
+	var validIDs []uuid.UUID
+	existingMap := make(map[uuid.UUID]personal_chat_store.GetMessagesByIdsRow, len(existingRows))
+
+	for _, row := range existingRows {
+		existingMap[row.ID] = row
+		if row.RecipientID == userID.UuidUserId {
+			if targetChatID == uuid.Nil {
+				targetChatID = row.ChatID
+			} else if targetChatID != row.ChatID {
+				// Reject immediately without starting write transaction or wasting DB resources
+				return nil, uuid.Nil, kit.NewError(http.StatusBadRequest, "invalid_batch", "All messages in an in-chat batch must belong to the same chat")
+			}
+			validIDs = append(validIDs, row.ID)
+		}
+	}
+
+	// 2. Transaction Phase: Update delivery and mark read for the target chat
+	var readRows []personal_chat_store.MarkMessagesAsReadRow
+	if len(validIDs) > 0 && targetChatID != uuid.Nil {
+		tx, err := s.Pool.Begin(ctx)
+		if err != nil {
+			return nil, uuid.Nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to begin tx")
+		}
+		defer tx.Rollback(ctx)
+		qtx := s.PostgresQueries.WithTx(tx)
+
+		if isPrimary {
+			rows, batchErr := qtx.MarkMessagesDeliveredToRecipientPrimaryBatch(ctx, personal_chat_store.MarkMessagesDeliveredToRecipientPrimaryBatchParams{
+				RecipientID: userID.UuidUserId,
+				MessageIds:  validIDs,
+			})
+			if batchErr != nil {
+				return nil, uuid.Nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(batchErr).Message)
+			}
+			for _, r := range rows {
+				if r.CreatedAt.After(latestCreatedAt) {
+					latestCreatedAt = r.CreatedAt
+				}
+			}
+		} else {
+			rows, batchErr := qtx.MarkMessagesDeliveredToRecipientBatch(ctx, personal_chat_store.MarkMessagesDeliveredToRecipientBatchParams{
+				RecipientID: userID.UuidUserId,
+				MessageIds:  validIDs,
+			})
+			if batchErr != nil {
+				return nil, uuid.Nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(batchErr).Message)
+			}
+			for _, r := range rows {
+				if r.CreatedAt.After(latestCreatedAt) {
+					latestCreatedAt = r.CreatedAt
+				}
+			}
+		}
+
+		if latestCreatedAt.IsZero() {
+			latestCreatedAt = time.Now()
+		}
+
+		_ = qtx.UpdateChatLastDeliveredAt(ctx, personal_chat_store.UpdateChatLastDeliveredAtParams{
+			ChatID:          targetChatID,
+			ParticipantID:   userID.UuidUserId,
+			LastDeliveredAt: latestCreatedAt,
+		})
+
+		if err := qtx.ResetChatReadStatus(ctx, personal_chat_store.ResetChatReadStatusParams{
+			ID:             targetChatID,
+			Participant1ID: userID.UuidUserId,
+		}); err != nil {
+			return nil, uuid.Nil, kit.NewError(http.StatusInternalServerError, "mark_read_failed", kit.GetPostgresError(err).Message)
+		}
+
+		rRows, markErr := qtx.MarkMessagesAsRead(ctx, personal_chat_store.MarkMessagesAsReadParams{
+			ChatID:      targetChatID,
+			RecipientID: userID.UuidUserId,
+			MessageIds:  validIDs,
+		})
+		if markErr != nil {
+			return nil, uuid.Nil, kit.NewError(http.StatusInternalServerError, "mark_read_failed", kit.GetPostgresError(markErr).Message)
+		}
+		readRows = rRows
+
+		if err := tx.Commit(ctx); err != nil {
+			return nil, uuid.Nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to commit tx")
+		}
+
+		// Async relay cleanup for this specific chat
+		go func(cID uuid.UUID) {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := s.PostgresQueries.CleanupFullyAcknowledgedReadMessagesInChat(cleanupCtx, cID); err != nil {
+				log.Printf("[AckAndReadBatch] Async CleanupFullyAcknowledgedReadMessagesInChat ERROR for chat %s: %v", cID, err)
+			}
+		}(targetChatID)
+	}
+
+	// 3. Build Read Receipts: Newly read, Already read, Purged from DB
+	readReceipts := make([]*rpc_personal_chatv1.MessageReadReceipt, 0, len(msgUUIDs))
+	readMap := make(map[uuid.UUID]bool, len(readRows))
+	for _, r := range readRows {
+		readMap[r.ID] = true
+		receipt := &rpc_personal_chatv1.MessageReadReceipt{
+			MessageId: r.ID.String(),
+		}
+		if r.ReadAt != nil {
+			receipt.ReadAt = timestamppb.New(*r.ReadAt)
+		}
+		readReceipts = append(readReceipts, receipt)
+	}
+
+	now := time.Now()
+	for _, id := range msgUUIDs {
+		if readMap[id] {
+			continue
+		}
+		row, exists := existingMap[id]
+		if !exists {
+			// Message already deleted from relay table (Stage 2 complete) -> Idempotent Confirmation
+			readReceipts = append(readReceipts, &rpc_personal_chatv1.MessageReadReceipt{
+				MessageId: id.String(),
+				ReadAt:    timestamppb.New(now),
+			})
+			continue
+		}
+		// Message exists in DB: confirm if caller is recipient and message is read
+		if row.RecipientID == userID.UuidUserId && row.ReadByRecipient {
+			rAt := now
+			if row.ReadAt != nil {
+				rAt = *row.ReadAt
+			}
+			readReceipts = append(readReceipts, &rpc_personal_chatv1.MessageReadReceipt{
+				MessageId: id.String(),
+				ReadAt:    timestamppb.New(rAt),
+			})
+		}
+	}
+
+	return &rpc_personal_chatv1.AckAndReadBatchResponse{
+		AcknowledgedCount: int32(len(readReceipts)),
+		ReadMessages:      readReceipts,
+	}, targetChatID, nil
+}
+
+func (s *chatService) AcknowledgeReadReceiptBatch(ctx context.Context, payload *AckReadReceiptBatchPayload, userID kit.UserId, isPrimary bool) (*rpc_personal_chatv1.AckReadReceiptBatchResponse, error) {
+	if !isPrimary {
+		return nil, kit.NewError(http.StatusForbidden, "forbidden", "Forbidden: Only primary device can ACK read receipts")
+	}
+
 	chatID, err := uuid.Parse(payload.ChatID)
 	if err != nil {
-		return kit.NewError(http.StatusBadRequest, "invalid_request", "Invalid chat ID")
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_chat_id", "Invalid chat ID")
 	}
-	return s.MarkChatRead(ctx, userID, chatID, isPrimary)
+
+	chat, err := s.PostgresQueries.GetChatByID(ctx, chatID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "chat not found")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
+	}
+	if chat.Participant1ID != userID.UuidUserId && chat.Participant2ID != userID.UuidUserId {
+		return nil, kit.NewError(http.StatusForbidden, "forbidden", "You are not a participant in this chat")
+	}
+
+	msgUUIDs := make([]uuid.UUID, 0, len(payload.MessageIDs))
+	for _, idStr := range payload.MessageIDs {
+		if u, err := uuid.Parse(idStr); err == nil {
+			msgUUIDs = append(msgUUIDs, u)
+		}
+	}
+
+	if len(msgUUIDs) == 0 {
+		return &rpc_personal_chatv1.AckReadReceiptBatchResponse{
+			AcknowledgedCount:      0,
+			AcknowledgedMessageIds: []string{},
+		}, nil
+	}
+
+	ackedIDs, err := s.PostgresQueries.MarkMessagesReadAckedBySender(ctx, personal_chat_store.MarkMessagesReadAckedBySenderParams{
+		ChatID:     chatID,
+		SenderID:   userID.UuidUserId,
+		MessageIds: msgUUIDs,
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "mark_read_ack_failed", kit.GetPostgresError(err).Message)
+	}
+
+	ackedMap := make(map[uuid.UUID]bool, len(ackedIDs))
+	for _, id := range ackedIDs {
+		ackedMap[id] = true
+	}
+
+	var remainingIDs []uuid.UUID
+	for _, id := range msgUUIDs {
+		if !ackedMap[id] {
+			remainingIDs = append(remainingIDs, id)
+		}
+	}
+
+	var finalAckedIDs []string
+	for _, id := range ackedIDs {
+		finalAckedIDs = append(finalAckedIDs, id.String())
+	}
+
+	if len(remainingIDs) > 0 {
+		existingRows, getErr := s.PostgresQueries.GetMessagesByIds(ctx, remainingIDs)
+		if getErr != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "fetch_messages_failed", kit.GetPostgresError(getErr).Message)
+		}
+
+		existingMap := make(map[uuid.UUID]personal_chat_store.GetMessagesByIdsRow, len(existingRows))
+		for _, row := range existingRows {
+			existingMap[row.ID] = row
+		}
+
+		for _, id := range remainingIDs {
+			row, exists := existingMap[id]
+			if !exists {
+				// Message already deleted from relay table (Stage 2 complete) -> Idempotent Success
+				finalAckedIDs = append(finalAckedIDs, id.String())
+				continue
+			}
+			// If message exists in DB and caller is not the sender of this message
+			if row.SenderID != userID.UuidUserId {
+				return nil, kit.NewError(http.StatusForbidden, "forbidden", "You are not the sender of message "+id.String())
+			}
+			if row.ChatID == chatID && row.ReadAckedBySender {
+				finalAckedIDs = append(finalAckedIDs, id.String())
+			}
+		}
+	}
+
+	// Async relay cleanup: delete fully acknowledged, read messages in this chat
+	if len(ackedIDs) > 0 {
+		go func(cID uuid.UUID) {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := s.PostgresQueries.CleanupFullyAcknowledgedReadMessagesInChat(cleanupCtx, cID); err != nil {
+				log.Printf("[AcknowledgeReadReceiptBatch] Async CleanupFullyAcknowledgedReadMessagesInChat ERROR for chat %s: %v", cID, err)
+			}
+		}(chatID)
+	}
+
+	return &rpc_personal_chatv1.AckReadReceiptBatchResponse{
+		AcknowledgedCount:      int32(len(finalAckedIDs)),
+		AcknowledgedMessageIds: finalAckedIDs,
+	}, nil
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1020,7 +1459,7 @@ func (s *chatService) DeleteMessageForMe(ctx context.Context, messageIDs []uuid.
 		}
 		shouldDeleteNow := false
 		if msg.SenderID == userID.UuidUserId {
-			if msg.DeliveredToRecipientPrimary != nil && *msg.DeliveredToRecipientPrimary {
+			if msg.DeliveredToRecipientPrimary {
 				shouldDeleteNow = true
 			}
 		} else if msg.RecipientID == userID.UuidUserId {
@@ -1115,26 +1554,75 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 	if limit <= 0 {
 		limit = 100
 	}
-	// 1. Fetch pending received messages
-	recipientMsgs, err := s.PostgresQueries.GetPendingMessagesForRecipient(ctx, personal_chat_store.GetPendingMessagesForRecipientParams{
-		RecipientID:      userID.UuidUserId,
-		Limit:            limit,
-		SessionCreatedAt: sessionCreatedAt,
-	})
-	if err != nil {
-		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
+	if limit > 200 {
+		limit = 200
+	}
+	hasRecipCreatedAt := payload.AfterRecipientCreatedAt != nil
+	hasRecipMsgID := payload.AfterRecipientMessageID != nil && *payload.AfterRecipientMessageID != ""
+	if hasRecipCreatedAt != hasRecipMsgID {
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_cursor", "Both after_recipient_created_at and after_recipient_message_id must be provided together")
+	}
+	var afterRecipientMsgUUID *uuid.UUID
+	if hasRecipMsgID {
+		parsed, parseErr := uuid.Parse(*payload.AfterRecipientMessageID)
+		if parseErr != nil {
+			return nil, kit.NewError(http.StatusBadRequest, "invalid_cursor", "Invalid after_recipient_message_id format")
+		}
+		afterRecipientMsgUUID = &parsed
 	}
 
+	hasSenderCreatedAt := payload.AfterSenderCreatedAt != nil
+	hasSenderMsgID := payload.AfterSenderMessageID != nil && *payload.AfterSenderMessageID != ""
+	if hasSenderCreatedAt != hasSenderMsgID {
+		return nil, kit.NewError(http.StatusBadRequest, "invalid_cursor", "Both after_sender_created_at and after_sender_message_id must be provided together")
+	}
+	var afterSenderMsgUUID *uuid.UUID
+	if hasSenderMsgID {
+		parsed, parseErr := uuid.Parse(*payload.AfterSenderMessageID)
+		if parseErr != nil {
+			return nil, kit.NewError(http.StatusBadRequest, "invalid_cursor", "Invalid after_sender_message_id format")
+		}
+		afterSenderMsgUUID = &parsed
+	}
+
+	baseLimit := limit
+	maxTotalCapacity := int(baseLimit * 2)
+
+	// 1. Fetch pending received messages up to maxTotalCapacity, looping internally through filtered/blocked rows
 	var recipientMsgsFiltered []personal_chat_store.Message
-	if len(recipientMsgs) > 0 {
+	var lastRawRecipientMsg *personal_chat_store.Message
+	curAfterRecipCreatedAt := payload.AfterRecipientCreatedAt
+	curAfterRecipUUID := afterRecipientMsgUUID
+
+	const maxFilterIterations = 10
+	for iteration := 0; iteration < maxFilterIterations && len(recipientMsgsFiltered) < maxTotalCapacity; iteration++ {
+		rawBatch, err := s.PostgresQueries.GetPendingMessagesForRecipient(ctx, personal_chat_store.GetPendingMessagesForRecipientParams{
+			RecipientID:      userID.UuidUserId,
+			Limit:            int32(maxTotalCapacity),
+			SessionCreatedAt: sessionCreatedAt,
+			AfterCreatedAt:   curAfterRecipCreatedAt,
+			AfterMessageID:   curAfterRecipUUID,
+		})
+		if err != nil {
+			return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
+		}
+		if len(rawBatch) == 0 {
+			break
+		}
+
+		lastRawRecipientMsg = &rawBatch[len(rawBatch)-1]
+		curAfterRecipCreatedAt = &lastRawRecipientMsg.CreatedAt
+		curAfterRecipUUID = &lastRawRecipientMsg.ID
+
 		senderIDsMap := make(map[uuid.UUID]struct{})
-		for _, m := range recipientMsgs {
+		for _, m := range rawBatch {
 			senderIDsMap[m.SenderID] = struct{}{}
 		}
 		senderIDs := make([]uuid.UUID, 0, len(senderIDsMap))
 		for id := range senderIDsMap {
 			senderIDs = append(senderIDs, id)
 		}
+
 		// Batch check contactable user IDs to enforce both admin and peer blocks
 		contactableIDs, err := s.ProfileProvider.GetContactableUserIDs(ctx, userID.UuidUserId, senderIDs)
 		if err != nil {
@@ -1145,40 +1633,88 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 		for _, id := range contactableIDs {
 			contactableSet[id] = struct{}{}
 		}
-		for _, m := range recipientMsgs {
+		for _, m := range rawBatch {
 			if _, isContactable := contactableSet[m.SenderID]; isContactable {
 				recipientMsgsFiltered = append(recipientMsgsFiltered, m)
 			}
 		}
+
+		if len(rawBatch) < maxTotalCapacity {
+			break
+		}
+	}
+
+	// 2. Fetch pending sender sync messages up to maxTotalCapacity
+	senderMsgs, err := s.PostgresQueries.GetPendingSenderSyncMessages(ctx, personal_chat_store.GetPendingSenderSyncMessagesParams{
+		SenderID:         userID.UuidUserId,
+		Limit:            int32(maxTotalCapacity),
+		SessionCreatedAt: sessionCreatedAt,
+		AfterCreatedAt:   payload.AfterSenderCreatedAt,
+		AfterMessageID:   afterSenderMsgUUID,
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
+	}
+
+	// 3. Dynamic capacity borrowing: fill unused slots from the smaller stream into the larger stream
+	lenRecip := len(recipientMsgsFiltered)
+	lenSender := len(senderMsgs)
+
+	var takeRecip, takeSender int
+	if lenRecip <= int(baseLimit) && lenSender <= int(baseLimit) {
+		takeRecip = lenRecip
+		takeSender = lenSender
+	} else if lenRecip <= int(baseLimit) {
+		takeRecip = lenRecip
+		takeSender = lenSender
+		if takeSender > (maxTotalCapacity - takeRecip) {
+			takeSender = maxTotalCapacity - takeRecip
+		}
+	} else if lenSender <= int(baseLimit) {
+		takeSender = lenSender
+		takeRecip = lenRecip
+		if takeRecip > (maxTotalCapacity - takeSender) {
+			takeRecip = maxTotalCapacity - takeSender
+		}
+	} else {
+		takeRecip = int(baseLimit)
+		takeSender = int(baseLimit)
 	}
 
 	var combinedMsgs []personal_chat_store.Message
-	combinedMsgs = append(combinedMsgs, recipientMsgsFiltered...)
-
-	// 2. Fetch pending sender sync messages if device is Primary
-	if isPrimary {
-		senderMsgs, err := s.PostgresQueries.GetPendingSenderSyncMessages(ctx, personal_chat_store.GetPendingSenderSyncMessagesParams{
-			SenderID:         userID.UuidUserId,
-			Limit:            limit,
-			SessionCreatedAt: sessionCreatedAt,
-		})
-		if err != nil {
-			return nil, kit.NewError(http.StatusInternalServerError, "fetch_failed", kit.GetPostgresError(err).Message)
-		}
-		combinedMsgs = append(combinedMsgs, senderMsgs...)
+	if takeRecip > 0 {
+		combinedMsgs = append(combinedMsgs, recipientMsgsFiltered[:takeRecip]...)
+	}
+	if takeSender > 0 {
+		combinedMsgs = append(combinedMsgs, senderMsgs[:takeSender]...)
 	}
 
-	// 3. Sort chronologically by CreatedAt ASC
+	// 4. Sort chronologically by CreatedAt ASC, id ASC
 	if len(combinedMsgs) > 1 {
 		sort.Slice(combinedMsgs, func(i, j int) bool {
+			if combinedMsgs[i].CreatedAt.Equal(combinedMsgs[j].CreatedAt) {
+				return combinedMsgs[i].ID.String() < combinedMsgs[j].ID.String()
+			}
 			return combinedMsgs[i].CreatedAt.Before(combinedMsgs[j].CreatedAt)
 		})
 	}
 
-	// 4. Build response payload
+	// 4. Memoize sender key revisions across pending messages
+	revisionMap := make(map[uuid.UUID]int32, 4)
+	getRevision := func(senderID uuid.UUID) int32 {
+		if rev, ok := revisionMap[senderID]; ok {
+			return rev
+		}
+		rev := s.getSenderKeysRevision(ctx, senderID)
+		revisionMap[senderID] = rev
+		return rev
+	}
+
+	// 5. Build response payload
 	msgResponses := make([]*rpc_personal_chatv1.Message, 0, len(combinedMsgs))
 	for _, msg := range combinedMsgs {
-		mr := s.buildMessageResponse(ctx, msg, userID)
+		rev := getRevision(msg.SenderID)
+		mr := s.buildMessageResponse(ctx, msg, userID, isPrimary, rev)
 		msgResponses = append(msgResponses, &rpc_personal_chatv1.Message{
 			MessageId:                   mr.MessageID,
 			ChatId:                      mr.ChatID,
@@ -1198,12 +1734,46 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 			FileMimeType:                mr.FileMimeType,
 			ViewUrl:                     mr.ViewURL,
 			DownloadUrl:                 mr.DownloadURL,
+			ReadByRecipient:             mr.ReadByRecipient,
+			ReadAckedBySender:           mr.ReadAckedBySender,
+			ReadAt:                      kit.OptionalTimestamp(mr.ReadAt),
+			IsConsumed:                  mr.IsConsumed,
 		})
 	}
+
+	var nextRecipientCreatedAt *timestamppb.Timestamp
+	var nextRecipientMessageID *string
+
+	if takeRecip < len(recipientMsgsFiltered) {
+		lastTaken := recipientMsgsFiltered[takeRecip-1]
+		idStr := lastTaken.ID.String()
+		nextRecipientCreatedAt = timestamppb.New(lastTaken.CreatedAt)
+		nextRecipientMessageID = &idStr
+	} else if lastRawRecipientMsg != nil {
+		idStr := lastRawRecipientMsg.ID.String()
+		nextRecipientCreatedAt = timestamppb.New(lastRawRecipientMsg.CreatedAt)
+		nextRecipientMessageID = &idStr
+	}
+
+	nextSenderCreatedAt, nextSenderMessageID := extractNextCursor(senderMsgs[:takeSender])
+
 	return &rpc_personal_chatv1.GetPendingMessagesResponse{
-		Messages: msgResponses,
-		Count:    int32(len(msgResponses)),
+		Messages:               msgResponses,
+		Count:                  int32(len(msgResponses)),
+		NextRecipientCreatedAt: nextRecipientCreatedAt,
+		NextRecipientMessageId: nextRecipientMessageID,
+		NextSenderCreatedAt:    nextSenderCreatedAt,
+		NextSenderMessageId:    nextSenderMessageID,
 	}, nil
+}
+
+func extractNextCursor(msgs []personal_chat_store.Message) (*timestamppb.Timestamp, *string) {
+	if n := len(msgs); n > 0 {
+		last := msgs[n-1]
+		idStr := last.ID.String()
+		return timestamppb.New(last.CreatedAt), &idStr
+	}
+	return nil, nil
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1236,9 +1806,16 @@ func (s *chatService) deleteMessageFromRelay(ctx context.Context, message person
 		}
 	}
 
-	if err := qtx.DeleteMessage(ctx, messageID); err != nil {
-		log.Printf("[Relay-Cleanup] ERROR: Failed to delete message %s: %v", messageID, err)
-		return
+	if message.ReadByRecipient && message.ReadAckedBySender {
+		if err := qtx.DeleteMessage(ctx, messageID); err != nil {
+			log.Printf("[Relay-Cleanup] ERROR: Failed to delete message %s: %v", messageID, err)
+			return
+		}
+	} else {
+		if err := qtx.StripDeliveredMessagePayload(ctx, messageID); err != nil {
+			log.Printf("[Relay-Cleanup] ERROR: Failed to strip payload for message %s: %v", messageID, err)
+			return
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -1415,7 +1992,7 @@ func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 		if len(expiredMessages) == 0 {
 			break
 		}
-		// Concurrent R2 deletes — 20-way parallelism (kit.MaxConcurrentDeletes).
+		// Concurrent R2 deletes — 50-way parallelism (kit.MaxConcurrentDeletes).
 		// Returns errors[i] indexed by fileID position. nil = R2 success or "not found" (idempotent).
 		fileIDs := make([]string, 0, len(expiredMessages))
 		msgByFileID := make(map[string]personal_chat_store.Message, len(expiredMessages))
@@ -1434,30 +2011,8 @@ func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 			}
 			// R2 succeeded (or file was already gone)
 			msg := msgByFileID[fileID]
-			if msg.MessageType == "unsent" {
-				// Safe to clear file fields while keeping the tombstone
-				if err := s.PostgresQueries.ClearMessageFileFields(ctx, msg.ID); err != nil {
-					log.Printf("[CleanupJob] WARNING: Failed to clear expired unsent message file fields %s: %v", msg.ID, err)
-				}
-			} else {
-				// Safe to delete DB row completely
-				if err := s.PostgresQueries.DeleteMessage(ctx, msg.ID); err != nil {
-					log.Printf("[CleanupJob] WARNING: Failed to delete expired message record %s: %v", msg.ID, err)
-				}
-			}
-		}
-		// Also delete messages without files (no R2 step needed)
-		for _, msg := range expiredMessages {
-			if msg.FileID == nil || *msg.FileID == "" {
-				if msg.MessageType == "unsent" {
-					if err := s.PostgresQueries.ClearMessageFileFields(ctx, msg.ID); err != nil {
-						log.Printf("[CleanupJob] WARNING: Failed to clear expired unsent message file fields %s: %v", msg.ID, err)
-					}
-				} else {
-					if err := s.PostgresQueries.DeleteMessage(ctx, msg.ID); err != nil {
-						log.Printf("[CleanupJob] WARNING: Failed to delete expired message record %s: %v", msg.ID, err)
-					}
-				}
+			if err := s.PostgresQueries.StripDeliveredMessagePayload(ctx, msg.ID); err != nil {
+				log.Printf("[CleanupJob] WARNING: Failed to strip delivered message payload %s: %v", msg.ID, err)
 			}
 		}
 		if len(expiredMessages) < batchSize {
@@ -1495,13 +2050,6 @@ func (s *chatService) CleanupExpiredMessages(ctx context.Context) error {
 			}
 			if err := s.PostgresQueries.DeleteMessage(ctx, msgByFileID[fileID]); err != nil {
 				log.Printf("[CleanupJob] WARNING: Failed to delete blocked-user message record %s: %v", msgByFileID[fileID], err)
-			}
-		}
-		for _, msg := range blockedMessages {
-			if msg.FileID == nil || *msg.FileID == "" {
-				if err := s.PostgresQueries.DeleteMessage(ctx, msg.ID); err != nil {
-					log.Printf("[CleanupJob] WARNING: Failed to delete blocked-user message record %s: %v", msg.ID, err)
-				}
 			}
 		}
 		if len(blockedMessages) < batchSize {

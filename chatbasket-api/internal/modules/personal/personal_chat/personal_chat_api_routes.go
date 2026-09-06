@@ -27,6 +27,8 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, personalSseManage
 	chat.GET("/pending", handler.GetPendingMessages)
 	chat.POST("/ack", handler.AcknowledgeDelivery)
 	chat.POST("/ack-batch", handler.AcknowledgeDeliveryBatch)
+	chat.POST("/ack-read-batch", handler.AcknowledgeReadReceiptBatch)
+	chat.POST("/ack-and-read-batch", handler.AcknowledgeAndReadBatch)
 
 	// File messaging
 	chat.POST("/presign", handler.PresignUpload)
@@ -46,6 +48,7 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, personalSseManage
 	chat.POST("/history-sync/request", handler.RequestHistorySync)
 	chat.POST("/history-sync/upload", handler.UploadHistorySync, middleware.BodyLimit(94371840)) // 90MB limit for database cipher sync
 	chat.GET("/history-sync", handler.DownloadHistorySync)
+	chat.POST("/history-sync/ack", handler.AcknowledgeHistorySync)
 
 	// Connect RPC Routes
 	connectServer := newChatConnectServer(chatSvc, personalSseManager)

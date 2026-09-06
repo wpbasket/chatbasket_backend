@@ -50,6 +50,10 @@ message Message {
   optional string fileMimeType = 16;
   string viewUrl = 17;
   string downloadUrl = 18;
+  bool readByRecipient = 19;
+  bool readAckedBySender = 20;
+  optional google.protobuf.Timestamp readAt = 21;
+  bool isConsumed = 22;
 }
 
 message CheckEligibilityRequest {
@@ -101,7 +105,8 @@ message SendMessageRequest {
 message GetMessagesRequest {
   string chatId = 1;
   int32 limit = 2;
-  int32 offset = 3;
+  optional google.protobuf.Timestamp afterCreatedAt = 3;
+  optional string afterMessageId = 4;
 }
 
 message GetMessagesResponse {
@@ -109,10 +114,16 @@ message GetMessagesResponse {
   int32 count = 2;
   google.protobuf.Timestamp otherUserLastReadAt = 3;
   google.protobuf.Timestamp otherUserLastDeliveredAt = 4;
+  optional google.protobuf.Timestamp nextCreatedAt = 5;
+  optional string nextMessageId = 6;
 }
 
 message GetPendingMessagesRequest {
   int32 limit = 1;
+  optional google.protobuf.Timestamp afterRecipientCreatedAt = 2;
+  optional string afterRecipientMessageId = 3;
+  optional google.protobuf.Timestamp afterSenderCreatedAt = 4;
+  optional string afterSenderMessageId = 5;
 }
 
 message GetPendingMessagesResponse {
@@ -120,6 +131,10 @@ message GetPendingMessagesResponse {
   int32 count = 2;
   google.protobuf.Timestamp otherUserLastReadAt = 3;
   google.protobuf.Timestamp otherUserLastDeliveredAt = 4;
+  optional google.protobuf.Timestamp nextRecipientCreatedAt = 5;
+  optional string nextRecipientMessageId = 6;
+  optional google.protobuf.Timestamp nextSenderCreatedAt = 7;
+  optional string nextSenderMessageId = 8;
 }
 
 message AcknowledgeDeliveryRequest {
@@ -139,6 +154,26 @@ message AckDeliveryBatchPayload {
 
 message AckDeliveryBatchResponse {
   int32 acknowledgedCount = 1;
+  repeated string acknowledgedMessageIds = 2;
+}
+
+message AckReadReceiptBatchRequest {
+  string chatId = 1;
+  repeated string messageIds = 2;
+}
+
+message AckReadReceiptBatchResponse {
+  int32 acknowledgedCount = 1;
+  repeated string acknowledgedMessageIds = 2;
+}
+
+message AckAndReadBatchPayload {
+  repeated string messageIds = 1;
+}
+
+message AckAndReadBatchResponse {
+  int32 acknowledgedCount = 1;
+  repeated MessageReadReceipt readMessages = 2;
 }
 
 message PresignChatUploadRequest {
@@ -186,8 +221,20 @@ message GetFileURLResponse {
   string downloadUrl = 2;
 }
 
+message MessageReadReceipt {
+  string messageId = 1;
+  google.protobuf.Timestamp readAt = 2;
+}
+
 message MarkChatReadRequest {
   string chatId = 1;
+  repeated string messageIds = 2;
+}
+
+message MarkChatReadResponse {
+  bool status = 1;
+  string readAt = 2;
+  repeated MessageReadReceipt readMessages = 3;
 }
 
 message UnsendMessageRequest {
@@ -248,6 +295,10 @@ message DownloadHistorySyncResponse {
   string payloadCipher = 1;
 }
 
+message AcknowledgeHistorySyncRequest {
+  string requestId = 1;
+}
+
 message AcknowledgeDeliverySsePayload {
   string chatId = 1;
   repeated string messageIds = 2;
@@ -258,6 +309,7 @@ message MarkChatReadSsePayload {
   string chatId = 1;
   string readerId = 2;
   string readAt = 3;
+  repeated MessageReadReceipt readMessages = 4;
 }
 
 message UnsendMessageSsePayload {
@@ -305,10 +357,12 @@ service ChatService {
   rpc GetPendingMessages(GetPendingMessagesRequest) returns (GetPendingMessagesResponse);
   rpc AcknowledgeDelivery(AcknowledgeDeliveryRequest) returns (AcknowledgeDeliveryResponse);
   rpc AcknowledgeDeliveryBatch(AckDeliveryBatchPayload) returns (AckDeliveryBatchResponse);
+  rpc AcknowledgeReadReceiptBatch(AckReadReceiptBatchRequest) returns (AckReadReceiptBatchResponse);
+  rpc AcknowledgeAndReadBatch(AckAndReadBatchPayload) returns (AckAndReadBatchResponse);
   rpc PresignUpload(PresignChatUploadRequest) returns (PresignChatUploadResponse);
   rpc ConfirmUpload(ConfirmChatUploadRequest) returns (ConfirmChatUploadResponse);
   rpc GetFileURL(GetFileURLRequest) returns (GetFileURLResponse);
-  rpc MarkChatRead(MarkChatReadRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc MarkChatRead(MarkChatReadRequest) returns (MarkChatReadResponse);
   rpc UnsendMessage(UnsendMessageRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc DeleteMessageForMe(DeleteMessageForMeRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc GetSyncActions(GetSyncActionsRequest) returns (GetSyncActionsResponse);
@@ -316,4 +370,5 @@ service ChatService {
   rpc RequestHistorySync(RequestHistorySyncRequest) returns (RequestHistorySyncResponse);
   rpc UploadHistorySync(UploadHistorySyncRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc DownloadHistorySync(DownloadHistorySyncRequest) returns (DownloadHistorySyncResponse);
+  rpc AcknowledgeHistorySync(AcknowledgeHistorySyncRequest) returns (rpc_common_model.v1.StatusOkay);
 }

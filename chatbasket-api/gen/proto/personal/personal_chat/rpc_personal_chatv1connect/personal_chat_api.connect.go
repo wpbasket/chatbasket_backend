@@ -55,6 +55,12 @@ const (
 	// ChatServiceAcknowledgeDeliveryBatchProcedure is the fully-qualified name of the ChatService's
 	// AcknowledgeDeliveryBatch RPC.
 	ChatServiceAcknowledgeDeliveryBatchProcedure = "/rpc_personal_chat.v1.ChatService/AcknowledgeDeliveryBatch"
+	// ChatServiceAcknowledgeReadReceiptBatchProcedure is the fully-qualified name of the ChatService's
+	// AcknowledgeReadReceiptBatch RPC.
+	ChatServiceAcknowledgeReadReceiptBatchProcedure = "/rpc_personal_chat.v1.ChatService/AcknowledgeReadReceiptBatch"
+	// ChatServiceAcknowledgeAndReadBatchProcedure is the fully-qualified name of the ChatService's
+	// AcknowledgeAndReadBatch RPC.
+	ChatServiceAcknowledgeAndReadBatchProcedure = "/rpc_personal_chat.v1.ChatService/AcknowledgeAndReadBatch"
 	// ChatServicePresignUploadProcedure is the fully-qualified name of the ChatService's PresignUpload
 	// RPC.
 	ChatServicePresignUploadProcedure = "/rpc_personal_chat.v1.ChatService/PresignUpload"
@@ -87,30 +93,36 @@ const (
 	// ChatServiceDownloadHistorySyncProcedure is the fully-qualified name of the ChatService's
 	// DownloadHistorySync RPC.
 	ChatServiceDownloadHistorySyncProcedure = "/rpc_personal_chat.v1.ChatService/DownloadHistorySync"
+	// ChatServiceAcknowledgeHistorySyncProcedure is the fully-qualified name of the ChatService's
+	// AcknowledgeHistorySync RPC.
+	ChatServiceAcknowledgeHistorySyncProcedure = "/rpc_personal_chat.v1.ChatService/AcknowledgeHistorySync"
 )
 
 // These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
 var (
-	chatServiceServiceDescriptor                        = personal_chat.File_proto_personal_personal_chat_personal_chat_api_proto.Services().ByName("ChatService")
-	chatServiceCheckEligibilityMethodDescriptor         = chatServiceServiceDescriptor.Methods().ByName("CheckEligibility")
-	chatServiceCreateChatMethodDescriptor               = chatServiceServiceDescriptor.Methods().ByName("CreateChat")
-	chatServiceGetUserChatsMethodDescriptor             = chatServiceServiceDescriptor.Methods().ByName("GetUserChats")
-	chatServiceSendMessageMethodDescriptor              = chatServiceServiceDescriptor.Methods().ByName("SendMessage")
-	chatServiceGetMessagesMethodDescriptor              = chatServiceServiceDescriptor.Methods().ByName("GetMessages")
-	chatServiceGetPendingMessagesMethodDescriptor       = chatServiceServiceDescriptor.Methods().ByName("GetPendingMessages")
-	chatServiceAcknowledgeDeliveryMethodDescriptor      = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeDelivery")
-	chatServiceAcknowledgeDeliveryBatchMethodDescriptor = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeDeliveryBatch")
-	chatServicePresignUploadMethodDescriptor            = chatServiceServiceDescriptor.Methods().ByName("PresignUpload")
-	chatServiceConfirmUploadMethodDescriptor            = chatServiceServiceDescriptor.Methods().ByName("ConfirmUpload")
-	chatServiceGetFileURLMethodDescriptor               = chatServiceServiceDescriptor.Methods().ByName("GetFileURL")
-	chatServiceMarkChatReadMethodDescriptor             = chatServiceServiceDescriptor.Methods().ByName("MarkChatRead")
-	chatServiceUnsendMessageMethodDescriptor            = chatServiceServiceDescriptor.Methods().ByName("UnsendMessage")
-	chatServiceDeleteMessageForMeMethodDescriptor       = chatServiceServiceDescriptor.Methods().ByName("DeleteMessageForMe")
-	chatServiceGetSyncActionsMethodDescriptor           = chatServiceServiceDescriptor.Methods().ByName("GetSyncActions")
-	chatServiceAcknowledgeSyncActionMethodDescriptor    = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeSyncAction")
-	chatServiceRequestHistorySyncMethodDescriptor       = chatServiceServiceDescriptor.Methods().ByName("RequestHistorySync")
-	chatServiceUploadHistorySyncMethodDescriptor        = chatServiceServiceDescriptor.Methods().ByName("UploadHistorySync")
-	chatServiceDownloadHistorySyncMethodDescriptor      = chatServiceServiceDescriptor.Methods().ByName("DownloadHistorySync")
+	chatServiceServiceDescriptor                           = personal_chat.File_proto_personal_personal_chat_personal_chat_api_proto.Services().ByName("ChatService")
+	chatServiceCheckEligibilityMethodDescriptor            = chatServiceServiceDescriptor.Methods().ByName("CheckEligibility")
+	chatServiceCreateChatMethodDescriptor                  = chatServiceServiceDescriptor.Methods().ByName("CreateChat")
+	chatServiceGetUserChatsMethodDescriptor                = chatServiceServiceDescriptor.Methods().ByName("GetUserChats")
+	chatServiceSendMessageMethodDescriptor                 = chatServiceServiceDescriptor.Methods().ByName("SendMessage")
+	chatServiceGetMessagesMethodDescriptor                 = chatServiceServiceDescriptor.Methods().ByName("GetMessages")
+	chatServiceGetPendingMessagesMethodDescriptor          = chatServiceServiceDescriptor.Methods().ByName("GetPendingMessages")
+	chatServiceAcknowledgeDeliveryMethodDescriptor         = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeDelivery")
+	chatServiceAcknowledgeDeliveryBatchMethodDescriptor    = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeDeliveryBatch")
+	chatServiceAcknowledgeReadReceiptBatchMethodDescriptor = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeReadReceiptBatch")
+	chatServiceAcknowledgeAndReadBatchMethodDescriptor     = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeAndReadBatch")
+	chatServicePresignUploadMethodDescriptor               = chatServiceServiceDescriptor.Methods().ByName("PresignUpload")
+	chatServiceConfirmUploadMethodDescriptor               = chatServiceServiceDescriptor.Methods().ByName("ConfirmUpload")
+	chatServiceGetFileURLMethodDescriptor                  = chatServiceServiceDescriptor.Methods().ByName("GetFileURL")
+	chatServiceMarkChatReadMethodDescriptor                = chatServiceServiceDescriptor.Methods().ByName("MarkChatRead")
+	chatServiceUnsendMessageMethodDescriptor               = chatServiceServiceDescriptor.Methods().ByName("UnsendMessage")
+	chatServiceDeleteMessageForMeMethodDescriptor          = chatServiceServiceDescriptor.Methods().ByName("DeleteMessageForMe")
+	chatServiceGetSyncActionsMethodDescriptor              = chatServiceServiceDescriptor.Methods().ByName("GetSyncActions")
+	chatServiceAcknowledgeSyncActionMethodDescriptor       = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeSyncAction")
+	chatServiceRequestHistorySyncMethodDescriptor          = chatServiceServiceDescriptor.Methods().ByName("RequestHistorySync")
+	chatServiceUploadHistorySyncMethodDescriptor           = chatServiceServiceDescriptor.Methods().ByName("UploadHistorySync")
+	chatServiceDownloadHistorySyncMethodDescriptor         = chatServiceServiceDescriptor.Methods().ByName("DownloadHistorySync")
+	chatServiceAcknowledgeHistorySyncMethodDescriptor      = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeHistorySync")
 )
 
 // ChatServiceClient is a client for the rpc_personal_chat.v1.ChatService service.
@@ -123,10 +135,12 @@ type ChatServiceClient interface {
 	GetPendingMessages(context.Context, *connect.Request[personal_chat.GetPendingMessagesRequest]) (*connect.Response[personal_chat.GetPendingMessagesResponse], error)
 	AcknowledgeDelivery(context.Context, *connect.Request[personal_chat.AcknowledgeDeliveryRequest]) (*connect.Response[personal_chat.AcknowledgeDeliveryResponse], error)
 	AcknowledgeDeliveryBatch(context.Context, *connect.Request[personal_chat.AckDeliveryBatchPayload]) (*connect.Response[personal_chat.AckDeliveryBatchResponse], error)
+	AcknowledgeReadReceiptBatch(context.Context, *connect.Request[personal_chat.AckReadReceiptBatchRequest]) (*connect.Response[personal_chat.AckReadReceiptBatchResponse], error)
+	AcknowledgeAndReadBatch(context.Context, *connect.Request[personal_chat.AckAndReadBatchPayload]) (*connect.Response[personal_chat.AckAndReadBatchResponse], error)
 	PresignUpload(context.Context, *connect.Request[personal_chat.PresignChatUploadRequest]) (*connect.Response[personal_chat.PresignChatUploadResponse], error)
 	ConfirmUpload(context.Context, *connect.Request[personal_chat.ConfirmChatUploadRequest]) (*connect.Response[personal_chat.ConfirmChatUploadResponse], error)
 	GetFileURL(context.Context, *connect.Request[personal_chat.GetFileURLRequest]) (*connect.Response[personal_chat.GetFileURLResponse], error)
-	MarkChatRead(context.Context, *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[model.StatusOkay], error)
+	MarkChatRead(context.Context, *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[personal_chat.MarkChatReadResponse], error)
 	UnsendMessage(context.Context, *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[model.StatusOkay], error)
 	DeleteMessageForMe(context.Context, *connect.Request[personal_chat.DeleteMessageForMeRequest]) (*connect.Response[model.StatusOkay], error)
 	GetSyncActions(context.Context, *connect.Request[personal_chat.GetSyncActionsRequest]) (*connect.Response[personal_chat.GetSyncActionsResponse], error)
@@ -134,6 +148,7 @@ type ChatServiceClient interface {
 	RequestHistorySync(context.Context, *connect.Request[personal_chat.RequestHistorySyncRequest]) (*connect.Response[personal_chat.RequestHistorySyncResponse], error)
 	UploadHistorySync(context.Context, *connect.Request[personal_chat.UploadHistorySyncRequest]) (*connect.Response[model.StatusOkay], error)
 	DownloadHistorySync(context.Context, *connect.Request[personal_chat.DownloadHistorySyncRequest]) (*connect.Response[personal_chat.DownloadHistorySyncResponse], error)
+	AcknowledgeHistorySync(context.Context, *connect.Request[personal_chat.AcknowledgeHistorySyncRequest]) (*connect.Response[model.StatusOkay], error)
 }
 
 // NewChatServiceClient constructs a client for the rpc_personal_chat.v1.ChatService service. By
@@ -194,6 +209,18 @@ func NewChatServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(chatServiceAcknowledgeDeliveryBatchMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
+		acknowledgeReadReceiptBatch: connect.NewClient[personal_chat.AckReadReceiptBatchRequest, personal_chat.AckReadReceiptBatchResponse](
+			httpClient,
+			baseURL+ChatServiceAcknowledgeReadReceiptBatchProcedure,
+			connect.WithSchema(chatServiceAcknowledgeReadReceiptBatchMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
+		acknowledgeAndReadBatch: connect.NewClient[personal_chat.AckAndReadBatchPayload, personal_chat.AckAndReadBatchResponse](
+			httpClient,
+			baseURL+ChatServiceAcknowledgeAndReadBatchProcedure,
+			connect.WithSchema(chatServiceAcknowledgeAndReadBatchMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
 		presignUpload: connect.NewClient[personal_chat.PresignChatUploadRequest, personal_chat.PresignChatUploadResponse](
 			httpClient,
 			baseURL+ChatServicePresignUploadProcedure,
@@ -212,7 +239,7 @@ func NewChatServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(chatServiceGetFileURLMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
-		markChatRead: connect.NewClient[personal_chat.MarkChatReadRequest, model.StatusOkay](
+		markChatRead: connect.NewClient[personal_chat.MarkChatReadRequest, personal_chat.MarkChatReadResponse](
 			httpClient,
 			baseURL+ChatServiceMarkChatReadProcedure,
 			connect.WithSchema(chatServiceMarkChatReadMethodDescriptor),
@@ -260,30 +287,39 @@ func NewChatServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(chatServiceDownloadHistorySyncMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
+		acknowledgeHistorySync: connect.NewClient[personal_chat.AcknowledgeHistorySyncRequest, model.StatusOkay](
+			httpClient,
+			baseURL+ChatServiceAcknowledgeHistorySyncProcedure,
+			connect.WithSchema(chatServiceAcknowledgeHistorySyncMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // chatServiceClient implements ChatServiceClient.
 type chatServiceClient struct {
-	checkEligibility         *connect.Client[personal_chat.CheckEligibilityRequest, personal_chat.CheckEligibilityResponse]
-	createChat               *connect.Client[personal_chat.CreateChatRequest, personal_chat.CreateChatResponse]
-	getUserChats             *connect.Client[personal_chat.GetUserChatsRequest, personal_chat.GetUserChatsResponse]
-	sendMessage              *connect.Client[personal_chat.SendMessageRequest, personal_chat.Message]
-	getMessages              *connect.Client[personal_chat.GetMessagesRequest, personal_chat.GetMessagesResponse]
-	getPendingMessages       *connect.Client[personal_chat.GetPendingMessagesRequest, personal_chat.GetPendingMessagesResponse]
-	acknowledgeDelivery      *connect.Client[personal_chat.AcknowledgeDeliveryRequest, personal_chat.AcknowledgeDeliveryResponse]
-	acknowledgeDeliveryBatch *connect.Client[personal_chat.AckDeliveryBatchPayload, personal_chat.AckDeliveryBatchResponse]
-	presignUpload            *connect.Client[personal_chat.PresignChatUploadRequest, personal_chat.PresignChatUploadResponse]
-	confirmUpload            *connect.Client[personal_chat.ConfirmChatUploadRequest, personal_chat.ConfirmChatUploadResponse]
-	getFileURL               *connect.Client[personal_chat.GetFileURLRequest, personal_chat.GetFileURLResponse]
-	markChatRead             *connect.Client[personal_chat.MarkChatReadRequest, model.StatusOkay]
-	unsendMessage            *connect.Client[personal_chat.UnsendMessageRequest, model.StatusOkay]
-	deleteMessageForMe       *connect.Client[personal_chat.DeleteMessageForMeRequest, model.StatusOkay]
-	getSyncActions           *connect.Client[personal_chat.GetSyncActionsRequest, personal_chat.GetSyncActionsResponse]
-	acknowledgeSyncAction    *connect.Client[personal_chat.AcknowledgeSyncActionRequest, model.StatusOkay]
-	requestHistorySync       *connect.Client[personal_chat.RequestHistorySyncRequest, personal_chat.RequestHistorySyncResponse]
-	uploadHistorySync        *connect.Client[personal_chat.UploadHistorySyncRequest, model.StatusOkay]
-	downloadHistorySync      *connect.Client[personal_chat.DownloadHistorySyncRequest, personal_chat.DownloadHistorySyncResponse]
+	checkEligibility            *connect.Client[personal_chat.CheckEligibilityRequest, personal_chat.CheckEligibilityResponse]
+	createChat                  *connect.Client[personal_chat.CreateChatRequest, personal_chat.CreateChatResponse]
+	getUserChats                *connect.Client[personal_chat.GetUserChatsRequest, personal_chat.GetUserChatsResponse]
+	sendMessage                 *connect.Client[personal_chat.SendMessageRequest, personal_chat.Message]
+	getMessages                 *connect.Client[personal_chat.GetMessagesRequest, personal_chat.GetMessagesResponse]
+	getPendingMessages          *connect.Client[personal_chat.GetPendingMessagesRequest, personal_chat.GetPendingMessagesResponse]
+	acknowledgeDelivery         *connect.Client[personal_chat.AcknowledgeDeliveryRequest, personal_chat.AcknowledgeDeliveryResponse]
+	acknowledgeDeliveryBatch    *connect.Client[personal_chat.AckDeliveryBatchPayload, personal_chat.AckDeliveryBatchResponse]
+	acknowledgeReadReceiptBatch *connect.Client[personal_chat.AckReadReceiptBatchRequest, personal_chat.AckReadReceiptBatchResponse]
+	acknowledgeAndReadBatch     *connect.Client[personal_chat.AckAndReadBatchPayload, personal_chat.AckAndReadBatchResponse]
+	presignUpload               *connect.Client[personal_chat.PresignChatUploadRequest, personal_chat.PresignChatUploadResponse]
+	confirmUpload               *connect.Client[personal_chat.ConfirmChatUploadRequest, personal_chat.ConfirmChatUploadResponse]
+	getFileURL                  *connect.Client[personal_chat.GetFileURLRequest, personal_chat.GetFileURLResponse]
+	markChatRead                *connect.Client[personal_chat.MarkChatReadRequest, personal_chat.MarkChatReadResponse]
+	unsendMessage               *connect.Client[personal_chat.UnsendMessageRequest, model.StatusOkay]
+	deleteMessageForMe          *connect.Client[personal_chat.DeleteMessageForMeRequest, model.StatusOkay]
+	getSyncActions              *connect.Client[personal_chat.GetSyncActionsRequest, personal_chat.GetSyncActionsResponse]
+	acknowledgeSyncAction       *connect.Client[personal_chat.AcknowledgeSyncActionRequest, model.StatusOkay]
+	requestHistorySync          *connect.Client[personal_chat.RequestHistorySyncRequest, personal_chat.RequestHistorySyncResponse]
+	uploadHistorySync           *connect.Client[personal_chat.UploadHistorySyncRequest, model.StatusOkay]
+	downloadHistorySync         *connect.Client[personal_chat.DownloadHistorySyncRequest, personal_chat.DownloadHistorySyncResponse]
+	acknowledgeHistorySync      *connect.Client[personal_chat.AcknowledgeHistorySyncRequest, model.StatusOkay]
 }
 
 // CheckEligibility calls rpc_personal_chat.v1.ChatService.CheckEligibility.
@@ -326,6 +362,16 @@ func (c *chatServiceClient) AcknowledgeDeliveryBatch(ctx context.Context, req *c
 	return c.acknowledgeDeliveryBatch.CallUnary(ctx, req)
 }
 
+// AcknowledgeReadReceiptBatch calls rpc_personal_chat.v1.ChatService.AcknowledgeReadReceiptBatch.
+func (c *chatServiceClient) AcknowledgeReadReceiptBatch(ctx context.Context, req *connect.Request[personal_chat.AckReadReceiptBatchRequest]) (*connect.Response[personal_chat.AckReadReceiptBatchResponse], error) {
+	return c.acknowledgeReadReceiptBatch.CallUnary(ctx, req)
+}
+
+// AcknowledgeAndReadBatch calls rpc_personal_chat.v1.ChatService.AcknowledgeAndReadBatch.
+func (c *chatServiceClient) AcknowledgeAndReadBatch(ctx context.Context, req *connect.Request[personal_chat.AckAndReadBatchPayload]) (*connect.Response[personal_chat.AckAndReadBatchResponse], error) {
+	return c.acknowledgeAndReadBatch.CallUnary(ctx, req)
+}
+
 // PresignUpload calls rpc_personal_chat.v1.ChatService.PresignUpload.
 func (c *chatServiceClient) PresignUpload(ctx context.Context, req *connect.Request[personal_chat.PresignChatUploadRequest]) (*connect.Response[personal_chat.PresignChatUploadResponse], error) {
 	return c.presignUpload.CallUnary(ctx, req)
@@ -342,7 +388,7 @@ func (c *chatServiceClient) GetFileURL(ctx context.Context, req *connect.Request
 }
 
 // MarkChatRead calls rpc_personal_chat.v1.ChatService.MarkChatRead.
-func (c *chatServiceClient) MarkChatRead(ctx context.Context, req *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[model.StatusOkay], error) {
+func (c *chatServiceClient) MarkChatRead(ctx context.Context, req *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[personal_chat.MarkChatReadResponse], error) {
 	return c.markChatRead.CallUnary(ctx, req)
 }
 
@@ -381,6 +427,11 @@ func (c *chatServiceClient) DownloadHistorySync(ctx context.Context, req *connec
 	return c.downloadHistorySync.CallUnary(ctx, req)
 }
 
+// AcknowledgeHistorySync calls rpc_personal_chat.v1.ChatService.AcknowledgeHistorySync.
+func (c *chatServiceClient) AcknowledgeHistorySync(ctx context.Context, req *connect.Request[personal_chat.AcknowledgeHistorySyncRequest]) (*connect.Response[model.StatusOkay], error) {
+	return c.acknowledgeHistorySync.CallUnary(ctx, req)
+}
+
 // ChatServiceHandler is an implementation of the rpc_personal_chat.v1.ChatService service.
 type ChatServiceHandler interface {
 	CheckEligibility(context.Context, *connect.Request[personal_chat.CheckEligibilityRequest]) (*connect.Response[personal_chat.CheckEligibilityResponse], error)
@@ -391,10 +442,12 @@ type ChatServiceHandler interface {
 	GetPendingMessages(context.Context, *connect.Request[personal_chat.GetPendingMessagesRequest]) (*connect.Response[personal_chat.GetPendingMessagesResponse], error)
 	AcknowledgeDelivery(context.Context, *connect.Request[personal_chat.AcknowledgeDeliveryRequest]) (*connect.Response[personal_chat.AcknowledgeDeliveryResponse], error)
 	AcknowledgeDeliveryBatch(context.Context, *connect.Request[personal_chat.AckDeliveryBatchPayload]) (*connect.Response[personal_chat.AckDeliveryBatchResponse], error)
+	AcknowledgeReadReceiptBatch(context.Context, *connect.Request[personal_chat.AckReadReceiptBatchRequest]) (*connect.Response[personal_chat.AckReadReceiptBatchResponse], error)
+	AcknowledgeAndReadBatch(context.Context, *connect.Request[personal_chat.AckAndReadBatchPayload]) (*connect.Response[personal_chat.AckAndReadBatchResponse], error)
 	PresignUpload(context.Context, *connect.Request[personal_chat.PresignChatUploadRequest]) (*connect.Response[personal_chat.PresignChatUploadResponse], error)
 	ConfirmUpload(context.Context, *connect.Request[personal_chat.ConfirmChatUploadRequest]) (*connect.Response[personal_chat.ConfirmChatUploadResponse], error)
 	GetFileURL(context.Context, *connect.Request[personal_chat.GetFileURLRequest]) (*connect.Response[personal_chat.GetFileURLResponse], error)
-	MarkChatRead(context.Context, *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[model.StatusOkay], error)
+	MarkChatRead(context.Context, *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[personal_chat.MarkChatReadResponse], error)
 	UnsendMessage(context.Context, *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[model.StatusOkay], error)
 	DeleteMessageForMe(context.Context, *connect.Request[personal_chat.DeleteMessageForMeRequest]) (*connect.Response[model.StatusOkay], error)
 	GetSyncActions(context.Context, *connect.Request[personal_chat.GetSyncActionsRequest]) (*connect.Response[personal_chat.GetSyncActionsResponse], error)
@@ -402,6 +455,7 @@ type ChatServiceHandler interface {
 	RequestHistorySync(context.Context, *connect.Request[personal_chat.RequestHistorySyncRequest]) (*connect.Response[personal_chat.RequestHistorySyncResponse], error)
 	UploadHistorySync(context.Context, *connect.Request[personal_chat.UploadHistorySyncRequest]) (*connect.Response[model.StatusOkay], error)
 	DownloadHistorySync(context.Context, *connect.Request[personal_chat.DownloadHistorySyncRequest]) (*connect.Response[personal_chat.DownloadHistorySyncResponse], error)
+	AcknowledgeHistorySync(context.Context, *connect.Request[personal_chat.AcknowledgeHistorySyncRequest]) (*connect.Response[model.StatusOkay], error)
 }
 
 // NewChatServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -456,6 +510,18 @@ func NewChatServiceHandler(svc ChatServiceHandler, opts ...connect.HandlerOption
 		ChatServiceAcknowledgeDeliveryBatchProcedure,
 		svc.AcknowledgeDeliveryBatch,
 		connect.WithSchema(chatServiceAcknowledgeDeliveryBatchMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
+	chatServiceAcknowledgeReadReceiptBatchHandler := connect.NewUnaryHandler(
+		ChatServiceAcknowledgeReadReceiptBatchProcedure,
+		svc.AcknowledgeReadReceiptBatch,
+		connect.WithSchema(chatServiceAcknowledgeReadReceiptBatchMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
+	chatServiceAcknowledgeAndReadBatchHandler := connect.NewUnaryHandler(
+		ChatServiceAcknowledgeAndReadBatchProcedure,
+		svc.AcknowledgeAndReadBatch,
+		connect.WithSchema(chatServiceAcknowledgeAndReadBatchMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServicePresignUploadHandler := connect.NewUnaryHandler(
@@ -524,6 +590,12 @@ func NewChatServiceHandler(svc ChatServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(chatServiceDownloadHistorySyncMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
+	chatServiceAcknowledgeHistorySyncHandler := connect.NewUnaryHandler(
+		ChatServiceAcknowledgeHistorySyncProcedure,
+		svc.AcknowledgeHistorySync,
+		connect.WithSchema(chatServiceAcknowledgeHistorySyncMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/rpc_personal_chat.v1.ChatService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ChatServiceCheckEligibilityProcedure:
@@ -542,6 +614,10 @@ func NewChatServiceHandler(svc ChatServiceHandler, opts ...connect.HandlerOption
 			chatServiceAcknowledgeDeliveryHandler.ServeHTTP(w, r)
 		case ChatServiceAcknowledgeDeliveryBatchProcedure:
 			chatServiceAcknowledgeDeliveryBatchHandler.ServeHTTP(w, r)
+		case ChatServiceAcknowledgeReadReceiptBatchProcedure:
+			chatServiceAcknowledgeReadReceiptBatchHandler.ServeHTTP(w, r)
+		case ChatServiceAcknowledgeAndReadBatchProcedure:
+			chatServiceAcknowledgeAndReadBatchHandler.ServeHTTP(w, r)
 		case ChatServicePresignUploadProcedure:
 			chatServicePresignUploadHandler.ServeHTTP(w, r)
 		case ChatServiceConfirmUploadProcedure:
@@ -564,6 +640,8 @@ func NewChatServiceHandler(svc ChatServiceHandler, opts ...connect.HandlerOption
 			chatServiceUploadHistorySyncHandler.ServeHTTP(w, r)
 		case ChatServiceDownloadHistorySyncProcedure:
 			chatServiceDownloadHistorySyncHandler.ServeHTTP(w, r)
+		case ChatServiceAcknowledgeHistorySyncProcedure:
+			chatServiceAcknowledgeHistorySyncHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -605,6 +683,14 @@ func (UnimplementedChatServiceHandler) AcknowledgeDeliveryBatch(context.Context,
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.AcknowledgeDeliveryBatch is not implemented"))
 }
 
+func (UnimplementedChatServiceHandler) AcknowledgeReadReceiptBatch(context.Context, *connect.Request[personal_chat.AckReadReceiptBatchRequest]) (*connect.Response[personal_chat.AckReadReceiptBatchResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.AcknowledgeReadReceiptBatch is not implemented"))
+}
+
+func (UnimplementedChatServiceHandler) AcknowledgeAndReadBatch(context.Context, *connect.Request[personal_chat.AckAndReadBatchPayload]) (*connect.Response[personal_chat.AckAndReadBatchResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.AcknowledgeAndReadBatch is not implemented"))
+}
+
 func (UnimplementedChatServiceHandler) PresignUpload(context.Context, *connect.Request[personal_chat.PresignChatUploadRequest]) (*connect.Response[personal_chat.PresignChatUploadResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.PresignUpload is not implemented"))
 }
@@ -617,7 +703,7 @@ func (UnimplementedChatServiceHandler) GetFileURL(context.Context, *connect.Requ
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.GetFileURL is not implemented"))
 }
 
-func (UnimplementedChatServiceHandler) MarkChatRead(context.Context, *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[model.StatusOkay], error) {
+func (UnimplementedChatServiceHandler) MarkChatRead(context.Context, *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[personal_chat.MarkChatReadResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.MarkChatRead is not implemented"))
 }
 
@@ -647,4 +733,8 @@ func (UnimplementedChatServiceHandler) UploadHistorySync(context.Context, *conne
 
 func (UnimplementedChatServiceHandler) DownloadHistorySync(context.Context, *connect.Request[personal_chat.DownloadHistorySyncRequest]) (*connect.Response[personal_chat.DownloadHistorySyncResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.DownloadHistorySync is not implemented"))
+}
+
+func (UnimplementedChatServiceHandler) AcknowledgeHistorySync(context.Context, *connect.Request[personal_chat.AcknowledgeHistorySyncRequest]) (*connect.Response[model.StatusOkay], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.AcknowledgeHistorySync is not implemented"))
 }

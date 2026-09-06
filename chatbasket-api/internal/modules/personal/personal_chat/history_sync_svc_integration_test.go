@@ -2,14 +2,22 @@ package personal_chat
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
+	"chatbasket-api/internal/platform/kit"
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -133,6 +141,15 @@ func TestHistorySync_FullIntegration_EdgeCases(t *testing.T) {
 	if assert.NotNil(t, downPayload) {
 		assert.JSONEq(t, payloadCipher, *downPayload)
 	}
+
+	// 5. AcknowledgeHistorySync - Success
+	err = svc.AcknowledgeHistorySync(ctx, userID, sessionID, reqID)
+	require.NoError(t, err)
+
+	// Verify row is deleted from database
+	_, err = svc.DownloadHistorySync(ctx, userID, sessionID, reqID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expired or not found")
 }
 
 func TestHistorySync_Timeouts(t *testing.T) {
@@ -197,3 +214,83 @@ func TestHistorySync_UpsertReplace(t *testing.T) {
 	assert.Equal(t, userID, meta.UserID)
 	assert.Equal(t, sessionID, meta.SessionID)
 }
+
+func TestHistorySync_EchoHandler_Ack(t *testing.T) {
+	pool := setupIntegrationDB(t)
+	ctx := context.Background()
+
+	userID, sessionID := createUserAndSession(t, pool)
+	pubKey := "test-public-key-44-chars-base-64-encoded-key"
+
+	mockAuth := &historySyncMockAuthProvider{
+		primarySessionID: sessionID,
+		publicKey:        pubKey,
+	}
+
+	svc := &chatService{
+		PostgresQuerier: personal_chat_store.New(pool),
+		AuthProvider:    mockAuth,
+	}
+
+	reqID, _, _, err := svc.RequestHistorySync(ctx, userID, sessionID, "\"chats1\"", pubKey)
+	require.NoError(t, err)
+
+	handler := &chatHandler{Service: svc}
+
+	e := echo.New()
+	body := fmt.Sprintf(`{"request_id":"%s"}`, reqID.String())
+	req := httptest.NewRequest(http.MethodPost, "/chat/history-sync/ack", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("userId", userID.String())
+	c.Set("uuidUserId", userID)
+	c.Set("sessionUUID", sessionID)
+
+	err = handler.AcknowledgeHistorySync(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Verify row deleted
+	_, err = svc.PostgresQuerier.GetHistorySyncMeta(ctx, reqID)
+	assert.Error(t, err)
+}
+
+func TestHistorySync_ConnectHandler_Ack(t *testing.T) {
+	pool := setupIntegrationDB(t)
+	ctx := context.Background()
+
+	userID, sessionID := createUserAndSession(t, pool)
+	pubKey := "test-public-key-44-chars-base-64-encoded-key"
+
+	mockAuth := &historySyncMockAuthProvider{
+		primarySessionID: sessionID,
+		publicKey:        pubKey,
+	}
+
+	svc := &chatService{
+		PostgresQuerier: personal_chat_store.New(pool),
+		AuthProvider:    mockAuth,
+	}
+
+	reqID, _, _, err := svc.RequestHistorySync(ctx, userID, sessionID, "\"chats1\"", pubKey)
+	require.NoError(t, err)
+
+	connectServer := &chatConnectServer{chatService: svc}
+	reqCtx := context.WithValue(ctx, kit.CtxSessionData, kit.SessionData{
+		UserID:      userID.String(),
+		UUIDUserID:  userID,
+		SessionUUID: sessionID,
+	})
+
+	res, err := connectServer.AcknowledgeHistorySync(reqCtx, connect.NewRequest(&rpc_personal_chatv1.AcknowledgeHistorySyncRequest{
+		RequestId: reqID.String(),
+	}))
+	require.NoError(t, err)
+	assert.True(t, res.Msg.Status)
+
+	// Verify row deleted
+	_, err = svc.PostgresQuerier.GetHistorySyncMeta(ctx, reqID)
+	assert.Error(t, err)
+}
+

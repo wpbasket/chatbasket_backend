@@ -121,7 +121,7 @@ type Message struct {
 	ThumbnailTokenID            *string    `json:"thumbnail_token_id"`
 	ThumbnailTokenSecret        *string    `json:"thumbnail_token_secret"`
 	DeliveredToRecipient        bool       `json:"delivered_to_recipient"`
-	DeliveredToRecipientPrimary *bool      `json:"delivered_to_recipient_primary"`
+	DeliveredToRecipientPrimary bool       `json:"delivered_to_recipient_primary"`
 	SyncedToSenderPrimary       bool       `json:"synced_to_sender_primary"`
 	DeletedBySender             bool       `json:"deleted_by_sender"`
 	DeletedByRecipient          bool       `json:"deleted_by_recipient"`
@@ -129,6 +129,9 @@ type Message struct {
 	ExpiresAt                   time.Time  `json:"expires_at"`
 	CreatedAt                   time.Time  `json:"created_at"`
 	UpdatedAt                   time.Time  `json:"updated_at"`
+	ReadByRecipient             bool       `json:"read_by_recipient"`
+	ReadAckedBySender           bool       `json:"read_acked_by_sender"`
+	ReadAt                      *time.Time `json:"read_at"`
 }
 
 type MessageSyncAction struct {

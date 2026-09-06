@@ -118,4 +118,17 @@ func (s *chatService) DownloadHistorySync(ctx context.Context, userID uuid.UUID,
 	return &payloadStr, nil
 }
 
+// AcknowledgeHistorySync handles step ⑥: secondary acknowledges receipt, immediately deleting the staged payload
+func (s *chatService) AcknowledgeHistorySync(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, requestID uuid.UUID) error {
+	_, err := s.PostgresQuerier.DeleteHistorySync(ctx, personal_chat_store.DeleteHistorySyncParams{
+		ID:        requestID,
+		UserID:    userID,
+		SessionID: sessionID,
+	})
+	if err != nil {
+		return kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to acknowledge history sync: "+err.Error())
+	}
+	return nil
+}
+
 

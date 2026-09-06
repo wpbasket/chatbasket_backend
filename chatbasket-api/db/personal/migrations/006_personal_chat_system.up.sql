@@ -106,7 +106,7 @@ thumbnail_token_secret TEXT,
 
 -- Delivery tracking for primary-device-centric relay
 delivered_to_recipient BOOLEAN NOT NULL DEFAULT FALSE,
-delivered_to_recipient_primary BOOLEAN DEFAULT FALSE,
+delivered_to_recipient_primary BOOLEAN NOT NULL DEFAULT FALSE,
 synced_to_sender_primary BOOLEAN NOT NULL DEFAULT FALSE,
 
 -- Per-user deletion flags

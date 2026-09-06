@@ -30,6 +30,10 @@ type HistorySyncResponse struct {
 	PayloadCipher string `json:"payload_cipher"`
 }
 
+type HistorySyncAckPayload struct {
+	RequestID uuid.UUID `json:"request_id"`
+}
+
 // RequestHistorySync handles POST /chat/history-sync/request
 func (h *chatHandler) RequestHistorySync(c *echo.Context) error {
 	userID, err := kit.ExtractUserID(c)
@@ -153,4 +157,32 @@ func (h *chatHandler) DownloadHistorySync(c *echo.Context) error {
 	return c.JSON(http.StatusOK, HistorySyncResponse{
 		PayloadCipher: *payloadCipher,
 	})
+}
+
+// AcknowledgeHistorySync handles POST /chat/history-sync/ack
+func (h *chatHandler) AcknowledgeHistorySync(c *echo.Context) error {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	sessionUUIDVal, ok := c.Get("sessionUUID").(uuid.UUID)
+	if !ok {
+		return kit.NewError(http.StatusUnauthorized, "unauthorized", "invalid session")
+	}
+
+	var req HistorySyncAckPayload
+	if err := c.Bind(&req); err != nil {
+		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid payload")
+	}
+
+	if req.RequestID == uuid.Nil {
+		return kit.NewError(http.StatusBadRequest, "bad_request", "request_id is required")
+	}
+
+	if err := h.Service.AcknowledgeHistorySync(c.Request().Context(), userID.UuidUserId, sessionUUIDVal, req.RequestID); err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, kit.StatusOkay{Status: true})
 }
