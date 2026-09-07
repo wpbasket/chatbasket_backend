@@ -37,12 +37,6 @@ const (
 	EmailServiceSendEmailProcedure = "/rpc_core_email.v1.EmailService/SendEmail"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	emailServiceServiceDescriptor         = core_email.File_proto_core_core_email_core_email_api_proto.Services().ByName("EmailService")
-	emailServiceSendEmailMethodDescriptor = emailServiceServiceDescriptor.Methods().ByName("SendEmail")
-)
-
 // EmailServiceClient is a client for the rpc_core_email.v1.EmailService service.
 type EmailServiceClient interface {
 	SendEmail(context.Context, *connect.Request[core_email.SendEmailRequest]) (*connect.Response[core_email.SendEmailResponse], error)
@@ -57,11 +51,12 @@ type EmailServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewEmailServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) EmailServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	emailServiceMethods := core_email.File_proto_core_core_email_core_email_api_proto.Services().ByName("EmailService").Methods()
 	return &emailServiceClient{
 		sendEmail: connect.NewClient[core_email.SendEmailRequest, core_email.SendEmailResponse](
 			httpClient,
 			baseURL+EmailServiceSendEmailProcedure,
-			connect.WithSchema(emailServiceSendEmailMethodDescriptor),
+			connect.WithSchema(emailServiceMethods.ByName("SendEmail")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -88,10 +83,11 @@ type EmailServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewEmailServiceHandler(svc EmailServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	emailServiceMethods := core_email.File_proto_core_core_email_core_email_api_proto.Services().ByName("EmailService").Methods()
 	emailServiceSendEmailHandler := connect.NewUnaryHandler(
 		EmailServiceSendEmailProcedure,
 		svc.SendEmail,
-		connect.WithSchema(emailServiceSendEmailMethodDescriptor),
+		connect.WithSchema(emailServiceMethods.ByName("SendEmail")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/rpc_core_email.v1.EmailService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
