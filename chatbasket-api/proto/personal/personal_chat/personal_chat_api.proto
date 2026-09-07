@@ -17,18 +17,8 @@ message Chat {
   optional string avatarFileId = 7;
   google.protobuf.Timestamp createdAt = 8;
   google.protobuf.Timestamp updatedAt = 9;
-  google.protobuf.Timestamp otherUserLastReadAt = 10;
-  google.protobuf.Timestamp otherUserLastDeliveredAt = 11;
-  optional string lastMessageContent = 12;
-  optional google.protobuf.Timestamp lastMessageCreatedAt = 13;
-  optional string lastMessageType = 14;
-  bool lastMessageIsFromMe = 15;
-  string lastMessageStatus = 16;
-  bool lastMessageIsUnsent = 17;
-  optional string lastMessageId = 18;
-  int32 unreadCount = 19;
-  int32 otherUserKeysRevision = 20;
-  string profileType = 21;
+  int32 otherUserKeysRevision = 10;
+  string profileType = 11;
 }
 
 message Message {
@@ -79,11 +69,8 @@ message CreateChatResponse {
   optional string avatarFileId = 7;
   google.protobuf.Timestamp createdAt = 8;
   google.protobuf.Timestamp updatedAt = 9;
-  google.protobuf.Timestamp otherUserLastReadAt = 10;
-  google.protobuf.Timestamp otherUserLastDeliveredAt = 11;
-  bool lastMessageIsFromMe = 12;
-  int32 otherUserKeysRevision = 13;
-  string profileType = 14;
+  int32 otherUserKeysRevision = 10;
+  string profileType = 11;
 }
 
 message GetUserChatsRequest {}
@@ -238,8 +225,8 @@ message MarkChatReadResponse {
 }
 
 message UnsendMessageRequest {
-  string chatId = 2;
-  repeated string messageIds = 3;
+  string chatId = 1;
+  repeated string messageIds = 2;
 }
 
 message DeleteMessageForMeRequest {

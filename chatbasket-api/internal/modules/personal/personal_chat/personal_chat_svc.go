@@ -241,14 +241,6 @@ func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChat
 	if chatErr != nil {
 		return nil, chatErr
 	}
-	var otherReadAt, otherDeliveredAt time.Time
-	if chat.Participant1ID == userID.UuidUserId {
-		otherReadAt = kit.DerefTime(chat.P2LastReadAt)
-		otherDeliveredAt = kit.DerefTime(chat.P2LastDeliveredAt)
-	} else {
-		otherReadAt = kit.DerefTime(chat.P1LastReadAt)
-		otherDeliveredAt = kit.DerefTime(chat.P1LastDeliveredAt)
-	}
 	contactProfile, _ := s.ProfileProvider.GetContactableProfilesForViewer(ctx, userID.UuidUserId, []uuid.UUID{recipientID})
 	// Privacy exclusion: if the contactable profile lookup omits the user
 	// (admin-blocked / private profile / user-blocked either way), the map
@@ -273,20 +265,17 @@ func (s *chatService) CreateChatHandler(ctx context.Context, payload *CreateChat
 		otherUserKeysRevision = cp.KeysRevision
 	}
 	return &rpc_personal_chatv1.CreateChatResponse{
-		ChatId:                   chat.ID.String(),
-		OtherUserId:              recipientID.String(),
-		OtherUserName:            otherName,
-		OtherUserUsername:        otherUsername,
-		OtherUserBio:             otherBio,
-		AvatarUrl:                avatarURL,
-		AvatarFileId:             avatarFileID,
-		CreatedAt:                timestamppb.New(chat.CreatedAt),
-		UpdatedAt:                timestamppb.New(chat.UpdatedAt),
-		OtherUserLastReadAt:      timestamppb.New(otherReadAt),
-		OtherUserLastDeliveredAt: timestamppb.New(otherDeliveredAt),
-		LastMessageIsFromMe:      false,
-		OtherUserKeysRevision:    otherUserKeysRevision,
-		ProfileType:              otherProfileType,
+		ChatId:                chat.ID.String(),
+		OtherUserId:           recipientID.String(),
+		OtherUserName:         otherName,
+		OtherUserUsername:     otherUsername,
+		OtherUserBio:          otherBio,
+		AvatarUrl:             avatarURL,
+		AvatarFileId:          avatarFileID,
+		CreatedAt:             timestamppb.New(chat.CreatedAt),
+		UpdatedAt:             timestamppb.New(chat.UpdatedAt),
+		OtherUserKeysRevision: otherUserKeysRevision,
+		ProfileType:           otherProfileType,
 	}, nil
 }
 
@@ -792,74 +781,21 @@ func (s *chatService) GetUserChatsHandler(ctx context.Context, userID kit.UserId
 			avatarFileID = cp.AvatarFileId
 			otherProfileType = cp.ProfileType
 		}
-		var lastMessageContent *string
-		var lastMessageType *string
-		var lastMessageCreatedAt *time.Time
-		var lastMessageSenderID *string
-		var lastMessageID *string
-		var otherUserLastReadAt, otherUserLastDeliveredAt time.Time
 		var otherUserKeysRevision int32
-		if chat.Participant1ID == userID.UuidUserId {
-			lastMessageContent = chat.P2LastMessageContent
-			lastMessageType = chat.P2LastMessageType
-			lastMessageCreatedAt = chat.LastMessageCreatedAt
-			otherUserLastReadAt = kit.DerefTime(chat.P2LastReadAt)
-			otherUserLastDeliveredAt = kit.DerefTime(chat.P2LastDeliveredAt)
-			if chat.LastMessageSenderID != nil {
-				s := chat.LastMessageSenderID.String()
-				lastMessageSenderID = &s
-			}
-			if chat.LastMessageID != nil {
-				s := chat.LastMessageID.String()
-				lastMessageID = &s
-			}
-		} else {
-			lastMessageContent = chat.P1LastMessageContent
-			lastMessageType = chat.P1LastMessageType
-			lastMessageCreatedAt = chat.LastMessageCreatedAt
-			otherUserLastReadAt = kit.DerefTime(chat.P1LastReadAt)
-			otherUserLastDeliveredAt = kit.DerefTime(chat.P1LastDeliveredAt)
-			if chat.LastMessageSenderID != nil {
-				s := chat.LastMessageSenderID.String()
-				lastMessageSenderID = &s
-			}
-			if chat.LastMessageID != nil {
-				s := chat.LastMessageID.String()
-				lastMessageID = &s
-			}
-		}
 		if cp, ok := contactProfiles[otherUserID]; ok && cp != nil {
 			otherUserKeysRevision = cp.KeysRevision
 		}
 
-		if lastMessageCreatedAt != nil && lastMessageCreatedAt.Before(sessionCreatedAt) {
-			lastMessageContent = nil
-			lastMessageType = nil
-		}
-
-		lastMessageIsUnsent := false
-		lastMessageStatus := "sent"
 		chatResponses = append(chatResponses, &rpc_personal_chatv1.Chat{
-			ChatId:                   chat.ID.String(),
-			OtherUserId:              otherUserID.String(),
-			OtherUserName:            otherName,
-			OtherUserUsername:        otherUsername,
-			OtherUserBio:             otherBio,
-			AvatarUrl:                avatarURL,
-			AvatarFileId:             avatarFileID,
-			CreatedAt:                timestamppb.New(chat.CreatedAt),
-			UpdatedAt:                timestamppb.New(chat.UpdatedAt),
-			OtherUserLastReadAt:      timestamppb.New(otherUserLastReadAt),
-			OtherUserLastDeliveredAt: timestamppb.New(otherUserLastDeliveredAt),
-			LastMessageContent:       lastMessageContent,
-			LastMessageCreatedAt:     kit.OptionalTimestamp(lastMessageCreatedAt),
-			LastMessageType:          lastMessageType,
-
-			LastMessageIsFromMe:   lastMessageSenderID != nil && *lastMessageSenderID == userID.StringUserId,
-			LastMessageStatus:     lastMessageStatus,
-			LastMessageIsUnsent:   lastMessageIsUnsent,
-			LastMessageId:         lastMessageID,
-			UnreadCount:           chat.UnreadCount,
+			ChatId:                chat.ID.String(),
+			OtherUserId:           otherUserID.String(),
+			OtherUserName:         otherName,
+			OtherUserUsername:     otherUsername,
+			OtherUserBio:          otherBio,
+			AvatarUrl:             avatarURL,
+			AvatarFileId:          avatarFileID,
+			CreatedAt:             timestamppb.New(chat.CreatedAt),
+			UpdatedAt:             timestamppb.New(chat.UpdatedAt),
 			OtherUserKeysRevision: otherUserKeysRevision,
 			ProfileType:           otherProfileType,
 		})

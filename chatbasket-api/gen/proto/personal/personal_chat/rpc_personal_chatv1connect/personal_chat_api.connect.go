@@ -98,33 +98,6 @@ const (
 	ChatServiceAcknowledgeHistorySyncProcedure = "/rpc_personal_chat.v1.ChatService/AcknowledgeHistorySync"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	chatServiceServiceDescriptor                           = personal_chat.File_proto_personal_personal_chat_personal_chat_api_proto.Services().ByName("ChatService")
-	chatServiceCheckEligibilityMethodDescriptor            = chatServiceServiceDescriptor.Methods().ByName("CheckEligibility")
-	chatServiceCreateChatMethodDescriptor                  = chatServiceServiceDescriptor.Methods().ByName("CreateChat")
-	chatServiceGetUserChatsMethodDescriptor                = chatServiceServiceDescriptor.Methods().ByName("GetUserChats")
-	chatServiceSendMessageMethodDescriptor                 = chatServiceServiceDescriptor.Methods().ByName("SendMessage")
-	chatServiceGetMessagesMethodDescriptor                 = chatServiceServiceDescriptor.Methods().ByName("GetMessages")
-	chatServiceGetPendingMessagesMethodDescriptor          = chatServiceServiceDescriptor.Methods().ByName("GetPendingMessages")
-	chatServiceAcknowledgeDeliveryMethodDescriptor         = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeDelivery")
-	chatServiceAcknowledgeDeliveryBatchMethodDescriptor    = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeDeliveryBatch")
-	chatServiceAcknowledgeReadReceiptBatchMethodDescriptor = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeReadReceiptBatch")
-	chatServiceAcknowledgeAndReadBatchMethodDescriptor     = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeAndReadBatch")
-	chatServicePresignUploadMethodDescriptor               = chatServiceServiceDescriptor.Methods().ByName("PresignUpload")
-	chatServiceConfirmUploadMethodDescriptor               = chatServiceServiceDescriptor.Methods().ByName("ConfirmUpload")
-	chatServiceGetFileURLMethodDescriptor                  = chatServiceServiceDescriptor.Methods().ByName("GetFileURL")
-	chatServiceMarkChatReadMethodDescriptor                = chatServiceServiceDescriptor.Methods().ByName("MarkChatRead")
-	chatServiceUnsendMessageMethodDescriptor               = chatServiceServiceDescriptor.Methods().ByName("UnsendMessage")
-	chatServiceDeleteMessageForMeMethodDescriptor          = chatServiceServiceDescriptor.Methods().ByName("DeleteMessageForMe")
-	chatServiceGetSyncActionsMethodDescriptor              = chatServiceServiceDescriptor.Methods().ByName("GetSyncActions")
-	chatServiceAcknowledgeSyncActionMethodDescriptor       = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeSyncAction")
-	chatServiceRequestHistorySyncMethodDescriptor          = chatServiceServiceDescriptor.Methods().ByName("RequestHistorySync")
-	chatServiceUploadHistorySyncMethodDescriptor           = chatServiceServiceDescriptor.Methods().ByName("UploadHistorySync")
-	chatServiceDownloadHistorySyncMethodDescriptor         = chatServiceServiceDescriptor.Methods().ByName("DownloadHistorySync")
-	chatServiceAcknowledgeHistorySyncMethodDescriptor      = chatServiceServiceDescriptor.Methods().ByName("AcknowledgeHistorySync")
-)
-
 // ChatServiceClient is a client for the rpc_personal_chat.v1.ChatService service.
 type ChatServiceClient interface {
 	CheckEligibility(context.Context, *connect.Request[personal_chat.CheckEligibilityRequest]) (*connect.Response[personal_chat.CheckEligibilityResponse], error)
@@ -160,137 +133,138 @@ type ChatServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewChatServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ChatServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	chatServiceMethods := personal_chat.File_proto_personal_personal_chat_personal_chat_api_proto.Services().ByName("ChatService").Methods()
 	return &chatServiceClient{
 		checkEligibility: connect.NewClient[personal_chat.CheckEligibilityRequest, personal_chat.CheckEligibilityResponse](
 			httpClient,
 			baseURL+ChatServiceCheckEligibilityProcedure,
-			connect.WithSchema(chatServiceCheckEligibilityMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("CheckEligibility")),
 			connect.WithClientOptions(opts...),
 		),
 		createChat: connect.NewClient[personal_chat.CreateChatRequest, personal_chat.CreateChatResponse](
 			httpClient,
 			baseURL+ChatServiceCreateChatProcedure,
-			connect.WithSchema(chatServiceCreateChatMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("CreateChat")),
 			connect.WithClientOptions(opts...),
 		),
 		getUserChats: connect.NewClient[personal_chat.GetUserChatsRequest, personal_chat.GetUserChatsResponse](
 			httpClient,
 			baseURL+ChatServiceGetUserChatsProcedure,
-			connect.WithSchema(chatServiceGetUserChatsMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("GetUserChats")),
 			connect.WithClientOptions(opts...),
 		),
 		sendMessage: connect.NewClient[personal_chat.SendMessageRequest, personal_chat.Message](
 			httpClient,
 			baseURL+ChatServiceSendMessageProcedure,
-			connect.WithSchema(chatServiceSendMessageMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("SendMessage")),
 			connect.WithClientOptions(opts...),
 		),
 		getMessages: connect.NewClient[personal_chat.GetMessagesRequest, personal_chat.GetMessagesResponse](
 			httpClient,
 			baseURL+ChatServiceGetMessagesProcedure,
-			connect.WithSchema(chatServiceGetMessagesMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("GetMessages")),
 			connect.WithClientOptions(opts...),
 		),
 		getPendingMessages: connect.NewClient[personal_chat.GetPendingMessagesRequest, personal_chat.GetPendingMessagesResponse](
 			httpClient,
 			baseURL+ChatServiceGetPendingMessagesProcedure,
-			connect.WithSchema(chatServiceGetPendingMessagesMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("GetPendingMessages")),
 			connect.WithClientOptions(opts...),
 		),
 		acknowledgeDelivery: connect.NewClient[personal_chat.AcknowledgeDeliveryRequest, personal_chat.AcknowledgeDeliveryResponse](
 			httpClient,
 			baseURL+ChatServiceAcknowledgeDeliveryProcedure,
-			connect.WithSchema(chatServiceAcknowledgeDeliveryMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("AcknowledgeDelivery")),
 			connect.WithClientOptions(opts...),
 		),
 		acknowledgeDeliveryBatch: connect.NewClient[personal_chat.AckDeliveryBatchPayload, personal_chat.AckDeliveryBatchResponse](
 			httpClient,
 			baseURL+ChatServiceAcknowledgeDeliveryBatchProcedure,
-			connect.WithSchema(chatServiceAcknowledgeDeliveryBatchMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("AcknowledgeDeliveryBatch")),
 			connect.WithClientOptions(opts...),
 		),
 		acknowledgeReadReceiptBatch: connect.NewClient[personal_chat.AckReadReceiptBatchRequest, personal_chat.AckReadReceiptBatchResponse](
 			httpClient,
 			baseURL+ChatServiceAcknowledgeReadReceiptBatchProcedure,
-			connect.WithSchema(chatServiceAcknowledgeReadReceiptBatchMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("AcknowledgeReadReceiptBatch")),
 			connect.WithClientOptions(opts...),
 		),
 		acknowledgeAndReadBatch: connect.NewClient[personal_chat.AckAndReadBatchPayload, personal_chat.AckAndReadBatchResponse](
 			httpClient,
 			baseURL+ChatServiceAcknowledgeAndReadBatchProcedure,
-			connect.WithSchema(chatServiceAcknowledgeAndReadBatchMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("AcknowledgeAndReadBatch")),
 			connect.WithClientOptions(opts...),
 		),
 		presignUpload: connect.NewClient[personal_chat.PresignChatUploadRequest, personal_chat.PresignChatUploadResponse](
 			httpClient,
 			baseURL+ChatServicePresignUploadProcedure,
-			connect.WithSchema(chatServicePresignUploadMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("PresignUpload")),
 			connect.WithClientOptions(opts...),
 		),
 		confirmUpload: connect.NewClient[personal_chat.ConfirmChatUploadRequest, personal_chat.ConfirmChatUploadResponse](
 			httpClient,
 			baseURL+ChatServiceConfirmUploadProcedure,
-			connect.WithSchema(chatServiceConfirmUploadMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("ConfirmUpload")),
 			connect.WithClientOptions(opts...),
 		),
 		getFileURL: connect.NewClient[personal_chat.GetFileURLRequest, personal_chat.GetFileURLResponse](
 			httpClient,
 			baseURL+ChatServiceGetFileURLProcedure,
-			connect.WithSchema(chatServiceGetFileURLMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("GetFileURL")),
 			connect.WithClientOptions(opts...),
 		),
 		markChatRead: connect.NewClient[personal_chat.MarkChatReadRequest, personal_chat.MarkChatReadResponse](
 			httpClient,
 			baseURL+ChatServiceMarkChatReadProcedure,
-			connect.WithSchema(chatServiceMarkChatReadMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("MarkChatRead")),
 			connect.WithClientOptions(opts...),
 		),
 		unsendMessage: connect.NewClient[personal_chat.UnsendMessageRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ChatServiceUnsendMessageProcedure,
-			connect.WithSchema(chatServiceUnsendMessageMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("UnsendMessage")),
 			connect.WithClientOptions(opts...),
 		),
 		deleteMessageForMe: connect.NewClient[personal_chat.DeleteMessageForMeRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ChatServiceDeleteMessageForMeProcedure,
-			connect.WithSchema(chatServiceDeleteMessageForMeMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("DeleteMessageForMe")),
 			connect.WithClientOptions(opts...),
 		),
 		getSyncActions: connect.NewClient[personal_chat.GetSyncActionsRequest, personal_chat.GetSyncActionsResponse](
 			httpClient,
 			baseURL+ChatServiceGetSyncActionsProcedure,
-			connect.WithSchema(chatServiceGetSyncActionsMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("GetSyncActions")),
 			connect.WithClientOptions(opts...),
 		),
 		acknowledgeSyncAction: connect.NewClient[personal_chat.AcknowledgeSyncActionRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ChatServiceAcknowledgeSyncActionProcedure,
-			connect.WithSchema(chatServiceAcknowledgeSyncActionMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("AcknowledgeSyncAction")),
 			connect.WithClientOptions(opts...),
 		),
 		requestHistorySync: connect.NewClient[personal_chat.RequestHistorySyncRequest, personal_chat.RequestHistorySyncResponse](
 			httpClient,
 			baseURL+ChatServiceRequestHistorySyncProcedure,
-			connect.WithSchema(chatServiceRequestHistorySyncMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("RequestHistorySync")),
 			connect.WithClientOptions(opts...),
 		),
 		uploadHistorySync: connect.NewClient[personal_chat.UploadHistorySyncRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ChatServiceUploadHistorySyncProcedure,
-			connect.WithSchema(chatServiceUploadHistorySyncMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("UploadHistorySync")),
 			connect.WithClientOptions(opts...),
 		),
 		downloadHistorySync: connect.NewClient[personal_chat.DownloadHistorySyncRequest, personal_chat.DownloadHistorySyncResponse](
 			httpClient,
 			baseURL+ChatServiceDownloadHistorySyncProcedure,
-			connect.WithSchema(chatServiceDownloadHistorySyncMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("DownloadHistorySync")),
 			connect.WithClientOptions(opts...),
 		),
 		acknowledgeHistorySync: connect.NewClient[personal_chat.AcknowledgeHistorySyncRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ChatServiceAcknowledgeHistorySyncProcedure,
-			connect.WithSchema(chatServiceAcknowledgeHistorySyncMethodDescriptor),
+			connect.WithSchema(chatServiceMethods.ByName("AcknowledgeHistorySync")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -464,136 +438,137 @@ type ChatServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewChatServiceHandler(svc ChatServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	chatServiceMethods := personal_chat.File_proto_personal_personal_chat_personal_chat_api_proto.Services().ByName("ChatService").Methods()
 	chatServiceCheckEligibilityHandler := connect.NewUnaryHandler(
 		ChatServiceCheckEligibilityProcedure,
 		svc.CheckEligibility,
-		connect.WithSchema(chatServiceCheckEligibilityMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("CheckEligibility")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceCreateChatHandler := connect.NewUnaryHandler(
 		ChatServiceCreateChatProcedure,
 		svc.CreateChat,
-		connect.WithSchema(chatServiceCreateChatMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("CreateChat")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceGetUserChatsHandler := connect.NewUnaryHandler(
 		ChatServiceGetUserChatsProcedure,
 		svc.GetUserChats,
-		connect.WithSchema(chatServiceGetUserChatsMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("GetUserChats")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceSendMessageHandler := connect.NewUnaryHandler(
 		ChatServiceSendMessageProcedure,
 		svc.SendMessage,
-		connect.WithSchema(chatServiceSendMessageMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("SendMessage")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceGetMessagesHandler := connect.NewUnaryHandler(
 		ChatServiceGetMessagesProcedure,
 		svc.GetMessages,
-		connect.WithSchema(chatServiceGetMessagesMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("GetMessages")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceGetPendingMessagesHandler := connect.NewUnaryHandler(
 		ChatServiceGetPendingMessagesProcedure,
 		svc.GetPendingMessages,
-		connect.WithSchema(chatServiceGetPendingMessagesMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("GetPendingMessages")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceAcknowledgeDeliveryHandler := connect.NewUnaryHandler(
 		ChatServiceAcknowledgeDeliveryProcedure,
 		svc.AcknowledgeDelivery,
-		connect.WithSchema(chatServiceAcknowledgeDeliveryMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("AcknowledgeDelivery")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceAcknowledgeDeliveryBatchHandler := connect.NewUnaryHandler(
 		ChatServiceAcknowledgeDeliveryBatchProcedure,
 		svc.AcknowledgeDeliveryBatch,
-		connect.WithSchema(chatServiceAcknowledgeDeliveryBatchMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("AcknowledgeDeliveryBatch")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceAcknowledgeReadReceiptBatchHandler := connect.NewUnaryHandler(
 		ChatServiceAcknowledgeReadReceiptBatchProcedure,
 		svc.AcknowledgeReadReceiptBatch,
-		connect.WithSchema(chatServiceAcknowledgeReadReceiptBatchMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("AcknowledgeReadReceiptBatch")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceAcknowledgeAndReadBatchHandler := connect.NewUnaryHandler(
 		ChatServiceAcknowledgeAndReadBatchProcedure,
 		svc.AcknowledgeAndReadBatch,
-		connect.WithSchema(chatServiceAcknowledgeAndReadBatchMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("AcknowledgeAndReadBatch")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServicePresignUploadHandler := connect.NewUnaryHandler(
 		ChatServicePresignUploadProcedure,
 		svc.PresignUpload,
-		connect.WithSchema(chatServicePresignUploadMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("PresignUpload")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceConfirmUploadHandler := connect.NewUnaryHandler(
 		ChatServiceConfirmUploadProcedure,
 		svc.ConfirmUpload,
-		connect.WithSchema(chatServiceConfirmUploadMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("ConfirmUpload")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceGetFileURLHandler := connect.NewUnaryHandler(
 		ChatServiceGetFileURLProcedure,
 		svc.GetFileURL,
-		connect.WithSchema(chatServiceGetFileURLMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("GetFileURL")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceMarkChatReadHandler := connect.NewUnaryHandler(
 		ChatServiceMarkChatReadProcedure,
 		svc.MarkChatRead,
-		connect.WithSchema(chatServiceMarkChatReadMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("MarkChatRead")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceUnsendMessageHandler := connect.NewUnaryHandler(
 		ChatServiceUnsendMessageProcedure,
 		svc.UnsendMessage,
-		connect.WithSchema(chatServiceUnsendMessageMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("UnsendMessage")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceDeleteMessageForMeHandler := connect.NewUnaryHandler(
 		ChatServiceDeleteMessageForMeProcedure,
 		svc.DeleteMessageForMe,
-		connect.WithSchema(chatServiceDeleteMessageForMeMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("DeleteMessageForMe")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceGetSyncActionsHandler := connect.NewUnaryHandler(
 		ChatServiceGetSyncActionsProcedure,
 		svc.GetSyncActions,
-		connect.WithSchema(chatServiceGetSyncActionsMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("GetSyncActions")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceAcknowledgeSyncActionHandler := connect.NewUnaryHandler(
 		ChatServiceAcknowledgeSyncActionProcedure,
 		svc.AcknowledgeSyncAction,
-		connect.WithSchema(chatServiceAcknowledgeSyncActionMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("AcknowledgeSyncAction")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceRequestHistorySyncHandler := connect.NewUnaryHandler(
 		ChatServiceRequestHistorySyncProcedure,
 		svc.RequestHistorySync,
-		connect.WithSchema(chatServiceRequestHistorySyncMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("RequestHistorySync")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceUploadHistorySyncHandler := connect.NewUnaryHandler(
 		ChatServiceUploadHistorySyncProcedure,
 		svc.UploadHistorySync,
-		connect.WithSchema(chatServiceUploadHistorySyncMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("UploadHistorySync")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceDownloadHistorySyncHandler := connect.NewUnaryHandler(
 		ChatServiceDownloadHistorySyncProcedure,
 		svc.DownloadHistorySync,
-		connect.WithSchema(chatServiceDownloadHistorySyncMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("DownloadHistorySync")),
 		connect.WithHandlerOptions(opts...),
 	)
 	chatServiceAcknowledgeHistorySyncHandler := connect.NewUnaryHandler(
 		ChatServiceAcknowledgeHistorySyncProcedure,
 		svc.AcknowledgeHistorySync,
-		connect.WithSchema(chatServiceAcknowledgeHistorySyncMethodDescriptor),
+		connect.WithSchema(chatServiceMethods.ByName("AcknowledgeHistorySync")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/rpc_personal_chat.v1.ChatService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

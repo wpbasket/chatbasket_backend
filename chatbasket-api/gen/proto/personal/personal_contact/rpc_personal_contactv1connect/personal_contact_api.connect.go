@@ -75,24 +75,6 @@ const (
 	ContactServiceGetBlocksProcedure = "/rpc_personal_contact.v1.ContactService/GetBlocks"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	contactServiceServiceDescriptor                     = personal_contact.File_proto_personal_personal_contact_personal_contact_api_proto.Services().ByName("ContactService")
-	contactServiceGetContactsMethodDescriptor           = contactServiceServiceDescriptor.Methods().ByName("GetContacts")
-	contactServiceCheckContactExistanceMethodDescriptor = contactServiceServiceDescriptor.Methods().ByName("CheckContactExistance")
-	contactServiceCreateContactMethodDescriptor         = contactServiceServiceDescriptor.Methods().ByName("CreateContact")
-	contactServiceDeleteContactMethodDescriptor         = contactServiceServiceDescriptor.Methods().ByName("DeleteContact")
-	contactServiceGetContactRequestsMethodDescriptor    = contactServiceServiceDescriptor.Methods().ByName("GetContactRequests")
-	contactServiceAcceptContactRequestMethodDescriptor  = contactServiceServiceDescriptor.Methods().ByName("AcceptContactRequest")
-	contactServiceRejectContactRequestMethodDescriptor  = contactServiceServiceDescriptor.Methods().ByName("RejectContactRequest")
-	contactServiceUndoContactRequestMethodDescriptor    = contactServiceServiceDescriptor.Methods().ByName("UndoContactRequest")
-	contactServiceUpdateContactNicknameMethodDescriptor = contactServiceServiceDescriptor.Methods().ByName("UpdateContactNickname")
-	contactServiceRemoveContactNicknameMethodDescriptor = contactServiceServiceDescriptor.Methods().ByName("RemoveContactNickname")
-	contactServiceBlockUserMethodDescriptor             = contactServiceServiceDescriptor.Methods().ByName("BlockUser")
-	contactServiceUnblockUserMethodDescriptor           = contactServiceServiceDescriptor.Methods().ByName("UnblockUser")
-	contactServiceGetBlocksMethodDescriptor             = contactServiceServiceDescriptor.Methods().ByName("GetBlocks")
-)
-
 // ContactServiceClient is a client for the rpc_personal_contact.v1.ContactService service.
 type ContactServiceClient interface {
 	GetContacts(context.Context, *connect.Request[personal_contact.GetContactsRequest]) (*connect.Response[personal_contact.GetContactsResponse], error)
@@ -119,83 +101,84 @@ type ContactServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewContactServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ContactServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	contactServiceMethods := personal_contact.File_proto_personal_personal_contact_personal_contact_api_proto.Services().ByName("ContactService").Methods()
 	return &contactServiceClient{
 		getContacts: connect.NewClient[personal_contact.GetContactsRequest, personal_contact.GetContactsResponse](
 			httpClient,
 			baseURL+ContactServiceGetContactsProcedure,
-			connect.WithSchema(contactServiceGetContactsMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("GetContacts")),
 			connect.WithClientOptions(opts...),
 		),
 		checkContactExistance: connect.NewClient[personal_contact.CheckContactExistanceRequest, personal_contact.CheckContactExistanceResponse](
 			httpClient,
 			baseURL+ContactServiceCheckContactExistanceProcedure,
-			connect.WithSchema(contactServiceCheckContactExistanceMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("CheckContactExistance")),
 			connect.WithClientOptions(opts...),
 		),
 		createContact: connect.NewClient[personal_contact.CreateContactRequest, personal_contact.CreateContactResponse](
 			httpClient,
 			baseURL+ContactServiceCreateContactProcedure,
-			connect.WithSchema(contactServiceCreateContactMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("CreateContact")),
 			connect.WithClientOptions(opts...),
 		),
 		deleteContact: connect.NewClient[personal_contact.DeleteContactRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ContactServiceDeleteContactProcedure,
-			connect.WithSchema(contactServiceDeleteContactMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("DeleteContact")),
 			connect.WithClientOptions(opts...),
 		),
 		getContactRequests: connect.NewClient[personal_contact.GetContactRequestsRequest, personal_contact.GetContactRequestsResponse](
 			httpClient,
 			baseURL+ContactServiceGetContactRequestsProcedure,
-			connect.WithSchema(contactServiceGetContactRequestsMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("GetContactRequests")),
 			connect.WithClientOptions(opts...),
 		),
 		acceptContactRequest: connect.NewClient[personal_contact.AcceptContactRequestRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ContactServiceAcceptContactRequestProcedure,
-			connect.WithSchema(contactServiceAcceptContactRequestMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("AcceptContactRequest")),
 			connect.WithClientOptions(opts...),
 		),
 		rejectContactRequest: connect.NewClient[personal_contact.RejectContactRequestRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ContactServiceRejectContactRequestProcedure,
-			connect.WithSchema(contactServiceRejectContactRequestMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("RejectContactRequest")),
 			connect.WithClientOptions(opts...),
 		),
 		undoContactRequest: connect.NewClient[personal_contact.UndoContactRequestRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ContactServiceUndoContactRequestProcedure,
-			connect.WithSchema(contactServiceUndoContactRequestMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("UndoContactRequest")),
 			connect.WithClientOptions(opts...),
 		),
 		updateContactNickname: connect.NewClient[personal_contact.UpdateContactNicknameRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ContactServiceUpdateContactNicknameProcedure,
-			connect.WithSchema(contactServiceUpdateContactNicknameMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("UpdateContactNickname")),
 			connect.WithClientOptions(opts...),
 		),
 		removeContactNickname: connect.NewClient[personal_contact.RemoveContactNicknameRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ContactServiceRemoveContactNicknameProcedure,
-			connect.WithSchema(contactServiceRemoveContactNicknameMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("RemoveContactNickname")),
 			connect.WithClientOptions(opts...),
 		),
 		blockUser: connect.NewClient[personal_contact.BlockUserRequest, personal_contact.BlockUserResponse](
 			httpClient,
 			baseURL+ContactServiceBlockUserProcedure,
-			connect.WithSchema(contactServiceBlockUserMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("BlockUser")),
 			connect.WithClientOptions(opts...),
 		),
 		unblockUser: connect.NewClient[personal_contact.UnblockUserRequest, personal_contact.UnblockUserResponse](
 			httpClient,
 			baseURL+ContactServiceUnblockUserProcedure,
-			connect.WithSchema(contactServiceUnblockUserMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("UnblockUser")),
 			connect.WithClientOptions(opts...),
 		),
 		getBlocks: connect.NewClient[personal_contact.GetBlocksRequest, personal_contact.GetBlocksResponse](
 			httpClient,
 			baseURL+ContactServiceGetBlocksProcedure,
-			connect.WithSchema(contactServiceGetBlocksMethodDescriptor),
+			connect.WithSchema(contactServiceMethods.ByName("GetBlocks")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -306,82 +289,83 @@ type ContactServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewContactServiceHandler(svc ContactServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	contactServiceMethods := personal_contact.File_proto_personal_personal_contact_personal_contact_api_proto.Services().ByName("ContactService").Methods()
 	contactServiceGetContactsHandler := connect.NewUnaryHandler(
 		ContactServiceGetContactsProcedure,
 		svc.GetContacts,
-		connect.WithSchema(contactServiceGetContactsMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("GetContacts")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceCheckContactExistanceHandler := connect.NewUnaryHandler(
 		ContactServiceCheckContactExistanceProcedure,
 		svc.CheckContactExistance,
-		connect.WithSchema(contactServiceCheckContactExistanceMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("CheckContactExistance")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceCreateContactHandler := connect.NewUnaryHandler(
 		ContactServiceCreateContactProcedure,
 		svc.CreateContact,
-		connect.WithSchema(contactServiceCreateContactMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("CreateContact")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceDeleteContactHandler := connect.NewUnaryHandler(
 		ContactServiceDeleteContactProcedure,
 		svc.DeleteContact,
-		connect.WithSchema(contactServiceDeleteContactMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("DeleteContact")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceGetContactRequestsHandler := connect.NewUnaryHandler(
 		ContactServiceGetContactRequestsProcedure,
 		svc.GetContactRequests,
-		connect.WithSchema(contactServiceGetContactRequestsMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("GetContactRequests")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceAcceptContactRequestHandler := connect.NewUnaryHandler(
 		ContactServiceAcceptContactRequestProcedure,
 		svc.AcceptContactRequest,
-		connect.WithSchema(contactServiceAcceptContactRequestMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("AcceptContactRequest")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceRejectContactRequestHandler := connect.NewUnaryHandler(
 		ContactServiceRejectContactRequestProcedure,
 		svc.RejectContactRequest,
-		connect.WithSchema(contactServiceRejectContactRequestMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("RejectContactRequest")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceUndoContactRequestHandler := connect.NewUnaryHandler(
 		ContactServiceUndoContactRequestProcedure,
 		svc.UndoContactRequest,
-		connect.WithSchema(contactServiceUndoContactRequestMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("UndoContactRequest")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceUpdateContactNicknameHandler := connect.NewUnaryHandler(
 		ContactServiceUpdateContactNicknameProcedure,
 		svc.UpdateContactNickname,
-		connect.WithSchema(contactServiceUpdateContactNicknameMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("UpdateContactNickname")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceRemoveContactNicknameHandler := connect.NewUnaryHandler(
 		ContactServiceRemoveContactNicknameProcedure,
 		svc.RemoveContactNickname,
-		connect.WithSchema(contactServiceRemoveContactNicknameMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("RemoveContactNickname")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceBlockUserHandler := connect.NewUnaryHandler(
 		ContactServiceBlockUserProcedure,
 		svc.BlockUser,
-		connect.WithSchema(contactServiceBlockUserMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("BlockUser")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceUnblockUserHandler := connect.NewUnaryHandler(
 		ContactServiceUnblockUserProcedure,
 		svc.UnblockUser,
-		connect.WithSchema(contactServiceUnblockUserMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("UnblockUser")),
 		connect.WithHandlerOptions(opts...),
 	)
 	contactServiceGetBlocksHandler := connect.NewUnaryHandler(
 		ContactServiceGetBlocksProcedure,
 		svc.GetBlocks,
-		connect.WithSchema(contactServiceGetBlocksMethodDescriptor),
+		connect.WithSchema(contactServiceMethods.ByName("GetBlocks")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/rpc_personal_contact.v1.ContactService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

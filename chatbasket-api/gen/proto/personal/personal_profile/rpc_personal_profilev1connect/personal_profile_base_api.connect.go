@@ -60,19 +60,6 @@ const (
 	ProfileServiceGetE2EEPublicKeyProcedure = "/rpc_personal_profile.v1.ProfileService/GetE2EEPublicKey"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	profileServiceServiceDescriptor                    = personal_profile.File_proto_personal_personal_profile_personal_profile_base_api_proto.Services().ByName("ProfileService")
-	profileServiceCreateUserProfileMethodDescriptor    = profileServiceServiceDescriptor.Methods().ByName("CreateUserProfile")
-	profileServiceGetProfileMethodDescriptor           = profileServiceServiceDescriptor.Methods().ByName("GetProfile")
-	profileServiceUpdateUserProfileMethodDescriptor    = profileServiceServiceDescriptor.Methods().ByName("UpdateUserProfile")
-	profileServicePresignAvatarMethodDescriptor        = profileServiceServiceDescriptor.Methods().ByName("PresignAvatar")
-	profileServiceConfirmAvatarMethodDescriptor        = profileServiceServiceDescriptor.Methods().ByName("ConfirmAvatar")
-	profileServiceRemoveProfilePictureMethodDescriptor = profileServiceServiceDescriptor.Methods().ByName("RemoveProfilePicture")
-	profileServiceUploadE2EEPublicKeyMethodDescriptor  = profileServiceServiceDescriptor.Methods().ByName("UploadE2EEPublicKey")
-	profileServiceGetE2EEPublicKeyMethodDescriptor     = profileServiceServiceDescriptor.Methods().ByName("GetE2EEPublicKey")
-)
-
 // ProfileServiceClient is a client for the rpc_personal_profile.v1.ProfileService service.
 type ProfileServiceClient interface {
 	CreateUserProfile(context.Context, *connect.Request[personal_profile.CreateUserProfileRequest]) (*connect.Response[personal_profile.CreateUserProfileResponse], error)
@@ -94,53 +81,54 @@ type ProfileServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewProfileServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ProfileServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	profileServiceMethods := personal_profile.File_proto_personal_personal_profile_personal_profile_base_api_proto.Services().ByName("ProfileService").Methods()
 	return &profileServiceClient{
 		createUserProfile: connect.NewClient[personal_profile.CreateUserProfileRequest, personal_profile.CreateUserProfileResponse](
 			httpClient,
 			baseURL+ProfileServiceCreateUserProfileProcedure,
-			connect.WithSchema(profileServiceCreateUserProfileMethodDescriptor),
+			connect.WithSchema(profileServiceMethods.ByName("CreateUserProfile")),
 			connect.WithClientOptions(opts...),
 		),
 		getProfile: connect.NewClient[personal_profile.GetProfileRequest, personal_profile.GetProfileResponse](
 			httpClient,
 			baseURL+ProfileServiceGetProfileProcedure,
-			connect.WithSchema(profileServiceGetProfileMethodDescriptor),
+			connect.WithSchema(profileServiceMethods.ByName("GetProfile")),
 			connect.WithClientOptions(opts...),
 		),
 		updateUserProfile: connect.NewClient[personal_profile.UpdateUserProfileRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ProfileServiceUpdateUserProfileProcedure,
-			connect.WithSchema(profileServiceUpdateUserProfileMethodDescriptor),
+			connect.WithSchema(profileServiceMethods.ByName("UpdateUserProfile")),
 			connect.WithClientOptions(opts...),
 		),
 		presignAvatar: connect.NewClient[personal_profile.PresignAvatarRequest, personal_profile.PresignAvatarResponse](
 			httpClient,
 			baseURL+ProfileServicePresignAvatarProcedure,
-			connect.WithSchema(profileServicePresignAvatarMethodDescriptor),
+			connect.WithSchema(profileServiceMethods.ByName("PresignAvatar")),
 			connect.WithClientOptions(opts...),
 		),
 		confirmAvatar: connect.NewClient[personal_profile.ConfirmAvatarRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ProfileServiceConfirmAvatarProcedure,
-			connect.WithSchema(profileServiceConfirmAvatarMethodDescriptor),
+			connect.WithSchema(profileServiceMethods.ByName("ConfirmAvatar")),
 			connect.WithClientOptions(opts...),
 		),
 		removeProfilePicture: connect.NewClient[personal_profile.RemoveProfilePictureRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ProfileServiceRemoveProfilePictureProcedure,
-			connect.WithSchema(profileServiceRemoveProfilePictureMethodDescriptor),
+			connect.WithSchema(profileServiceMethods.ByName("RemoveProfilePicture")),
 			connect.WithClientOptions(opts...),
 		),
 		uploadE2EEPublicKey: connect.NewClient[personal_profile.UploadE2EEPublicKeyRequest, personal_profile.UploadE2EEPublicKeyResponse](
 			httpClient,
 			baseURL+ProfileServiceUploadE2EEPublicKeyProcedure,
-			connect.WithSchema(profileServiceUploadE2EEPublicKeyMethodDescriptor),
+			connect.WithSchema(profileServiceMethods.ByName("UploadE2EEPublicKey")),
 			connect.WithClientOptions(opts...),
 		),
 		getE2EEPublicKey: connect.NewClient[personal_profile.GetE2EEPublicKeyRequest, personal_profile.GetE2EEPublicKeyResponse](
 			httpClient,
 			baseURL+ProfileServiceGetE2EEPublicKeyProcedure,
-			connect.WithSchema(profileServiceGetE2EEPublicKeyMethodDescriptor),
+			connect.WithSchema(profileServiceMethods.ByName("GetE2EEPublicKey")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -216,52 +204,53 @@ type ProfileServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewProfileServiceHandler(svc ProfileServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	profileServiceMethods := personal_profile.File_proto_personal_personal_profile_personal_profile_base_api_proto.Services().ByName("ProfileService").Methods()
 	profileServiceCreateUserProfileHandler := connect.NewUnaryHandler(
 		ProfileServiceCreateUserProfileProcedure,
 		svc.CreateUserProfile,
-		connect.WithSchema(profileServiceCreateUserProfileMethodDescriptor),
+		connect.WithSchema(profileServiceMethods.ByName("CreateUserProfile")),
 		connect.WithHandlerOptions(opts...),
 	)
 	profileServiceGetProfileHandler := connect.NewUnaryHandler(
 		ProfileServiceGetProfileProcedure,
 		svc.GetProfile,
-		connect.WithSchema(profileServiceGetProfileMethodDescriptor),
+		connect.WithSchema(profileServiceMethods.ByName("GetProfile")),
 		connect.WithHandlerOptions(opts...),
 	)
 	profileServiceUpdateUserProfileHandler := connect.NewUnaryHandler(
 		ProfileServiceUpdateUserProfileProcedure,
 		svc.UpdateUserProfile,
-		connect.WithSchema(profileServiceUpdateUserProfileMethodDescriptor),
+		connect.WithSchema(profileServiceMethods.ByName("UpdateUserProfile")),
 		connect.WithHandlerOptions(opts...),
 	)
 	profileServicePresignAvatarHandler := connect.NewUnaryHandler(
 		ProfileServicePresignAvatarProcedure,
 		svc.PresignAvatar,
-		connect.WithSchema(profileServicePresignAvatarMethodDescriptor),
+		connect.WithSchema(profileServiceMethods.ByName("PresignAvatar")),
 		connect.WithHandlerOptions(opts...),
 	)
 	profileServiceConfirmAvatarHandler := connect.NewUnaryHandler(
 		ProfileServiceConfirmAvatarProcedure,
 		svc.ConfirmAvatar,
-		connect.WithSchema(profileServiceConfirmAvatarMethodDescriptor),
+		connect.WithSchema(profileServiceMethods.ByName("ConfirmAvatar")),
 		connect.WithHandlerOptions(opts...),
 	)
 	profileServiceRemoveProfilePictureHandler := connect.NewUnaryHandler(
 		ProfileServiceRemoveProfilePictureProcedure,
 		svc.RemoveProfilePicture,
-		connect.WithSchema(profileServiceRemoveProfilePictureMethodDescriptor),
+		connect.WithSchema(profileServiceMethods.ByName("RemoveProfilePicture")),
 		connect.WithHandlerOptions(opts...),
 	)
 	profileServiceUploadE2EEPublicKeyHandler := connect.NewUnaryHandler(
 		ProfileServiceUploadE2EEPublicKeyProcedure,
 		svc.UploadE2EEPublicKey,
-		connect.WithSchema(profileServiceUploadE2EEPublicKeyMethodDescriptor),
+		connect.WithSchema(profileServiceMethods.ByName("UploadE2EEPublicKey")),
 		connect.WithHandlerOptions(opts...),
 	)
 	profileServiceGetE2EEPublicKeyHandler := connect.NewUnaryHandler(
 		ProfileServiceGetE2EEPublicKeyProcedure,
 		svc.GetE2EEPublicKey,
-		connect.WithSchema(profileServiceGetE2EEPublicKeyMethodDescriptor),
+		connect.WithSchema(profileServiceMethods.ByName("GetE2EEPublicKey")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/rpc_personal_profile.v1.ProfileService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

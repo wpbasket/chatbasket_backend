@@ -42,13 +42,6 @@ const (
 	SettingServiceUpdateSessionNotificationTokenProcedure = "/rpc_personal_setting.v1.SettingService/UpdateSessionNotificationToken"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	settingServiceServiceDescriptor                              = personal_setting.File_proto_personal_personal_setting_personal_setting_api_proto.Services().ByName("SettingService")
-	settingServiceSetCentralDeviceMethodDescriptor               = settingServiceServiceDescriptor.Methods().ByName("SetCentralDevice")
-	settingServiceUpdateSessionNotificationTokenMethodDescriptor = settingServiceServiceDescriptor.Methods().ByName("UpdateSessionNotificationToken")
-)
-
 // SettingServiceClient is a client for the rpc_personal_setting.v1.SettingService service.
 type SettingServiceClient interface {
 	SetCentralDevice(context.Context, *connect.Request[personal_setting.SetCentralDeviceRequest]) (*connect.Response[model.StatusOkay], error)
@@ -64,17 +57,18 @@ type SettingServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewSettingServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) SettingServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	settingServiceMethods := personal_setting.File_proto_personal_personal_setting_personal_setting_api_proto.Services().ByName("SettingService").Methods()
 	return &settingServiceClient{
 		setCentralDevice: connect.NewClient[personal_setting.SetCentralDeviceRequest, model.StatusOkay](
 			httpClient,
 			baseURL+SettingServiceSetCentralDeviceProcedure,
-			connect.WithSchema(settingServiceSetCentralDeviceMethodDescriptor),
+			connect.WithSchema(settingServiceMethods.ByName("SetCentralDevice")),
 			connect.WithClientOptions(opts...),
 		),
 		updateSessionNotificationToken: connect.NewClient[personal_setting.RegisterOrUpdateNotificationTokenRequest, model.StatusOkay](
 			httpClient,
 			baseURL+SettingServiceUpdateSessionNotificationTokenProcedure,
-			connect.WithSchema(settingServiceUpdateSessionNotificationTokenMethodDescriptor),
+			connect.WithSchema(settingServiceMethods.ByName("UpdateSessionNotificationToken")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -109,16 +103,17 @@ type SettingServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewSettingServiceHandler(svc SettingServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	settingServiceMethods := personal_setting.File_proto_personal_personal_setting_personal_setting_api_proto.Services().ByName("SettingService").Methods()
 	settingServiceSetCentralDeviceHandler := connect.NewUnaryHandler(
 		SettingServiceSetCentralDeviceProcedure,
 		svc.SetCentralDevice,
-		connect.WithSchema(settingServiceSetCentralDeviceMethodDescriptor),
+		connect.WithSchema(settingServiceMethods.ByName("SetCentralDevice")),
 		connect.WithHandlerOptions(opts...),
 	)
 	settingServiceUpdateSessionNotificationTokenHandler := connect.NewUnaryHandler(
 		SettingServiceUpdateSessionNotificationTokenProcedure,
 		svc.UpdateSessionNotificationToken,
-		connect.WithSchema(settingServiceUpdateSessionNotificationTokenMethodDescriptor),
+		connect.WithSchema(settingServiceMethods.ByName("UpdateSessionNotificationToken")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/rpc_personal_setting.v1.SettingService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

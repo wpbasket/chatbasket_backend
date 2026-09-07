@@ -76,27 +76,6 @@ const (
 	AuthServiceQRCallbackProcedure = "/rpc_core_auth.v1.AuthService/QRCallback"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	authServiceServiceDescriptor                     = core_auth.File_proto_core_core_auth_core_auth_api_proto.Services().ByName("AuthService")
-	authServiceSignupMethodDescriptor                = authServiceServiceDescriptor.Methods().ByName("Signup")
-	authServiceAccountVerificationMethodDescriptor   = authServiceServiceDescriptor.Methods().ByName("AccountVerification")
-	authServiceLoginMethodDescriptor                 = authServiceServiceDescriptor.Methods().ByName("Login")
-	authServiceLoginVerificationMethodDescriptor     = authServiceServiceDescriptor.Methods().ByName("LoginVerification")
-	authServiceResendOTPMethodDescriptor             = authServiceServiceDescriptor.Methods().ByName("ResendOTP")
-	authServiceForgotPasswordMethodDescriptor        = authServiceServiceDescriptor.Methods().ByName("ForgotPassword")
-	authServiceVerifyForgotPasswordMethodDescriptor  = authServiceServiceDescriptor.Methods().ByName("VerifyForgotPassword")
-	authServiceLogoutMethodDescriptor                = authServiceServiceDescriptor.Methods().ByName("Logout")
-	authServiceGetUserMethodDescriptor               = authServiceServiceDescriptor.Methods().ByName("GetUser")
-	authServiceRequestUpdateOTPMethodDescriptor      = authServiceServiceDescriptor.Methods().ByName("RequestUpdateOTP")
-	authServiceConfirmPasswordUpdateMethodDescriptor = authServiceServiceDescriptor.Methods().ByName("ConfirmPasswordUpdate")
-	authServiceRequestEmailUpdateMethodDescriptor    = authServiceServiceDescriptor.Methods().ByName("RequestEmailUpdate")
-	authServiceConfirmEmailUpdateMethodDescriptor    = authServiceServiceDescriptor.Methods().ByName("ConfirmEmailUpdate")
-	authServiceQRInitiateMethodDescriptor            = authServiceServiceDescriptor.Methods().ByName("QRInitiate")
-	authServiceQRApproveMethodDescriptor             = authServiceServiceDescriptor.Methods().ByName("QRApprove")
-	authServiceQRCallbackMethodDescriptor            = authServiceServiceDescriptor.Methods().ByName("QRCallback")
-)
-
 // AuthServiceClient is a client for the rpc_core_auth.v1.AuthService service.
 type AuthServiceClient interface {
 	Signup(context.Context, *connect.Request[core_auth.SignupRequest]) (*connect.Response[model.StatusOkay], error)
@@ -128,101 +107,102 @@ type AuthServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) AuthServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	authServiceMethods := core_auth.File_proto_core_core_auth_core_auth_api_proto.Services().ByName("AuthService").Methods()
 	return &authServiceClient{
 		signup: connect.NewClient[core_auth.SignupRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceSignupProcedure,
-			connect.WithSchema(authServiceSignupMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("Signup")),
 			connect.WithClientOptions(opts...),
 		),
 		accountVerification: connect.NewClient[core_auth.AccountVerificationRequest, core_auth.SessionResponse](
 			httpClient,
 			baseURL+AuthServiceAccountVerificationProcedure,
-			connect.WithSchema(authServiceAccountVerificationMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("AccountVerification")),
 			connect.WithClientOptions(opts...),
 		),
 		login: connect.NewClient[core_auth.LoginRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceLoginProcedure,
-			connect.WithSchema(authServiceLoginMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("Login")),
 			connect.WithClientOptions(opts...),
 		),
 		loginVerification: connect.NewClient[core_auth.LoginVerificationRequest, core_auth.SessionResponse](
 			httpClient,
 			baseURL+AuthServiceLoginVerificationProcedure,
-			connect.WithSchema(authServiceLoginVerificationMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("LoginVerification")),
 			connect.WithClientOptions(opts...),
 		),
 		resendOTP: connect.NewClient[core_auth.ResendOTPRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceResendOTPProcedure,
-			connect.WithSchema(authServiceResendOTPMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("ResendOTP")),
 			connect.WithClientOptions(opts...),
 		),
 		forgotPassword: connect.NewClient[core_auth.ForgotPasswordRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceForgotPasswordProcedure,
-			connect.WithSchema(authServiceForgotPasswordMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("ForgotPassword")),
 			connect.WithClientOptions(opts...),
 		),
 		verifyForgotPassword: connect.NewClient[core_auth.VerifyForgotPasswordRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceVerifyForgotPasswordProcedure,
-			connect.WithSchema(authServiceVerifyForgotPasswordMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("VerifyForgotPassword")),
 			connect.WithClientOptions(opts...),
 		),
 		logout: connect.NewClient[core_auth.LogoutRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceLogoutProcedure,
-			connect.WithSchema(authServiceLogoutMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("Logout")),
 			connect.WithClientOptions(opts...),
 		),
 		getUser: connect.NewClient[core_auth.GetUserRequest, core_auth.SessionResponse](
 			httpClient,
 			baseURL+AuthServiceGetUserProcedure,
-			connect.WithSchema(authServiceGetUserMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("GetUser")),
 			connect.WithClientOptions(opts...),
 		),
 		requestUpdateOTP: connect.NewClient[core_auth.RequestUpdateOTPRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceRequestUpdateOTPProcedure,
-			connect.WithSchema(authServiceRequestUpdateOTPMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("RequestUpdateOTP")),
 			connect.WithClientOptions(opts...),
 		),
 		confirmPasswordUpdate: connect.NewClient[core_auth.ConfirmPasswordUpdateRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceConfirmPasswordUpdateProcedure,
-			connect.WithSchema(authServiceConfirmPasswordUpdateMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("ConfirmPasswordUpdate")),
 			connect.WithClientOptions(opts...),
 		),
 		requestEmailUpdate: connect.NewClient[core_auth.RequestEmailUpdateRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceRequestEmailUpdateProcedure,
-			connect.WithSchema(authServiceRequestEmailUpdateMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("RequestEmailUpdate")),
 			connect.WithClientOptions(opts...),
 		),
 		confirmEmailUpdate: connect.NewClient[core_auth.ConfirmEmailUpdateRequest, model.StatusOkay](
 			httpClient,
 			baseURL+AuthServiceConfirmEmailUpdateProcedure,
-			connect.WithSchema(authServiceConfirmEmailUpdateMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("ConfirmEmailUpdate")),
 			connect.WithClientOptions(opts...),
 		),
 		qRInitiate: connect.NewClient[core_auth.QRInitiateRequest, core_auth.QRInitiateResponse](
 			httpClient,
 			baseURL+AuthServiceQRInitiateProcedure,
-			connect.WithSchema(authServiceQRInitiateMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("QRInitiate")),
 			connect.WithClientOptions(opts...),
 		),
 		qRApprove: connect.NewClient[core_auth.QRApproveRequest, core_auth.QRApproveResponse](
 			httpClient,
 			baseURL+AuthServiceQRApproveProcedure,
-			connect.WithSchema(authServiceQRApproveMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("QRApprove")),
 			connect.WithClientOptions(opts...),
 		),
 		qRCallback: connect.NewClient[core_auth.QRCallbackRequest, core_auth.SessionResponse](
 			httpClient,
 			baseURL+AuthServiceQRCallbackProcedure,
-			connect.WithSchema(authServiceQRCallbackMethodDescriptor),
+			connect.WithSchema(authServiceMethods.ByName("QRCallback")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -356,100 +336,101 @@ type AuthServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	authServiceMethods := core_auth.File_proto_core_core_auth_core_auth_api_proto.Services().ByName("AuthService").Methods()
 	authServiceSignupHandler := connect.NewUnaryHandler(
 		AuthServiceSignupProcedure,
 		svc.Signup,
-		connect.WithSchema(authServiceSignupMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("Signup")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceAccountVerificationHandler := connect.NewUnaryHandler(
 		AuthServiceAccountVerificationProcedure,
 		svc.AccountVerification,
-		connect.WithSchema(authServiceAccountVerificationMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("AccountVerification")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceLoginHandler := connect.NewUnaryHandler(
 		AuthServiceLoginProcedure,
 		svc.Login,
-		connect.WithSchema(authServiceLoginMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("Login")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceLoginVerificationHandler := connect.NewUnaryHandler(
 		AuthServiceLoginVerificationProcedure,
 		svc.LoginVerification,
-		connect.WithSchema(authServiceLoginVerificationMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("LoginVerification")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceResendOTPHandler := connect.NewUnaryHandler(
 		AuthServiceResendOTPProcedure,
 		svc.ResendOTP,
-		connect.WithSchema(authServiceResendOTPMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("ResendOTP")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceForgotPasswordHandler := connect.NewUnaryHandler(
 		AuthServiceForgotPasswordProcedure,
 		svc.ForgotPassword,
-		connect.WithSchema(authServiceForgotPasswordMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("ForgotPassword")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceVerifyForgotPasswordHandler := connect.NewUnaryHandler(
 		AuthServiceVerifyForgotPasswordProcedure,
 		svc.VerifyForgotPassword,
-		connect.WithSchema(authServiceVerifyForgotPasswordMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("VerifyForgotPassword")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceLogoutHandler := connect.NewUnaryHandler(
 		AuthServiceLogoutProcedure,
 		svc.Logout,
-		connect.WithSchema(authServiceLogoutMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("Logout")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceGetUserHandler := connect.NewUnaryHandler(
 		AuthServiceGetUserProcedure,
 		svc.GetUser,
-		connect.WithSchema(authServiceGetUserMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("GetUser")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceRequestUpdateOTPHandler := connect.NewUnaryHandler(
 		AuthServiceRequestUpdateOTPProcedure,
 		svc.RequestUpdateOTP,
-		connect.WithSchema(authServiceRequestUpdateOTPMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("RequestUpdateOTP")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceConfirmPasswordUpdateHandler := connect.NewUnaryHandler(
 		AuthServiceConfirmPasswordUpdateProcedure,
 		svc.ConfirmPasswordUpdate,
-		connect.WithSchema(authServiceConfirmPasswordUpdateMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("ConfirmPasswordUpdate")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceRequestEmailUpdateHandler := connect.NewUnaryHandler(
 		AuthServiceRequestEmailUpdateProcedure,
 		svc.RequestEmailUpdate,
-		connect.WithSchema(authServiceRequestEmailUpdateMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("RequestEmailUpdate")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceConfirmEmailUpdateHandler := connect.NewUnaryHandler(
 		AuthServiceConfirmEmailUpdateProcedure,
 		svc.ConfirmEmailUpdate,
-		connect.WithSchema(authServiceConfirmEmailUpdateMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("ConfirmEmailUpdate")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceQRInitiateHandler := connect.NewUnaryHandler(
 		AuthServiceQRInitiateProcedure,
 		svc.QRInitiate,
-		connect.WithSchema(authServiceQRInitiateMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("QRInitiate")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceQRApproveHandler := connect.NewUnaryHandler(
 		AuthServiceQRApproveProcedure,
 		svc.QRApprove,
-		connect.WithSchema(authServiceQRApproveMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("QRApprove")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceQRCallbackHandler := connect.NewUnaryHandler(
 		AuthServiceQRCallbackProcedure,
 		svc.QRCallback,
-		connect.WithSchema(authServiceQRCallbackMethodDescriptor),
+		connect.WithSchema(authServiceMethods.ByName("QRCallback")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/rpc_core_auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

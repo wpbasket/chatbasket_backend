@@ -38,12 +38,6 @@ const (
 	PersonalSseServiceStreamEventsProcedure = "/rpc_personal_sse.v1.PersonalSseService/StreamEvents"
 )
 
-// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
-var (
-	personalSseServiceServiceDescriptor            = personal_sse.File_proto_personal_personal_sse_personal_sse_api_proto.Services().ByName("PersonalSseService")
-	personalSseServiceStreamEventsMethodDescriptor = personalSseServiceServiceDescriptor.Methods().ByName("StreamEvents")
-)
-
 // PersonalSseServiceClient is a client for the rpc_personal_sse.v1.PersonalSseService service.
 type PersonalSseServiceClient interface {
 	StreamEvents(context.Context, *connect.Request[personal_sse.PersonalSseEventsRequest]) (*connect.ServerStreamForClient[personal_sse.PersonalSseEvent], error)
@@ -58,11 +52,12 @@ type PersonalSseServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewPersonalSseServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) PersonalSseServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	personalSseServiceMethods := personal_sse.File_proto_personal_personal_sse_personal_sse_api_proto.Services().ByName("PersonalSseService").Methods()
 	return &personalSseServiceClient{
 		streamEvents: connect.NewClient[personal_sse.PersonalSseEventsRequest, personal_sse.PersonalSseEvent](
 			httpClient,
 			baseURL+PersonalSseServiceStreamEventsProcedure,
-			connect.WithSchema(personalSseServiceStreamEventsMethodDescriptor),
+			connect.WithSchema(personalSseServiceMethods.ByName("StreamEvents")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -90,10 +85,11 @@ type PersonalSseServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewPersonalSseServiceHandler(svc PersonalSseServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	personalSseServiceMethods := personal_sse.File_proto_personal_personal_sse_personal_sse_api_proto.Services().ByName("PersonalSseService").Methods()
 	personalSseServiceStreamEventsHandler := connect.NewServerStreamHandler(
 		PersonalSseServiceStreamEventsProcedure,
 		svc.StreamEvents,
-		connect.WithSchema(personalSseServiceStreamEventsMethodDescriptor),
+		connect.WithSchema(personalSseServiceMethods.ByName("StreamEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/rpc_personal_sse.v1.PersonalSseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
