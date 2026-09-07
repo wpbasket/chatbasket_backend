@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func setupIntegrationDB(t *testing.T) (*pgxpool.Pool, *core_auth.AuthService) {
 	_ = godotenv.Load("../../../../.env")
 	_ = godotenv.Load("../../../../../.env")
@@ -112,7 +111,7 @@ func TestQRLoginFlow_Concurrent_Integration(t *testing.T) {
 	concurrency := 50
 	errChan := make(chan error, concurrency)
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		go func(routineIndex int) {
 			ctx := context.Background()
 
@@ -151,7 +150,7 @@ func TestQRLoginFlow_Concurrent_Integration(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		err := <-errChan
 		require.NoError(t, err, "A concurrent worker failed")
 	}

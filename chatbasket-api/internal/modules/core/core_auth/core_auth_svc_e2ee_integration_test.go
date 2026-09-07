@@ -1,10 +1,10 @@
 package core_auth_test
 
 import (
-	"fmt"
-	"strings"
 	"context"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -213,7 +213,7 @@ func TestCountActiveKeyedSessionsForUser_Integration(t *testing.T) {
 	publicKey := "test-public-key-44-chars-base64-encoded!!!"
 
 	// Create 3 sessions with keys
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		sessionID := uuid.New()
 		_, err := pool.Exec(ctx,
 			"INSERT INTO sessions (id, auth_user_id, token_hash, e2ee_public_key, expires_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, now(), now())",
@@ -301,14 +301,14 @@ func TestIncrementKeysRevision_Integration_Concurrent(t *testing.T) {
 	concurrency := 10
 	errChan := make(chan error, concurrency)
 
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		go func() {
 			errChan <- authSvc.IncrementKeysRevision(ctx, nil, userID)
 		}()
 	}
 
 	// Collect errors
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		err := <-errChan
 		assert.NoError(t, err)
 	}
@@ -421,7 +421,7 @@ func TestE2EE_FullFlow_Integration(t *testing.T) {
 
 	// 1. Create user with 3 sessions
 	userID, session1, sessionToken1 := createTestUserWithSession(t, pool)
-	
+
 	session2 := uuid.New()
 	tokenHash2 := "full-flow-session-2-" + session2.String()
 	_, err := pool.Exec(ctx,
@@ -570,7 +570,7 @@ func TestSaveSessionE2EEPublicKey_Integration_ConcurrentSameSession(t *testing.T
 	concurrency := 5
 	errChan := make(chan error, concurrency)
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		go func(idx int) {
 			key := fmt.Sprintf("concurrent-key-%d-44-chars-base64-encoded!!", idx)
 			errChan <- authSvc.SaveSessionE2EEPublicKey(ctx, nil, userID, sessionID, key)
@@ -579,7 +579,7 @@ func TestSaveSessionE2EEPublicKey_Integration_ConcurrentSameSession(t *testing.T
 
 	// All should succeed (last write wins)
 	successCount := 0
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		err := <-errChan
 		if err == nil {
 			successCount++
@@ -868,7 +868,7 @@ func TestGetActiveSessionKeysForUser_Integration_ManySessions(t *testing.T) {
 	userID, _, _ := createTestUserWithSession(t, pool)
 
 	// Create 10 sessions with keys
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		sessionID := uuid.New()
 		publicKey := fmt.Sprintf("many-session-key-%d-44-chars-base6", i)
 		tokenHash := fmt.Sprintf("many-session-%d-%s", i, sessionID.String())
@@ -894,7 +894,7 @@ func TestE2EE_Integration_RapidKeyUploadAndLogout(t *testing.T) {
 	// Create user with 5 sessions
 	userID, _, sessionToken := createTestUserWithSession(t, pool)
 	sessions := []uuid.UUID{}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		sessionID := uuid.New()
 		tokenHash := fmt.Sprintf("rapid-session-%d-%s", i, sessionID.String())
 		_, err := pool.Exec(ctx,

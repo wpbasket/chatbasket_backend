@@ -26,7 +26,7 @@ func generateRandomUsername() (string, error) {
 	username := make([]byte, 10)
 
 	// first 4 letters
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		if err != nil {
 			return "", err
@@ -221,13 +221,13 @@ func (ps *profileService) IsBlockedBetweenUsersBatch(ctx context.Context, reques
 
 func blockStatusFromRow(requesterAdmin, targetAdmin, requesterBlockedByTarget, targetBlockedByRequester bool, targetProfilePrivate bool, targetID uuid.UUID) *BlockStatusResult {
 	return &BlockStatusResult{
-		IsBlocked:                       requesterAdmin || targetAdmin || requesterBlockedByTarget || targetBlockedByRequester || targetProfilePrivate,
-		IsRequesterAdminBlocked:         requesterAdmin,
-		IsTargetAdminBlocked:            targetAdmin,
-		IsRequesterUserBlockedByTarget:  requesterBlockedByTarget,
-		IsTargetUserBlockedByRequester:  targetBlockedByRequester,
+		IsBlocked:                      requesterAdmin || targetAdmin || requesterBlockedByTarget || targetBlockedByRequester || targetProfilePrivate,
+		IsRequesterAdminBlocked:        requesterAdmin,
+		IsTargetAdminBlocked:           targetAdmin,
+		IsRequesterUserBlockedByTarget: requesterBlockedByTarget,
+		IsTargetUserBlockedByRequester: targetBlockedByRequester,
 		IsTargetProfilePrivate:         targetProfilePrivate,
-		TargetID:                        targetID,
+		TargetID:                       targetID,
 	}
 }
 

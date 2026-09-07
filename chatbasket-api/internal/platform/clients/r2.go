@@ -85,8 +85,7 @@ func (c *R2Client) DeleteFile(ctx context.Context, bucket, key string) error {
 	if err == nil {
 		return nil
 	}
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[smithy.APIError](err); ok {
 		switch apiErr.ErrorCode() {
 		case "NoSuchKey", "NotFound", "NoSuchBucket":
 			return nil
@@ -147,16 +146,20 @@ func (c *R2Client) ProfileBucket() string { return c.ProfilePicBucket }
 //
 // Example multi-bucket DEV configuration:
 // R2_ACCOUNTS_JSON='[
-//   {"name":"chat-files-01", "account_id":"...", "access_key_id":"...", "secret_access_key":"...", "chat_files_bucket":"dev-chat-files-01", "profile_pic_bucket":""},
-//   {"name":"profile-pic-01", "account_id":"...", "access_key_id":"...", "secret_access_key":"...", "chat_files_bucket":"", "profile_pic_bucket":"dev-profile-pic-01"}
+//
+//	{"name":"chat-files-01", "account_id":"...", "access_key_id":"...", "secret_access_key":"...", "chat_files_bucket":"dev-chat-files-01", "profile_pic_bucket":""},
+//	{"name":"profile-pic-01", "account_id":"...", "access_key_id":"...", "secret_access_key":"...", "chat_files_bucket":"", "profile_pic_bucket":"dev-profile-pic-01"}
+//
 // ]'
 // R2_PRIMARY_CHAT_ACCOUNT=chat-files-01
 // R2_PRIMARY_PROFILE_ACCOUNT=profile-pic-01
 //
 // Example multi-bucket PROD configuration:
 // R2_ACCOUNTS_JSON='[
-//   {"name":"chat-files-01", "account_id":"...", "access_key_id":"...", "secret_access_key":"...", "chat_files_bucket":"chat-files-01", "profile_pic_bucket":""},
-//   {"name":"profile-pic-01", "account_id":"...", "access_key_id":"...", "secret_access_key":"...", "chat_files_bucket":"", "profile_pic_bucket":"profile-pic-01"}
+//
+//	{"name":"chat-files-01", "account_id":"...", "access_key_id":"...", "secret_access_key":"...", "chat_files_bucket":"chat-files-01", "profile_pic_bucket":""},
+//	{"name":"profile-pic-01", "account_id":"...", "access_key_id":"...", "secret_access_key":"...", "chat_files_bucket":"", "profile_pic_bucket":"profile-pic-01"}
+//
 // ]'
 // R2_PRIMARY_CHAT_ACCOUNT=chat-files-01
 // R2_PRIMARY_PROFILE_ACCOUNT=profile-pic-01
@@ -288,7 +291,6 @@ func (p *R2ClientPool) GetClientByAccount(accountName string) *R2Client {
 	}
 	return p.clients[p.primaryChatAccount]
 }
-
 
 // PrimaryChatClient returns the R2 client for the configured primary chat account.
 func (p *R2ClientPool) PrimaryChatClient() *R2Client {

@@ -52,7 +52,7 @@ func (h *QRHub) Close(token uuid.UUID) {
 	}
 }
 
-func (h *QRHub) Broadcast(token uuid.UUID, eventType string, payload interface{}) {
+func (h *QRHub) Broadcast(token uuid.UUID, eventType string, payload any) {
 	h.mu.RLock()
 	conn, ok := h.conns[token]
 	h.mu.RUnlock()
@@ -61,7 +61,7 @@ func (h *QRHub) Broadcast(token uuid.UUID, eventType string, payload interface{}
 		return
 	}
 
-	msg, err := json.Marshal(map[string]interface{}{
+	msg, err := json.Marshal(map[string]any{
 		"type":    eventType,
 		"payload": payload,
 	})

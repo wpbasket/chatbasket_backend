@@ -2041,7 +2041,7 @@ func (s *chatService) CleanupDatabaseOnly(ctx context.Context) error {
 		{s.PostgresQueries.DeleteExpiredHistorySyncBatch, "expired history sync"},
 	}
 
-	for i := 0; i < len(jobs); i++ {
+	for i := range jobs {
 		// Stop immediately before starting the next job if context has been cancelled or hard timed out.
 		select {
 		case <-jobCtx.Done():

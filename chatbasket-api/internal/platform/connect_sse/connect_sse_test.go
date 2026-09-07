@@ -83,7 +83,7 @@ func TestBroadcastToUserSession_BufferFull_EventDropped(t *testing.T) {
 	}
 
 	// Fill the buffer completely (channelBufferSize = 128)
-	for i := 0; i < channelBufferSize; i++ {
+	for range channelBufferSize {
 		conn.Send <- "fill"
 	}
 	// One more — should be dropped without panic
@@ -178,7 +178,7 @@ func TestIsSessionActive_FalseAfterUnregister(t *testing.T) {
 func TestRegister_MaxConnsPerUser_Rejected(t *testing.T) {
 	userID := uuid.New()
 	m := NewManager[string]()
-	for i := 0; i < maxConnsPerUser; i++ {
+	for i := range maxConnsPerUser {
 		_, ok := m.Register(userID, uuid.New(), false)
 		if !ok {
 			t.Fatalf("Register should succeed for conn %d", i+1)
@@ -287,10 +287,8 @@ func TestManager_ConcurrentRegisterAndBroadcast(t *testing.T) {
 	m := NewManager[string]()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			sID := uuid.New()
 			conn, ok := m.Register(userID, sID, false)
 			if ok {
@@ -302,7 +300,7 @@ func TestManager_ConcurrentRegisterAndBroadcast(t *testing.T) {
 				}
 				m.Unregister(conn)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -317,7 +315,7 @@ func TestBroadcastToUser_BufferFull_EventDropped(t *testing.T) {
 		t.Fatal("Register returned false")
 	}
 	// Fill buffer
-	for i := 0; i < channelBufferSize; i++ {
+	for range channelBufferSize {
 		conn.Send <- "fill"
 	}
 	// Overflow — must not panic, event dropped
@@ -470,12 +468,10 @@ func TestManager_ConcurrentBroadcastToUser(t *testing.T) {
 	defer m.Unregister(conn)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 20 {
+		wg.Go(func() {
 			m.BroadcastToUser(userID, "concurrent-broadcast")
-		}()
+		})
 	}
 	wg.Wait()
 	// drain — no assertions on count since buffer may drop; just must not race or panic
@@ -497,7 +493,7 @@ func TestManager_ConcurrentUnregisterAndBroadcast(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			m.BroadcastToUser(userID, "racing")
 		}
 	}()

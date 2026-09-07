@@ -30,17 +30,17 @@ type ProcessedError interface {
 // the value in the JSON response's "details" field.
 type DetailedProcessedError interface {
 	ProcessedError
-	Details() interface{} // Structured data included in the error response
+	Details() any // Structured data included in the error response
 }
 
 // --- Standard Error Models (DTOs) ---
 
 // ApiError is the standard JSON error response, ported from chatbasket-api/model/error.go
 type ApiError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Type    string      `json:"type"`
-	Details interface{} `json:"details,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Details any    `json:"details,omitempty"`
 }
 
 // Error implements the standard Go error interface.
@@ -57,13 +57,13 @@ type processedError struct {
 	code    int
 	errType string
 	message string
-	details interface{}
+	details any
 }
 
-func (e *processedError) Error() string        { return e.message }
-func (e *processedError) Status() int          { return e.code }
-func (e *processedError) Kind() string         { return e.errType }
-func (e *processedError) Details() interface{} { return e.details }
+func (e *processedError) Error() string { return e.message }
+func (e *processedError) Status() int   { return e.code }
+func (e *processedError) Kind() string  { return e.errType }
+func (e *processedError) Details() any  { return e.details }
 
 // NewError creates a new "Smart Processed Error" that implements kit.ProcessedError.
 func NewError(code int, errType, message string) error {
@@ -86,9 +86,10 @@ func NewError(code int, errType, message string) error {
 // as it will be silently ignored by the RPC error serializer.
 //
 // Example:
-//   details := &rpc_common_modelv1.StaleKeysErrorDetails{StaleSide: "recipient"}
-//   return NewErrorWithDetails(http.StatusConflict, "keys_stale", "stale keys", details)
-func NewErrorWithDetails(code int, errType, message string, details interface{}) error {
+//
+//	details := &rpc_common_modelv1.StaleKeysErrorDetails{StaleSide: "recipient"}
+//	return NewErrorWithDetails(http.StatusConflict, "keys_stale", "stale keys", details)
+func NewErrorWithDetails(code int, errType, message string, details any) error {
 	return &processedError{
 		code:    code,
 		errType: errType,
@@ -120,8 +121,7 @@ func GlobalErrorHandler(c *echo.Context, err error) {
 	}
 
 	// 1. Check if it's a ProcessedError (or a compatible ApiError)
-	var pe ProcessedError
-	if errors.As(err, &pe) {
+	if pe, ok := errors.AsType[ProcessedError](err); ok {
 		apiErr := ApiError{
 			Code:    pe.Status(),
 			Type:    pe.Kind(),
@@ -136,8 +136,7 @@ func GlobalErrorHandler(c *echo.Context, err error) {
 	}
 
 	// 2. Check if it's an Echo HTTP Error (e.g., 404/405 from router, or binding/validation errors)
-	var he *echo.HTTPError
-	if errors.As(err, &he) {
+	if he, ok := errors.AsType[*echo.HTTPError](err); ok {
 		message := he.Message
 		if message == "" {
 			message = he.Error()
@@ -201,13 +200,11 @@ func ParseIntoRpcError(err error) error {
 		return nil
 	}
 	// Check if the error is already a connect.Error
-	var connectErr *connect.Error
-	if errors.As(err, &connectErr) {
+	if _, ok := errors.AsType[*connect.Error](err); ok {
 		return err
 	}
 	// Map kit.ProcessedError status codes to Connect codes
-	var pe ProcessedError
-	if errors.As(err, &pe) {
+	if pe, ok := errors.AsType[ProcessedError](err); ok {
 		var code connect.Code
 		switch pe.Status() {
 		case http.StatusBadRequest:
@@ -281,9 +278,9 @@ func NewConnectRpcError(code int, errType, message string) error {
 // struct, as it will be silently ignored by the RPC error serializer.
 //
 // Example:
-//   details := &rpc_common_modelv1.StaleKeysErrorDetails{StaleSide: "recipient"}
-//   return NewConnectRpcErrorWithDetails(http.StatusConflict, "keys_stale", "stale keys", details)
-func NewConnectRpcErrorWithDetails(code int, errType, message string, details interface{}) error {
+//
+//	details := &rpc_common_modelv1.StaleKeysErrorDetails{StaleSide: "recipient"}
+//	return NewConnectRpcErrorWithDetails(http.StatusConflict, "keys_stale", "stale keys", details)
+func NewConnectRpcErrorWithDetails(code int, errType, message string, details any) error {
 	return ParseIntoRpcError(NewErrorWithDetails(code, errType, message, details))
 }
-

@@ -297,7 +297,7 @@ func addrAllowed(allowed []*net.IPNet, addr string) bool {
 // are treated as single host entries; an empty value disables the allowlist.
 func parseAllowedIPs(raw string) ([]*net.IPNet, error) {
 	var networks []*net.IPNet
-	for _, entry := range strings.Split(raw, ",") {
+	for entry := range strings.SplitSeq(raw, ",") {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
 			continue

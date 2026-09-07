@@ -95,19 +95,19 @@ func TestStaleKeysError_HTTPResponse_IncludesDetails(t *testing.T) {
 	jsonBytes, marshalErr := json.Marshal(apiErr)
 	require.NoError(t, marshalErr)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal(jsonBytes, &result))
 
 	assert.Equal(t, float64(409), result["code"])
 	assert.Equal(t, "keys_stale", result["type"])
 	assert.Contains(t, result["message"], "keys_revision is stale")
 
-	detailsMap, ok := result["details"].(map[string]interface{})
+	detailsMap, ok := result["details"].(map[string]any)
 	require.True(t, ok, "details field should exist and be a map")
 	assert.Equal(t, "recipient", detailsMap["staleSide"])
 	assert.Equal(t, float64(7), detailsMap["recipientKeysRevision"])
 
-	activeKeys, ok := detailsMap["recipientActiveKeys"].([]interface{})
+	activeKeys, ok := detailsMap["recipientActiveKeys"].([]any)
 	require.True(t, ok, "recipient_active_keys should be an array")
 	assert.Len(t, activeKeys, 2)
 	assert.Equal(t, "device1_key_base64", activeKeys[0])
@@ -138,9 +138,9 @@ func TestStaleKeysError_HTTPResponse_RecipientStale(t *testing.T) {
 	jsonBytes, marshalErr := json.Marshal(apiErr)
 	require.NoError(t, marshalErr)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal(jsonBytes, &result))
-	detailsMap := result["details"].(map[string]interface{})
+	detailsMap := result["details"].(map[string]any)
 
 	_, hasSenderRevision := detailsMap["senderKeysRevision"]
 	_, hasSenderKeys := detailsMap["senderActiveKeys"]
@@ -172,9 +172,9 @@ func TestStaleKeysError_HTTPResponse_SenderStale(t *testing.T) {
 	jsonBytes, marshalErr := json.Marshal(apiErr)
 	require.NoError(t, marshalErr)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal(jsonBytes, &result))
-	detailsMap := result["details"].(map[string]interface{})
+	detailsMap := result["details"].(map[string]any)
 
 	assert.Equal(t, "sender", detailsMap["staleSide"])
 	assert.Equal(t, float64(3), detailsMap["senderKeysRevision"])
@@ -211,18 +211,18 @@ func TestStaleKeysError_HTTPResponse_BothStale(t *testing.T) {
 	jsonBytes, marshalErr := json.Marshal(apiErr)
 	require.NoError(t, marshalErr)
 
-	var result map[string]interface{}
+	var result map[string]any
 	require.NoError(t, json.Unmarshal(jsonBytes, &result))
-	detailsMap := result["details"].(map[string]interface{})
+	detailsMap := result["details"].(map[string]any)
 
 	assert.Equal(t, "both", detailsMap["staleSide"])
 	assert.Equal(t, float64(3), detailsMap["senderKeysRevision"])
 	assert.Equal(t, float64(7), detailsMap["recipientKeysRevision"])
 
-	senderKeys := detailsMap["senderActiveKeys"].([]interface{})
+	senderKeys := detailsMap["senderActiveKeys"].([]any)
 	assert.Len(t, senderKeys, 1)
 
-	recipientKeys := detailsMap["recipientActiveKeys"].([]interface{})
+	recipientKeys := detailsMap["recipientActiveKeys"].([]any)
 	assert.Len(t, recipientKeys, 2)
 }
 

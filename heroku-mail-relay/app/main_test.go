@@ -247,7 +247,7 @@ func TestSendEmailThrottlesRepeatedFailures(t *testing.T) {
 	srv := newTestRelayWithConfig(t, testConfig())
 	client := newRelayClient(srv, &signingTransport{base: srv.Client().Transport, secret: "wrong"})
 
-	for i := 0; i < maxAuthFailures; i++ {
+	for i := range maxAuthFailures {
 		_, err := client.SendEmail(context.Background(), connect.NewRequest(validMessage()))
 		if got := connect.CodeOf(err); got != connect.CodeUnauthenticated {
 			t.Fatalf("attempt %d: code = %v, want %v", i+1, got, connect.CodeUnauthenticated)
@@ -276,7 +276,7 @@ func TestStaleSignedRequestsDoNotThrottle(t *testing.T) {
 	srv := newTestRelayWithConfig(t, testConfig())
 	drifted := newRelayClient(srv, &signingTransport{base: srv.Client().Transport, secret: testSecret, skew: -5 * time.Minute})
 
-	for i := 0; i < maxAuthFailures+1; i++ {
+	for i := range maxAuthFailures + 1 {
 		_, err := drifted.SendEmail(context.Background(), connect.NewRequest(validMessage()))
 		if got := connect.CodeOf(err); got != connect.CodeUnauthenticated {
 			t.Fatalf("attempt %d: code = %v, want %v (err: %v)", i+1, got, connect.CodeUnauthenticated, err)
@@ -296,7 +296,7 @@ func TestStaleForgedRequestsStillThrottle(t *testing.T) {
 	srv := newTestRelayWithConfig(t, testConfig())
 	client := newRelayClient(srv, &signingTransport{base: srv.Client().Transport, secret: "wrong", skew: -5 * time.Minute})
 
-	for i := 0; i < maxAuthFailures; i++ {
+	for i := range maxAuthFailures {
 		_, err := client.SendEmail(context.Background(), connect.NewRequest(validMessage()))
 		if got := connect.CodeOf(err); got != connect.CodeUnauthenticated {
 			t.Fatalf("attempt %d: code = %v, want %v (err: %v)", i+1, got, connect.CodeUnauthenticated, err)
@@ -539,7 +539,7 @@ func TestHealthCheck(t *testing.T) {
 func TestHealthCheckDegraded(t *testing.T) {
 	srv := newTestRelayWithConfig(t, testConfig())
 
-	for i := 0; i < 181; i++ {
+	for range 181 {
 		jobQueue <- emailJob{To: []string{"user@example.com"}}
 	}
 
