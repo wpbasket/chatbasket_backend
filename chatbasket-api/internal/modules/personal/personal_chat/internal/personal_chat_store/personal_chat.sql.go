@@ -871,6 +871,30 @@ func (q *Queries) GetHistorySyncMeta(ctx context.Context, id uuid.UUID) (GetHist
 	return i, err
 }
 
+const getHistorySyncRequest = `-- name: GetHistorySyncRequest :one
+SELECT session_id, chats_json, expires_at
+FROM history_sync
+WHERE id = $1 AND user_id = $2
+`
+
+type GetHistorySyncRequestParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type GetHistorySyncRequestRow struct {
+	SessionID uuid.UUID `json:"session_id"`
+	ChatsJson []byte    `json:"chats_json"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (q *Queries) GetHistorySyncRequest(ctx context.Context, arg GetHistorySyncRequestParams) (GetHistorySyncRequestRow, error) {
+	row := q.db.QueryRow(ctx, getHistorySyncRequest, arg.ID, arg.UserID)
+	var i GetHistorySyncRequestRow
+	err := row.Scan(&i.SessionID, &i.ChatsJson, &i.ExpiresAt)
+	return i, err
+}
+
 const getMessageByID = `-- name: GetMessageByID :one
 SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at FROM messages WHERE id = $1 LIMIT 1
 `

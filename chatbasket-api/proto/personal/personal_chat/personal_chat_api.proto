@@ -286,6 +286,18 @@ message AcknowledgeHistorySyncRequest {
   string requestId = 1;
 }
 
+// Primary fetches a secondary's history-sync request body (pointer pattern:
+// the SSE event carries only the requestId, never the cipher, because
+// pg_notify hard-caps payloads at 8,000 bytes).
+message FetchHistorySyncRequest {
+  string requestId = 1;
+}
+
+message FetchHistorySyncResponse {
+  string chatsCipher = 1;
+  string requesterPublicKey = 2;
+}
+
 message AcknowledgeDeliverySsePayload {
   string chatId = 1;
   repeated string messageIds = 2;
@@ -313,7 +325,6 @@ message DeleteMessageForMeSsePayload {
 message RequestHistorySyncSsePayload {
   string requestId = 1;
   string requesterPublicKey = 2;
-  string chatsCipher = 3;
 }
 
 message UploadHistorySyncSsePayload {
@@ -357,5 +368,6 @@ service ChatService {
   rpc RequestHistorySync(RequestHistorySyncRequest) returns (RequestHistorySyncResponse);
   rpc UploadHistorySync(UploadHistorySyncRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc DownloadHistorySync(DownloadHistorySyncRequest) returns (DownloadHistorySyncResponse);
+  rpc FetchHistorySync(FetchHistorySyncRequest) returns (FetchHistorySyncResponse);
   rpc AcknowledgeHistorySync(AcknowledgeHistorySyncRequest) returns (rpc_common_model.v1.StatusOkay);
 }

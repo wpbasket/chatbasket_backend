@@ -64,6 +64,7 @@ type Querier interface {
 	GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpiredMessagesWithFilesParams) ([]Message, error)
 	GetHistorySyncForDownload(ctx context.Context, arg GetHistorySyncForDownloadParams) ([]byte, error)
 	GetHistorySyncMeta(ctx context.Context, id uuid.UUID) (GetHistorySyncMetaRow, error)
+	GetHistorySyncRequest(ctx context.Context, arg GetHistorySyncRequestParams) (GetHistorySyncRequestRow, error)
 	GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error)
 	GetMessagesByIds(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesByIdsRow, error)
 	GetMessagesWithFilesByChatID(ctx context.Context, chatID uuid.UUID) ([]Message, error)

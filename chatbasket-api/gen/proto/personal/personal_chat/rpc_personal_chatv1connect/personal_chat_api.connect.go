@@ -93,6 +93,9 @@ const (
 	// ChatServiceDownloadHistorySyncProcedure is the fully-qualified name of the ChatService's
 	// DownloadHistorySync RPC.
 	ChatServiceDownloadHistorySyncProcedure = "/rpc_personal_chat.v1.ChatService/DownloadHistorySync"
+	// ChatServiceFetchHistorySyncProcedure is the fully-qualified name of the ChatService's
+	// FetchHistorySync RPC.
+	ChatServiceFetchHistorySyncProcedure = "/rpc_personal_chat.v1.ChatService/FetchHistorySync"
 	// ChatServiceAcknowledgeHistorySyncProcedure is the fully-qualified name of the ChatService's
 	// AcknowledgeHistorySync RPC.
 	ChatServiceAcknowledgeHistorySyncProcedure = "/rpc_personal_chat.v1.ChatService/AcknowledgeHistorySync"
@@ -121,6 +124,7 @@ type ChatServiceClient interface {
 	RequestHistorySync(context.Context, *connect.Request[personal_chat.RequestHistorySyncRequest]) (*connect.Response[personal_chat.RequestHistorySyncResponse], error)
 	UploadHistorySync(context.Context, *connect.Request[personal_chat.UploadHistorySyncRequest]) (*connect.Response[model.StatusOkay], error)
 	DownloadHistorySync(context.Context, *connect.Request[personal_chat.DownloadHistorySyncRequest]) (*connect.Response[personal_chat.DownloadHistorySyncResponse], error)
+	FetchHistorySync(context.Context, *connect.Request[personal_chat.FetchHistorySyncRequest]) (*connect.Response[personal_chat.FetchHistorySyncResponse], error)
 	AcknowledgeHistorySync(context.Context, *connect.Request[personal_chat.AcknowledgeHistorySyncRequest]) (*connect.Response[model.StatusOkay], error)
 }
 
@@ -261,6 +265,12 @@ func NewChatServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(chatServiceMethods.ByName("DownloadHistorySync")),
 			connect.WithClientOptions(opts...),
 		),
+		fetchHistorySync: connect.NewClient[personal_chat.FetchHistorySyncRequest, personal_chat.FetchHistorySyncResponse](
+			httpClient,
+			baseURL+ChatServiceFetchHistorySyncProcedure,
+			connect.WithSchema(chatServiceMethods.ByName("FetchHistorySync")),
+			connect.WithClientOptions(opts...),
+		),
 		acknowledgeHistorySync: connect.NewClient[personal_chat.AcknowledgeHistorySyncRequest, model.StatusOkay](
 			httpClient,
 			baseURL+ChatServiceAcknowledgeHistorySyncProcedure,
@@ -293,6 +303,7 @@ type chatServiceClient struct {
 	requestHistorySync          *connect.Client[personal_chat.RequestHistorySyncRequest, personal_chat.RequestHistorySyncResponse]
 	uploadHistorySync           *connect.Client[personal_chat.UploadHistorySyncRequest, model.StatusOkay]
 	downloadHistorySync         *connect.Client[personal_chat.DownloadHistorySyncRequest, personal_chat.DownloadHistorySyncResponse]
+	fetchHistorySync            *connect.Client[personal_chat.FetchHistorySyncRequest, personal_chat.FetchHistorySyncResponse]
 	acknowledgeHistorySync      *connect.Client[personal_chat.AcknowledgeHistorySyncRequest, model.StatusOkay]
 }
 
@@ -401,6 +412,11 @@ func (c *chatServiceClient) DownloadHistorySync(ctx context.Context, req *connec
 	return c.downloadHistorySync.CallUnary(ctx, req)
 }
 
+// FetchHistorySync calls rpc_personal_chat.v1.ChatService.FetchHistorySync.
+func (c *chatServiceClient) FetchHistorySync(ctx context.Context, req *connect.Request[personal_chat.FetchHistorySyncRequest]) (*connect.Response[personal_chat.FetchHistorySyncResponse], error) {
+	return c.fetchHistorySync.CallUnary(ctx, req)
+}
+
 // AcknowledgeHistorySync calls rpc_personal_chat.v1.ChatService.AcknowledgeHistorySync.
 func (c *chatServiceClient) AcknowledgeHistorySync(ctx context.Context, req *connect.Request[personal_chat.AcknowledgeHistorySyncRequest]) (*connect.Response[model.StatusOkay], error) {
 	return c.acknowledgeHistorySync.CallUnary(ctx, req)
@@ -429,6 +445,7 @@ type ChatServiceHandler interface {
 	RequestHistorySync(context.Context, *connect.Request[personal_chat.RequestHistorySyncRequest]) (*connect.Response[personal_chat.RequestHistorySyncResponse], error)
 	UploadHistorySync(context.Context, *connect.Request[personal_chat.UploadHistorySyncRequest]) (*connect.Response[model.StatusOkay], error)
 	DownloadHistorySync(context.Context, *connect.Request[personal_chat.DownloadHistorySyncRequest]) (*connect.Response[personal_chat.DownloadHistorySyncResponse], error)
+	FetchHistorySync(context.Context, *connect.Request[personal_chat.FetchHistorySyncRequest]) (*connect.Response[personal_chat.FetchHistorySyncResponse], error)
 	AcknowledgeHistorySync(context.Context, *connect.Request[personal_chat.AcknowledgeHistorySyncRequest]) (*connect.Response[model.StatusOkay], error)
 }
 
@@ -565,6 +582,12 @@ func NewChatServiceHandler(svc ChatServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(chatServiceMethods.ByName("DownloadHistorySync")),
 		connect.WithHandlerOptions(opts...),
 	)
+	chatServiceFetchHistorySyncHandler := connect.NewUnaryHandler(
+		ChatServiceFetchHistorySyncProcedure,
+		svc.FetchHistorySync,
+		connect.WithSchema(chatServiceMethods.ByName("FetchHistorySync")),
+		connect.WithHandlerOptions(opts...),
+	)
 	chatServiceAcknowledgeHistorySyncHandler := connect.NewUnaryHandler(
 		ChatServiceAcknowledgeHistorySyncProcedure,
 		svc.AcknowledgeHistorySync,
@@ -615,6 +638,8 @@ func NewChatServiceHandler(svc ChatServiceHandler, opts ...connect.HandlerOption
 			chatServiceUploadHistorySyncHandler.ServeHTTP(w, r)
 		case ChatServiceDownloadHistorySyncProcedure:
 			chatServiceDownloadHistorySyncHandler.ServeHTTP(w, r)
+		case ChatServiceFetchHistorySyncProcedure:
+			chatServiceFetchHistorySyncHandler.ServeHTTP(w, r)
 		case ChatServiceAcknowledgeHistorySyncProcedure:
 			chatServiceAcknowledgeHistorySyncHandler.ServeHTTP(w, r)
 		default:
@@ -708,6 +733,10 @@ func (UnimplementedChatServiceHandler) UploadHistorySync(context.Context, *conne
 
 func (UnimplementedChatServiceHandler) DownloadHistorySync(context.Context, *connect.Request[personal_chat.DownloadHistorySyncRequest]) (*connect.Response[personal_chat.DownloadHistorySyncResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.DownloadHistorySync is not implemented"))
+}
+
+func (UnimplementedChatServiceHandler) FetchHistorySync(context.Context, *connect.Request[personal_chat.FetchHistorySyncRequest]) (*connect.Response[personal_chat.FetchHistorySyncResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.FetchHistorySync is not implemented"))
 }
 
 func (UnimplementedChatServiceHandler) AcknowledgeHistorySync(context.Context, *connect.Request[personal_chat.AcknowledgeHistorySyncRequest]) (*connect.Response[model.StatusOkay], error) {

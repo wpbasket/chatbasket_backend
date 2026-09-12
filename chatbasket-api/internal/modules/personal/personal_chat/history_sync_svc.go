@@ -118,6 +118,38 @@ func (s *chatService) DownloadHistorySync(ctx context.Context, userID uuid.UUID,
 	return &payloadStr, nil
 }
 
+// FetchHistorySync handles the primary's pull of a secondary's request body.
+// Pointer pattern: the SSE event carries only the request id because pg_notify
+// hard-caps payloads at 8,000 bytes — the cipher itself travels over this
+// unary call instead (mirrors Upload → Download on the reverse leg).
+func (s *chatService) FetchHistorySync(ctx context.Context, userID uuid.UUID, requestID uuid.UUID) (string, string, error) {
+	row, err := s.PostgresQuerier.GetHistorySyncRequest(ctx, personal_chat_store.GetHistorySyncRequestParams{
+		ID:     requestID,
+		UserID: userID,
+	})
+	if err != nil {
+		return "", "", kit.NewError(http.StatusGone, "request_gone", "History sync request expired or not found")
+	}
+
+	if row.ExpiresAt.Before(time.Now()) {
+		return "", "", kit.NewError(http.StatusGone, "request_gone", "History sync request expired")
+	}
+
+	requesterPublicKey, err := s.AuthProvider.GetSessionE2EEPublicKey(ctx, row.SessionID)
+	if err != nil || requesterPublicKey == nil {
+		return "", "", kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to get requester public key")
+	}
+
+	// chats_json is JSONB: the stored cipher arrives quote-wrapped, same as the
+	// download leg strips it in DownloadHistorySync.
+	chatsCipher := string(row.ChatsJson)
+	if len(chatsCipher) >= 2 && chatsCipher[0] == '"' && chatsCipher[len(chatsCipher)-1] == '"' {
+		chatsCipher = chatsCipher[1 : len(chatsCipher)-1]
+	}
+
+	return chatsCipher, *requesterPublicKey, nil
+}
+
 // AcknowledgeHistorySync handles step ⑥: secondary acknowledges receipt, immediately deleting the staged payload
 func (s *chatService) AcknowledgeHistorySync(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, requestID uuid.UUID) error {
 	_, err := s.PostgresQuerier.DeleteHistorySync(ctx, personal_chat_store.DeleteHistorySyncParams{

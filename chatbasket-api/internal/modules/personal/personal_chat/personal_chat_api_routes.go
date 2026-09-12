@@ -48,6 +48,7 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, personalSseManage
 	chat.POST("/history-sync/request", handler.RequestHistorySync)
 	chat.POST("/history-sync/upload", handler.UploadHistorySync, middleware.BodyLimit(94371840)) // 90MB limit for database cipher sync
 	chat.GET("/history-sync", handler.DownloadHistorySync)
+	chat.GET("/history-sync/fetch", handler.FetchHistorySync)
 	chat.POST("/history-sync/ack", handler.AcknowledgeHistorySync)
 
 	// Connect RPC Routes

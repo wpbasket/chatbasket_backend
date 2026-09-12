@@ -34,6 +34,11 @@ type HistorySyncAckPayload struct {
 	RequestID uuid.UUID `json:"request_id"`
 }
 
+type HistorySyncFetchResponse struct {
+	ChatsCipher        string `json:"chats_cipher"`
+	RequesterPublicKey string `json:"requester_public_key"`
+}
+
 // RequestHistorySync handles POST /chat/history-sync/request
 func (h *chatHandler) RequestHistorySync(c *echo.Context) error {
 	userID, err := kit.ExtractUserID(c)
@@ -66,7 +71,11 @@ func (h *chatHandler) RequestHistorySync(c *echo.Context) error {
 		return err
 	}
 
-	// SSE Broadcast: RequestHistorySyncSseEvent to primary device
+	// SSE Broadcast: RequestHistorySyncSseEvent to primary device.
+	// Id-only pointer: the cipher must NOT ride the event — pg_notify caps
+	// payloads at 8,000 bytes and a full have_ids cipher exceeds it. The
+	// primary pulls the body via FetchHistorySync (same pattern as the
+	// Upload → Download reverse leg).
 	if h.personalSseManager != nil && primarySessionID != uuid.Nil {
 		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
 			Timestamp: timestamppb.Now(),
@@ -76,7 +85,6 @@ func (h *chatHandler) RequestHistorySync(c *echo.Context) error {
 						RequestHistorySyncSseEvent: &rpc_personal_chatv1.RequestHistorySyncSsePayload{
 							RequestId:          requestID.String(),
 							RequesterPublicKey: requesterPubKey,
-							ChatsCipher:        req.ChatsCipher,
 						},
 					},
 				},
@@ -156,6 +164,35 @@ func (h *chatHandler) DownloadHistorySync(c *echo.Context) error {
 
 	return c.JSON(http.StatusOK, HistorySyncResponse{
 		PayloadCipher: *payloadCipher,
+	})
+}
+
+// FetchHistorySync handles GET /chat/history-sync/fetch?request_id=...
+// Primary-only pull of a secondary's request body (pointer pattern).
+func (h *chatHandler) FetchHistorySync(c *echo.Context) error {
+	userID, err := kit.ExtractUserID(c)
+	if err != nil {
+		return err
+	}
+
+	if !extractIsPrimary(c) {
+		return kit.NewError(http.StatusForbidden, "forbidden", "Only primary device can fetch history sync requests")
+	}
+
+	requestIDStr := c.QueryParam("request_id")
+	requestID, err := uuid.Parse(requestIDStr)
+	if err != nil {
+		return kit.NewError(http.StatusBadRequest, "bad_request", "missing or invalid request_id")
+	}
+
+	chatsCipher, requesterPubKey, err := h.Service.FetchHistorySync(c.Request().Context(), userID.UuidUserId, requestID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, HistorySyncFetchResponse{
+		ChatsCipher:        chatsCipher,
+		RequesterPublicKey: requesterPubKey,
 	})
 }
 

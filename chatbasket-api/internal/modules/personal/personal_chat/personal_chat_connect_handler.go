@@ -863,7 +863,11 @@ func (s *chatConnectServer) RequestHistorySync(ctx context.Context, req *connect
 		return nil, kit.ParseIntoRpcError(svcErr)
 	}
 
-	// SSE Broadcast: RequestHistorySyncSseEvent to primary device
+	// SSE Broadcast: RequestHistorySyncSseEvent to primary device.
+	// Id-only pointer: the cipher must NOT ride the event — pg_notify caps
+	// payloads at 8,000 bytes and a full have_ids cipher exceeds it. The
+	// primary pulls the body via FetchHistorySync (same pattern as the
+	// Upload → Download reverse leg).
 	if s.personalSseManager != nil && primarySessionID != uuid.Nil {
 		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
 			Timestamp: timestamppb.Now(),
@@ -873,7 +877,6 @@ func (s *chatConnectServer) RequestHistorySync(ctx context.Context, req *connect
 						RequestHistorySyncSseEvent: &rpc_personal_chatv1.RequestHistorySyncSsePayload{
 							RequestId:          requestID.String(),
 							RequesterPublicKey: requesterPubKey,
-							ChatsCipher:        req.Msg.ChatsCipher,
 						},
 					},
 				},
@@ -968,6 +971,41 @@ func (s *chatConnectServer) DownloadHistorySync(ctx context.Context, req *connec
 
 	return connect.NewResponse(&rpc_personal_chatv1.DownloadHistorySyncResponse{
 		PayloadCipher: payload,
+	}), nil
+}
+
+func (s *chatConnectServer) FetchHistorySync(ctx context.Context, req *connect.Request[rpc_personal_chatv1.FetchHistorySyncRequest]) (*connect.Response[rpc_personal_chatv1.FetchHistorySyncResponse], error) {
+	userID, err := kit.GetConnectRpcUserID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	isPrimary, err := kit.GetConnectRpcIsPrimary(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	if !isPrimary {
+		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusForbidden, "forbidden", "Only primary device can fetch history sync requests"))
+	}
+
+	if req == nil || req.Msg == nil || req.Msg.RequestId == "" {
+		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "missing or invalid request_id"))
+	}
+
+	requestID, err := uuid.Parse(req.Msg.RequestId)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "missing or invalid request_id"))
+	}
+
+	chatsCipher, requesterPubKey, svcErr := s.chatService.FetchHistorySync(ctx, userID.UuidUserId, requestID)
+	if svcErr != nil {
+		return nil, kit.ParseIntoRpcError(svcErr)
+	}
+
+	return connect.NewResponse(&rpc_personal_chatv1.FetchHistorySyncResponse{
+		ChatsCipher:        chatsCipher,
+		RequesterPublicKey: requesterPubKey,
 	}), nil
 }
 

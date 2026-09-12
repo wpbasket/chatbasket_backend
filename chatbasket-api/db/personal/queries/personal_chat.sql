@@ -764,6 +764,11 @@ SELECT user_id, session_id, expires_at
 FROM history_sync 
 WHERE id = $1;
 
+-- name: GetHistorySyncRequest :one
+SELECT session_id, chats_json, expires_at
+FROM history_sync
+WHERE id = $1 AND user_id = $2;
+
 -- name: GetMessagesWithFilesByChatID :many
 SELECT * FROM messages 
 WHERE chat_id = $1 AND file_id IS NOT NULL;
