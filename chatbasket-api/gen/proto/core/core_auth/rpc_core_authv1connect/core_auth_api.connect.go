@@ -68,6 +68,9 @@ const (
 	// AuthServiceConfirmEmailUpdateProcedure is the fully-qualified name of the AuthService's
 	// ConfirmEmailUpdate RPC.
 	AuthServiceConfirmEmailUpdateProcedure = "/rpc_core_auth.v1.AuthService/ConfirmEmailUpdate"
+	// AuthServiceDeletePersonalAccountProcedure is the fully-qualified name of the AuthService's
+	// DeletePersonalAccount RPC.
+	AuthServiceDeletePersonalAccountProcedure = "/rpc_core_auth.v1.AuthService/DeletePersonalAccount"
 	// AuthServiceQRInitiateProcedure is the fully-qualified name of the AuthService's QRInitiate RPC.
 	AuthServiceQRInitiateProcedure = "/rpc_core_auth.v1.AuthService/QRInitiate"
 	// AuthServiceQRApproveProcedure is the fully-qualified name of the AuthService's QRApprove RPC.
@@ -92,6 +95,7 @@ type AuthServiceClient interface {
 	ConfirmPasswordUpdate(context.Context, *connect.Request[core_auth.ConfirmPasswordUpdateRequest]) (*connect.Response[model.StatusOkay], error)
 	RequestEmailUpdate(context.Context, *connect.Request[core_auth.RequestEmailUpdateRequest]) (*connect.Response[model.StatusOkay], error)
 	ConfirmEmailUpdate(context.Context, *connect.Request[core_auth.ConfirmEmailUpdateRequest]) (*connect.Response[model.StatusOkay], error)
+	DeletePersonalAccount(context.Context, *connect.Request[core_auth.DeletePersonalAccountRequest]) (*connect.Response[model.StatusOkay], error)
 	// QR Login endpoints
 	QRInitiate(context.Context, *connect.Request[core_auth.QRInitiateRequest]) (*connect.Response[core_auth.QRInitiateResponse], error)
 	QRApprove(context.Context, *connect.Request[core_auth.QRApproveRequest]) (*connect.Response[core_auth.QRApproveResponse], error)
@@ -187,6 +191,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("ConfirmEmailUpdate")),
 			connect.WithClientOptions(opts...),
 		),
+		deletePersonalAccount: connect.NewClient[core_auth.DeletePersonalAccountRequest, model.StatusOkay](
+			httpClient,
+			baseURL+AuthServiceDeletePersonalAccountProcedure,
+			connect.WithSchema(authServiceMethods.ByName("DeletePersonalAccount")),
+			connect.WithClientOptions(opts...),
+		),
 		qRInitiate: connect.NewClient[core_auth.QRInitiateRequest, core_auth.QRInitiateResponse](
 			httpClient,
 			baseURL+AuthServiceQRInitiateProcedure,
@@ -223,6 +233,7 @@ type authServiceClient struct {
 	confirmPasswordUpdate *connect.Client[core_auth.ConfirmPasswordUpdateRequest, model.StatusOkay]
 	requestEmailUpdate    *connect.Client[core_auth.RequestEmailUpdateRequest, model.StatusOkay]
 	confirmEmailUpdate    *connect.Client[core_auth.ConfirmEmailUpdateRequest, model.StatusOkay]
+	deletePersonalAccount *connect.Client[core_auth.DeletePersonalAccountRequest, model.StatusOkay]
 	qRInitiate            *connect.Client[core_auth.QRInitiateRequest, core_auth.QRInitiateResponse]
 	qRApprove             *connect.Client[core_auth.QRApproveRequest, core_auth.QRApproveResponse]
 	qRCallback            *connect.Client[core_auth.QRCallbackRequest, core_auth.SessionResponse]
@@ -293,6 +304,11 @@ func (c *authServiceClient) ConfirmEmailUpdate(ctx context.Context, req *connect
 	return c.confirmEmailUpdate.CallUnary(ctx, req)
 }
 
+// DeletePersonalAccount calls rpc_core_auth.v1.AuthService.DeletePersonalAccount.
+func (c *authServiceClient) DeletePersonalAccount(ctx context.Context, req *connect.Request[core_auth.DeletePersonalAccountRequest]) (*connect.Response[model.StatusOkay], error) {
+	return c.deletePersonalAccount.CallUnary(ctx, req)
+}
+
 // QRInitiate calls rpc_core_auth.v1.AuthService.QRInitiate.
 func (c *authServiceClient) QRInitiate(ctx context.Context, req *connect.Request[core_auth.QRInitiateRequest]) (*connect.Response[core_auth.QRInitiateResponse], error) {
 	return c.qRInitiate.CallUnary(ctx, req)
@@ -324,6 +340,7 @@ type AuthServiceHandler interface {
 	ConfirmPasswordUpdate(context.Context, *connect.Request[core_auth.ConfirmPasswordUpdateRequest]) (*connect.Response[model.StatusOkay], error)
 	RequestEmailUpdate(context.Context, *connect.Request[core_auth.RequestEmailUpdateRequest]) (*connect.Response[model.StatusOkay], error)
 	ConfirmEmailUpdate(context.Context, *connect.Request[core_auth.ConfirmEmailUpdateRequest]) (*connect.Response[model.StatusOkay], error)
+	DeletePersonalAccount(context.Context, *connect.Request[core_auth.DeletePersonalAccountRequest]) (*connect.Response[model.StatusOkay], error)
 	// QR Login endpoints
 	QRInitiate(context.Context, *connect.Request[core_auth.QRInitiateRequest]) (*connect.Response[core_auth.QRInitiateResponse], error)
 	QRApprove(context.Context, *connect.Request[core_auth.QRApproveRequest]) (*connect.Response[core_auth.QRApproveResponse], error)
@@ -415,6 +432,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("ConfirmEmailUpdate")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceDeletePersonalAccountHandler := connect.NewUnaryHandler(
+		AuthServiceDeletePersonalAccountProcedure,
+		svc.DeletePersonalAccount,
+		connect.WithSchema(authServiceMethods.ByName("DeletePersonalAccount")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authServiceQRInitiateHandler := connect.NewUnaryHandler(
 		AuthServiceQRInitiateProcedure,
 		svc.QRInitiate,
@@ -461,6 +484,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceRequestEmailUpdateHandler.ServeHTTP(w, r)
 		case AuthServiceConfirmEmailUpdateProcedure:
 			authServiceConfirmEmailUpdateHandler.ServeHTTP(w, r)
+		case AuthServiceDeletePersonalAccountProcedure:
+			authServiceDeletePersonalAccountHandler.ServeHTTP(w, r)
 		case AuthServiceQRInitiateProcedure:
 			authServiceQRInitiateHandler.ServeHTTP(w, r)
 		case AuthServiceQRApproveProcedure:
@@ -526,6 +551,10 @@ func (UnimplementedAuthServiceHandler) RequestEmailUpdate(context.Context, *conn
 
 func (UnimplementedAuthServiceHandler) ConfirmEmailUpdate(context.Context, *connect.Request[core_auth.ConfirmEmailUpdateRequest]) (*connect.Response[model.StatusOkay], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_core_auth.v1.AuthService.ConfirmEmailUpdate is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) DeletePersonalAccount(context.Context, *connect.Request[core_auth.DeletePersonalAccountRequest]) (*connect.Response[model.StatusOkay], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_core_auth.v1.AuthService.DeletePersonalAccount is not implemented"))
 }
 
 func (UnimplementedAuthServiceHandler) QRInitiate(context.Context, *connect.Request[core_auth.QRInitiateRequest]) (*connect.Response[core_auth.QRInitiateResponse], error) {

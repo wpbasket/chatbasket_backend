@@ -456,12 +456,23 @@ func TestPresignAvatarUpload_Mock_Success(t *testing.T) {
 		},
 	}
 
+	userID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
+
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+	store := personal_profile_store.New(mock)
+	mock.ExpectQuery(`SELECT 1 AS locked FROM users WHERE id = \$1 FOR UPDATE NOWAIT`).
+		WithArgs(userID.UuidUserId).
+		WillReturnRows(pgxmock.NewRows([]string{"locked"}).AddRow(int32(1)))
+
 	svc := &profileService{
-		R2Pool:         r2Pool,
-		PendingUploads: pendingUploads,
+		R2Pool:          r2Pool,
+		PendingUploads:  pendingUploads,
+		PostgresQueries: store,
+		PostgresQuerier: store,
 	}
 
-	userID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
 	res, err := svc.PresignAvatarUpload(context.Background(), userID)
 
 	// Since client GenerateUploadURL will try to hit the AWS SDK S3 client config and signature logic,
@@ -476,4 +487,6 @@ func TestPresignAvatarUpload_Mock_Success(t *testing.T) {
 		// pendingUploads was called.
 		t.Logf("PresignAvatarUpload returned error: %v", err)
 	}
+
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

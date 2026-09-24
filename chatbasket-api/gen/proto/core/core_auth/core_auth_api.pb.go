@@ -806,6 +806,58 @@ func (x *ConfirmEmailUpdateRequest) GetOtp() string {
 	return ""
 }
 
+type DeletePersonalAccountRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UpdateId      string                 `protobuf:"bytes,1,opt,name=updateId,proto3" json:"updateId,omitempty"`
+	Otp           string                 `protobuf:"bytes,2,opt,name=otp,proto3" json:"otp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeletePersonalAccountRequest) Reset() {
+	*x = DeletePersonalAccountRequest{}
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeletePersonalAccountRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeletePersonalAccountRequest) ProtoMessage() {}
+
+func (x *DeletePersonalAccountRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeletePersonalAccountRequest.ProtoReflect.Descriptor instead.
+func (*DeletePersonalAccountRequest) Descriptor() ([]byte, []int) {
+	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *DeletePersonalAccountRequest) GetUpdateId() string {
+	if x != nil {
+		return x.UpdateId
+	}
+	return ""
+}
+
+func (x *DeletePersonalAccountRequest) GetOtp() string {
+	if x != nil {
+		return x.Otp
+	}
+	return ""
+}
+
 type QRInitiateRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -814,7 +866,7 @@ type QRInitiateRequest struct {
 
 func (x *QRInitiateRequest) Reset() {
 	*x = QRInitiateRequest{}
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[14]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -826,7 +878,7 @@ func (x *QRInitiateRequest) String() string {
 func (*QRInitiateRequest) ProtoMessage() {}
 
 func (x *QRInitiateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[14]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -839,7 +891,7 @@ func (x *QRInitiateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QRInitiateRequest.ProtoReflect.Descriptor instead.
 func (*QRInitiateRequest) Descriptor() ([]byte, []int) {
-	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{14}
+	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{15}
 }
 
 type QRInitiateResponse struct {
@@ -852,7 +904,7 @@ type QRInitiateResponse struct {
 
 func (x *QRInitiateResponse) Reset() {
 	*x = QRInitiateResponse{}
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[15]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -864,7 +916,7 @@ func (x *QRInitiateResponse) String() string {
 func (*QRInitiateResponse) ProtoMessage() {}
 
 func (x *QRInitiateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[15]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -877,7 +929,7 @@ func (x *QRInitiateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QRInitiateResponse.ProtoReflect.Descriptor instead.
 func (*QRInitiateResponse) Descriptor() ([]byte, []int) {
-	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{15}
+	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *QRInitiateResponse) GetQrToken() string {
@@ -903,7 +955,7 @@ type QRApproveRequest struct {
 
 func (x *QRApproveRequest) Reset() {
 	*x = QRApproveRequest{}
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[16]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -915,7 +967,7 @@ func (x *QRApproveRequest) String() string {
 func (*QRApproveRequest) ProtoMessage() {}
 
 func (x *QRApproveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[16]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -928,7 +980,7 @@ func (x *QRApproveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QRApproveRequest.ProtoReflect.Descriptor instead.
 func (*QRApproveRequest) Descriptor() ([]byte, []int) {
-	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{16}
+	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *QRApproveRequest) GetQrToken() string {
@@ -947,7 +999,7 @@ type QRApproveResponse struct {
 
 func (x *QRApproveResponse) Reset() {
 	*x = QRApproveResponse{}
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[17]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -959,7 +1011,7 @@ func (x *QRApproveResponse) String() string {
 func (*QRApproveResponse) ProtoMessage() {}
 
 func (x *QRApproveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[17]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -972,7 +1024,7 @@ func (x *QRApproveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QRApproveResponse.ProtoReflect.Descriptor instead.
 func (*QRApproveResponse) Descriptor() ([]byte, []int) {
-	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{17}
+	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *QRApproveResponse) GetStatus() bool {
@@ -991,7 +1043,7 @@ type QRCallbackRequest struct {
 
 func (x *QRCallbackRequest) Reset() {
 	*x = QRCallbackRequest{}
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[18]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1003,7 +1055,7 @@ func (x *QRCallbackRequest) String() string {
 func (*QRCallbackRequest) ProtoMessage() {}
 
 func (x *QRCallbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[18]
+	mi := &file_proto_core_core_auth_core_auth_api_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1016,7 +1068,7 @@ func (x *QRCallbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QRCallbackRequest.ProtoReflect.Descriptor instead.
 func (*QRCallbackRequest) Descriptor() ([]byte, []int) {
-	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{18}
+	return file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *QRCallbackRequest) GetQrToken() string {
@@ -1083,6 +1135,9 @@ const file_proto_core_core_auth_core_auth_api_proto_rawDesc = "" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\"J\n" +
 	"\x19ConfirmEmailUpdateRequest\x12\x1b\n" +
 	"\tupdate_id\x18\x01 \x01(\tR\bupdateId\x12\x10\n" +
+	"\x03otp\x18\x02 \x01(\tR\x03otp\"L\n" +
+	"\x1cDeletePersonalAccountRequest\x12\x1a\n" +
+	"\bupdateId\x18\x01 \x01(\tR\bupdateId\x12\x10\n" +
 	"\x03otp\x18\x02 \x01(\tR\x03otp\"\x13\n" +
 	"\x11QRInitiateRequest\"N\n" +
 	"\x12QRInitiateResponse\x12\x19\n" +
@@ -1094,7 +1149,7 @@ const file_proto_core_core_auth_core_auth_api_proto_rawDesc = "" +
 	"\x11QRApproveResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\bR\x06status\".\n" +
 	"\x11QRCallbackRequest\x12\x19\n" +
-	"\bqr_token\x18\x01 \x01(\tR\aqrToken2\xb8\v\n" +
+	"\bqr_token\x18\x01 \x01(\tR\aqrToken2\xa2\f\n" +
 	"\vAuthService\x12J\n" +
 	"\x06Signup\x12\x1f.rpc_core_auth.v1.SignupRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12f\n" +
 	"\x13AccountVerification\x12,.rpc_core_auth.v1.AccountVerificationRequest\x1a!.rpc_core_auth.v1.SessionResponse\x12H\n" +
@@ -1108,7 +1163,8 @@ const file_proto_core_core_auth_core_auth_api_proto_rawDesc = "" +
 	"\x10RequestUpdateOTP\x12).rpc_core_auth.v1.RequestUpdateOTPRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12h\n" +
 	"\x15ConfirmPasswordUpdate\x12..rpc_core_auth.v1.ConfirmPasswordUpdateRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12b\n" +
 	"\x12RequestEmailUpdate\x12+.rpc_core_auth.v1.RequestEmailUpdateRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12b\n" +
-	"\x12ConfirmEmailUpdate\x12+.rpc_core_auth.v1.ConfirmEmailUpdateRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12W\n" +
+	"\x12ConfirmEmailUpdate\x12+.rpc_core_auth.v1.ConfirmEmailUpdateRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12h\n" +
+	"\x15DeletePersonalAccount\x12..rpc_core_auth.v1.DeletePersonalAccountRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12W\n" +
 	"\n" +
 	"QRInitiate\x12#.rpc_core_auth.v1.QRInitiateRequest\x1a$.rpc_core_auth.v1.QRInitiateResponse\x12T\n" +
 	"\tQRApprove\x12\".rpc_core_auth.v1.QRApproveRequest\x1a#.rpc_core_auth.v1.QRApproveResponse\x12T\n" +
@@ -1127,7 +1183,7 @@ func file_proto_core_core_auth_core_auth_api_proto_rawDescGZIP() []byte {
 	return file_proto_core_core_auth_core_auth_api_proto_rawDescData
 }
 
-var file_proto_core_core_auth_core_auth_api_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_proto_core_core_auth_core_auth_api_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_proto_core_core_auth_core_auth_api_proto_goTypes = []any{
 	(*SessionResponse)(nil),              // 0: rpc_core_auth.v1.SessionResponse
 	(*SignupRequest)(nil),                // 1: rpc_core_auth.v1.SignupRequest
@@ -1143,12 +1199,13 @@ var file_proto_core_core_auth_core_auth_api_proto_goTypes = []any{
 	(*ConfirmPasswordUpdateRequest)(nil), // 11: rpc_core_auth.v1.ConfirmPasswordUpdateRequest
 	(*RequestEmailUpdateRequest)(nil),    // 12: rpc_core_auth.v1.RequestEmailUpdateRequest
 	(*ConfirmEmailUpdateRequest)(nil),    // 13: rpc_core_auth.v1.ConfirmEmailUpdateRequest
-	(*QRInitiateRequest)(nil),            // 14: rpc_core_auth.v1.QRInitiateRequest
-	(*QRInitiateResponse)(nil),           // 15: rpc_core_auth.v1.QRInitiateResponse
-	(*QRApproveRequest)(nil),             // 16: rpc_core_auth.v1.QRApproveRequest
-	(*QRApproveResponse)(nil),            // 17: rpc_core_auth.v1.QRApproveResponse
-	(*QRCallbackRequest)(nil),            // 18: rpc_core_auth.v1.QRCallbackRequest
-	(*model.StatusOkay)(nil),             // 19: rpc_common_model.v1.StatusOkay
+	(*DeletePersonalAccountRequest)(nil), // 14: rpc_core_auth.v1.DeletePersonalAccountRequest
+	(*QRInitiateRequest)(nil),            // 15: rpc_core_auth.v1.QRInitiateRequest
+	(*QRInitiateResponse)(nil),           // 16: rpc_core_auth.v1.QRInitiateResponse
+	(*QRApproveRequest)(nil),             // 17: rpc_core_auth.v1.QRApproveRequest
+	(*QRApproveResponse)(nil),            // 18: rpc_core_auth.v1.QRApproveResponse
+	(*QRCallbackRequest)(nil),            // 19: rpc_core_auth.v1.QRCallbackRequest
+	(*model.StatusOkay)(nil),             // 20: rpc_common_model.v1.StatusOkay
 }
 var file_proto_core_core_auth_core_auth_api_proto_depIdxs = []int32{
 	1,  // 0: rpc_core_auth.v1.AuthService.Signup:input_type -> rpc_core_auth.v1.SignupRequest
@@ -1164,27 +1221,29 @@ var file_proto_core_core_auth_core_auth_api_proto_depIdxs = []int32{
 	11, // 10: rpc_core_auth.v1.AuthService.ConfirmPasswordUpdate:input_type -> rpc_core_auth.v1.ConfirmPasswordUpdateRequest
 	12, // 11: rpc_core_auth.v1.AuthService.RequestEmailUpdate:input_type -> rpc_core_auth.v1.RequestEmailUpdateRequest
 	13, // 12: rpc_core_auth.v1.AuthService.ConfirmEmailUpdate:input_type -> rpc_core_auth.v1.ConfirmEmailUpdateRequest
-	14, // 13: rpc_core_auth.v1.AuthService.QRInitiate:input_type -> rpc_core_auth.v1.QRInitiateRequest
-	16, // 14: rpc_core_auth.v1.AuthService.QRApprove:input_type -> rpc_core_auth.v1.QRApproveRequest
-	18, // 15: rpc_core_auth.v1.AuthService.QRCallback:input_type -> rpc_core_auth.v1.QRCallbackRequest
-	19, // 16: rpc_core_auth.v1.AuthService.Signup:output_type -> rpc_common_model.v1.StatusOkay
-	0,  // 17: rpc_core_auth.v1.AuthService.AccountVerification:output_type -> rpc_core_auth.v1.SessionResponse
-	19, // 18: rpc_core_auth.v1.AuthService.Login:output_type -> rpc_common_model.v1.StatusOkay
-	0,  // 19: rpc_core_auth.v1.AuthService.LoginVerification:output_type -> rpc_core_auth.v1.SessionResponse
-	19, // 20: rpc_core_auth.v1.AuthService.ResendOTP:output_type -> rpc_common_model.v1.StatusOkay
-	19, // 21: rpc_core_auth.v1.AuthService.ForgotPassword:output_type -> rpc_common_model.v1.StatusOkay
-	19, // 22: rpc_core_auth.v1.AuthService.VerifyForgotPassword:output_type -> rpc_common_model.v1.StatusOkay
-	19, // 23: rpc_core_auth.v1.AuthService.Logout:output_type -> rpc_common_model.v1.StatusOkay
-	0,  // 24: rpc_core_auth.v1.AuthService.GetUser:output_type -> rpc_core_auth.v1.SessionResponse
-	19, // 25: rpc_core_auth.v1.AuthService.RequestUpdateOTP:output_type -> rpc_common_model.v1.StatusOkay
-	19, // 26: rpc_core_auth.v1.AuthService.ConfirmPasswordUpdate:output_type -> rpc_common_model.v1.StatusOkay
-	19, // 27: rpc_core_auth.v1.AuthService.RequestEmailUpdate:output_type -> rpc_common_model.v1.StatusOkay
-	19, // 28: rpc_core_auth.v1.AuthService.ConfirmEmailUpdate:output_type -> rpc_common_model.v1.StatusOkay
-	15, // 29: rpc_core_auth.v1.AuthService.QRInitiate:output_type -> rpc_core_auth.v1.QRInitiateResponse
-	17, // 30: rpc_core_auth.v1.AuthService.QRApprove:output_type -> rpc_core_auth.v1.QRApproveResponse
-	0,  // 31: rpc_core_auth.v1.AuthService.QRCallback:output_type -> rpc_core_auth.v1.SessionResponse
-	16, // [16:32] is the sub-list for method output_type
-	0,  // [0:16] is the sub-list for method input_type
+	14, // 13: rpc_core_auth.v1.AuthService.DeletePersonalAccount:input_type -> rpc_core_auth.v1.DeletePersonalAccountRequest
+	15, // 14: rpc_core_auth.v1.AuthService.QRInitiate:input_type -> rpc_core_auth.v1.QRInitiateRequest
+	17, // 15: rpc_core_auth.v1.AuthService.QRApprove:input_type -> rpc_core_auth.v1.QRApproveRequest
+	19, // 16: rpc_core_auth.v1.AuthService.QRCallback:input_type -> rpc_core_auth.v1.QRCallbackRequest
+	20, // 17: rpc_core_auth.v1.AuthService.Signup:output_type -> rpc_common_model.v1.StatusOkay
+	0,  // 18: rpc_core_auth.v1.AuthService.AccountVerification:output_type -> rpc_core_auth.v1.SessionResponse
+	20, // 19: rpc_core_auth.v1.AuthService.Login:output_type -> rpc_common_model.v1.StatusOkay
+	0,  // 20: rpc_core_auth.v1.AuthService.LoginVerification:output_type -> rpc_core_auth.v1.SessionResponse
+	20, // 21: rpc_core_auth.v1.AuthService.ResendOTP:output_type -> rpc_common_model.v1.StatusOkay
+	20, // 22: rpc_core_auth.v1.AuthService.ForgotPassword:output_type -> rpc_common_model.v1.StatusOkay
+	20, // 23: rpc_core_auth.v1.AuthService.VerifyForgotPassword:output_type -> rpc_common_model.v1.StatusOkay
+	20, // 24: rpc_core_auth.v1.AuthService.Logout:output_type -> rpc_common_model.v1.StatusOkay
+	0,  // 25: rpc_core_auth.v1.AuthService.GetUser:output_type -> rpc_core_auth.v1.SessionResponse
+	20, // 26: rpc_core_auth.v1.AuthService.RequestUpdateOTP:output_type -> rpc_common_model.v1.StatusOkay
+	20, // 27: rpc_core_auth.v1.AuthService.ConfirmPasswordUpdate:output_type -> rpc_common_model.v1.StatusOkay
+	20, // 28: rpc_core_auth.v1.AuthService.RequestEmailUpdate:output_type -> rpc_common_model.v1.StatusOkay
+	20, // 29: rpc_core_auth.v1.AuthService.ConfirmEmailUpdate:output_type -> rpc_common_model.v1.StatusOkay
+	20, // 30: rpc_core_auth.v1.AuthService.DeletePersonalAccount:output_type -> rpc_common_model.v1.StatusOkay
+	16, // 31: rpc_core_auth.v1.AuthService.QRInitiate:output_type -> rpc_core_auth.v1.QRInitiateResponse
+	18, // 32: rpc_core_auth.v1.AuthService.QRApprove:output_type -> rpc_core_auth.v1.QRApproveResponse
+	0,  // 33: rpc_core_auth.v1.AuthService.QRCallback:output_type -> rpc_core_auth.v1.SessionResponse
+	17, // [17:34] is the sub-list for method output_type
+	0,  // [0:17] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
@@ -1201,7 +1260,7 @@ func file_proto_core_core_auth_core_auth_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_core_core_auth_core_auth_api_proto_rawDesc), len(file_proto_core_core_auth_core_auth_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

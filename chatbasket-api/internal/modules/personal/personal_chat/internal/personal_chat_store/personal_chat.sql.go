@@ -1109,6 +1109,73 @@ func (q *Queries) GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg G
 	return items, nil
 }
 
+const getMessagesWithFilesForUserUnion = `-- name: GetMessagesWithFilesForUserUnion :many
+SELECT u.id, u.file_id, u.side FROM (
+    (SELECT m1.id, m1.file_id, 'sent'::TEXT AS side
+     FROM messages AS m1
+     WHERE m1.sender_id = $1
+       AND m1.file_id IS NOT NULL
+       AND m1.id > $2
+     ORDER BY m1.id ASC
+     LIMIT $3)
+    UNION ALL
+    (SELECT m2.id, m2.file_id, 'received'::TEXT AS side
+     FROM messages AS m2
+     WHERE m2.recipient_id = $1
+       AND m2.file_id IS NOT NULL
+       AND m2.id > $4
+     ORDER BY m2.id ASC
+     LIMIT $3)
+) AS u
+`
+
+type GetMessagesWithFilesForUserUnionParams struct {
+	UserID         uuid.UUID `json:"user_id"`
+	LastSentID     uuid.UUID `json:"last_sent_id"`
+	Limit          int32     `json:"limit"`
+	LastReceivedID uuid.UUID `json:"last_received_id"`
+}
+
+type GetMessagesWithFilesForUserUnionRow struct {
+	ID     uuid.UUID `json:"id"`
+	FileID *string   `json:"file_id"`
+	Side   string    `json:"side"`
+}
+
+// Single round-trip file discovery for account deletion.
+// One index-backed branch per side (never OR): the sent branch rides
+// idx_messages_files_sender_id, the received branch rides
+// idx_messages_files_recipient_id. The service advances each keyset cursor
+// independently (side column) and merges in memory (dedup by file_id).
+// The old single-query OR could not use an index and scanned while holding
+// chat row locks; disjoint sides (no self messages) make UNION ALL exact.
+// No outer ORDER BY: the service advances each side's cursor from the
+// side column, so row order across sides is irrelevant.
+func (q *Queries) GetMessagesWithFilesForUserUnion(ctx context.Context, arg GetMessagesWithFilesForUserUnionParams) ([]GetMessagesWithFilesForUserUnionRow, error) {
+	rows, err := q.db.Query(ctx, getMessagesWithFilesForUserUnion,
+		arg.UserID,
+		arg.LastSentID,
+		arg.Limit,
+		arg.LastReceivedID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMessagesWithFilesForUserUnionRow
+	for rows.Next() {
+		var i GetMessagesWithFilesForUserUnionRow
+		if err := rows.Scan(&i.ID, &i.FileID, &i.Side); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPendingMessagesForRecipient = `-- name: GetPendingMessagesForRecipient :many
 SELECT id, chat_id, sender_id, recipient_id, content, message_type, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at
 FROM messages
@@ -1488,6 +1555,34 @@ func (q *Queries) IsChatParticipant(ctx context.Context, arg IsChatParticipantPa
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const lockUserChatsForUpdate = `-- name: LockUserChatsForUpdate :many
+SELECT id
+FROM chats
+WHERE participant_1_id = $1 OR participant_2_id = $1
+FOR UPDATE
+`
+
+// Acquires exclusive row-level locks on all chats involving the user to prevent concurrent message writes during account deletion
+func (q *Queries) LockUserChatsForUpdate(ctx context.Context, participant1ID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, lockUserChatsForUpdate, participant1ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markMessageDeletedByRecipient = `-- name: MarkMessageDeletedByRecipient :exec

@@ -73,6 +73,16 @@ type Querier interface {
 	// ===========================================
 	// Fetches messages with files for chats between blocked users for cleanup.
 	GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg GetMessagesWithFilesForBlockedUsersParams) ([]Message, error)
+	// Single round-trip file discovery for account deletion.
+	// One index-backed branch per side (never OR): the sent branch rides
+	// idx_messages_files_sender_id, the received branch rides
+	// idx_messages_files_recipient_id. The service advances each keyset cursor
+	// independently (side column) and merges in memory (dedup by file_id).
+	// The old single-query OR could not use an index and scanned while holding
+	// chat row locks; disjoint sides (no self messages) make UNION ALL exact.
+	// No outer ORDER BY: the service advances each side's cursor from the
+	// side column, so row order across sides is irrelevant.
+	GetMessagesWithFilesForUserUnion(ctx context.Context, arg GetMessagesWithFilesForUserUnionParams) ([]GetMessagesWithFilesForUserUnionRow, error)
 	GetPendingMessagesForRecipient(ctx context.Context, arg GetPendingMessagesForRecipientParams) ([]Message, error)
 	GetPendingSenderSyncMessages(ctx context.Context, arg GetPendingSenderSyncMessagesParams) ([]Message, error)
 	GetPendingSyncActions(ctx context.Context, arg GetPendingSyncActionsParams) ([]MessageSyncAction, error)
@@ -87,6 +97,8 @@ type Querier interface {
 	// Messaging Eligibility Checks
 	// ===========================================
 	IsChatParticipant(ctx context.Context, arg IsChatParticipantParams) (bool, error)
+	// Acquires exclusive row-level locks on all chats involving the user to prevent concurrent message writes during account deletion
+	LockUserChatsForUpdate(ctx context.Context, participant1ID uuid.UUID) ([]uuid.UUID, error)
 	MarkMessageDeletedByRecipient(ctx context.Context, arg MarkMessageDeletedByRecipientParams) error
 	MarkMessageDeletedBySender(ctx context.Context, arg MarkMessageDeletedBySenderParams) error
 	MarkMessageDeliveredToRecipient(ctx context.Context, id uuid.UUID) error

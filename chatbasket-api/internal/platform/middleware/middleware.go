@@ -41,12 +41,13 @@ func Register(e *echo.Echo, corsOrigin string) {
 		Timeout: 30 * time.Second,
 		Skipper: func(c *echo.Context) bool {
 			ct := c.Request().Header.Get("Content-Type")
-			// Skip timeout for WebSockets and Connect/gRPC streams
+			// Skip timeout for WebSockets, Connect/gRPC streams, and Account Deletion
 			return c.Request().Header.Get("Upgrade") == "websocket" ||
 				strings.HasPrefix(ct, "application/connect") ||
 				strings.HasPrefix(ct, "application/grpc") ||
 				strings.Contains(c.Path(), "personal_sse") ||
-				strings.Contains(c.Path(), "StreamEvents")
+				strings.Contains(c.Path(), "StreamEvents") ||
+				c.Path() == "/api/common/settings/account/delete/personal"
 		},
 	}))
 

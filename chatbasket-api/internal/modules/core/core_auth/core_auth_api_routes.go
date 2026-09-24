@@ -12,6 +12,7 @@ import (
 	rpc_core_authv1connect "chatbasket-api/gen/proto/core/core_auth/rpc_core_authv1connect"
 
 	"github.com/labstack/echo/v5"
+	echo_middleware "github.com/labstack/echo/v5/middleware"
 )
 
 // Register initializes the Auth module dependencies and registers its routes.
@@ -63,6 +64,9 @@ func Register(group *echo.Group, authService *AuthService, personalSseManager *p
 	settings.POST("/password/confirm", handler.ConfirmPasswordUpdate)
 	settings.POST("/email/request", handler.RequestEmailUpdate)
 	settings.POST("/email/confirm", handler.ConfirmEmailUpdate)
+	settings.POST("/account/delete/personal", handler.DeletePersonalAccount, echo_middleware.ContextTimeoutWithConfig(echo_middleware.ContextTimeoutConfig{
+		Timeout: 10 * time.Minute,
+	}))
 
 	// Connect RPC Routes
 	connectServer := newAuthConnectServer(authService, personalSseManager, qrHub)

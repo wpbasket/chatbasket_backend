@@ -97,6 +97,12 @@ var otpCopies = map[string]otpCopy{
 		Headline: "Email change verification code",
 		Purpose:  "Use this code to confirm the new email address on your ChatBasket account.",
 	},
+	// account_deletion — sent during the in-app account deletion flow.
+	"account_deletion": {
+		Subject:  "Confirm your ChatBasket account deletion",
+		Headline: "Account deletion verification code",
+		Purpose:  "Use this code to permanently delete your ChatBasket account. This action cannot be undone.",
+	},
 }
 
 // buildOTPEmail renders a transactional OTP email and returns its subject,

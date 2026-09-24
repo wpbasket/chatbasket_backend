@@ -28,12 +28,29 @@ WHERE
 -- name: IsUserExists :one
 SELECT EXISTS ( SELECT 1 FROM users WHERE id = $1 );
 
+-- name: LockUserForUpdate :one
+-- Locks the users row for account deletion (field: users.id).
+-- The deleter holds this lock until commit; the messaging eligibility gate
+-- probes the same row with TryLockUserNoWait so new sends fail instantly
+-- instead of slipping a message in mid-deletion.
+SELECT 1 AS locked FROM users WHERE id = $1 FOR UPDATE;
+
+-- name: TryLockUserNoWait :one
+-- Instant deletion probe for the messaging gate (fields: users.id = sender
+-- or recipient). NOWAIT = Postgres returns 55P03 at once if the deleter
+-- holds the row, never waits. Plain SELECTs do not conflict with row locks
+-- (docs 13.3.2), so this explicit probe is required.
+SELECT 1 AS locked FROM users WHERE id = $1 FOR UPDATE NOWAIT;
+
 -- name: CreateAloneUsername :one
 INSERT INTO
     alone_username (id, username)
 VALUES ($1, $2)
 RETURNING
     *;
+
+-- name: DeleteAloneUsername :exec
+DELETE FROM alone_username WHERE username = $1;
 
 -- name: GetActiveAvatar :one
 -- Fetches the id and file_id for the main profile avatar

@@ -156,8 +156,9 @@ func (s *AuthService) GetUserWithSession(ctx context.Context, userID uuid.UUID, 
 // new flow becomes a one-line addition in *both* places, with the compiler
 // catching any drift.
 var allowedUpdateOTPTypes = map[string]struct{}{
-	"password_update": {},
-	"email_update":    {},
+	"password_update":  {},
+	"email_update":     {},
+	"account_deletion": {},
 }
 
 // RequestUpdateOTP sends OTP for update operations (password, email, etc.)
@@ -461,6 +462,155 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 	return &rpc_common_modelv1.StatusOkay{
 		Status:  true,
 		Message: "Email updated successfully",
+	}, nil
+}
+
+// DeletePersonalAccount permanently deletes the authenticated personal user account and all cascading data.
+// Step 2 of two-step account deletion flow (requires valid update_id and OTP).
+//
+// Strictly transactional:
+//   1. Checks rate limit & validates payload.
+//   2. Begins a PostgreSQL transaction (pgx.Tx).
+//   3. Validates OTP and deletes the verification code within tx.
+//   4. Calls RegisterCleanupFilesTx on registered cleanup providers (profile, chat) to discover
+//      avatar and all chat message files in batched loop and register them in pending_uploads within tx.
+//   5. Deletes the auth_user row (triggering PostgreSQL ON DELETE CASCADE across all 17 relational tables).
+//   6. Commits the transaction atomically.
+//   7. Spawns an asynchronous background goroutine to perform Cloudflare R2 deletions and remove entries from pending_uploads.
+func (s *AuthService) DeletePersonalAccount(ctx context.Context, payload *DeletePersonalAccountPayload, userID uuid.UUID) (*rpc_common_modelv1.StatusOkay, error) {
+	// 1. Validate payload
+	if payload == nil || payload.UpdateID == "" || payload.Otp == "" {
+		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "Missing update_id or otp")
+	}
+
+	// 2. Parse update_id
+	updateID, err := kit.StringToUUID(payload.UpdateID)
+	if err != nil {
+		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "Invalid update ID")
+	}
+
+	// 3. Lockout check
+	if err := s.CheckOTPVerifyRateLimit(ctx, userID); err != nil {
+		return nil, err
+	}
+
+	// 4. Start single atomic database transaction
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to begin transaction: "+err.Error())
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.PostgresQueries.WithTx(tx)
+
+	// 5. Get verification code by user ID for "account_deletion"
+	record, err := qtx.GetVerificationCode(ctx, core_auth_store.GetVerificationCodeParams{
+		ID:   userID,
+		Type: "account_deletion",
+	})
+	if err != nil {
+		return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+	}
+
+	// 6. Verify update_id matches
+	if record.UpdateID == nil || *record.UpdateID != updateID {
+		return nil, kit.NewError(http.StatusUnauthorized, "flow_error", "Request session invalid")
+	}
+
+	// 7. Check expiry (3 minutes)
+	if IsExpiredOTP(record.CreatedAt, 3) {
+		_ = qtx.DeleteVerificationCode(ctx, userID)
+		_ = tx.Commit(ctx)
+		return nil, kit.NewError(http.StatusUnauthorized, "otp_expired", "OTP has expired")
+	}
+
+	// 8. Verify OTP
+	match, err := VerifyOTP(payload.Otp, record.CodeHash)
+	if err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify OTP: "+err.Error())
+	}
+	if !match {
+		_ = s.RecordVerifyError(ctx, userID)
+		return nil, kit.NewError(http.StatusUnauthorized, "invalid_otp", "Invalid OTP")
+	}
+
+	// 9. Reset lockout on success
+	if err := s.ResetVerifyErrors(ctx, userID); err != nil {
+		log.Printf("[DeletePersonalAccount] Failed to reset verify errors: %v", err)
+	}
+
+	// 10. Lock users.id FIRST (same door the messaging gate probes with NOWAIT).
+	// Held until commit: any send involving this user fails instantly with
+	// account_deletion_in_progress instead of slipping a message in.
+	if s.profileCleanupProvider != nil {
+		if err := s.profileCleanupProvider.LockUserForDeletionTx(ctx, tx, userID); err != nil {
+			log.Printf("[DeletePersonalAccount] ERROR: LockUserForDeletionTx failed for user %s: %v", userID, err)
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to acquire lock for account deletion: "+err.Error())
+		}
+	}
+
+	// 10b. Acquire exclusive row-level locks on user chats (chat-preview writes).
+	if s.chatCleanupProvider != nil {
+		if err := s.chatCleanupProvider.LockUserChatsTx(ctx, tx, userID); err != nil {
+			log.Printf("[DeletePersonalAccount] ERROR: Chat cleanup provider LockUserChatsTx failed for user %s: %v", userID, err)
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to acquire lock for account deletion: "+err.Error())
+		}
+	}
+
+	// 11. Discover and register all external files (avatar + chat messages in batch keyset loop) into pending_uploads within tx
+	var avatarFileIDs []string
+	if s.profileCleanupProvider != nil {
+		aIDs, err := s.profileCleanupProvider.RegisterProfileCleanupTx(ctx, tx, userID)
+		if err != nil {
+			log.Printf("[DeletePersonalAccount] ERROR: Profile cleanup provider RegisterProfileCleanupTx failed for user %s: %v", userID, err)
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to perform profile cleanup: "+err.Error())
+		}
+		avatarFileIDs = aIDs
+	}
+
+	var chatFileIDs []string
+	if s.chatCleanupProvider != nil {
+		cIDs, err := s.chatCleanupProvider.RegisterChatCleanupFilesTx(ctx, tx, userID)
+		if err != nil {
+			log.Printf("[DeletePersonalAccount] ERROR: Chat cleanup provider RegisterChatCleanupFilesTx failed for user %s: %v", userID, err)
+			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to register chat files for cleanup: "+err.Error())
+		}
+		chatFileIDs = cIDs
+	}
+
+	log.Printf("[DeletePersonalAccount] Checked profile picture (avatars registered: %d) and messages table (chat files registered in loop: %d, none left behind)", len(avatarFileIDs), len(chatFileIDs))
+
+	// 12. Delete user from auth_users (Postgres ON DELETE CASCADE purges all 17 interconnected tables including verification_codes)
+	if err := qtx.DeleteAuthUser(ctx, userID); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete account: "+err.Error())
+	}
+
+	// 13. Commit transaction atomically
+	if err := tx.Commit(ctx); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to commit account deletion: "+err.Error())
+	}
+
+	log.Printf("[DeletePersonalAccount] Successfully deleted user account %s in transaction (avatar files: %d, chat files: %d)", userID, len(avatarFileIDs), len(chatFileIDs))
+
+	// 15. Post-commit: Execute Cloudflare R2 deletions asynchronously in the background
+	if len(avatarFileIDs) > 0 && s.profileCleanupProvider != nil {
+		go func(files []string, provider personalProfileAuthCleanupProvider) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			provider.DeleteAvatarR2FilesAsync(bgCtx, files)
+		}(avatarFileIDs, s.profileCleanupProvider)
+	}
+
+	if len(chatFileIDs) > 0 && s.chatCleanupProvider != nil {
+		go func(files []string, provider personalChatAuthCleanupProvider) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			provider.DeleteChatR2FilesAsync(bgCtx, files)
+		}(chatFileIDs, s.chatCleanupProvider)
+	}
+
+	return &rpc_common_modelv1.StatusOkay{
+		Status:  true,
+		Message: "Account deleted successfully",
 	}, nil
 }
 

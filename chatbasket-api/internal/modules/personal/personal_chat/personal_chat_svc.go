@@ -42,11 +42,13 @@ type pendingUploadsChatProvider interface {
 	LookupTx(ctx context.Context, tx pgx.Tx, fileID string) (pending_uploads.PendingUpload, error)
 	RemoveTx(ctx context.Context, tx pgx.Tx, fileID string) error
 	RegisterTx(ctx context.Context, tx pgx.Tx, fileID, bucket, r2Key string, expiresAt time.Time) error
+	RegisterBatchTx(ctx context.Context, tx pgx.Tx, fileIDs, buckets, r2Keys []string, expiresAt time.Time) error
 }
 
 type personalProfilePersonalChatProvider interface {
 	GetContactableProfilesForViewer(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
+	IsUserLockedForDeletion(ctx context.Context, userID uuid.UUID) (bool, error)
 	GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, int32, error)
 	GetActiveSessionKeysForUser(ctx context.Context, userID uuid.UUID) ([]string, error)
 	IsUserAdminBlocked(ctx context.Context, userID uuid.UUID) (bool, error)
@@ -104,6 +106,24 @@ func (s *chatService) accountClient(accountName string) *clients.R2Client {
 func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID kit.UserId, recipientID uuid.UUID) (string, *string, int32, error) {
 	if senderID.UuidUserId == recipientID {
 		return "", nil, 0, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot check eligibility with yourself")
+	}
+	// Strict account-deletion block: the deleter holds users.id FOR UPDATE
+	// until commit; probe both sides with NOWAIT so a send involving a
+	// deleting user fails instantly (never waits, never slips in).
+	// Plain SELECTs do not conflict with row locks, so this explicit probe
+	// is required — GetUserCoreProfile below would pass straight through.
+	if locked, err := s.ProfileProvider.IsUserLockedForDeletion(ctx, senderID.UuidUserId); err != nil {
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to check sender deletion status: "+err.Error())
+	} else if locked {
+		return "", nil, 0, kit.NewError(http.StatusForbidden, "messaging_not_allowed", "This account is not available for messaging.")
+	}
+	if locked, err := s.ProfileProvider.IsUserLockedForDeletion(ctx, recipientID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return EligibilityRecipientNotFound, nil, 0, nil
+		}
+		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to check recipient deletion status: "+err.Error())
+	} else if locked {
+		return "", nil, 0, kit.NewError(http.StatusForbidden, "messaging_not_allowed", "This account is not available for messaging.")
 	}
 	coreProfile, err := s.ProfileProvider.GetUserCoreProfile(ctx, recipientID)
 	if err != nil {
@@ -2066,4 +2086,117 @@ func (s *chatService) CleanupDatabaseOnly(ctx context.Context) error {
 
 	log.Printf("[DatabaseCleanupJob] Cleanup sweep completed (elapsed: %v)", time.Since(jobStart))
 	return nil
+}
+
+// LockUserChatsTx satisfies core_auth.personalChatAuthCleanupProvider.
+// Acquires exclusive row-level locks on all chats involving the user to prevent concurrent message writes during account deletion.
+func (s *chatService) LockUserChatsTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
+	qtx := s.PostgresQueries.WithTx(tx)
+	_, err := qtx.LockUserChatsForUpdate(ctx, userID)
+	return err
+}
+
+// RegisterChatCleanupFilesTx satisfies core_auth.personalChatAuthCleanupProvider.
+// Single round-trip UNION ALL scan per page: one index-backed branch per
+// side (sent rides idx_messages_files_sender_id, received rides
+// idx_messages_files_recipient_id — never OR, which could not use an
+// index and scanned while holding chat row locks). The side column drives
+// independent keyset cursors; rows merge in memory (dedup by file_id).
+// Rows are born-expired in pending_uploads (expires_at = now()) so the
+// background sweeper retries them if the async R2 goroutine dies.
+func (s *chatService) RegisterChatCleanupFilesTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) ([]string, error) {
+	qtx := s.PostgresQueries.WithTx(tx)
+	const batchSize = 100
+	seen := make(map[string]struct{})
+	var fileIDs []string
+	lastSentID := uuid.Nil
+	lastReceivedID := uuid.Nil
+
+	for {
+		batch, err := qtx.GetMessagesWithFilesForUserUnion(ctx, personal_chat_store.GetMessagesWithFilesForUserUnionParams{
+			UserID:         userID,
+			LastSentID:     lastSentID,
+			LastReceivedID: lastReceivedID,
+			Limit:          int32(batchSize),
+		})
+		if err != nil {
+			log.Printf("[Chat RegisterChatCleanupFilesTx] ERROR: Failed to fetch messages with files: %v", err)
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		var batchFileIDs []string
+		var batchBuckets []string
+		var batchKeys []string
+
+		for i := range batch {
+			row := &batch[i]
+			// Advance the cursor of whichever side produced this row.
+			if row.Side == "sent" {
+				lastSentID = row.ID
+			} else {
+				lastReceivedID = row.ID
+			}
+			if row.FileID == nil || *row.FileID == "" {
+				continue
+			}
+			fileID := *row.FileID
+			if _, exists := seen[fileID]; exists {
+				continue
+			}
+			seen[fileID] = struct{}{}
+
+			_, objectKey := clients.ParseFilePrefix(fileID)
+			client := s.R2Pool.GetClient(fileID)
+			bucket := client.ChatBucket()
+
+			batchFileIDs = append(batchFileIDs, fileID)
+			batchBuckets = append(batchBuckets, bucket)
+			batchKeys = append(batchKeys, objectKey)
+			fileIDs = append(fileIDs, fileID)
+		}
+
+		if len(batchFileIDs) > 0 {
+			if err := s.PendingUploads.RegisterBatchTx(ctx, tx, batchFileIDs, batchBuckets, batchKeys, time.Now().UTC()); err != nil {
+				log.Printf("[Chat RegisterChatCleanupFilesTx] ERROR: Failed to batch register %d files in pending_uploads: %v", len(batchFileIDs), err)
+				return nil, err
+			}
+		}
+
+		// Each branch returns up to batchSize rows: a side returning
+		// fewer than batchSize has no more pages; stop when both are done.
+		sentCount, receivedCount := 0, 0
+		for i := range batch {
+			if batch[i].Side == "sent" {
+				sentCount++
+			} else {
+				receivedCount++
+			}
+		}
+		if sentCount < batchSize && receivedCount < batchSize {
+			break
+		}
+	}
+
+	return fileIDs, nil
+}
+
+// DeleteChatR2FilesAsync satisfies core_auth.personalChatAuthCleanupProvider.
+// Performs asynchronous Cloudflare R2 deletions for chat files and removes entries from pending_uploads on success.
+func (s *chatService) DeleteChatR2FilesAsync(ctx context.Context, chatFileIDs []string) {
+	if len(chatFileIDs) == 0 {
+		return
+	}
+	r2Errors := kit.DeleteFilesBatch(ctx, chatFileIDs, s.DeleteChatFile)
+	for i, fileID := range chatFileIDs {
+		if r2Errors[i] == nil {
+			if remErr := s.PendingUploads.Remove(ctx, fileID); remErr != nil {
+				log.Printf("[Chat DeleteChatR2FilesAsync] WARNING: Failed to remove file %s from pending_uploads: %v", fileID, remErr)
+			}
+		} else {
+			log.Printf("[Chat DeleteChatR2FilesAsync] WARNING: Async file %s R2 delete failed: %v (sweeper will retry)", fileID, r2Errors[i])
+		}
+	}
 }

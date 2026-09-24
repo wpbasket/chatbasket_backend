@@ -122,6 +122,9 @@ func (m *mockPersonalProfileProvider) GetContactableProfilesForViewer(ctx contex
 func (m *mockPersonalProfileProvider) GetUserCoreProfile(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 	return nil, nil
 }
+func (m *mockPersonalProfileProvider) IsUserLockedForDeletion(ctx context.Context, userID uuid.UUID) (bool, error) {
+	return false, nil
+}
 func (m *mockPersonalProfileProvider) GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, int32, error) {
 	return nil, 0, nil
 }

@@ -244,6 +244,25 @@ func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UU
 	}, nil
 }
 
+// IsUserLockedForDeletion probes whether users.id is currently locked by an
+// account-deletion transaction. Uses SELECT ... FOR UPDATE NOWAIT on a
+// pool-bound (autocommit) connection, so the probe holds its own lock only
+// for the statement duration: (true, nil) instantly when the deleter holds
+// the row (Postgres 55P03 lock_not_available), (false, nil) when free.
+// pgx.ErrNoRows (user already deleted) is returned as-is so the caller
+// falls through to its normal recipient-not-found path; any other error is
+// returned for normal handling.
+func (ps *profileService) IsUserLockedForDeletion(ctx context.Context, userID uuid.UUID) (bool, error) {
+	_, err := ps.PostgresQueries.TryLockUserNoWait(ctx, userID)
+	if err == nil {
+		return false, nil
+	}
+	if pgErr := kit.GetPostgresError(err); pgErr != nil && pgErr.PgError != nil && pgErr.PgError.Code == "55P03" {
+		return true, nil
+	}
+	return false, err
+}
+
 // GetContactableProfilesForViewer fetches profiles for contact enrichment with
 // privacy filtering. The returned map only contains users that pass every
 // privacy-exclusion check (not admin-blocked, public/personal profile type,

@@ -21,7 +21,15 @@ type Querier interface {
 	// ===========================================
 	// Registers a new presigned upload in the tracking table.
 	// created_at/updated_at are auto-populated by the set_timestamps() trigger.
+	// ON CONFLICT DO NOTHING: account deletion re-registers already-tracked files
+	// (e.g. unfinished presigns) — those rows are exactly what the async R2
+	// cleanup + sweeper want, so a duplicate must not abort the deletion tx.
 	InsertPendingUpload(ctx context.Context, arg InsertPendingUploadParams) error
+	// ON CONFLICT DO NOTHING: see InsertPendingUpload — deletion re-registers
+	// already-tracked files in batches; duplicates must be skipped, not fail the tx.
+	// Deletion rows are intentionally born-expired (expires_at = now()) so the
+	// background sweeper retries them if the async R2 goroutine dies.
+	InsertPendingUploadsBatch(ctx context.Context, arg InsertPendingUploadsBatchParams) error
 }
 
 var _ Querier = (*Queries)(nil)

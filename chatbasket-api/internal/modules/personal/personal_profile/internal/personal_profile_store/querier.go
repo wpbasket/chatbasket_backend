@@ -20,6 +20,7 @@ type Querier interface {
 	// Inserts a new user and returns all columns
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserBlock(ctx context.Context, arg CreateUserBlockParams) error
+	DeleteAloneUsername(ctx context.Context, username string) error
 	// Deletes the main profile avatar for a user (called from ConfirmAvatarUpload tx when replacing)
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
 	DeleteUserBlock(ctx context.Context, arg DeleteUserBlockParams) (int64, error)
@@ -85,6 +86,16 @@ type Querier interface {
 	// Returns true if the user is admin-blocked
 	IsUserAdminBlocked(ctx context.Context, id uuid.UUID) (bool, error)
 	IsUserExists(ctx context.Context, id uuid.UUID) (bool, error)
+	// Locks the users row for account deletion (field: users.id).
+	// The deleter holds this lock until commit; the messaging eligibility gate
+	// probes the same row with TryLockUserNoWait so new sends fail instantly
+	// instead of slipping a message in mid-deletion.
+	LockUserForUpdate(ctx context.Context, id uuid.UUID) (int32, error)
+	// Instant deletion probe for the messaging gate (fields: users.id = sender
+	// or recipient). NOWAIT = Postgres returns 55P03 at once if the deleter
+	// holds the row, never waits. Plain SELECTs do not conflict with row locks
+	// (docs 13.3.2), so this explicit probe is required.
+	TryLockUserNoWait(ctx context.Context, id uuid.UUID) (int32, error)
 	// Updates only the file_id for the main profile avatar (token columns unused per spec §3.C).
 	UpdateAvatarFileID(ctx context.Context, arg UpdateAvatarFileIDParams) error
 	// Updates user profile fields

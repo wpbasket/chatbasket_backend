@@ -93,6 +93,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 		pendingUploadsSvc, r.R2Pool,
 	)
 	personal_profile.Register(personalGroup, profileService)
+	authService.RegisterProfileCleanupProvider(profileService)
 
 	// 2.3 Contact Module
 	contactService := personal_contact.NewContactService(globalService, r.Pool, profileService, r.Config.Security.PersonalUsernameKey, r.Config.Security.PersonalContactKey)
@@ -106,6 +107,7 @@ func (r *Router) RegisterModuleRoutes(apiGroup *echo.Group) {
 	)
 	personal_chat.Register(personalGroup, chatService, personalSseManager)
 	contactService.RegisterChatCleanupProvider(chatService)
+	authService.RegisterChatCleanupProvider(chatService)
 
 	// 2.5 Settings Module
 	settingService := personal_setting.NewSettingService(authService)

@@ -3,7 +3,6 @@ package core_auth
 import (
 	"chatbasket-api/internal/platform/kit"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -48,36 +47,9 @@ func (h *authHandler) Logout(c *echo.Context) error {
 		}
 	}
 
-	// For web, clear cookies
+	// For web, clear cookies (same attributes as the login set-cookie path).
 	if c.Get("platform").(string) == "web" {
-		// Determine cookie security based on host (targeting local frontend at 8081)
-		origin := c.Request().Header.Get("Origin")
-		isLocal := strings.Contains(origin, "localhost:8081")
-		cookieDomain := "chatbasket.live"
-		cookieSecure := true
-		if isLocal {
-			cookieDomain = ""
-			cookieSecure = false
-		}
-
-		c.SetCookie(&http.Cookie{
-			Name:     "sessionId",
-			Value:    "",
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   cookieSecure,
-			Domain:   cookieDomain,
-			MaxAge:   -1,
-		})
-		c.SetCookie(&http.Cookie{
-			Name:     "userId",
-			Value:    "",
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   cookieSecure,
-			Domain:   cookieDomain,
-			MaxAge:   -1,
-		})
+		clearAuthCookies(c, c.Request().Header.Get("Origin"))
 	}
 
 	return c.JSON(http.StatusOK, res)
@@ -190,5 +162,37 @@ func (h *authHandler) ConfirmEmailUpdate(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
+	return c.JSON(http.StatusOK, res)
+}
+
+// DeletePersonalAccount handles personal account deletion with OTP
+func (h *authHandler) DeletePersonalAccount(c *echo.Context) error {
+	var payload DeletePersonalAccountPayload
+	if err := c.Bind(&payload); err != nil {
+		return kit.NewError(400, "bad_request", "Invalid request payload")
+	}
+
+	// Get userId from context (set by auth middleware)
+	uuidUserId, okUUID := c.Get("uuidUserId").(uuid.UUID)
+	if !okUUID {
+		return ErrInvalidUserContext
+	}
+
+	// Call service
+	res, err := h.Service.DeletePersonalAccount(c.Request().Context(), &payload, uuidUserId)
+	if err != nil {
+		return err
+	}
+
+	// Sever all active SSE connections across cluster nodes
+	if h.personalSseManager != nil {
+		h.personalSseManager.UnregisterUserConnections(uuidUserId)
+	}
+
+	// Clear cookies for web platform (mirrors the set-cookie attributes).
+	if platform, ok := c.Get("platform").(string); ok && platform == "web" {
+		clearAuthCookies(c, c.Request().Header.Get("Origin"))
+	}
+
 	return c.JSON(http.StatusOK, res)
 }

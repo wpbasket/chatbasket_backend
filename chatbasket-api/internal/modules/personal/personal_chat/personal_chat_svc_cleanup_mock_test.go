@@ -36,6 +36,9 @@ func (m *mockPendingUploadsChat) RemoveTx(ctx context.Context, tx pgx.Tx, fileID
 func (m *mockPendingUploadsChat) RegisterTx(ctx context.Context, tx pgx.Tx, fileID, bucket, r2Key string, expiresAt time.Time) error {
 	return nil
 }
+func (m *mockPendingUploadsChat) RegisterBatchTx(ctx context.Context, tx pgx.Tx, fileIDs, buckets, r2Keys []string, expiresAt time.Time) error {
+	return nil
+}
 
 func setupChatServiceMock(t *testing.T) (*chatService, pgxmock.PgxPoolIface) {
 	mock, err := pgxmock.NewPool()

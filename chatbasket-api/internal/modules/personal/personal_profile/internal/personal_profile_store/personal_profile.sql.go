@@ -157,6 +157,15 @@ func (q *Queries) CreateUserBlock(ctx context.Context, arg CreateUserBlockParams
 	return err
 }
 
+const deleteAloneUsername = `-- name: DeleteAloneUsername :exec
+DELETE FROM alone_username WHERE username = $1
+`
+
+func (q *Queries) DeleteAloneUsername(ctx context.Context, username string) error {
+	_, err := q.db.Exec(ctx, deleteAloneUsername, username)
+	return err
+}
+
 const deleteAvatar = `-- name: DeleteAvatar :exec
 DELETE FROM avatars WHERE user_id = $1 AND avatar_type = 'profile'
 `
@@ -801,6 +810,36 @@ func (q *Queries) IsUserExists(ctx context.Context, id uuid.UUID) (bool, error) 
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const lockUserForUpdate = `-- name: LockUserForUpdate :one
+SELECT 1 AS locked FROM users WHERE id = $1 FOR UPDATE
+`
+
+// Locks the users row for account deletion (field: users.id).
+// The deleter holds this lock until commit; the messaging eligibility gate
+// probes the same row with TryLockUserNoWait so new sends fail instantly
+// instead of slipping a message in mid-deletion.
+func (q *Queries) LockUserForUpdate(ctx context.Context, id uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, lockUserForUpdate, id)
+	var locked int32
+	err := row.Scan(&locked)
+	return locked, err
+}
+
+const tryLockUserNoWait = `-- name: TryLockUserNoWait :one
+SELECT 1 AS locked FROM users WHERE id = $1 FOR UPDATE NOWAIT
+`
+
+// Instant deletion probe for the messaging gate (fields: users.id = sender
+// or recipient). NOWAIT = Postgres returns 55P03 at once if the deleter
+// holds the row, never waits. Plain SELECTs do not conflict with row locks
+// (docs 13.3.2), so this explicit probe is required.
+func (q *Queries) TryLockUserNoWait(ctx context.Context, id uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, tryLockUserNoWait, id)
+	var locked int32
+	err := row.Scan(&locked)
+	return locked, err
 }
 
 const updateAvatarFileID = `-- name: UpdateAvatarFileID :exec

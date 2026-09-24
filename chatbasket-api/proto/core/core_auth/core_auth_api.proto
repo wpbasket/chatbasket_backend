@@ -82,6 +82,11 @@ message ConfirmEmailUpdateRequest {
   string otp = 2;
 }
 
+message DeletePersonalAccountRequest {
+  string updateId = 1;
+  string otp = 2;
+}
+
 message QRInitiateRequest {}
 
 message QRInitiateResponse {
@@ -117,6 +122,7 @@ service AuthService {
   rpc ConfirmPasswordUpdate(ConfirmPasswordUpdateRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc RequestEmailUpdate(RequestEmailUpdateRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc ConfirmEmailUpdate(ConfirmEmailUpdateRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc DeletePersonalAccount(DeletePersonalAccountRequest) returns (rpc_common_model.v1.StatusOkay);
 
   // QR Login endpoints
   rpc QRInitiate(QRInitiateRequest) returns (QRInitiateResponse);

@@ -15,27 +15,51 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// AuthService handles the business logic for the Auth module.
+// personalProfileAuthCleanupProvider defines transactional profile cleanup (username, avatar registration) and async R2 deletion.
+type personalProfileAuthCleanupProvider interface {
+	RegisterProfileCleanupTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) ([]string, error)
+	DeleteAvatarR2FilesAsync(ctx context.Context, avatarFileIDs []string)
+	LockUserForDeletionTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error
+}
+
+// personalChatAuthCleanupProvider defines chat locking, message file registration, and async R2 deletion.
+type personalChatAuthCleanupProvider interface {
+	LockUserChatsTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error
+	RegisterChatCleanupFilesTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) ([]string, error)
+	DeleteChatR2FilesAsync(ctx context.Context, chatFileIDs []string)
+}
 
 // AuthService handles the business logic for the Auth module.
 type AuthService struct {
-	GlobalService       *services.GlobalService
-	PostgresQuerier     core_auth_store.Querier  // For regular queries (interface)
-	PostgresQueries     *core_auth_store.Queries // For transactions (concrete type with WithTx)
-	Pool                *pgxpool.Pool            // For raw DB execution (like NOTIFY)
-	AuthSecret []byte
+	GlobalService          *services.GlobalService
+	PostgresQuerier        core_auth_store.Querier  // For regular queries (interface)
+	PostgresQueries        *core_auth_store.Queries // For transactions (concrete type with WithTx)
+	Pool                   *pgxpool.Pool            // For raw DB execution (like NOTIFY)
+	AuthSecret             []byte
+	profileCleanupProvider personalProfileAuthCleanupProvider
+	chatCleanupProvider    personalChatAuthCleanupProvider
 }
 
 // NewAuthService creates a new AuthService instance.
 func NewAuthService(globalService *services.GlobalService, pool *pgxpool.Pool, authSecret []byte) *AuthService {
 	store := core_auth_store.New(pool)
 	return &AuthService{
-		GlobalService:       globalService,
-		PostgresQuerier:     store,
-		PostgresQueries:     store,
-		Pool:                pool,
-		AuthSecret: authSecret,
+		GlobalService:   globalService,
+		PostgresQuerier: store,
+		PostgresQueries: store,
+		Pool:            pool,
+		AuthSecret:      authSecret,
 	}
+}
+
+// RegisterProfileCleanupProvider registers the profile cleanup provider for personal account deletion.
+func (s *AuthService) RegisterProfileCleanupProvider(provider personalProfileAuthCleanupProvider) {
+	s.profileCleanupProvider = provider
+}
+
+// RegisterChatCleanupProvider registers the chat cleanup provider for personal account deletion.
+func (s *AuthService) RegisterChatCleanupProvider(provider personalChatAuthCleanupProvider) {
+	s.chatCleanupProvider = provider
 }
 
 

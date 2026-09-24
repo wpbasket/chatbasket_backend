@@ -72,35 +72,7 @@ func (s *authConnectServer) setWebCookies(header http.Header, origin string, use
 }
 
 func (s *authConnectServer) clearWebCookies(header http.Header, origin string) {
-	isLocal := strings.Contains(origin, "localhost:8081")
-	cookieDomain := "chatbasket.live"
-	cookieSecure := true
-	if isLocal {
-		cookieDomain = ""
-		cookieSecure = false
-	}
-
-	sessionCookie := &http.Cookie{
-		Name:     "sessionId",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   cookieSecure,
-		Domain:   cookieDomain,
-		MaxAge:   -1,
-	}
-	userCookie := &http.Cookie{
-		Name:     "userId",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   cookieSecure,
-		Domain:   cookieDomain,
-		MaxAge:   -1,
-	}
-
-	header.Add("Set-Cookie", sessionCookie.String())
-	header.Add("Set-Cookie", userCookie.String())
+	clearConnectAuthCookies(header, origin)
 }
 
 
@@ -413,6 +385,42 @@ func (s *authConnectServer) ConfirmEmailUpdate(ctx context.Context, req *connect
 	}
 
 	return connect.NewResponse(res), nil
+}
+
+func (s *authConnectServer) DeletePersonalAccount(ctx context.Context, req *connect.Request[rpc_core_authv1.DeletePersonalAccountRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
+	userID, err := kit.GetConnectRpcUserID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(ErrInvalidUserContext)
+	}
+	platform, err := kit.GetConnectRpcPlatform(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	payload := &DeletePersonalAccountPayload{
+		UpdateID: req.Msg.UpdateId,
+		Otp:      req.Msg.Otp,
+	}
+
+	res, err := s.authService.DeletePersonalAccount(ctx, payload, userID.UuidUserId)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
+	// Sever all active SSE connections across cluster nodes
+	if s.personalSseManager != nil {
+		s.personalSseManager.UnregisterUserConnections(userID.UuidUserId)
+	}
+
+	response := connect.NewResponse(res)
+
+	// Clear cookies for web platform
+	if platform == "web" {
+		origin := req.Header().Get("Origin")
+		s.clearWebCookies(response.Header(), origin)
+	}
+
+	return response, nil
 }
 
 func (s *authConnectServer) QRInitiate(ctx context.Context, req *connect.Request[rpc_core_authv1.QRInitiateRequest]) (*connect.Response[rpc_core_authv1.QRInitiateResponse], error) {

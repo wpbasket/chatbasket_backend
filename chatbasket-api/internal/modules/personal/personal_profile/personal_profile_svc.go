@@ -190,6 +190,11 @@ func (ps *profileService) UpdateUserProfile(ctx context.Context, payload *update
 // unique prefixed file ID, registers the upload in pending_uploads with a
 // 2-hour TTL, and returns a presigned R2 PUT URL.
 func (ps *profileService) PresignAvatarUpload(ctx context.Context, userId kit.UserId) (*rpc_personal_profilev1.PresignAvatarResponse, error) {
+	if locked, err := ps.IsUserLockedForDeletion(ctx, userId.UuidUserId); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to check account deletion status: "+err.Error())
+	} else if locked {
+		return nil, kit.NewError(http.StatusForbidden, "account_deletion_in_progress", "Account deletion in progress")
+	}
 	accountName := ps.R2Pool.NextProfileAccount()
 	client := ps.R2Pool.GetClientByAccount(accountName)
 	objectID := uuid.New().String()
@@ -227,6 +232,11 @@ func (ps *profileService) PresignAvatarUpload(ctx context.Context, userId kit.Us
 //   - Fast path: immediate inline cleanup without blocking the DB transaction.
 //   - Recovery path: no orphans created if R2 is down; background sweeper automatically cleans up later.
 func (ps *profileService) ConfirmAvatarUpload(ctx context.Context, userId kit.UserId, fileID string) (*rpc_common_modelv1.StatusOkay, error) {
+	if locked, err := ps.IsUserLockedForDeletion(ctx, userId.UuidUserId); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to check account deletion status: "+err.Error())
+	} else if locked {
+		return nil, kit.NewError(http.StatusForbidden, "account_deletion_in_progress", "Account deletion in progress")
+	}
 	// 1. Tx: verify pending, register old avatar in pending_uploads, delete old avatar, insert new avatar, delete new avatar from pending_uploads
 	tx, err := ps.Pool.Begin(ctx)
 	if err != nil {
@@ -309,6 +319,11 @@ func (ps *profileService) ConfirmAvatarUpload(ctx context.Context, userId kit.Us
 //   3. On success: remove from pending_uploads.
 //   4. Background sweeper (CleanupExpiredPendingUploads) will clean it up if R2 fails.
 func (ps *profileService) RemoveUserProfilePicture(ctx context.Context, userId kit.UserId) (*rpc_common_modelv1.StatusOkay, error) {
+	if locked, err := ps.IsUserLockedForDeletion(ctx, userId.UuidUserId); err != nil {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to check account deletion status: "+err.Error())
+	} else if locked {
+		return nil, kit.NewError(http.StatusForbidden, "account_deletion_in_progress", "Account deletion in progress")
+	}
 	// 1. Tx: fetch file_id, register in pending_uploads, delete row
 	tx, err := ps.Pool.Begin(ctx)
 	if err != nil {
@@ -465,6 +480,78 @@ func (ps *profileService) IsEitherBlocked(ctx context.Context, user1ID, user2ID 
 		BlockedUserID: user2ID,
 	})
 	return status, err
+}
+
+// LockUserForDeletionTx satisfies core_auth.personalProfileAuthCleanupProvider.
+// Locks users.id FOR UPDATE so the messaging eligibility gate (NOWAIT probe
+// on the same row) instantly rejects new sends involving this user.
+func (ps *profileService) LockUserForDeletionTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
+	_, err := ps.PostgresQueries.WithTx(tx).LockUserForUpdate(ctx, userID)
+	return err
+}
+
+// RegisterProfileCleanupTx satisfies core_auth.personalProfileAuthCleanupProvider.
+// 1. Fetches user profile to decrypt username and deletes the entry from alone_username within the transaction.
+// 2. Registers the avatar file_id into pending_uploads within the transaction.
+func (ps *profileService) RegisterProfileCleanupTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) ([]string, error) {
+	qtx := ps.PostgresQueries.WithTx(tx)
+
+	profile, err := qtx.GetUserProfile(ctx, userID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// 1. Decrypt username and delete from alone_username within the transaction.
+	// alone_username has no FK cascade and username is UNIQUE: a swallowed
+	// failure here permanently reserves the username while the account is
+	// gone, so any failure aborts the whole deletion tx for a clean retry.
+	if profile.B64CipherChacha20poly1305Username != "" {
+		plainUsername, err := DecryptUsername(profile.B64CipherChacha20poly1305Username, ps.PersonalUsernameKey)
+		if err != nil {
+			log.Printf("[Profile RegisterProfileCleanupTx] ERROR: Failed to decrypt username for user %s: %v", userID, err)
+			return nil, err
+		}
+		if plainUsername != "" {
+			if delErr := qtx.DeleteAloneUsername(ctx, plainUsername); delErr != nil {
+				log.Printf("[Profile RegisterProfileCleanupTx] ERROR: Failed to delete alone_username for user %s: %v", userID, delErr)
+				return nil, delErr
+			}
+		}
+	}
+
+	// 2. Register avatar in pending_uploads if present
+	if profile.FileID == nil || *profile.FileID == "" {
+		return nil, nil
+	}
+	fileID := *profile.FileID
+
+	_, objectKey := clients.ParseFilePrefix(fileID)
+	client := ps.R2Pool.GetClient(fileID)
+	bucket := client.ProfileBucket()
+
+	if err := ps.PendingUploads.RegisterTx(ctx, tx, fileID, bucket, objectKey, time.Now().UTC()); err != nil {
+		log.Printf("[Profile RegisterProfileCleanupTx] ERROR: Failed to register avatar %s in pending_uploads: %v", fileID, err)
+		return nil, err
+	}
+
+	return []string{fileID}, nil
+}
+
+// DeleteAvatarR2FilesAsync satisfies core_auth.personalProfileAuthCleanupProvider.
+// Performs asynchronous Cloudflare R2 deletions for avatars and removes entries from pending_uploads on success.
+func (ps *profileService) DeleteAvatarR2FilesAsync(ctx context.Context, avatarFileIDs []string) {
+	for _, fileID := range avatarFileIDs {
+		if err := ps.deleteAvatarFromR2(ctx, fileID); err == nil {
+			if remErr := ps.PendingUploads.Remove(ctx, fileID); remErr != nil {
+				log.Printf("[Profile DeleteAvatarR2FilesAsync] WARNING: Failed to remove avatar %s from pending_uploads: %v", fileID, remErr)
+			}
+		} else {
+			log.Printf("[Profile DeleteAvatarR2FilesAsync] WARNING: Async avatar %s R2 delete failed: %v (sweeper will retry)", fileID, err)
+		}
+	}
 }
 
 

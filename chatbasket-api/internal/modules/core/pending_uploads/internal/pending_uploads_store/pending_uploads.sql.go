@@ -99,6 +99,7 @@ const insertPendingUpload = `-- name: InsertPendingUpload :exec
 
 INSERT INTO pending_uploads (file_id, bucket_name, r2_key, expires_at)
 VALUES ($1, $2, $3, $4)
+ON CONFLICT (file_id) DO NOTHING
 `
 
 type InsertPendingUploadParams struct {
@@ -113,12 +114,47 @@ type InsertPendingUploadParams struct {
 // ===========================================
 // Registers a new presigned upload in the tracking table.
 // created_at/updated_at are auto-populated by the set_timestamps() trigger.
+// ON CONFLICT DO NOTHING: account deletion re-registers already-tracked files
+// (e.g. unfinished presigns) — those rows are exactly what the async R2
+// cleanup + sweeper want, so a duplicate must not abort the deletion tx.
 func (q *Queries) InsertPendingUpload(ctx context.Context, arg InsertPendingUploadParams) error {
 	_, err := q.db.Exec(ctx, insertPendingUpload,
 		arg.FileID,
 		arg.BucketName,
 		arg.R2Key,
 		arg.ExpiresAt,
+	)
+	return err
+}
+
+const insertPendingUploadsBatch = `-- name: InsertPendingUploadsBatch :exec
+INSERT INTO pending_uploads (file_id, bucket_name, r2_key, expires_at)
+SELECT file_id, bucket_name, r2_key, expires_at FROM ROWS FROM (
+    unnest($1::text[]),
+    unnest($2::text[]),
+    unnest($3::text[]),
+    unnest($4::timestamptz[])
+) AS t(file_id, bucket_name, r2_key, expires_at)
+ON CONFLICT (file_id) DO NOTHING
+`
+
+type InsertPendingUploadsBatchParams struct {
+	FileIds     []string    `json:"file_ids"`
+	BucketNames []string    `json:"bucket_names"`
+	R2Keys      []string    `json:"r2_keys"`
+	ExpiresAts  []time.Time `json:"expires_ats"`
+}
+
+// ON CONFLICT DO NOTHING: see InsertPendingUpload — deletion re-registers
+// already-tracked files in batches; duplicates must be skipped, not fail the tx.
+// Deletion rows are intentionally born-expired (expires_at = now()) so the
+// background sweeper retries them if the async R2 goroutine dies.
+func (q *Queries) InsertPendingUploadsBatch(ctx context.Context, arg InsertPendingUploadsBatchParams) error {
+	_, err := q.db.Exec(ctx, insertPendingUploadsBatch,
+		arg.FileIds,
+		arg.BucketNames,
+		arg.R2Keys,
+		arg.ExpiresAts,
 	)
 	return err
 }

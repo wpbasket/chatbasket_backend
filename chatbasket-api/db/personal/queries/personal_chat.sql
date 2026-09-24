@@ -775,3 +775,38 @@ WHERE chat_id = $1 AND file_id IS NOT NULL;
 
 -- name: DeleteMessagesByChatID :exec
 DELETE FROM messages WHERE chat_id = $1;
+
+-- name: GetMessagesWithFilesForUserUnion :many
+-- Single round-trip file discovery for account deletion.
+-- One index-backed branch per side (never OR): the sent branch rides
+-- idx_messages_files_sender_id, the received branch rides
+-- idx_messages_files_recipient_id. The service advances each keyset cursor
+-- independently (side column) and merges in memory (dedup by file_id).
+-- The old single-query OR could not use an index and scanned while holding
+-- chat row locks; disjoint sides (no self messages) make UNION ALL exact.
+-- No outer ORDER BY: the service advances each side's cursor from the
+-- side column, so row order across sides is irrelevant.
+SELECT u.id, u.file_id, u.side FROM (
+    (SELECT m1.id, m1.file_id, 'sent'::TEXT AS side
+     FROM messages AS m1
+     WHERE m1.sender_id = sqlc.arg('user_id')
+       AND m1.file_id IS NOT NULL
+       AND m1.id > sqlc.arg('last_sent_id')
+     ORDER BY m1.id ASC
+     LIMIT sqlc.arg('limit'))
+    UNION ALL
+    (SELECT m2.id, m2.file_id, 'received'::TEXT AS side
+     FROM messages AS m2
+     WHERE m2.recipient_id = sqlc.arg('user_id')
+       AND m2.file_id IS NOT NULL
+       AND m2.id > sqlc.arg('last_received_id')
+     ORDER BY m2.id ASC
+     LIMIT sqlc.arg('limit'))
+) AS u;
+
+-- name: LockUserChatsForUpdate :many
+-- Acquires exclusive row-level locks on all chats involving the user to prevent concurrent message writes during account deletion
+SELECT id
+FROM chats
+WHERE participant_1_id = $1 OR participant_2_id = $1
+FOR UPDATE;

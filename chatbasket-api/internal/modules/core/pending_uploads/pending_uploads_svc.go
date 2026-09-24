@@ -64,6 +64,28 @@ func (s *Service) RegisterTx(ctx context.Context, tx pgx.Tx, fileID, bucket, r2K
 	})
 }
 
+// RegisterBatch records multiple pending uploads in a single batch query.
+func (s *Service) RegisterBatch(ctx context.Context, fileIDs, buckets, r2Keys []string, expiresAt time.Time) error {
+	return s.RegisterBatchTx(ctx, nil, fileIDs, buckets, r2Keys, expiresAt)
+}
+
+// RegisterBatchTx records multiple pending uploads in a single batch query within an optional transaction.
+func (s *Service) RegisterBatchTx(ctx context.Context, tx pgx.Tx, fileIDs, buckets, r2Keys []string, expiresAt time.Time) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+	expiresAts := make([]time.Time, len(fileIDs))
+	for i := range expiresAts {
+		expiresAts[i] = expiresAt
+	}
+	return s.storeOrTx(tx).InsertPendingUploadsBatch(ctx, pending_uploads_store.InsertPendingUploadsBatchParams{
+		FileIds:     fileIDs,
+		BucketNames: buckets,
+		R2Keys:      r2Keys,
+		ExpiresAts:  expiresAts,
+	})
+}
+
 // Lookup fetches a pending upload record (confirm step).
 func (s *Service) Lookup(ctx context.Context, fileID string) (PendingUpload, error) {
 	return s.LookupTx(ctx, nil, fileID)

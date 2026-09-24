@@ -22,6 +22,14 @@ type mockProfileProvider struct {
 	getContactableProfilesForViewerFunc func(ctx context.Context, viewerID uuid.UUID, targetIDs []uuid.UUID) (map[uuid.UUID]*personal_profile.ContactProfileView, error)
 	getUserCoreProfileFunc              func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error)
 	isUserAdminBlockedFunc              func(ctx context.Context, userID uuid.UUID) (bool, error)
+	isUserLockedForDeletionFunc         func(ctx context.Context, userID uuid.UUID) (bool, error)
+}
+
+func (m *mockProfileProvider) IsUserLockedForDeletion(ctx context.Context, userID uuid.UUID) (bool, error) {
+	if m.isUserLockedForDeletionFunc != nil {
+		return m.isUserLockedForDeletionFunc(ctx, userID)
+	}
+	return false, nil
 }
 
 func (m *mockProfileProvider) GetE2EEPublicKey(ctx context.Context, targetUserID uuid.UUID) (*string, int32, error) {
