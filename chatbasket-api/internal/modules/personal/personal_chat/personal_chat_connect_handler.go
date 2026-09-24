@@ -909,6 +909,10 @@ func (s *chatConnectServer) UploadHistorySync(ctx context.Context, req *connect.
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
+	if len(req.Msg.PayloadCipher) > 94371840 { // 90MB limit for database cipher sync
+		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusRequestEntityTooLarge, "payload_too_large", "history sync payload exceeds 90MB limit"))
+	}
+
 	requestID, err := uuid.Parse(req.Msg.RequestId)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request_id"))

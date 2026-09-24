@@ -15,42 +15,8 @@ func Register(e *echo.Echo, corsOrigin string) {
 	e.Use(middleware.RequestLogger()) // Most efficient v5 way: uses e.Logger + slog.LogAttrs
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
-	e.Use(middleware.Secure())
-	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
-		Level: 5,
-		Skipper: func(c *echo.Context) bool {
-			// Skip Gzip for WebSocket upgrades, Connect/gRPC RPCs, and SSE streams
-			ct := c.Request().Header.Get("Content-Type")
-			return c.Request().Header.Get("Upgrade") == "websocket" ||
-				strings.HasPrefix(ct, "application/grpc") ||
-				strings.HasPrefix(ct, "application/connect") ||
-				strings.HasPrefix(ct, "application/proto") ||
-				strings.Contains(c.Path(), "personal_sse") ||
-				strings.Contains(c.Path(), "StreamEvents")
-		},
-	}))
-	e.Use(middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
-		LimitBytes: 5242880, // 5MB global limit
-		Skipper: func(c *echo.Context) bool {
-			return c.Path() == "/api/personal/chat/history-sync/upload"
-		},
-	}))
 
-	// Safeguard: Limit logic execution to 30s as per best practices
-	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
-		Timeout: 30 * time.Second,
-		Skipper: func(c *echo.Context) bool {
-			ct := c.Request().Header.Get("Content-Type")
-			// Skip timeout for WebSockets, Connect/gRPC streams, and Account Deletion
-			return c.Request().Header.Get("Upgrade") == "websocket" ||
-				strings.HasPrefix(ct, "application/connect") ||
-				strings.HasPrefix(ct, "application/grpc") ||
-				strings.Contains(c.Path(), "personal_sse") ||
-				strings.Contains(c.Path(), "StreamEvents") ||
-				c.Path() == "/api/common/settings/account/delete/personal"
-		},
-	}))
-
+	// Fast preflight handling: Intercept OPTIONS requests immediately before downstream processing
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{corsOrigin},
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
@@ -62,6 +28,53 @@ func Register(e *echo.Echo, corsOrigin string) {
 
 	// Rate limit: 100 requests per second per IP
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(100)))
+	e.Use(middleware.Secure())
+
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Level: 5,
+		Skipper: func(c *echo.Context) bool {
+			// Skip Gzip for WebSocket upgrades, Connect/gRPC RPCs, and SSE streams
+			if c.Request().Header.Get("Upgrade") == "websocket" {
+				return true
+			}
+			ct := c.Request().Header.Get("Content-Type")
+			p := c.Request().URL.Path
+			return strings.HasPrefix(ct, "application/grpc") ||
+				strings.HasPrefix(ct, "application/connect") ||
+				strings.HasPrefix(ct, "application/proto") ||
+				strings.Contains(p, "personal_sse") ||
+				strings.Contains(p, "StreamEvents")
+		},
+	}))
+
+	e.Use(middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
+		LimitBytes: 5242880, // 5MB global limit
+		Skipper: func(c *echo.Context) bool {
+			p := c.Request().URL.Path
+			return p == "/api/personal/chat/history-sync/upload" ||
+				p == "/api/personal/rpc_personal_chat.v1.ChatService/UploadHistorySync"
+		},
+	}))
+
+	// Safeguard: Limit logic execution to 30s as per best practices
+	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
+		Timeout: 30 * time.Second,
+		Skipper: func(c *echo.Context) bool {
+			// Skip timeout for WebSockets, Connect/gRPC streams, SSE, Account Deletion, and History Sync
+			if c.Request().Header.Get("Upgrade") == "websocket" {
+				return true
+			}
+			ct := c.Request().Header.Get("Content-Type")
+			p := c.Request().URL.Path
+			return strings.HasPrefix(ct, "application/connect") ||
+				strings.HasPrefix(ct, "application/grpc") ||
+				strings.Contains(p, "personal_sse") ||
+				strings.Contains(p, "StreamEvents") ||
+				p == "/api/common/settings/account/delete/personal" ||
+				p == "/api/personal/chat/history-sync/upload" ||
+				p == "/api/personal/chat/history-sync"
+		},
+	}))
 }
 
 // BodyLimit returns a middleware that limits the request body size.

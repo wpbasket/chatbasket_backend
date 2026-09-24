@@ -1,12 +1,15 @@
 package personal_chat
 
 import (
+	"net/http"
+	"time"
+
 	rpc_personal_chatv1connect "chatbasket-api/gen/proto/personal/personal_chat/rpc_personal_chatv1connect"
 	"chatbasket-api/internal/modules/personal/personal_sse"
 	"chatbasket-api/internal/platform/middleware"
 
 	"github.com/labstack/echo/v5"
-	"net/http"
+	echo_middleware "github.com/labstack/echo/v5/middleware"
 )
 
 // Register initializes the Chat module dependencies and registers its routes.
@@ -46,8 +49,17 @@ func Register(personalGroup *echo.Group, chatSvc *chatService, personalSseManage
 
 	// History Sync
 	chat.POST("/history-sync/request", handler.RequestHistorySync)
-	chat.POST("/history-sync/upload", handler.UploadHistorySync, middleware.BodyLimit(94371840)) // 90MB limit for database cipher sync
-	chat.GET("/history-sync", handler.DownloadHistorySync)
+	chat.POST("/history-sync/upload", handler.UploadHistorySync,
+		middleware.BodyLimit(94371840), // 90MB limit for database cipher sync
+		echo_middleware.ContextTimeoutWithConfig(echo_middleware.ContextTimeoutConfig{
+			Timeout: 10 * time.Minute,
+		}),
+	)
+	chat.GET("/history-sync", handler.DownloadHistorySync,
+		echo_middleware.ContextTimeoutWithConfig(echo_middleware.ContextTimeoutConfig{
+			Timeout: 10 * time.Minute,
+		}),
+	)
 	chat.GET("/history-sync/fetch", handler.FetchHistorySync)
 	chat.POST("/history-sync/ack", handler.AcknowledgeHistorySync)
 

@@ -114,6 +114,10 @@ func (h *chatHandler) UploadHistorySync(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid payload")
 	}
 
+	if len(req.PayloadCipher) > 94371840 { // 90MB limit for database cipher sync
+		return kit.NewError(http.StatusRequestEntityTooLarge, "payload_too_large", "history sync payload exceeds 90MB limit")
+	}
+
 	requesterSessionID, err := h.Service.UploadHistorySync(c.Request().Context(), userID.UuidUserId, req.RequestID, req.PayloadCipher)
 	if err != nil {
 		return err
