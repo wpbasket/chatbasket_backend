@@ -13,25 +13,23 @@ import (
 )
 
 const acceptContactRequest = `-- name: AcceptContactRequest :one
-WITH updated AS (
-    UPDATE contact_requests AS cr
-    SET status = 'accepted'
+WITH deleted AS (
+    DELETE FROM contact_requests AS cr
     WHERE cr.requester_user_id = $1
       AND cr.receiver_user_id = $2
       AND cr.status = 'pending'
-    RETURNING cr.id
-), existing AS (
-    SELECT cr.status
-    FROM contact_requests AS cr
-    WHERE cr.requester_user_id = $1
-      AND cr.receiver_user_id = $2
-    LIMIT 1
+    RETURNING cr.requester_user_id, cr.receiver_user_id
+), inserted AS (
+    INSERT INTO user_contacts (owner_user_id, contact_user_id)
+    SELECT d.requester_user_id, d.receiver_user_id
+    FROM deleted d
+    ON CONFLICT (owner_user_id, contact_user_id) DO NOTHING
+    RETURNING owner_user_id
 )
 SELECT
     (CASE
-        WHEN EXISTS (SELECT 1 FROM updated) THEN 'accepted'
-        WHEN (SELECT status FROM existing) IS NULL THEN 'not_found'
-        ELSE 'processed'
+        WHEN EXISTS (SELECT 1 FROM deleted) THEN 'accepted'
+        ELSE 'not_found'
     END)::TEXT AS outcome
 `
 
@@ -53,8 +51,8 @@ WITH deleted AS (
     WHERE requester_user_id = $2 AND receiver_user_id = $3
     RETURNING requester_user_id
 )
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status, nickname)
-SELECT $1, $2, $3, 'pending', $4
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
+SELECT $1, $2, $3, 'pending'
 WHERE EXISTS (SELECT 1 FROM deleted) OR NOT EXISTS (
     SELECT 1 FROM contact_requests 
     WHERE requester_user_id = $2 AND receiver_user_id = $3
@@ -65,16 +63,10 @@ type DeleteAndInsertContactRequestParams struct {
 	ID              uuid.UUID `json:"id"`
 	RequesterUserID uuid.UUID `json:"requester_user_id"`
 	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
-	Nickname        *string   `json:"nickname"`
 }
 
 func (q *Queries) DeleteAndInsertContactRequest(ctx context.Context, arg DeleteAndInsertContactRequestParams) error {
-	_, err := q.db.Exec(ctx, deleteAndInsertContactRequest,
-		arg.ID,
-		arg.RequesterUserID,
-		arg.ReceiverUserID,
-		arg.Nickname,
-	)
+	_, err := q.db.Exec(ctx, deleteAndInsertContactRequest, arg.ID, arg.RequesterUserID, arg.ReceiverUserID)
 	return err
 }
 
@@ -122,7 +114,6 @@ func (q *Queries) GetContactRequestStatus(ctx context.Context, arg GetContactReq
 const getPendingContactRequestsLite = `-- name: GetPendingContactRequestsLite :many
 SELECT
     cr.requester_user_id AS id,
-    cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
     cr.status::text AS status
@@ -134,7 +125,6 @@ ORDER BY cr.created_at DESC
 
 type GetPendingContactRequestsLiteRow struct {
 	ID               uuid.UUID `json:"id"`
-	Nickname         *string   `json:"nickname"`
 	RequestCreatedAt time.Time `json:"request_created_at"`
 	RequestUpdatedAt time.Time `json:"request_updated_at"`
 	Status           string    `json:"status"`
@@ -151,7 +141,6 @@ func (q *Queries) GetPendingContactRequestsLite(ctx context.Context, receiverUse
 		var i GetPendingContactRequestsLiteRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Nickname,
 			&i.RequestCreatedAt,
 			&i.RequestUpdatedAt,
 			&i.Status,
@@ -169,19 +158,17 @@ func (q *Queries) GetPendingContactRequestsLite(ctx context.Context, receiverUse
 const getSentContactRequestsLite = `-- name: GetSentContactRequestsLite :many
 SELECT
     cr.receiver_user_id AS id,
-    cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
     cr.status::text AS status
 FROM contact_requests cr
 WHERE cr.requester_user_id = $1
-  AND cr.status IN ('pending', 'declined')
+  AND cr.status = 'pending'
 ORDER BY cr.created_at DESC
 `
 
 type GetSentContactRequestsLiteRow struct {
 	ID               uuid.UUID `json:"id"`
-	Nickname         *string   `json:"nickname"`
 	RequestCreatedAt time.Time `json:"request_created_at"`
 	RequestUpdatedAt time.Time `json:"request_updated_at"`
 	Status           string    `json:"status"`
@@ -198,7 +185,6 @@ func (q *Queries) GetSentContactRequestsLite(ctx context.Context, requesterUserI
 		var i GetSentContactRequestsLiteRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.Nickname,
 			&i.RequestCreatedAt,
 			&i.RequestUpdatedAt,
 			&i.Status,
@@ -364,8 +350,8 @@ func (q *Queries) HasPendingRequest(ctx context.Context, arg HasPendingRequestPa
 }
 
 const insertContactRequest = `-- name: InsertContactRequest :exec
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status, nickname)
-VALUES ($1, $2, $3, 'pending', $4)
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
+VALUES ($1, $2, $3, 'pending')
 ON CONFLICT DO NOTHING
 `
 
@@ -373,33 +359,26 @@ type InsertContactRequestParams struct {
 	ID              uuid.UUID `json:"id"`
 	RequesterUserID uuid.UUID `json:"requester_user_id"`
 	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
-	Nickname        *string   `json:"nickname"`
 }
 
 func (q *Queries) InsertContactRequest(ctx context.Context, arg InsertContactRequestParams) error {
-	_, err := q.db.Exec(ctx, insertContactRequest,
-		arg.ID,
-		arg.RequesterUserID,
-		arg.ReceiverUserID,
-		arg.Nickname,
-	)
+	_, err := q.db.Exec(ctx, insertContactRequest, arg.ID, arg.RequesterUserID, arg.ReceiverUserID)
 	return err
 }
 
 const insertUserContact = `-- name: InsertUserContact :exec
-INSERT INTO user_contacts (owner_user_id, contact_user_id, nickname)
-VALUES ($1, $2, $3)
+INSERT INTO user_contacts (owner_user_id, contact_user_id)
+VALUES ($1, $2)
 ON CONFLICT DO NOTHING
 `
 
 type InsertUserContactParams struct {
 	OwnerUserID   uuid.UUID `json:"owner_user_id"`
 	ContactUserID uuid.UUID `json:"contact_user_id"`
-	Nickname      *string   `json:"nickname"`
 }
 
 func (q *Queries) InsertUserContact(ctx context.Context, arg InsertUserContactParams) error {
-	_, err := q.db.Exec(ctx, insertUserContact, arg.OwnerUserID, arg.ContactUserID, arg.Nickname)
+	_, err := q.db.Exec(ctx, insertUserContact, arg.OwnerUserID, arg.ContactUserID)
 	return err
 }
 
@@ -475,25 +454,17 @@ func (q *Queries) IsAlreadyContact(ctx context.Context, arg IsAlreadyContactPara
 }
 
 const rejectContactRequest = `-- name: RejectContactRequest :one
-WITH updated AS (
-    UPDATE contact_requests AS cr
-    SET status = 'declined'
+WITH deleted AS (
+    DELETE FROM contact_requests AS cr
     WHERE cr.requester_user_id = $1
       AND cr.receiver_user_id = $2
       AND cr.status = 'pending'
     RETURNING cr.id
-), existing AS (
-    SELECT cr.status
-    FROM contact_requests AS cr
-    WHERE cr.requester_user_id = $1
-      AND cr.receiver_user_id = $2
-    LIMIT 1
 )
 SELECT
     (CASE
-        WHEN EXISTS (SELECT 1 FROM updated) THEN 'declined'
-        WHEN (SELECT status FROM existing) IS NULL THEN 'not_found'
-        ELSE 'processed'
+        WHEN EXISTS (SELECT 1 FROM deleted) THEN 'declined'
+        ELSE 'not_found'
     END)::TEXT AS outcome
 `
 

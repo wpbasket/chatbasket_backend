@@ -40,11 +40,6 @@ func (h *contactHandler) CreateContact(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
-	if payload.Nickname != nil {
-		trimmedNickname := strings.TrimSpace(*payload.Nickname)
-		payload.Nickname = &trimmedNickname
-	}
-
 	res, err := h.Service.CreateContact(c.Request().Context(), &payload, userID)
 	if err != nil {
 		return err

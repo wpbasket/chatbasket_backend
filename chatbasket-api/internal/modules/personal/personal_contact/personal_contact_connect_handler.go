@@ -76,12 +76,6 @@ func (s *contactConnectServer) CreateContact(ctx context.Context, req *connect.R
 
 	payload := &CreateContactPayload{
 		ContactUserId: req.Msg.ContactUserId,
-		Nickname:      req.Msg.Nickname,
-	}
-
-	if payload.Nickname != nil {
-		trimmedNickname := strings.TrimSpace(*payload.Nickname)
-		payload.Nickname = &trimmedNickname
 	}
 
 	res, err := s.contactService.CreateContact(ctx, payload, userID)

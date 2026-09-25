@@ -87,7 +87,6 @@ type ContactRequest struct {
 	RequesterUserID uuid.UUID `json:"requester_user_id"`
 	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
 	Status          string    `json:"status"`
-	Nickname        *string   `json:"nickname"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

@@ -173,12 +173,13 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   - Relationship 2: User B has added User A
 
 #### 4.1.3 Contact Requests
-- Contact requests support three status values: pending, accepted, declined
+- Contact requests support status value: pending
 - A unique constraint exists on the combination of requester and receiver
-- The system maintains an automated process for contact creation upon request acceptance
+- The system automatically creates the one-way contact relationship and deletes the pending request upon acceptance
+- The system deletes the pending request upon rejection
 
 #### 4.1.4 Contact Request Acceptance Behavior
-- When a contact request transitions from pending to accepted, the system shall automatically create a one-way contact relationship from requester to receiver
+- When a contact request is accepted, the system shall automatically create a one-way contact relationship from requester to receiver in user_contacts and remove the pending request record from contact_requests
 - The receiver does not automatically gain a contact relationship to the requester
 - To establish a mutual relationship, the receiver must separately add the requester
 
@@ -211,19 +212,17 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
      - If target blocked requester: Return "user_blocked_you" error
   8. Contact must not already exist (returns "already_in_contacts" success message)
    9. User cannot add users with private profiles (returns "user_private_profile" error)
-   10. Nickname validation: If provided, must be 40 characters or less (Unicode character count)
-
-- Nickname storage: Stored encrypted at rest (Base64 ChaCha20-Poly1305) in both user_contacts and contact_requests
+   10. Nickname cannot be provided at contact creation time (payload only accepts contact_user_id); newly created contacts and requests have NULL nickname initially. Nicknames may only be added or modified post-creation via the update nickname endpoint.
 
 - Behavior by target profile type:
   - **Public profile**:
-    - System shall create contact relationship immediately
+    - System shall create contact relationship immediately (with nickname = NULL)
     - Returns "public_contact_added" success message
   - **Personal profile**:
-    - If target has already added requester: System shall create contact relationship immediately, returns "personal_contact_added"
-    - Otherwise: System shall create or update contact request:
+    - If target has already added requester: System shall create contact relationship immediately (with nickname = NULL), returns "personal_contact_added"
+    - Otherwise: System shall check for pending requests:
       - If pending request exists: Return "pending_request_exists" without creating duplicate
-      - If accepted or declined request exists: Delete old request and create new one
+      - If no pending request: Inserts new contact request
       - Returns "contact_request_sent" success message
 
 - Contact creation uses ON CONFLICT DO NOTHING for idempotency
@@ -236,17 +235,11 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   2. Contact user ID must be valid UUID format
   3. User cannot accept their own request (returns "self_action_not_allowed" error)
 - Database operation:
-  - Updates request status from "pending" to "accepted"
-  - Returns outcome: "accepted", "not_found", or "processed"
-- Automatic contact creation:
-  - Database trigger fires AFTER UPDATE when status changes from "pending" to "accepted"
-  - Creates one-way contact relationship: requester → receiver
-   - Copies encrypted nickname from contact request to contact record
-  - Uses ON CONFLICT DO NOTHING to prevent duplicates
+  - Atomically deletes request from contact_requests and inserts one-way contact relationship into user_contacts with nickname = NULL
+  - Returns outcome: "accepted" or "not_found"
 - Response messages:
   - Success: "contact_request_accepted"
   - Not found: "pending_request_not_found" (404)
-  - Already processed: "request_already_processed" (409)
 - Frontend behavior:
   - Checks if requester is already in accepter's contacts
   - If mutual: Updates UI to show mutual badge
@@ -259,12 +252,11 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   2. Contact user ID must be valid UUID format
   3. User cannot reject their own request (returns "self_action_not_allowed" error)
 - Database operation:
-  - Updates request status from "pending" to "declined"
-  - Returns outcome: "declined", "not_found", or "processed"
+  - Deletes request from contact_requests
+  - Returns outcome: "declined" or "not_found"
 - Response messages:
   - Success: "contact_request_declined"
   - Not found: "pending_request_not_found" (404)
-  - Already processed: "request_already_processed" (409)
 - Frontend behavior:
   - Shows confirmation dialog before rejecting
   - Removes request from pending list
@@ -734,14 +726,13 @@ Stores one-way contact relationships between users.
 ---
 
 #### 8.1.6 contact_requests
-Stores pending, accepted, and declined contact requests.
+Stores pending contact requests.
 
 **Columns:**
 - `id` (UUID, Primary Key) - Request identifier
 - `requester_user_id` (UUID, NOT NULL) - User sending the request, references users(id)
 - `receiver_user_id` (UUID, NOT NULL) - User receiving the request, references users(id)
-- `status` (TEXT, NOT NULL, DEFAULT 'pending') - Request status: 'pending', 'accepted', or 'declined'
-- `nickname` (TEXT) - Encrypted nickname (Base64 ChaCha20-Poly1305), max 512 characters
+- `status` (TEXT, NOT NULL, DEFAULT 'pending') - Request status: 'pending'
 - `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
 - `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
@@ -749,33 +740,23 @@ Stores pending, accepted, and declined contact requests.
 - Primary key on `id`
 - Unique constraint on `(requester_user_id, receiver_user_id)`
 - Check constraint: `requester_user_id != receiver_user_id` (no self-requests)
-- Status must be one of: 'pending', 'accepted', 'declined' (CHECK constraint)
+- Status must be: 'pending' (CHECK constraint)
 - Foreign keys to users(id) with CASCADE delete
-- Nickname max 512 characters (CHECK constraint)
 
 **Indexes:**
 - Primary key on `id`
 - Unique index on `(requester_user_id, receiver_user_id)`
 - Partial index on `(receiver_user_id, created_at DESC)` including `requester_user_id` where `status = 'pending'`
 - Partial index on `(requester_user_id, created_at DESC)` including `receiver_user_id` where `status = 'pending'`
-- Index on `updated_at` where `status IN ('accepted', 'declined')` for cleanup
 
 **Triggers:**
 - `contact_requests_timestamps_trigger` - Automatic timestamp management via set_timestamps()
-- `auto_add_contact_on_accept` - Automatically creates one-way contact when request is accepted (AFTER UPDATE OF status when status changes from 'pending' to 'accepted')
-
-**Functions:**
-- `add_contact_on_accept()` - Inserts record into user_contacts with owner_user_id = requester_user_id and contact_user_id = receiver_user_id, copies encrypted nickname from request, uses ON CONFLICT DO NOTHING for idempotency
-
-**Status Transitions:**
-- pending → accepted: Triggers automatic contact creation
-- pending → declined: No contact created
-- Accepted/declined requests can be deleted and recreated as new pending requests
 
 **Request Lifecycle:**
-- No TTL or expiration on contact requests
-- Requests remain indefinitely until accepted/declined/undone
-- Cleanup index exists for processed requests
+- No TTL or expiration on active contact requests
+- Requests remain in table until accepted, declined, undone, or blocked
+- Upon accept, the relationship is created in user_contacts and the request is deleted immediately
+- Upon decline or undo, the request is deleted immediately
 
 #### 8.1.7 user_blocks
 Stores block relationships between users.

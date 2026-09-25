@@ -30,7 +30,6 @@ message GetContactsResponse {
 
 message CreateContactRequest {
   string contact_user_id = 1;
-  optional string nickname = 2;
 }
 
 message CreateContactResponse {

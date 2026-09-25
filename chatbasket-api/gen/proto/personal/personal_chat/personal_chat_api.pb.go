@@ -2779,9 +2779,9 @@ func (x *AcknowledgeHistorySyncRequest) GetRequestId() string {
 	return ""
 }
 
-// Primary fetches a secondary's history-sync request body (pointer pattern:
-// the SSE event carries only the requestId, never the cipher, because
-// pg_notify hard-caps payloads at 8,000 bytes).
+// The main device reads a request body with this call. The event carries
+// only the request id, never the cipher: Postgres drops NOTIFY messages
+// bigger than 8,000 bytes, and the cipher is bigger than that.
 type FetchHistorySyncRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     string                 `protobuf:"bytes,1,opt,name=requestId,proto3" json:"requestId,omitempty"`

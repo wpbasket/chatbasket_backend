@@ -52,8 +52,8 @@ SELECT EXISTS(
 );
 
 -- name: InsertUserContact :exec
-INSERT INTO user_contacts (owner_user_id, contact_user_id, nickname)
-VALUES ($1, $2, $3)
+INSERT INTO user_contacts (owner_user_id, contact_user_id)
+VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
 -- name: GetSingleUserContactLite :one
@@ -84,60 +84,50 @@ WITH deleted AS (
     WHERE requester_user_id = $2 AND receiver_user_id = $3
     RETURNING requester_user_id
 )
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status, nickname)
-SELECT $1, $2, $3, 'pending', $4
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
+SELECT $1, $2, $3, 'pending'
 WHERE EXISTS (SELECT 1 FROM deleted) OR NOT EXISTS (
     SELECT 1 FROM contact_requests 
     WHERE requester_user_id = $2 AND receiver_user_id = $3
 );
 
 -- name: InsertContactRequest :exec
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status, nickname)
-VALUES ($1, $2, $3, 'pending', $4)
+INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
+VALUES ($1, $2, $3, 'pending')
 ON CONFLICT DO NOTHING;
 
 -- name: AcceptContactRequest :one
-WITH updated AS (
-    UPDATE contact_requests AS cr
-    SET status = 'accepted'
+WITH deleted AS (
+    DELETE FROM contact_requests AS cr
     WHERE cr.requester_user_id = $1
       AND cr.receiver_user_id = $2
       AND cr.status = 'pending'
-    RETURNING cr.id
-), existing AS (
-    SELECT cr.status
-    FROM contact_requests AS cr
-    WHERE cr.requester_user_id = $1
-      AND cr.receiver_user_id = $2
-    LIMIT 1
+    RETURNING cr.requester_user_id, cr.receiver_user_id
+), inserted AS (
+    INSERT INTO user_contacts (owner_user_id, contact_user_id)
+    SELECT d.requester_user_id, d.receiver_user_id
+    FROM deleted d
+    ON CONFLICT (owner_user_id, contact_user_id) DO NOTHING
+    RETURNING owner_user_id
 )
 SELECT
     (CASE
-        WHEN EXISTS (SELECT 1 FROM updated) THEN 'accepted'
-        WHEN (SELECT status FROM existing) IS NULL THEN 'not_found'
-        ELSE 'processed'
+        WHEN EXISTS (SELECT 1 FROM deleted) THEN 'accepted'
+        ELSE 'not_found'
     END)::TEXT AS outcome;
 
 -- name: RejectContactRequest :one
-WITH updated AS (
-    UPDATE contact_requests AS cr
-    SET status = 'declined'
+WITH deleted AS (
+    DELETE FROM contact_requests AS cr
     WHERE cr.requester_user_id = $1
       AND cr.receiver_user_id = $2
       AND cr.status = 'pending'
     RETURNING cr.id
-), existing AS (
-    SELECT cr.status
-    FROM contact_requests AS cr
-    WHERE cr.requester_user_id = $1
-      AND cr.receiver_user_id = $2
-    LIMIT 1
 )
 SELECT
     (CASE
-        WHEN EXISTS (SELECT 1 FROM updated) THEN 'declined'
-        WHEN (SELECT status FROM existing) IS NULL THEN 'not_found'
-        ELSE 'processed'
+        WHEN EXISTS (SELECT 1 FROM deleted) THEN 'declined'
+        ELSE 'not_found'
     END)::TEXT AS outcome;
 
 -- name: DeleteContact :one
@@ -206,7 +196,6 @@ ORDER BY uc.created_at DESC;
 -- name: GetPendingContactRequestsLite :many
 SELECT
     cr.requester_user_id AS id,
-    cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
     cr.status::text AS status
@@ -218,11 +207,10 @@ ORDER BY cr.created_at DESC;
 -- name: GetSentContactRequestsLite :many
 SELECT
     cr.receiver_user_id AS id,
-    cr.nickname,
     cr.created_at AS request_created_at,
     cr.updated_at AS request_updated_at,
     cr.status::text AS status
 FROM contact_requests cr
 WHERE cr.requester_user_id = $1
-  AND cr.status IN ('pending', 'declined')
+  AND cr.status = 'pending'
 ORDER BY cr.created_at DESC;

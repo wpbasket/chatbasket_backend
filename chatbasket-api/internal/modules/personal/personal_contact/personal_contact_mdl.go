@@ -1,8 +1,7 @@
 package personal_contact
 
 type CreateContactPayload struct {
-	ContactUserId string  `json:"contact_user_id"`
-	Nickname      *string `json:"nickname"`
+	ContactUserId string `json:"contact_user_id"`
 }
 
 type CheckContactExistancePayload struct {

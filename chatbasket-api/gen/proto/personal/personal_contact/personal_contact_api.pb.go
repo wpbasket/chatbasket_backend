@@ -238,7 +238,6 @@ func (x *GetContactsResponse) GetPeopleWhoAddedYou() []*Contact {
 type CreateContactRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ContactUserId string                 `protobuf:"bytes,1,opt,name=contact_user_id,json=contactUserId,proto3" json:"contact_user_id,omitempty"`
-	Nickname      *string                `protobuf:"bytes,2,opt,name=nickname,proto3,oneof" json:"nickname,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -276,13 +275,6 @@ func (*CreateContactRequest) Descriptor() ([]byte, []int) {
 func (x *CreateContactRequest) GetContactUserId() string {
 	if x != nil {
 		return x.ContactUserId
-	}
-	return ""
-}
-
-func (x *CreateContactRequest) GetNickname() string {
-	if x != nil && x.Nickname != nil {
-		return *x.Nickname
 	}
 	return ""
 }
@@ -1467,11 +1459,9 @@ const file_proto_personal_personal_contact_personal_contact_api_proto_rawDesc = 
 	"\x12GetContactsRequest\"\xa6\x01\n" +
 	"\x13GetContactsResponse\x12<\n" +
 	"\bcontacts\x18\x01 \x03(\v2 .rpc_personal_contact.v1.ContactR\bcontacts\x12Q\n" +
-	"\x14people_who_added_you\x18\x02 \x03(\v2 .rpc_personal_contact.v1.ContactR\x11peopleWhoAddedYou\"l\n" +
+	"\x14people_who_added_you\x18\x02 \x03(\v2 .rpc_personal_contact.v1.ContactR\x11peopleWhoAddedYou\">\n" +
 	"\x14CreateContactRequest\x12&\n" +
-	"\x0fcontact_user_id\x18\x01 \x01(\tR\rcontactUserId\x12\x1f\n" +
-	"\bnickname\x18\x02 \x01(\tH\x00R\bnickname\x88\x01\x01B\v\n" +
-	"\t_nickname\"\x96\x01\n" +
+	"\x0fcontact_user_id\x18\x01 \x01(\tR\rcontactUserId\"\x96\x01\n" +
 	"\x15CreateContactResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\bR\x06status\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12?\n" +
@@ -1680,7 +1670,6 @@ func file_proto_personal_personal_contact_personal_contact_api_proto_init() {
 		return
 	}
 	file_proto_personal_personal_contact_personal_contact_api_proto_msgTypes[0].OneofWrappers = []any{}
-	file_proto_personal_personal_contact_personal_contact_api_proto_msgTypes[3].OneofWrappers = []any{}
 	file_proto_personal_personal_contact_personal_contact_api_proto_msgTypes[4].OneofWrappers = []any{}
 	file_proto_personal_personal_contact_personal_contact_api_proto_msgTypes[6].OneofWrappers = []any{}
 	file_proto_personal_personal_contact_personal_contact_api_proto_msgTypes[11].OneofWrappers = []any{}

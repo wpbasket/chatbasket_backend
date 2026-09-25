@@ -17,7 +17,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v5"
 	"github.com/pashagolub/pgxmock/v5"
 	"github.com/stretchr/testify/assert"
@@ -153,34 +152,30 @@ func TestCreateContact_PublicProfile(t *testing.T) {
 		},
 	}
 	service, mock := newMockContactService(t, profile)
-	nickname := "Best contact"
-	encryptedNickname, err := service.EncryptNickname(nickname, ownerID, contactID)
-	require.NoError(t, err)
 
 	mock.ExpectQuery(`SELECT EXISTS`).
 		WithArgs(ownerID, contactID).
 		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
 	mock.ExpectExec(`INSERT INTO user_contacts`).
-		WithArgs(ownerID, contactID, pgxmock.AnyArg()).
+		WithArgs(ownerID, contactID).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectQuery(`SELECT\s+uc\.contact_user_id AS id`).
 		WithArgs(ownerID, contactID).
 		WillReturnRows(pgxmock.NewRows([]string{"id", "nickname", "contact_created_at", "contact_updated_at"}).
-			AddRow(contactID, &encryptedNickname, now, now))
+			AddRow(contactID, (*string)(nil), now, now))
 	mock.ExpectQuery(`SELECT EXISTS`).
 		WithArgs(contactID, ownerID).
 		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
 
 	res, err := service.CreateContact(context.Background(), &CreateContactPayload{
 		ContactUserId: contactID.String(),
-		Nickname:      &nickname,
 	}, kit.UserId{UuidUserId: ownerID})
 
 	require.NoError(t, err)
 	assert.Equal(t, "public_contact_added", res.Message)
 	require.NotNil(t, res.Contact)
 	assert.Equal(t, contactID.String(), res.Contact.Id)
-	assert.Equal(t, nickname, res.Contact.GetNickname())
+	assert.Nil(t, res.Contact.Nickname)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -198,11 +193,11 @@ func TestCreateContact_PersonalProfileCreatesRequest(t *testing.T) {
 	mock.ExpectQuery(`SELECT EXISTS`).
 		WithArgs(contactID, ownerID).
 		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
-	mock.ExpectQuery(`SELECT status::text FROM contact_requests`).
+	mock.ExpectQuery(`SELECT EXISTS`).
 		WithArgs(ownerID, contactID).
-		WillReturnError(pgx.ErrNoRows)
+		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
 	mock.ExpectExec(`INSERT INTO contact_requests`).
-		WithArgs(pgxmock.AnyArg(), ownerID, contactID, pgxmock.AnyArg()).
+		WithArgs(pgxmock.AnyArg(), ownerID, contactID).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 	res, err := service.CreateContact(context.Background(), &CreateContactPayload{

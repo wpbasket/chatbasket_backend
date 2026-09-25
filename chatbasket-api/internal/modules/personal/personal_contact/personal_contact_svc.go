@@ -338,38 +338,15 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "already_in_contacts", Contact: contact}, nil
 	}
 
-	// Normalize optional nickname
-	var nickname *string
-	if payload.Nickname != nil {
-		trimmed := strings.TrimSpace(*payload.Nickname)
-		if trimmed != "" {
-			if len([]rune(trimmed)) > 40 {
-				return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid_nickname_length")
-			}
-			nickname = new(trimmed)
-		}
-	}
-
 	// Handle based on target profile type
 	switch targetProfile.ProfileType {
 	case "private":
 		return nil, kit.NewError(http.StatusForbidden, "forbidden", "user_private_profile")
 	case "public":
-		// Encrypt nickname if provided
-		var encryptedNickname *string
-		if nickname != nil {
-			encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
-			}
-			encryptedNickname = &encrypted
-		}
-
 		// DB call to add contact
 		err = ps.PostgresQueries.InsertUserContact(ctx, personal_contact_store.InsertUserContactParams{
 			OwnerUserID:   userId.UuidUserId,
 			ContactUserID: targetUUID,
-			Nickname:      encryptedNickname,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -388,20 +365,9 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 		}
 		if targetAlreadyHasMe {
-			// Encrypt nickname if provided
-			var encryptedNickname *string
-			if nickname != nil {
-				encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
-				if err != nil {
-					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
-				}
-				encryptedNickname = &encrypted
-			}
-
 			err = ps.PostgresQueries.InsertUserContact(ctx, personal_contact_store.InsertUserContactParams{
 				OwnerUserID:   userId.UuidUserId,
 				ContactUserID: targetUUID,
-				Nickname:      encryptedNickname,
 			})
 			if err != nil {
 				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -414,12 +380,15 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		}
 
 		// DB call to check for existing request status
-		requestStatus, err := ps.PostgresQueries.GetContactRequestStatus(ctx, personal_contact_store.GetContactRequestStatusParams{
+		hasPending, err := ps.PostgresQueries.HasPendingRequest(ctx, personal_contact_store.HasPendingRequestParams{
 			RequesterUserID: userId.UuidUserId,
 			ReceiverUserID:  targetUUID,
 		})
-		if err != nil && err != pgx.ErrNoRows {
+		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+		}
+		if hasPending {
+			return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "pending_request_exists"}, nil
 		}
 
 		// Generate new request ID
@@ -428,51 +397,11 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to generate request ID")
 		}
 
-		// If request exists, check its status
-		if err != pgx.ErrNoRows && requestStatus != "" {
-			if requestStatus == "pending" {
-				return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "pending_request_exists"}, nil
-			}
-
-			// Encrypt nickname if provided
-			var encryptedNickname *string
-			if nickname != nil {
-				encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
-				if err != nil {
-					return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
-				}
-				encryptedNickname = &encrypted
-			}
-
-			// If accepted or declined, delete old request and insert new one
-			err = ps.PostgresQueries.DeleteAndInsertContactRequest(ctx, personal_contact_store.DeleteAndInsertContactRequestParams{
-				ID:              reqID,
-				RequesterUserID: userId.UuidUserId,
-				ReceiverUserID:  targetUUID,
-				Nickname:        encryptedNickname,
-			})
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
-			}
-			return &rpc_personal_contactv1.CreateContactResponse{Status: true, Message: "contact_request_sent"}, nil
-		}
-
-		// Encrypt nickname if provided
-		var encryptedNickname *string
-		if nickname != nil {
-			encrypted, err := ps.EncryptNickname(*nickname, userId.UuidUserId, targetUUID)
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to encrypt nickname")
-			}
-			encryptedNickname = &encrypted
-		}
-
 		// No existing request, insert new one
 		err = ps.PostgresQueries.InsertContactRequest(ctx, personal_contact_store.InsertContactRequestParams{
 			ID:              reqID,
 			RequesterUserID: userId.UuidUserId,
 			ReceiverUserID:  targetUUID,
-			Nickname:        encryptedNickname,
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
@@ -514,8 +443,6 @@ func (ps *contactService) AcceptContactRequest(ctx context.Context, payload *Acc
 		return &rpc_common_modelv1.StatusOkay{Status: true, Message: "contact_request_accepted"}, nil
 	case "not_found":
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "pending_request_not_found")
-	case "processed":
-		return nil, kit.NewError(http.StatusConflict, "conflict", "request_already_processed")
 	default:
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "unexpected outcome")
 	}
@@ -552,8 +479,6 @@ func (ps *contactService) RejectContactRequest(ctx context.Context, payload *Rej
 		return &rpc_common_modelv1.StatusOkay{Status: true, Message: "contact_request_declined"}, nil
 	case "not_found":
 		return nil, kit.NewError(http.StatusNotFound, "not_found", "pending_request_not_found")
-	case "processed":
-		return nil, kit.NewError(http.StatusConflict, "conflict", "request_already_processed")
 	default:
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "unexpected outcome")
 	}
@@ -767,21 +692,12 @@ func (ps *contactService) GetContactRequests(ctx context.Context, userId kit.Use
 			continue
 		}
 
-		var nickname *string
-		if r.Nickname != nil {
-			decrypted, err := ps.DecryptNickname(r.Nickname, userId.UuidUserId, r.ID)
-			if err != nil {
-				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "failed to decrypt sent request nickname")
-			}
-			nickname = decrypted
-		}
-
 		sent = append(sent, &rpc_personal_contactv1.SentContactRequest{
 			Id:           r.ID.String(),
 			Name:         profile.Name,
 			Username:     profile.Username,
 			Bio:          profile.Bio,
-			Nickname:     nickname,
+			Nickname:     nil, // Requests do not carry nicknames; nicknames are set after contact creation
 			RequestedAt:  timestamppb.New(r.RequestCreatedAt),
 			UpdatedAt:    timestamppb.New(r.RequestUpdatedAt),
 			Status:       r.Status,
