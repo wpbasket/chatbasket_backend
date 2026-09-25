@@ -863,11 +863,10 @@ func (s *chatConnectServer) RequestHistorySync(ctx context.Context, req *connect
 		return nil, kit.ParseIntoRpcError(svcErr)
 	}
 
-	// SSE Broadcast: RequestHistorySyncSseEvent to primary device.
-	// Id-only pointer: the cipher must NOT ride the event — pg_notify caps
-	// payloads at 8,000 bytes and a full have_ids cipher exceeds it. The
-	// primary pulls the body via FetchHistorySync (same pattern as the
-	// Upload → Download reverse leg).
+	// Tell the main device about the new request.
+	// Send only the request id, not the big cipher: Postgres drops NOTIFY
+	// messages bigger than 8,000 bytes, and the cipher is bigger than that.
+	// The main device reads the full cipher with FetchHistorySync.
 	if s.personalSseManager != nil && primarySessionID != uuid.Nil {
 		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
 			Timestamp: timestamppb.Now(),

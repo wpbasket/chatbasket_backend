@@ -118,10 +118,10 @@ func (s *chatService) DownloadHistorySync(ctx context.Context, userID uuid.UUID,
 	return &payloadStr, nil
 }
 
-// FetchHistorySync handles the primary's pull of a secondary's request body.
-// Pointer pattern: the SSE event carries only the request id because pg_notify
-// hard-caps payloads at 8,000 bytes — the cipher itself travels over this
-// unary call instead (mirrors Upload → Download on the reverse leg).
+// FetchHistorySync lets the main device read a request body.
+// The event carries only the request id, never the cipher: Postgres drops
+// NOTIFY messages bigger than 8,000 bytes, and the cipher is bigger than
+// that. So the cipher travels over this normal call instead.
 func (s *chatService) FetchHistorySync(ctx context.Context, userID uuid.UUID, requestID uuid.UUID) (string, string, error) {
 	row, err := s.PostgresQuerier.GetHistorySyncRequest(ctx, personal_chat_store.GetHistorySyncRequestParams{
 		ID:     requestID,

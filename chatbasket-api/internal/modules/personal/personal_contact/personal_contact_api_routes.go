@@ -2,8 +2,10 @@ package personal_contact
 
 import (
 	"net/http"
+	"time"
 
 	rpc_personal_contactv1connect "chatbasket-api/gen/proto/personal/personal_contact/rpc_personal_contactv1connect"
+	"chatbasket-api/internal/platform/middleware"
 
 	"github.com/labstack/echo/v5"
 )
@@ -12,8 +14,8 @@ import (
 func Register(personalGroup *echo.Group, contactService *contactService) {
 	handler := newContactHandler(contactService)
 
-	// Contact Routes
-	contacts := personalGroup.Group("/contacts")
+	// Contact calls are small: max 5MB upload, max 30 seconds.
+	contacts := personalGroup.Group("/contacts", middleware.BodyLimit(5242880), middleware.ContextTimeout(30*time.Second))
 
 	contacts.GET("/get", handler.GetContacts)
 	contacts.POST("/check-existence", handler.CheckContactExistance)
@@ -32,10 +34,15 @@ func Register(personalGroup *echo.Group, contactService *contactService) {
 	blocks.POST("/create", handler.BlockUser)
 	blocks.POST("/delete", handler.UnblockUser)
 
-	// Connect RPC Routes
+	// Same rules for the RPC version: max 5MB upload, max 30 seconds.
 	connectServer := newContactConnectServer(contactService)
 	path, connectHandler := rpc_personal_contactv1connect.NewContactServiceHandler(
 		connectServer,
 	)
-	personalGroup.Any(path+"*", echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)))
+	personalGroup.Any(
+		path+"*",
+		echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)),
+		middleware.BodyLimit(5242880),
+		middleware.ContextTimeout(30*time.Second),
+	)
 }

@@ -26,12 +26,16 @@ const (
 	cmdUnregisterUserConnections = "unregister_user_connections" // close all sessions of a user on all nodes
 )
 
-// postgresSsePayload is the JSON envelope communicated across cluster nodes via pg_notify.
+// postgresSsePayload is the JSON message sent between servers using pg_notify.
 //
-// Postgres NOTIFY Limits & Encoding:
-//  - PostgreSQL pg_notify strictly accepts a text string with an 8,000-byte limit (PostgreSQL 18 specification).
-//  - Binary Protobuf is base64-encoded to prevent C null-byte (\x00) string truncation in Postgres.
-//  - 8,000 Byte Limit: Our payloads are ~120 bytes (well under the 8,000-byte limit).
+// Size rules:
+//   - Postgres drops any NOTIFY message bigger than 8,000 bytes.
+//   - The event is first packed with protobuf, then changed to base64 text
+//     (about 33% bigger), then put inside JSON. So the final message is
+//     bigger than the chat text alone.
+//   - Small events (delivery ack, read, delete) are about 150 bytes and fit.
+//   - Full chat messages can hold up to 5,000 chars plus long links, so they
+//     can get close to or go over the 8,000-byte cap.
 type postgresSsePayload struct {
 	Command            string     `json:"cmd"`
 	TargetUserID       uuid.UUID  `json:"uid"`

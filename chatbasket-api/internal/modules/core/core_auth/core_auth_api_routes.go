@@ -12,7 +12,6 @@ import (
 	rpc_core_authv1connect "chatbasket-api/gen/proto/core/core_auth/rpc_core_authv1connect"
 
 	"github.com/labstack/echo/v5"
-	echo_middleware "github.com/labstack/echo/v5/middleware"
 )
 
 // Register initializes the Auth module dependencies and registers its routes.
@@ -31,8 +30,11 @@ func Register(group *echo.Group, authService *AuthService, personalSseManager *p
 
 	handler := newAuthHandler(authService, personalSseManager, qrHub)
 
-	// Auth Routes (shared across domains)
-	auth := group.Group("/auth")
+	// Normal login and signup calls: max 5MB upload, max 30 seconds.
+	// The QR websocket stays open long, so it skips the 30-second limit.
+	auth := group.Group("/auth", middleware.BodyLimit(5242880), middleware.ContextTimeoutWithSkipper(30*time.Second, func(c *echo.Context) bool {
+		return c.Request().Header.Get("Upgrade") == "websocket" || strings.HasSuffix(c.Request().URL.Path, "/ws")
+	}))
 	
 	// QR Login Routes
 	qr := auth.Group("/qr")
@@ -52,8 +54,12 @@ func Register(group *echo.Group, authService *AuthService, personalSseManager *p
 	auth.POST("/forgot-password", handler.ForgotPassword)
 	auth.POST("/forgot-password-verify", handler.VerifyForgotPassword)
 
-	// Common Auth Routes (logout works for both modes)
-	common := group.Group("/common")
+	// Logout and profile calls: max 5MB upload, max 30 seconds.
+	// Delete-account needs up to 10 minutes, so it skips the 30-second
+	// limit here and sets its own 10-minute limit on its route below.
+	common := group.Group("/common", middleware.BodyLimit(5242880), middleware.ContextTimeoutWithSkipper(30*time.Second, func(c *echo.Context) bool {
+		return c.Request().URL.Path == "/api/common/settings/account/delete/personal"
+	}))
 	common.Use(middleware.AuthSessionMiddleware(authService, true, personalSseManager))
 	common.POST("/logout", handler.Logout)
 	common.GET("/me", handler.GetUser)
@@ -64,17 +70,21 @@ func Register(group *echo.Group, authService *AuthService, personalSseManager *p
 	settings.POST("/password/confirm", handler.ConfirmPasswordUpdate)
 	settings.POST("/email/request", handler.RequestEmailUpdate)
 	settings.POST("/email/confirm", handler.ConfirmEmailUpdate)
-	settings.POST("/account/delete/personal", handler.DeletePersonalAccount, echo_middleware.ContextTimeoutWithConfig(echo_middleware.ContextTimeoutConfig{
-		Timeout: 10 * time.Minute,
-	}))
+	// Delete-account erases a lot of data, so it may run up to 10 minutes.
+	settings.POST("/account/delete/personal", handler.DeletePersonalAccount, middleware.ContextTimeout(10*time.Minute))
 
-	// Connect RPC Routes
+	// Same rules for the RPC version: 5MB for all calls, except
+	// DeletePersonalAccount which may run up to 10 minutes.
 	connectServer := newAuthConnectServer(authService, personalSseManager, qrHub)
 	path, connectHandler := rpc_core_authv1connect.NewAuthServiceHandler(connectServer)
 	
 	group.Any(
 		"/personal"+path+"*",
 		echo.WrapHandler(http.StripPrefix("/api/personal", connectHandler)),
+		middleware.BodyLimit(5242880),
+		middleware.DynamicContextTimeout(30*time.Second, middleware.ContextTimeoutOverrides{
+			rpc_core_authv1connect.AuthServiceDeletePersonalAccountProcedure: 10 * time.Minute,
+		}),
 		middleware.AuthSessionMiddlewareWithConfig(middleware.AuthSessionConfig{
 			AuthProvider:       authService,
 			RequireVerified:    true,
