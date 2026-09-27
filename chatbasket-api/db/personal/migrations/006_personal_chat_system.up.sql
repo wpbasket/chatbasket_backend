@@ -194,6 +194,16 @@ WHERE
     file_id IS NOT NULL
     AND file_token_expiry IS NOT NULL;
 
+-- Sender-side file scan for account deletion
+CREATE INDEX IF NOT EXISTS idx_messages_files_sender_id
+    ON messages (sender_id, id)
+    WHERE file_id IS NOT NULL;
+
+-- Recipient-side file scan for account deletion
+CREATE INDEX IF NOT EXISTS idx_messages_files_recipient_id
+    ON messages (recipient_id, id)
+    WHERE file_id IS NOT NULL;
+
 -- TTL-expired messages with no R2 file attached
 CREATE INDEX IF NOT EXISTS idx_messages_expired_no_file
     ON messages (expires_at)

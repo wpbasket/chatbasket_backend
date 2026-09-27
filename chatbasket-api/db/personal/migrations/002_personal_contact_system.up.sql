@@ -35,10 +35,7 @@ CREATE TABLE IF NOT EXISTS contact_requests (
     id                      UUID                    PRIMARY KEY,  -- Direct index via PK
     requester_user_id       UUID                    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     receiver_user_id        UUID                    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    status                  TEXT                    NOT NULL DEFAULT 'pending' CHECK (
-        status IN ('pending', 'accepted', 'declined')
-    ),
-    nickname                TEXT                    CHECK (length(nickname) <= 512),
+    status                  TEXT                    NOT NULL DEFAULT 'pending' CHECK (status = 'pending'),
     created_at              TIMESTAMPTZ             NOT NULL,
     updated_at              TIMESTAMPTZ             NOT NULL,
 
@@ -66,37 +63,6 @@ CREATE INDEX IF NOT EXISTS idx_contact_requests_requester_pending
     ON contact_requests(requester_user_id, created_at DESC)
     INCLUDE (receiver_user_id)
     WHERE status = 'pending';
-
--- Explicit index for cleanup of old processed requests
-CREATE INDEX IF NOT EXISTS idx_contact_requests_processed_cleanup
-    ON contact_requests(updated_at)
-    WHERE status IN ('accepted', 'declined');
-
--- ======================================
--- Function: add_contact_on_accept()
--- Automatically adds the one-way contact when a request is accepted
--- ======================================
-CREATE OR REPLACE FUNCTION add_contact_on_accept()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    INSERT INTO user_contacts (owner_user_id, contact_user_id, nickname)
-    VALUES (NEW.requester_user_id, NEW.receiver_user_id, NEW.nickname)
-    ON CONFLICT (owner_user_id, contact_user_id) DO NOTHING;
-    RETURN NEW;
-END;
-$$;
-
--- Drop existing trigger if already present
-DROP TRIGGER IF EXISTS auto_add_contact_on_accept ON contact_requests;  -- Trigger for auto adding contact on accept
-
--- Attach trigger to automatically add contact on accept
-CREATE TRIGGER auto_add_contact_on_accept
-AFTER UPDATE OF status ON contact_requests
-FOR EACH ROW
-WHEN (OLD.status = 'pending' AND NEW.status = 'accepted')
-EXECUTE FUNCTION add_contact_on_accept();
 
 -- ======================================
 -- End of Contacts and Requests section

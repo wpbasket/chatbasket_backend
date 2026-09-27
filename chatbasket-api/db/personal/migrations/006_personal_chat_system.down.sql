@@ -21,6 +21,8 @@ DROP INDEX IF EXISTS idx_messages_unread;
 DROP INDEX IF EXISTS idx_messages_chat_no_file;
 DROP INDEX IF EXISTS idx_messages_ack_no_file;
 DROP INDEX IF EXISTS idx_messages_expired_no_file;
+DROP INDEX IF EXISTS idx_messages_files_recipient_id;
+DROP INDEX IF EXISTS idx_messages_files_sender_id;
 DROP INDEX IF EXISTS idx_messages_expired_file_tokens;                           -- Expired file tokens index
 DROP INDEX IF EXISTS idx_messages_file_cleanup;                                  -- File cleanup index
 DROP INDEX IF EXISTS idx_messages_chat_history;                                  -- Chat history index
