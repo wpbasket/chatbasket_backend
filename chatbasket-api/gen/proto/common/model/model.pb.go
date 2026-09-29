@@ -74,14 +74,12 @@ func (x *StatusOkay) GetMessage() string {
 }
 
 type BlockStatusFlags struct {
-	state                          protoimpl.MessageState `protogen:"open.v1"`
-	IsRequesterAdminBlocked        bool                   `protobuf:"varint,1,opt,name=isRequesterAdminBlocked,proto3" json:"isRequesterAdminBlocked,omitempty"`
-	IsTargetAdminBlocked           bool                   `protobuf:"varint,2,opt,name=isTargetAdminBlocked,proto3" json:"isTargetAdminBlocked,omitempty"`
-	IsRequesterUserBlockedByTarget bool                   `protobuf:"varint,3,opt,name=isRequesterUserBlockedByTarget,proto3" json:"isRequesterUserBlockedByTarget,omitempty"`
-	IsTargetUserBlockedByRequester bool                   `protobuf:"varint,4,opt,name=isTargetUserBlockedByRequester,proto3" json:"isTargetUserBlockedByRequester,omitempty"`
-	IsTargetProfilePrivate         bool                   `protobuf:"varint,5,opt,name=isTargetProfilePrivate,proto3" json:"isTargetProfilePrivate,omitempty"`
-	unknownFields                  protoimpl.UnknownFields
-	sizeCache                      protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	IsRequesterAdminBlocked bool                   `protobuf:"varint,1,opt,name=isRequesterAdminBlocked,proto3" json:"isRequesterAdminBlocked,omitempty"`
+	IsTargetAdminBlocked    bool                   `protobuf:"varint,2,opt,name=isTargetAdminBlocked,proto3" json:"isTargetAdminBlocked,omitempty"`
+	IsTargetProfilePrivate  bool                   `protobuf:"varint,3,opt,name=isTargetProfilePrivate,proto3" json:"isTargetProfilePrivate,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *BlockStatusFlags) Reset() {
@@ -124,20 +122,6 @@ func (x *BlockStatusFlags) GetIsRequesterAdminBlocked() bool {
 func (x *BlockStatusFlags) GetIsTargetAdminBlocked() bool {
 	if x != nil {
 		return x.IsTargetAdminBlocked
-	}
-	return false
-}
-
-func (x *BlockStatusFlags) GetIsRequesterUserBlockedByTarget() bool {
-	if x != nil {
-		return x.IsRequesterUserBlockedByTarget
-	}
-	return false
-}
-
-func (x *BlockStatusFlags) GetIsTargetUserBlockedByRequester() bool {
-	if x != nil {
-		return x.IsTargetUserBlockedByRequester
 	}
 	return false
 }
@@ -233,13 +217,11 @@ const file_proto_common_model_model_proto_rawDesc = "" +
 	"\n" +
 	"StatusOkay\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\bR\x06status\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xc8\x02\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xb8\x01\n" +
 	"\x10BlockStatusFlags\x128\n" +
 	"\x17isRequesterAdminBlocked\x18\x01 \x01(\bR\x17isRequesterAdminBlocked\x122\n" +
-	"\x14isTargetAdminBlocked\x18\x02 \x01(\bR\x14isTargetAdminBlocked\x12F\n" +
-	"\x1eisRequesterUserBlockedByTarget\x18\x03 \x01(\bR\x1eisRequesterUserBlockedByTarget\x12F\n" +
-	"\x1eisTargetUserBlockedByRequester\x18\x04 \x01(\bR\x1eisTargetUserBlockedByRequester\x126\n" +
-	"\x16isTargetProfilePrivate\x18\x05 \x01(\bR\x16isTargetProfilePrivate\"\xf9\x01\n" +
+	"\x14isTargetAdminBlocked\x18\x02 \x01(\bR\x14isTargetAdminBlocked\x126\n" +
+	"\x16isTargetProfilePrivate\x18\x03 \x01(\bR\x16isTargetProfilePrivate\"\xf9\x01\n" +
 	"\x15StaleKeysErrorDetails\x12\x1c\n" +
 	"\tstaleSide\x18\x01 \x01(\tR\tstaleSide\x12.\n" +
 	"\x12senderKeysRevision\x18\x02 \x01(\x05R\x12senderKeysRevision\x124\n" +

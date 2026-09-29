@@ -12,9 +12,7 @@ message StatusOkay {
 message BlockStatusFlags {
   bool isRequesterAdminBlocked = 1;
   bool isTargetAdminBlocked = 2;
-  bool isRequesterUserBlockedByTarget = 3;
-  bool isTargetUserBlockedByRequester = 4;
-  bool isTargetProfilePrivate = 5;
+  bool isTargetProfilePrivate = 3;
 }
 
 message StaleKeysErrorDetails {

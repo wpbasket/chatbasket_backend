@@ -6,16 +6,15 @@ import (
 )
 
 const (
-	EligibilityAllowed            = "allowed"
-	EligibilityNotInContacts      = "not_in_contacts"
-	EligibilityRecipientPrivate   = "recipient_private"
-	EligibilityBlocked            = "blocked" // Legacy, keep for safety
-	EligibilityBlockedByRecipient = "blocked_by_recipient"
-	EligibilityBlockedByMe        = "blocked_by_me"
-	EligibilityAdminBlocked       = "admin_blocked"
-	EligibilityNoPrimaryDevice    = "no_primary_device"
-	EligibilityRecipientNotFound  = "recipient_not_found"
-	EligibilityNoE2EE             = "no_e2ee"
+	EligibilityAllowed           = "allowed"
+	EligibilityNotInContacts     = "not_in_contacts"
+	EligibilityRecipientPrivate  = "recipient_private"
+	EligibilityBlocked           = "blocked" // Legacy, keep for safety
+	EligibilityUserBlocked       = "user_blocked"
+	EligibilityAdminBlocked      = "admin_blocked"
+	EligibilityNoPrimaryDevice   = "no_primary_device"
+	EligibilityRecipientNotFound = "recipient_not_found"
+	EligibilityNoE2EE            = "no_e2ee"
 )
 
 func messagingEligibilityError(eligibility string) error {
@@ -25,10 +24,8 @@ func messagingEligibilityError(eligibility string) error {
 		errType = "messaging_not_allowed_not_in_contacts"
 	case EligibilityRecipientPrivate:
 		errType = "messaging_not_allowed_recipient_private"
-	case EligibilityBlocked, EligibilityBlockedByRecipient:
-		errType = "messaging_not_allowed_blocked_by_recipient"
-	case EligibilityBlockedByMe:
-		errType = "messaging_not_allowed_blocked_by_me"
+	case EligibilityBlocked, EligibilityUserBlocked:
+		errType = "messaging_not_allowed_user_blocked"
 	case EligibilityAdminBlocked:
 		errType = "messaging_not_allowed_admin_blocked"
 	case EligibilityNoPrimaryDevice:

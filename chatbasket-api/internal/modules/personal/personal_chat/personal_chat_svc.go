@@ -150,10 +150,11 @@ func (s *chatService) CheckMessagingEligibility(ctx context.Context, senderID ki
 		return "", nil, 0, kit.NewError(http.StatusInternalServerError, "eligibility_check_failed", "failed to verify block status: "+err.Error())
 	}
 	switch blockStatus {
-	case 1:
-		return EligibilityBlockedByMe, nil, 0, nil
-	case 2:
-		return EligibilityBlockedByRecipient, nil, 0, nil
+	case 1, 2:
+		// Privacy: identical reason either way — the sender must not learn
+		// whether they blocked the recipient or the recipient blocked them.
+		// Direction stays in server logs only (SendMessage logs eligibility).
+		return EligibilityUserBlocked, nil, 0, nil
 	}
 	senderBlocked, err := s.ProfileProvider.IsUserAdminBlocked(ctx, senderID.UuidUserId)
 	if err != nil {

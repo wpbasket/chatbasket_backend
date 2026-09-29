@@ -14,8 +14,6 @@ import (
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/services"
 
-	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -262,7 +260,7 @@ func TestDeleteContact_Integration_DeduplicatesBeforeBlockCheck(t *testing.T) {
 	assert.Equal(t, 0, countContacts(t, pool, owner, normal))
 }
 
-func TestDeleteContact_Integration_SingleBlockedDetail(t *testing.T) {
+func TestDeleteContact_Integration_SingleBlockedGeneric(t *testing.T) {
 	pool, contactSvc := setupContactDeleteIntegrationDB(t)
 	ctx := context.Background()
 
@@ -282,14 +280,15 @@ func TestDeleteContact_Integration_SingleBlockedDetail(t *testing.T) {
 	_, err = contactSvc.DeleteContact(ctx, &DeleteContactPayload{ContactUserId: []string{blocked.String()}}, kit.UserId{UuidUserId: owner})
 	require.Error(t, err)
 
+	// Privacy: a pure user block is a single generic denial — identical no
+	// matter which side created the block, and carrying no details.
+	var processed kit.ProcessedError
+	require.True(t, errors.As(err, &processed))
+	assert.Equal(t, http.StatusForbidden, processed.Status())
+	assert.Equal(t, "action_not_permitted", processed.Error())
 	var detailed kit.DetailedProcessedError
-	require.True(t, errors.As(err, &detailed))
-	assert.Equal(t, http.StatusForbidden, detailed.Status())
-	assert.Equal(t, "blocked", detailed.Error())
-
-	flags, ok := detailed.Details().(*rpc_common_modelv1.BlockStatusFlags)
-	require.True(t, ok, "details should be *rpc_common_modelv1.BlockStatusFlags")
-	assert.True(t, flags.IsTargetUserBlockedByRequester)
-	assert.False(t, flags.IsRequesterUserBlockedByTarget)
+	if errors.As(err, &detailed) {
+		assert.Nil(t, detailed.Details(), "user-block error must carry no details")
+	}
 }
 

@@ -101,11 +101,9 @@ func (p *blockStatusProfileProvider) IsBlockedBetweenUsersBatch(_ context.Contex
 
 func TestNewErrorWithDetails_BlockStatus(t *testing.T) {
 	flags := &rpc_common_modelv1.BlockStatusFlags{
-		IsRequesterAdminBlocked:        true,
-		IsTargetAdminBlocked:           true,
-		IsRequesterUserBlockedByTarget: true,
-		IsTargetUserBlockedByRequester: true,
-		IsTargetProfilePrivate:         true,
+		IsRequesterAdminBlocked: true,
+		IsTargetAdminBlocked:    true,
+		IsTargetProfilePrivate:  true,
 	}
 	err := kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", flags)
 	require.Error(t, err)
@@ -131,8 +129,6 @@ func TestNewErrorWithDetails_BlockStatus(t *testing.T) {
 	}
 	if got.IsRequesterAdminBlocked != flags.IsRequesterAdminBlocked ||
 		got.IsTargetAdminBlocked != flags.IsTargetAdminBlocked ||
-		got.IsRequesterUserBlockedByTarget != flags.IsRequesterUserBlockedByTarget ||
-		got.IsTargetUserBlockedByRequester != flags.IsTargetUserBlockedByRequester ||
 		got.IsTargetProfilePrivate != flags.IsTargetProfilePrivate {
 		t.Fatalf("details = %+v, want %+v", got, flags)
 	}

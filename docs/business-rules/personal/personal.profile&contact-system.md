@@ -208,8 +208,10 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   5. Target user must exist (returns "user_not_found" error)
   6. Target user must not be administratively blocked (returns "user_admin_blocked" error)
   7. Block status check using bidirectional query:
-     - If requester blocked target: Return "you_blocked_user" error
-     - If target blocked requester: Return "user_blocked_you" error
+     - If blocked in either direction: Return "action_not_permitted" error
+       (identical either way — the caller must not learn whether they
+       blocked the target or the target blocked them; direction stays
+       server-side only)
   8. Contact must not already exist (returns "already_in_contacts" success message)
    9. User cannot add users with private profiles (returns "user_private_profile" error)
    10. Nickname cannot be provided at contact creation time (payload only accepts contact_user_id); newly created contacts and requests have NULL nickname initially. Nicknames may only be added or modified post-creation via the update nickname endpoint.
@@ -372,19 +374,22 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
      - If requester already blocked target: Return success (idempotent operation)
      - If target already blocked requester: Allow reciprocal block to proceed
 
-### 5.2 Automatic Mutual Contact Removal
-- Database trigger fires AFTER INSERT on user_blocks table
-- Automatically removes both directional contact relationships and both directional contact requests:
-  - Blocker → Blocked contact removed
-  - Blocked → Blocker contact removed
-- Uses tuple deletion pattern for performance
-- Trigger function: remove_contact_on_block()
+### 5.2 Contact Relationship Preservation & Hard Exclusion
+- Contact records (`user_contacts`) and contact requests (`contact_requests`) are **not deleted** when a user is blocked.
+- Instead, blocking acts as a **hard exclusion layer** across all listing and interaction endpoints:
+  - `GetContactableProfilesForViewer` completely omits profiles blocked in either direction from contact lists, chat lists, and searches.
+  - Messaging eligibility and contact creation checks reject requests between blocked users with generic, non-directional errors (`action_not_permitted`, `user_blocked`).
+- **Self-Healing on Unblock**: If a block is lifted, existing contact records automatically reappear in the contact list during subsequent enrichment without requiring users to re-add each other.
 
 ### 5.3 Bidirectional Block Checking
-- Query: IsEitherBlocked returns status code:
+- Query: IsEitherBlocked returns internal status code (server-side only,
+  never exposed on the wire):
   - 0: No block exists between users
-  - 1: Requester blocked target ("you_blocked_user")
-  - 2: Target blocked requester ("user_blocked_you")
+  - 1: Requester blocked target
+  - 2: Target blocked requester
+- Outward errors are identical for 1 and 2 ("action_not_permitted" for
+  contacts, "user_blocked" eligibility for messaging) — direction must not
+  leak to either party.
 - Used in multiple operations:
   - Contact creation: Prevents adding blocked users.
   - Message sending: Prevents messaging blocked users.
@@ -403,7 +408,7 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   - Request body: `{ "blockedUserId": "<uuid>" }` (camelCase).
 - **Delete Block (Unblock)**: `POST /api/personal/contacts/blocks/delete`
   - Request body: `{ "blockedUserId": "<uuid>" }` (camelCase).
-  - Returns `rpc_common_model.v1.StatusOkay` (`{ "status": true, "message": "user_unblocked" }`).
+  - Returns `rpc_personal_contact.v1.UnblockUserResponse` (`{ "status": true, "message": "user_unblocked", "contact": <Contact?>, "isInContacts": <bool>, "isInPeopleWhoAddedYou": <bool> }`).
 
 ### 5.4 Message Cleanup on Block
 - System automatically deletes message sync actions between users in both directions
@@ -412,12 +417,6 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
 ### 5.5 Block Cascade Behavior
 - If user account is deleted: All block records are automatically removed via ON DELETE CASCADE
 - Blocks are permanent until explicitly removed or account deleted
-
-### 5.6 Frontend Implementation Status
-- Backend blocking functionality is fully implemented
-- Frontend has no blocking UI or API integration
-- No block action available in contact menus
-- No confirmation dialogs for blocking
 
 ---
 
@@ -780,17 +779,15 @@ Stores block relationships between users.
 
 **Triggers:**
 - `user_blocks_timestamps_trigger` - Automatic timestamp management via set_timestamps()
-- `auto_remove_contact_on_block` - Automatically removes mutual contacts and contact requests when block is created (AFTER INSERT)
 - `cleanup_sync_actions_on_block` - Automatically cleans up pending message sync actions when block is created (AFTER INSERT)
 
 **Functions:**
-- `remove_contact_on_block()` - Deletes both directional contact relationships and both directional contact requests: (blocker → blocked) and (blocked → blocker)
 - `cleanup_sync_actions_on_block()` - Deletes pending message sync actions for both users associated with their shared chat ID if a chat exists between them
 
 **Block Behavior:**
 - Idempotent: Blocking already-blocked user returns success
 - Reciprocal blocking allowed: If B blocked A, A can still block B
-- Automatic contact cleanup in both directions
+- Contact relationships and requests are preserved in DB (hard exclusion via query filtering, self-healing upon unblock)
 - Automatic message_sync_actions cleanup in both directions
 - Uses ON CONFLICT DO NOTHING for idempotency
 

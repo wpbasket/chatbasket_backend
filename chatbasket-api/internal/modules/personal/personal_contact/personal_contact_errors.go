@@ -15,8 +15,7 @@ var (
 	ErrSelfAdminBlocked      = kit.NewError(403, "forbidden", "self_admin_blocked")
 	ErrUserNotFound          = kit.NewError(404, "not_found", "user_not_found")
 	ErrUserAdminBlocked      = kit.NewError(403, "forbidden", "user_admin_blocked")
-	ErrYouBlockedUser        = kit.NewError(403, "forbidden", "you_blocked_user")
-	ErrUserBlockedYou        = kit.NewError(403, "forbidden", "user_blocked_you")
+	ErrActionNotPermitted    = kit.NewError(403, "forbidden", "action_not_permitted")
 	ErrInvalidNicknameLength = kit.NewError(400, "bad_request", "invalid_nickname_length")
 	ErrUserPrivateProfile    = kit.NewError(403, "forbidden", "user_private_profile")
 

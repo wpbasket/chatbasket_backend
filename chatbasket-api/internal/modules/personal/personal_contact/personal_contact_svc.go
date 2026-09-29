@@ -73,12 +73,18 @@ func (ps *contactService) checkBlockStatus(ctx context.Context, requesterID, tar
 	if !status.IsBlocked {
 		return nil
 	}
+	if status.IsRequesterUserBlockedByTarget || status.IsTargetUserBlockedByRequester {
+		// Privacy: user-block direction never leaves the service. If an
+		// admin/private condition is also present it takes precedence below
+		// (no user state); a pure user block is a single generic denial.
+		if !status.IsRequesterAdminBlocked && !status.IsTargetAdminBlocked && !status.IsTargetProfilePrivate {
+			return ErrActionNotPermitted
+		}
+	}
 	return kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", &rpc_common_modelv1.BlockStatusFlags{
-		IsRequesterAdminBlocked:        status.IsRequesterAdminBlocked,
-		IsTargetAdminBlocked:           status.IsTargetAdminBlocked,
-		IsRequesterUserBlockedByTarget: status.IsRequesterUserBlockedByTarget,
-		IsTargetUserBlockedByRequester: status.IsTargetUserBlockedByRequester,
-		IsTargetProfilePrivate:         status.IsTargetProfilePrivate,
+		IsRequesterAdminBlocked: status.IsRequesterAdminBlocked,
+		IsTargetAdminBlocked:    status.IsTargetAdminBlocked,
+		IsTargetProfilePrivate:  status.IsTargetProfilePrivate,
 	})
 }
 
@@ -312,10 +318,10 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 	switch blockStatus {
-	case 1:
-		return nil, kit.NewError(http.StatusForbidden, "forbidden", "you_blocked_user")
-	case 2:
-		return nil, kit.NewError(http.StatusForbidden, "forbidden", "user_blocked_you")
+	case 1, 2:
+		// Privacy: identical error either way — the caller must not learn
+		// whether they blocked the target or the target blocked them.
+		return nil, ErrActionNotPermitted
 	case 0:
 		// No block, continue
 	default:
@@ -535,20 +541,21 @@ func (ps *contactService) DeleteContact(ctx context.Context, payload *DeleteCont
 
 	if len(blockedIDs) == len(uniqIDs) {
 		if len(uniqIDs) == 1 {
-			var singleStatus *rpc_common_modelv1.BlockStatusFlags
 			for _, s := range statuses {
 				if s.TargetID == uniqIDs[0] {
-					singleStatus = &rpc_common_modelv1.BlockStatusFlags{
-						IsRequesterAdminBlocked:        s.IsRequesterAdminBlocked,
-						IsTargetAdminBlocked:           s.IsTargetAdminBlocked,
-						IsRequesterUserBlockedByTarget: s.IsRequesterUserBlockedByTarget,
-						IsTargetUserBlockedByRequester: s.IsTargetUserBlockedByRequester,
-						IsTargetProfilePrivate:         s.IsTargetProfilePrivate,
+					// Privacy: a pure user block is a single generic denial
+					// with no direction flags; admin/private keeps details.
+					if !s.IsRequesterAdminBlocked && !s.IsTargetAdminBlocked && !s.IsTargetProfilePrivate {
+						return nil, ErrActionNotPermitted
 					}
-					break
+					return nil, kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", &rpc_common_modelv1.BlockStatusFlags{
+						IsRequesterAdminBlocked: s.IsRequesterAdminBlocked,
+						IsTargetAdminBlocked:    s.IsTargetAdminBlocked,
+						IsTargetProfilePrivate:  s.IsTargetProfilePrivate,
+					})
 				}
 			}
-			return nil, kit.NewErrorWithDetails(http.StatusForbidden, "forbidden", "blocked", singleStatus)
+			return nil, kit.NewError(http.StatusForbidden, "forbidden", "all_contacts_blocked")
 		}
 		return nil, kit.NewError(http.StatusForbidden, "forbidden", "all_contacts_blocked")
 	}
