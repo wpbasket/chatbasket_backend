@@ -159,6 +159,9 @@ func TestCreateContact_PublicProfile(t *testing.T) {
 	mock.ExpectExec(`INSERT INTO user_contacts`).
 		WithArgs(ownerID, contactID).
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+	mock.ExpectQuery(`DELETE FROM contact_requests AS cr`).
+		WithArgs(ownerID, contactID).
+		WillReturnRows(pgxmock.NewRows([]string{"outcome"}).AddRow("not_found"))
 	mock.ExpectQuery(`SELECT\s+uc\.contact_user_id AS id`).
 		WithArgs(ownerID, contactID).
 		WillReturnRows(pgxmock.NewRows([]string{"id", "nickname", "contact_created_at", "contact_updated_at"}).

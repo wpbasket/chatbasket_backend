@@ -274,6 +274,21 @@ func (ps *contactService) CheckContactExistance(ctx context.Context, payload *Ch
 	return existsResp, nil
 }
 
+// deleteSatisfiedRequest removes the same-direction pending request
+// (requester=owner, receiver=contact) once the one-way contact exists.
+// The reverse wish is a separate row and is left untouched. A missing row
+// is a no-op, not an error.
+func (ps *contactService) deleteSatisfiedRequest(ctx context.Context, ownerID, contactID uuid.UUID) error {
+	_, err := ps.PostgresQueries.UndoContactRequest(ctx, personal_contact_store.UndoContactRequestParams{
+		RequesterUserID: ownerID,
+		ReceiverUserID:  contactID,
+	})
+	if err != nil {
+		return kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+	}
+	return nil
+}
+
 func (ps *contactService) CreateContact(ctx context.Context, payload *CreateContactPayload, userId kit.UserId) (*rpc_personal_contactv1.CreateContactResponse, error) {
 	if payload == nil || payload.ContactUserId == "" {
 		return nil, kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
@@ -337,6 +352,9 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
 	}
 	if alreadyContact {
+		if err := ps.deleteSatisfiedRequest(ctx, userId.UuidUserId, targetUUID); err != nil {
+			return nil, err
+		}
 		contact, err := ps.buildSingleContactForOwner(ctx, userId.UuidUserId, targetUUID)
 		if err != nil {
 			return nil, err
@@ -356,6 +374,9 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 		})
 		if err != nil {
 			return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+		}
+		if err := ps.deleteSatisfiedRequest(ctx, userId.UuidUserId, targetUUID); err != nil {
+			return nil, err
 		}
 		contact, err := ps.buildSingleContactForOwner(ctx, userId.UuidUserId, targetUUID)
 		if err != nil {
@@ -377,6 +398,9 @@ func (ps *contactService) CreateContact(ctx context.Context, payload *CreateCont
 			})
 			if err != nil {
 				return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", kit.GetPostgresError(err).Message)
+			}
+			if err := ps.deleteSatisfiedRequest(ctx, userId.UuidUserId, targetUUID); err != nil {
+				return nil, err
 			}
 			contact, err := ps.buildSingleContactForOwner(ctx, userId.UuidUserId, targetUUID)
 			if err != nil {
