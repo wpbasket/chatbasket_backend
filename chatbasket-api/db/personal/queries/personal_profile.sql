@@ -38,9 +38,9 @@ SELECT 1 AS locked FROM users WHERE id = $1 FOR UPDATE;
 -- name: TryLockUserNoWait :one
 -- Instant deletion probe for the messaging gate (fields: users.id = sender
 -- or recipient). NOWAIT = Postgres returns 55P03 at once if the deleter
--- holds the row, never waits. Plain SELECTs do not conflict with row locks
--- (docs 13.3.2), so this explicit probe is required.
-SELECT 1 AS locked FROM users WHERE id = $1 FOR UPDATE NOWAIT;
+-- holds the row (FOR UPDATE), never waits. Uses FOR KEY SHARE so concurrent
+-- message sends and foreign-key checks (which also use KEY SHARE) do not conflict.
+SELECT 1 AS locked FROM users WHERE id = $1 FOR KEY SHARE NOWAIT;
 
 -- name: CreateAloneUsername :one
 INSERT INTO

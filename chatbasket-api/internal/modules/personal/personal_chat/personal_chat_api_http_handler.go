@@ -92,6 +92,10 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload")
 	}
 
+	if err := validateMessageContentLength(payload.Content); err != nil {
+		return err
+	}
+
 	resp, svcErr := h.Service.SendMessageHandler(c.Request().Context(), &payload, userID, isPrimary)
 	if svcErr != nil {
 		return svcErr
@@ -650,6 +654,10 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 	if err := c.Bind(&payload); err != nil {
 		return kit.NewError(http.StatusBadRequest, "bad_request", "Invalid confirm payload")
 	}
+
+	if err := validateMessageContentLength(payload.Content); err != nil {
+		return err
+	}
 	messageID, err := uuid.Parse(payload.MessageID)
 	if err != nil {
 		return kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message id")
@@ -661,6 +669,14 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 	if userID.UuidUserId == recipientID {
 		return kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send file to yourself")
 	}
+	var replyToUUID *uuid.UUID
+	if payload.ReplyToMessageID != nil && *payload.ReplyToMessageID != "" {
+		parsed, err := uuid.Parse(*payload.ReplyToMessageID)
+		if err != nil {
+			return kit.NewError(http.StatusBadRequest, "invalid_reply_to_message_id", "Invalid reply to message id")
+		}
+		replyToUUID = &parsed
+	}
 	message, svcErr := h.Service.ConfirmChatUpload(c.Request().Context(), ConfirmChatUploadParams{
 		MessageID:             messageID,
 		SenderID:              userID,
@@ -671,6 +687,7 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 		IsPrimary:             isPrimary,
 		RecipientKeysRevision: payload.RecipientKeysRevision,
 		SenderKeysRevision:    payload.SenderKeysRevision,
+		ReplyToMessageID:      replyToUUID,
 	})
 	if svcErr != nil {
 		return svcErr
@@ -688,6 +705,7 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 		DownloadURL:        downloadURL,
 		CreatedAt:          message.CreatedAt,
 		ExpiresAt:          message.ExpiresAt,
+		ReplyToMessageID:   uuidPtrToStringPtr(message.ReplyToMessageID),
 	}
 	// SSE Broadcast: ConfirmFileMessageUploadSseEvent to recipient and sender's other devices
 	if h.personalSseManager != nil {
@@ -712,6 +730,7 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 			ReadByRecipient:       message.ReadByRecipient,
 			ReadAckedBySender:     message.ReadAckedBySender,
 			ReadAt:                kit.OptionalTimestamp(message.ReadAt),
+			ReplyToMessageId:      uuidPtrToStringPtr(message.ReplyToMessageID),
 		}
 
 		recipientUUID, _ := uuid.Parse(protoMsg.RecipientId)

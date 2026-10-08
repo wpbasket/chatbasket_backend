@@ -14,7 +14,8 @@ import (
 // Register initializes the Personal SSE module: instantiates its manager and starts the Postgres listener.
 func Register(pool *pgxpool.Pool) *Manager {
 	personalSseManager := NewManager(pool)
-	go StartPostgresListener(context.Background(), pool, personalSseManager)
+	go personalSseManager.StartListener(context.Background())
+	go personalSseManager.StartSweeper(context.Background())
 	return personalSseManager
 }
 

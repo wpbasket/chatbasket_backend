@@ -79,14 +79,14 @@ func TestCleanupExpiredMessages_Mock(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Define standard 28 columns returned by GetExpiredMessagesWithFiles & GetMessagesWithFilesForBlockedUsers
+	// Define standard 29 columns returned by GetExpiredMessagesWithFiles & GetMessagesWithFilesForBlockedUsers
 	columns := []string{
 		"id", "chat_id", "sender_id", "recipient_id", "content", "message_type",
 		"file_id", "file_name", "file_size", "file_mime_type", "file_token_id", "file_token_secret", "file_token_expiry",
 		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
 		"delivered_to_recipient", "delivered_to_recipient_primary", "synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient", "delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id",
 	}
 
 	msg1ID := uuid.New()
@@ -125,10 +125,10 @@ func TestCleanupExpiredMessages_Mock(t *testing.T) {
 	mock.ExpectQuery(`(?s)SELECT .* FROM messages WHERE .* expires_at < now\(\) .* file_id IS NOT NULL`).
 		WithArgs(int32(100), uuid.Nil).
 		WillReturnRows(pgxmock.NewRows(columns).
-			AddRow(msg1.ID, uuid.New(), uuid.New(), uuid.New(), "content", msg1.MessageType, msg1.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil).
-			AddRow(msg2.ID, uuid.New(), uuid.New(), uuid.New(), "content", msg2.MessageType, msg2.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil).
-			AddRow(msg3.ID, uuid.New(), uuid.New(), uuid.New(), "content", msg3.MessageType, msg3.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil).
-			AddRow(msg4.ID, uuid.New(), uuid.New(), uuid.New(), "content", msg4.MessageType, msg4.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil))
+			AddRow(msg1.ID, uuid.New(), uuid.New(), uuid.New(), "content", msg1.MessageType, msg1.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil, nil).
+			AddRow(msg2.ID, uuid.New(), uuid.New(), uuid.New(), "content", msg2.MessageType, msg2.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil, nil).
+			AddRow(msg3.ID, uuid.New(), uuid.New(), uuid.New(), "content", msg3.MessageType, msg3.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil, nil).
+			AddRow(msg4.ID, uuid.New(), uuid.New(), uuid.New(), "content", msg4.MessageType, msg4.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil, nil))
 
 	// Mock cleanup database expectations for GetExpiredMessagesWithFiles.
 	// New flow strips (never deletes): only rows WITH a file id reach the DB —
@@ -155,7 +155,7 @@ func TestCleanupExpiredMessages_Mock(t *testing.T) {
 	mock.ExpectQuery(`(?s)SELECT .* FROM messages m INNER JOIN chats c ON m.chat_id = c.id INNER JOIN user_blocks ub .* WHERE m.file_id IS NOT NULL`).
 		WithArgs(uuid.Nil, int32(100)).
 		WillReturnRows(pgxmock.NewRows(columns).
-			AddRow(msgBlocked.ID, uuid.New(), uuid.New(), uuid.New(), "content", msgBlocked.MessageType, msgBlocked.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil))
+			AddRow(msgBlocked.ID, uuid.New(), uuid.New(), uuid.New(), "content", msgBlocked.MessageType, msgBlocked.FileID, nil, nil, nil, nil, nil, nil, nil, nil, nil, true, trueVal, true, false, false, int32(0), time.Now(), time.Now(), time.Now(), false, false, nil, nil))
 
 	// Mock DB expectation for blocked message -> calls DeleteMessage
 	mock.ExpectExec(`DELETE FROM messages WHERE id = \$1`).

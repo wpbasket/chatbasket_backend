@@ -828,13 +828,13 @@ func (q *Queries) LockUserForUpdate(ctx context.Context, id uuid.UUID) (int32, e
 }
 
 const tryLockUserNoWait = `-- name: TryLockUserNoWait :one
-SELECT 1 AS locked FROM users WHERE id = $1 FOR UPDATE NOWAIT
+SELECT 1 AS locked FROM users WHERE id = $1 FOR KEY SHARE NOWAIT
 `
 
 // Instant deletion probe for the messaging gate (fields: users.id = sender
 // or recipient). NOWAIT = Postgres returns 55P03 at once if the deleter
-// holds the row, never waits. Plain SELECTs do not conflict with row locks
-// (docs 13.3.2), so this explicit probe is required.
+// holds the row (FOR UPDATE), never waits. Uses FOR KEY SHARE so concurrent
+// message sends and foreign-key checks (which also use KEY SHARE) do not conflict.
 func (q *Queries) TryLockUserNoWait(ctx context.Context, id uuid.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, tryLockUserNoWait, id)
 	var locked int32

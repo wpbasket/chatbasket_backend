@@ -247,8 +247,8 @@ func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at"}
-	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
 			"Hello", "text",
@@ -258,7 +258,7 @@ func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
 		),
 	)
 
@@ -283,14 +283,8 @@ func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
 		SenderKeysRevision:    0,
 	})
 
-	// Revision check passes — any error must NOT be a staleness error
-	if sendErr != nil {
-		if pe, ok := sendErr.(kit.ProcessedError); ok {
-			assert.NotEqual(t, "recipient_keys_stale", pe.Kind())
-			assert.NotEqual(t, "sender_keys_stale", pe.Kind())
-			assert.NotEqual(t, "keys_stale", pe.Kind())
-		}
-	}
+	// Revision check passes — the send must succeed, not just avoid staleness.
+	require.NoError(t, sendErr)
 	assert.NoError(t, mockPool.ExpectationsWereMet())
 }
 
@@ -355,8 +349,8 @@ func TestSendMessage_RevisionStaleness_AcceptsZeroRevision(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at"}
-	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
 			"Hello", "text",
@@ -366,7 +360,7 @@ func TestSendMessage_RevisionStaleness_AcceptsZeroRevision(t *testing.T) {
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
 		),
 	)
 	mockPool.ExpectExec(`UPDATE.*chats`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))

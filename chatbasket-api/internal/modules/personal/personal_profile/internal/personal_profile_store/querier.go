@@ -93,8 +93,8 @@ type Querier interface {
 	LockUserForUpdate(ctx context.Context, id uuid.UUID) (int32, error)
 	// Instant deletion probe for the messaging gate (fields: users.id = sender
 	// or recipient). NOWAIT = Postgres returns 55P03 at once if the deleter
-	// holds the row, never waits. Plain SELECTs do not conflict with row locks
-	// (docs 13.3.2), so this explicit probe is required.
+	// holds the row (FOR UPDATE), never waits. Uses FOR KEY SHARE so concurrent
+	// message sends and foreign-key checks (which also use KEY SHARE) do not conflict.
 	TryLockUserNoWait(ctx context.Context, id uuid.UUID) (int32, error)
 	// Updates only the file_id for the main profile avatar (token columns unused per spec §3.C).
 	UpdateAvatarFileID(ctx context.Context, arg UpdateAvatarFileIDParams) error

@@ -1,9 +1,12 @@
 package personal_chat
 
 import (
+	"net/http"
+	"time"
+	"unicode/utf8"
+
 	rpc_personal_chatv1 "chatbasket-api/gen/proto/personal/personal_chat"
 	"chatbasket-api/internal/platform/kit"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -17,11 +20,29 @@ const (
 )
 
 const (
-	MaxFileSize         = 100 * 1024 * 1024
-	DefaultMessageTTL   = 30 * 24 * time.Hour
-	StorageFullTTL      = 7 * 24 * time.Hour
-	MaxDeliveryAttempts = 5
+	MaxFileSize             = 100 * 1024 * 1024
+	DefaultMessageTTL       = 30 * 24 * time.Hour
+	StorageFullTTL          = 7 * 24 * time.Hour
+	MaxDeliveryAttempts     = 5
+	MaxMessageContentLength = 25000
 )
+
+// validateMessageContentLength caps content at 25,000 to protect DB, memory, and SSE fanout across both bytes and runes:
+// - 4,000 characters: the general message limit (user-typed text —
+//   the input box counts UTF-16 units, so basic 2-unit emojis allow
+//   roughly 2,000, while compound emojis like flags or families take
+//   4-7+ units each and fit fewer; 3-byte Asian/Hindi scripts are the
+//   heaviest real input at ~16.9KB wire bytes after E2EE + base64)
+// - 150 characters: reply/quote snippet, auto-appended by the client, not typed (~700 bytes metadata)
+// - Multi-device sessions (up to 6 recipient + sender sync devices): ~2,000 bytes
+// Worst-case peak ≈ 19.6KB, so 25,000 leaves a ~5.4KB buffer while staying
+// far under the 64KB SSE event ceiling. See MESSAGE_PAYLOAD_SIZING_FORMULA.md.
+func validateMessageContentLength(content string) error {
+	if len(content) > MaxMessageContentLength || utf8.RuneCountInString(content) > MaxMessageContentLength {
+		return kit.NewError(http.StatusBadRequest, "content_too_long", "Message content cannot exceed 25000 characters")
+	}
+	return nil
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Response Structs
@@ -75,6 +96,7 @@ type MessageResponse struct {
 	ReadAckedBySender           bool       `json:"readAckedBySender"`
 	ReadAt                      *time.Time `json:"readAt,omitempty"`
 	IsConsumed                  bool       `json:"isConsumed"`
+	ReplyToMessageID            *string    `json:"replyToMessageId,omitempty"`
 }
 
 type MessagingEligibilityResponse struct {
@@ -131,10 +153,11 @@ type ConfirmChatUploadPayload struct {
 	MessageID             string `json:"messageId" validate:"required,uuid"`
 	FileID                string `json:"fileId" validate:"required"`
 	RecipientID           string `json:"recipientId" validate:"required,uuid"`
-	Content               string `json:"content" validate:"required,max=5000"`
-	MessageType           string `json:"messageType" validate:"required,oneof=image video audio file"`
-	RecipientKeysRevision int32  `json:"recipientKeysRevision"`
-	SenderKeysRevision    int32  `json:"senderKeysRevision"`
+	Content               string  `json:"content" validate:"required,max=25000"`
+	MessageType           string  `json:"messageType" validate:"required,oneof=image video audio file"`
+	RecipientKeysRevision int32   `json:"recipientKeysRevision"`
+	SenderKeysRevision    int32   `json:"senderKeysRevision"`
+	ReplyToMessageID      *string `json:"replyToMessageId,omitempty" validate:"omitempty,uuid"`
 }
 
 // ConfirmChatUploadResponse is returned by POST /chat/confirm.
@@ -149,6 +172,7 @@ type ConfirmChatUploadResponse struct {
 	DownloadURL        string    `json:"downloadUrl"`
 	CreatedAt          time.Time `json:"createdAt"`
 	ExpiresAt          time.Time `json:"expiresAt"`
+	ReplyToMessageID   *string   `json:"replyToMessageId,omitempty"`
 }
 
 type SyncActionResponse struct {
@@ -205,10 +229,11 @@ type CreateChatPayload struct {
 type SendMessagePayload struct {
 	MessageID             string `json:"messageId" validate:"required,uuid"`
 	RecipientID           string `json:"recipientId" validate:"required,uuid"`
-	Content               string `json:"content" validate:"required,max=5000"`
-	MessageType           string `json:"messageType" validate:"required,oneof=text image video audio file"`
-	RecipientKeysRevision int32  `json:"recipientKeysRevision"`
-	SenderKeysRevision    int32  `json:"senderKeysRevision"`
+	Content               string  `json:"content" validate:"required,max=25000"`
+	MessageType           string  `json:"messageType" validate:"required,oneof=text image video audio file"`
+	RecipientKeysRevision int32   `json:"recipientKeysRevision"`
+	SenderKeysRevision    int32   `json:"senderKeysRevision"`
+	ReplyToMessageID      *string `json:"replyToMessageId,omitempty" validate:"omitempty,uuid"`
 }
 
 type AcknowledgeDeliveryPayload struct {
@@ -317,5 +342,6 @@ type SendMessageParams struct {
 	IsPrimary             bool
 	RecipientKeysRevision int32
 	SenderKeysRevision    int32
+	ReplyToMessageID      *uuid.UUID
 }
 

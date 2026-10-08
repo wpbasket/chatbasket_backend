@@ -107,7 +107,7 @@ func Load() (*Config, error) {
 	pgCfg := &PostgresConfig{
 		DatabaseURL:           dsn,
 		DatabaseURLTesting:    os.Getenv("DATABASE_URL_PG_TESTING"),
-		MaxConns:              30,
+		MaxConns:              40,
 		MinConns:              2,
 		MinIdleConns:          2,
 		MaxConnLifetime:       kit.DefaultPostgresMaxConnLifetime,

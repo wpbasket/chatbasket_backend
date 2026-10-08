@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.31.1
 
-package pending_uploads_store
+package personal_sse_store
 
 import (
 	"time"

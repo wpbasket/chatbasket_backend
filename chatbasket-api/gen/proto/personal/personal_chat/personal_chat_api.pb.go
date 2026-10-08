@@ -171,6 +171,7 @@ type Message struct {
 	ReadAckedBySender           bool                   `protobuf:"varint,20,opt,name=readAckedBySender,proto3" json:"readAckedBySender,omitempty"`
 	ReadAt                      *timestamppb.Timestamp `protobuf:"bytes,21,opt,name=readAt,proto3,oneof" json:"readAt,omitempty"`
 	IsConsumed                  bool                   `protobuf:"varint,22,opt,name=isConsumed,proto3" json:"isConsumed,omitempty"`
+	ReplyToMessageId            *string                `protobuf:"bytes,23,opt,name=replyToMessageId,proto3,oneof" json:"replyToMessageId,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -357,6 +358,13 @@ func (x *Message) GetIsConsumed() bool {
 		return x.IsConsumed
 	}
 	return false
+}
+
+func (x *Message) GetReplyToMessageId() string {
+	if x != nil && x.ReplyToMessageId != nil {
+		return *x.ReplyToMessageId
+	}
+	return ""
 }
 
 type CheckEligibilityRequest struct {
@@ -719,6 +727,7 @@ type SendMessageRequest struct {
 	MessageType           string                 `protobuf:"bytes,4,opt,name=messageType,proto3" json:"messageType,omitempty"`
 	RecipientKeysRevision int32                  `protobuf:"varint,5,opt,name=recipientKeysRevision,proto3" json:"recipientKeysRevision,omitempty"`
 	SenderKeysRevision    int32                  `protobuf:"varint,6,opt,name=senderKeysRevision,proto3" json:"senderKeysRevision,omitempty"`
+	ReplyToMessageId      *string                `protobuf:"bytes,7,opt,name=replyToMessageId,proto3,oneof" json:"replyToMessageId,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -793,6 +802,13 @@ func (x *SendMessageRequest) GetSenderKeysRevision() int32 {
 		return x.SenderKeysRevision
 	}
 	return 0
+}
+
+func (x *SendMessageRequest) GetReplyToMessageId() string {
+	if x != nil && x.ReplyToMessageId != nil {
+		return *x.ReplyToMessageId
+	}
+	return ""
 }
 
 type GetMessagesRequest struct {
@@ -1668,6 +1684,7 @@ type ConfirmChatUploadRequest struct {
 	MessageType           string                 `protobuf:"bytes,5,opt,name=messageType,proto3" json:"messageType,omitempty"`
 	RecipientKeysRevision int32                  `protobuf:"varint,6,opt,name=recipientKeysRevision,proto3" json:"recipientKeysRevision,omitempty"`
 	SenderKeysRevision    int32                  `protobuf:"varint,7,opt,name=senderKeysRevision,proto3" json:"senderKeysRevision,omitempty"`
+	ReplyToMessageId      *string                `protobuf:"bytes,8,opt,name=replyToMessageId,proto3,oneof" json:"replyToMessageId,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -1751,6 +1768,13 @@ func (x *ConfirmChatUploadRequest) GetSenderKeysRevision() int32 {
 	return 0
 }
 
+func (x *ConfirmChatUploadRequest) GetReplyToMessageId() string {
+	if x != nil && x.ReplyToMessageId != nil {
+		return *x.ReplyToMessageId
+	}
+	return ""
+}
+
 type ConfirmChatUploadResponse struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	MessageId          string                 `protobuf:"bytes,1,opt,name=messageId,proto3" json:"messageId,omitempty"`
@@ -1763,6 +1787,7 @@ type ConfirmChatUploadResponse struct {
 	DownloadUrl        string                 `protobuf:"bytes,8,opt,name=downloadUrl,proto3" json:"downloadUrl,omitempty"`
 	CreatedAt          *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=createdAt,proto3" json:"createdAt,omitempty"`
 	ExpiresAt          *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=expiresAt,proto3" json:"expiresAt,omitempty"`
+	ReplyToMessageId   *string                `protobuf:"bytes,11,opt,name=replyToMessageId,proto3,oneof" json:"replyToMessageId,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1865,6 +1890,13 @@ func (x *ConfirmChatUploadResponse) GetExpiresAt() *timestamppb.Timestamp {
 		return x.ExpiresAt
 	}
 	return nil
+}
+
+func (x *ConfirmChatUploadResponse) GetReplyToMessageId() string {
+	if x != nil && x.ReplyToMessageId != nil {
+		return *x.ReplyToMessageId
+	}
+	return ""
 }
 
 type GetFileURLRequest struct {
@@ -3415,7 +3447,7 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\r_otherUserBioB\f\n" +
 	"\n" +
 	"_avatarUrlB\x0f\n" +
-	"\r_avatarFileId\"\xbf\a\n" +
+	"\r_avatarFileId\"\x85\b\n" +
 	"\aMessage\x12\x1c\n" +
 	"\tmessageId\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06chatId\x18\x02 \x01(\tR\x06chatId\x12 \n" +
@@ -3441,12 +3473,14 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\x06readAt\x18\x15 \x01(\v2\x1a.google.protobuf.TimestampH\x04R\x06readAt\x88\x01\x01\x12\x1e\n" +
 	"\n" +
 	"isConsumed\x18\x16 \x01(\bR\n" +
-	"isConsumedB\t\n" +
+	"isConsumed\x12/\n" +
+	"\x10replyToMessageId\x18\x17 \x01(\tH\x05R\x10replyToMessageId\x88\x01\x01B\t\n" +
 	"\a_fileIdB\v\n" +
 	"\t_fileNameB\v\n" +
 	"\t_fileSizeB\x0f\n" +
 	"\r_fileMimeTypeB\t\n" +
-	"\a_readAt\";\n" +
+	"\a_readAtB\x13\n" +
+	"\x11_replyToMessageId\";\n" +
 	"\x17CheckEligibilityRequest\x12 \n" +
 	"\vrecipientId\x18\x01 \x01(\tR\vrecipientId\"L\n" +
 	"\x18CheckEligibilityResponse\x12\x18\n" +
@@ -3474,14 +3508,16 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\x13GetUserChatsRequest\"^\n" +
 	"\x14GetUserChatsResponse\x120\n" +
 	"\x05chats\x18\x01 \x03(\v2\x1a.rpc_personal_chat.v1.ChatR\x05chats\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x05R\x05count\"\xf6\x01\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\"\xbc\x02\n" +
 	"\x12SendMessageRequest\x12\x1c\n" +
 	"\tmessageId\x18\x01 \x01(\tR\tmessageId\x12 \n" +
 	"\vrecipientId\x18\x02 \x01(\tR\vrecipientId\x12\x18\n" +
 	"\acontent\x18\x03 \x01(\tR\acontent\x12 \n" +
 	"\vmessageType\x18\x04 \x01(\tR\vmessageType\x124\n" +
 	"\x15recipientKeysRevision\x18\x05 \x01(\x05R\x15recipientKeysRevision\x12.\n" +
-	"\x12senderKeysRevision\x18\x06 \x01(\x05R\x12senderKeysRevision\"\xde\x01\n" +
+	"\x12senderKeysRevision\x18\x06 \x01(\x05R\x12senderKeysRevision\x12/\n" +
+	"\x10replyToMessageId\x18\a \x01(\tH\x00R\x10replyToMessageId\x88\x01\x01B\x13\n" +
+	"\x11_replyToMessageId\"\xde\x01\n" +
 	"\x12GetMessagesRequest\x12\x16\n" +
 	"\x06chatId\x18\x01 \x01(\tR\x06chatId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12G\n" +
@@ -3558,7 +3594,7 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\x19PresignChatUploadResponse\x12\x16\n" +
 	"\x06fileId\x18\x01 \x01(\tR\x06fileId\x12\"\n" +
 	"\fpresignedUrl\x18\x02 \x01(\tR\fpresignedUrl\x128\n" +
-	"\texpiresAt\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\x94\x02\n" +
+	"\texpiresAt\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xda\x02\n" +
 	"\x18ConfirmChatUploadRequest\x12\x1c\n" +
 	"\tmessageId\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06fileId\x18\x02 \x01(\tR\x06fileId\x12 \n" +
@@ -3566,7 +3602,9 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\acontent\x18\x04 \x01(\tR\acontent\x12 \n" +
 	"\vmessageType\x18\x05 \x01(\tR\vmessageType\x124\n" +
 	"\x15recipientKeysRevision\x18\x06 \x01(\x05R\x15recipientKeysRevision\x12.\n" +
-	"\x12senderKeysRevision\x18\a \x01(\x05R\x12senderKeysRevision\"\x8d\x03\n" +
+	"\x12senderKeysRevision\x18\a \x01(\x05R\x12senderKeysRevision\x12/\n" +
+	"\x10replyToMessageId\x18\b \x01(\tH\x00R\x10replyToMessageId\x88\x01\x01B\x13\n" +
+	"\x11_replyToMessageId\"\xd3\x03\n" +
 	"\x19ConfirmChatUploadResponse\x12\x1c\n" +
 	"\tmessageId\x18\x01 \x01(\tR\tmessageId\x12\x16\n" +
 	"\x06chatId\x18\x02 \x01(\tR\x06chatId\x12 \n" +
@@ -3578,7 +3616,9 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\vdownloadUrl\x18\b \x01(\tR\vdownloadUrl\x128\n" +
 	"\tcreatedAt\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x128\n" +
 	"\texpiresAt\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"1\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12/\n" +
+	"\x10replyToMessageId\x18\v \x01(\tH\x00R\x10replyToMessageId\x88\x01\x01B\x13\n" +
+	"\x11_replyToMessageId\"1\n" +
 	"\x11GetFileURLRequest\x12\x1c\n" +
 	"\tmessageId\x18\x01 \x01(\tR\tmessageId\"P\n" +
 	"\x12GetFileURLResponse\x12\x18\n" +
@@ -3881,10 +3921,13 @@ func file_proto_personal_personal_chat_personal_chat_api_proto_init() {
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[0].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[1].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[5].OneofWrappers = []any{}
+	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[8].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[9].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[10].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[11].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[12].OneofWrappers = []any{}
+	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[23].OneofWrappers = []any{}
+	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[24].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[32].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[51].OneofWrappers = []any{
 		(*ChatSsePayload_SendMessageSseEvent)(nil),

@@ -88,6 +88,10 @@ func (s *chatConnectServer) SendMessage(ctx context.Context, req *connect.Reques
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
+	if err := validateMessageContentLength(req.Msg.Content); err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
 	res, err := s.chatService.SendMessageHandler(ctx, &SendMessagePayload{
 		MessageID:             req.Msg.MessageId,
 		RecipientID:           req.Msg.RecipientId,
@@ -95,6 +99,7 @@ func (s *chatConnectServer) SendMessage(ctx context.Context, req *connect.Reques
 		MessageType:           req.Msg.MessageType,
 		RecipientKeysRevision: req.Msg.RecipientKeysRevision,
 		SenderKeysRevision:    req.Msg.SenderKeysRevision,
+		ReplyToMessageID:      req.Msg.ReplyToMessageId,
 	}, userID, isPrimary)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
@@ -729,6 +734,10 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
+	if err := validateMessageContentLength(req.Msg.Content); err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
 	messageID, err := uuid.Parse(req.Msg.MessageId)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message id"))
@@ -743,6 +752,15 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send file to yourself"))
 	}
 
+	var replyToUUID *uuid.UUID
+	if req.Msg.ReplyToMessageId != nil && *req.Msg.ReplyToMessageId != "" {
+		parsed, err := uuid.Parse(*req.Msg.ReplyToMessageId)
+		if err != nil {
+			return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "invalid_reply_to_message_id", "Invalid reply to message id"))
+		}
+		replyToUUID = &parsed
+	}
+
 	message, svcErr := s.chatService.ConfirmChatUpload(ctx, ConfirmChatUploadParams{
 		MessageID:             messageID,
 		SenderID:              userID,
@@ -753,6 +771,7 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 		IsPrimary:             isPrimary,
 		RecipientKeysRevision: req.Msg.RecipientKeysRevision,
 		SenderKeysRevision:    req.Msg.SenderKeysRevision,
+		ReplyToMessageID:      replyToUUID,
 	})
 	if svcErr != nil {
 		return nil, kit.ParseIntoRpcError(svcErr)
@@ -772,6 +791,7 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 		DownloadUrl:        downloadURL,
 		CreatedAt:          timestamppb.New(message.CreatedAt),
 		ExpiresAt:          timestamppb.New(message.ExpiresAt),
+		ReplyToMessageId:   uuidPtrToStringPtr(message.ReplyToMessageID),
 	}
 
 	// SSE Broadcast: ConfirmFileMessageUploadSseEvent to recipient and sender's other devices
@@ -797,6 +817,7 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 			ReadByRecipient:       message.ReadByRecipient,
 			ReadAckedBySender:     message.ReadAckedBySender,
 			ReadAt:                kit.OptionalTimestamp(message.ReadAt),
+			ReplyToMessageId:      uuidPtrToStringPtr(message.ReplyToMessageID),
 		}
 
 		recipientUUID, _ := uuid.Parse(protoMsg.RecipientId)

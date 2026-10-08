@@ -503,3 +503,59 @@ func TestManager_ConcurrentUnregisterAndBroadcast(t *testing.T) {
 	}()
 	wg.Wait()
 }
+
+func TestManager_HasUser(t *testing.T) {
+	userID, sessionUUID := uuid.New(), uuid.New()
+	m := NewManager[string]()
+
+	if m.HasUser(userID) {
+		t.Fatal("expected HasUser to return false for unregistered user")
+	}
+
+	conn, ok := m.Register(userID, sessionUUID, false)
+	if !ok {
+		t.Fatal("Register returned false")
+	}
+
+	if !m.HasUser(userID) {
+		t.Fatal("expected HasUser to return true for registered user")
+	}
+
+	m.Unregister(conn)
+	if m.HasUser(userID) {
+		t.Fatal("expected HasUser to return false after unregistering")
+	}
+}
+
+func TestManager_HasUserExcept(t *testing.T) {
+	userID := uuid.New()
+	sessionA, sessionB := uuid.New(), uuid.New()
+	m := NewManager[string]()
+
+	if m.HasUserExcept(userID, sessionA) {
+		t.Fatal("expected false for unregistered user")
+	}
+
+	connA, _ := m.Register(userID, sessionA, false)
+
+	// User only has sessionA, so HasUserExcept sessionA should be false
+	if m.HasUserExcept(userID, sessionA) {
+		t.Fatal("expected false when only excluded session exists")
+	}
+	// HasUserExcept sessionB should be true because sessionA exists
+	if !m.HasUserExcept(userID, sessionB) {
+		t.Fatal("expected true when other session exists")
+	}
+
+	connB, _ := m.Register(userID, sessionB, false)
+	// Now both exist, so HasUserExcept sessionA should be true (sessionB is present)
+	if !m.HasUserExcept(userID, sessionA) {
+		t.Fatal("expected true because sessionB is still registered")
+	}
+
+	m.Unregister(connB)
+	if m.HasUserExcept(userID, sessionA) {
+		t.Fatal("expected false after sessionB unregistered")
+	}
+	m.Unregister(connA)
+}

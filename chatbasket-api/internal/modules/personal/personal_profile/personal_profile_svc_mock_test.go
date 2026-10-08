@@ -462,7 +462,7 @@ func TestPresignAvatarUpload_Mock_Success(t *testing.T) {
 	require.NoError(t, err)
 	defer mock.Close()
 	store := personal_profile_store.New(mock)
-	mock.ExpectQuery(`SELECT 1 AS locked FROM users WHERE id = \$1 FOR UPDATE NOWAIT`).
+	mock.ExpectQuery(`SELECT 1 AS locked FROM users WHERE id = \$1 FOR KEY SHARE NOWAIT`).
 		WithArgs(userID.UuidUserId).
 		WillReturnRows(pgxmock.NewRows([]string{"locked"}).AddRow(int32(1)))
 

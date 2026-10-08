@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"sort"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -345,6 +344,54 @@ func (s *chatService) checkRevisionStaleness(ctx context.Context, senderID kit.U
 	return kit.NewErrorWithDetails(http.StatusConflict, "keys_stale", fmt.Sprintf("keys_revision is stale (side: %s)", side), details)
 }
 
+// normalizeReplyToMessageID treats the all-zero UUID as absent.
+// uuid.Parse accepts 00000000-... so this must run after validation and
+// before insert on every write path (SendMessage, ConfirmChatUpload) to
+// avoid persisting a dangling reply target.
+func normalizeReplyToMessageID(replyToID *uuid.UUID) *uuid.UUID {
+	if replyToID != nil && *replyToID == uuid.Nil {
+		return nil
+	}
+	return replyToID
+}
+
+func (s *chatService) validateReplyToMessage(
+	ctx context.Context,
+	replyToID *uuid.UUID,
+	messageID uuid.UUID,
+	senderID uuid.UUID,
+	recipientID uuid.UUID,
+) error {
+	if replyToID == nil || *replyToID == uuid.Nil {
+		return nil
+	}
+	if *replyToID == messageID {
+		return kit.NewError(http.StatusBadRequest, "invalid_reply_to_message_id", "Cannot reply to the message itself")
+	}
+	if s.PostgresQueries == nil {
+		return nil
+	}
+	orig, err := s.PostgresQueries.GetMessageByID(ctx, *replyToID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Best-effort: relay is an ephemeral buffer; older messages expire or get pruned,
+			// while the client's local SQLite DB and encrypted quote snapshot retain them.
+			return nil
+		}
+		log.Printf("[validateReplyToMessage] GetMessageByID failed for %s: %v", replyToID, err)
+		return kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to verify reply to message")
+	}
+
+	// Require unordered pair match: {orig.SenderID, orig.RecipientID} == {new.SenderID, new.RecipientID}
+	// Allows normal replies and self-replies within the same 1:1 conversation.
+	isSamePair := (orig.SenderID == senderID && orig.RecipientID == recipientID) ||
+		(orig.SenderID == recipientID && orig.RecipientID == senderID)
+	if !isSamePair {
+		return kit.NewError(http.StatusBadRequest, "invalid_reply_to_message_id", "Invalid reply to message id")
+	}
+	return nil
+}
+
 func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams) (*personal_chat_store.Message, error) {
 	// Idempotency check:
 	if s.PostgresQueries != nil && params.MessageID != uuid.Nil {
@@ -370,9 +417,10 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 		return nil, staleErr
 	}
 	log.Printf("[E2EE] SendMessage: revision check PASSED — storing message from %s → %s", params.SenderID.UuidUserId, params.RecipientID)
-	if utf8.RuneCountInString(params.Content) > 5000 {
-		return nil, kit.NewError(http.StatusBadRequest, "content_too_long", "Message content cannot exceed 5000 characters")
+	if err := s.validateReplyToMessage(ctx, params.ReplyToMessageID, params.MessageID, params.SenderID.UuidUserId, params.RecipientID); err != nil {
+		return nil, err
 	}
+	params.ReplyToMessageID = normalizeReplyToMessageID(params.ReplyToMessageID)
 	chat, chatErr := s.CreateOrGetChat(ctx, params.SenderID.UuidUserId, params.RecipientID)
 	if chatErr != nil {
 		return nil, chatErr
@@ -388,6 +436,7 @@ func (s *chatService) SendMessage(ctx context.Context, params SendMessageParams)
 		ExpiresAt:                   expiresAt,
 		SyncedToSenderPrimary:       params.IsPrimary,
 		DeliveredToRecipientPrimary: false,
+		ReplyToMessageID:            params.ReplyToMessageID,
 	})
 	if dbErr != nil {
 		// Handle PK duplicate key violation (race condition: both WS and REST passed CheckMessageExists)
@@ -432,6 +481,14 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 	if userID.UuidUserId == recipientID {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_recipient", "Cannot send message to yourself")
 	}
+	var replyToUUID *uuid.UUID
+	if payload.ReplyToMessageID != nil && *payload.ReplyToMessageID != "" {
+		parsed, err := uuid.Parse(*payload.ReplyToMessageID)
+		if err != nil {
+			return nil, kit.NewError(http.StatusBadRequest, "invalid_reply_to_message_id", "Invalid reply to message id")
+		}
+		replyToUUID = &parsed
+	}
 	message, sendErr := s.SendMessage(ctx, SendMessageParams{
 		MessageID:             messageID,
 		SenderID:              userID,
@@ -441,6 +498,7 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		IsPrimary:             isPrimary,
 		RecipientKeysRevision: payload.RecipientKeysRevision,
 		SenderKeysRevision:    payload.SenderKeysRevision,
+		ReplyToMessageID:      replyToUUID,
 	})
 	if sendErr != nil {
 		return nil, sendErr
@@ -464,6 +522,7 @@ func (s *chatService) SendMessageHandler(ctx context.Context, payload *SendMessa
 		ReadByRecipient:       message.ReadByRecipient,
 		ReadAckedBySender:     message.ReadAckedBySender,
 		ReadAt:                kit.OptionalTimestamp(message.ReadAt),
+		ReplyToMessageId:      uuidPtrToStringPtr(message.ReplyToMessageID),
 	}, nil
 }
 
@@ -638,6 +697,7 @@ func (s *chatService) buildMessageResponse(ctx context.Context, msg personal_cha
 		ReadAckedBySender:           msg.ReadAckedBySender,
 		ReadAt:                      msg.ReadAt,
 		IsConsumed:                  isConsumed,
+		ReplyToMessageID:            uuidPtrToStringPtr(msg.ReplyToMessageID),
 	}
 }
 
@@ -718,6 +778,7 @@ func (s *chatService) GetMessagesHandler(ctx context.Context, payload *GetMessag
 			ReadAckedBySender:           messageResponse.ReadAckedBySender,
 			ReadAt:                      kit.OptionalTimestamp(messageResponse.ReadAt),
 			IsConsumed:                  messageResponse.IsConsumed,
+			ReplyToMessageId:            messageResponse.ReplyToMessageID,
 		})
 	}
 
@@ -1701,6 +1762,7 @@ func (s *chatService) GetPendingMessagesHandler(ctx context.Context, payload *Ge
 			ReadAckedBySender:           mr.ReadAckedBySender,
 			ReadAt:                      kit.OptionalTimestamp(mr.ReadAt),
 			IsConsumed:                  mr.IsConsumed,
+			ReplyToMessageId:            mr.ReplyToMessageID,
 		})
 	}
 
@@ -2200,4 +2262,12 @@ func (s *chatService) DeleteChatR2FilesAsync(ctx context.Context, chatFileIDs []
 			log.Printf("[Chat DeleteChatR2FilesAsync] WARNING: Async file %s R2 delete failed: %v (sweeper will retry)", fileID, r2Errors[i])
 		}
 	}
+}
+
+func uuidPtrToStringPtr(u *uuid.UUID) *string {
+	if u == nil {
+		return nil
+	}
+	s := u.String()
+	return &s
 }

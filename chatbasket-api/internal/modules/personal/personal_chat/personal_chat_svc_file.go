@@ -138,6 +138,11 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 		}
 	}
 
+	if err := s.validateReplyToMessage(ctx, params.ReplyToMessageID, params.MessageID, params.SenderID.UuidUserId, params.RecipientID); err != nil {
+		return nil, err
+	}
+	params.ReplyToMessageID = normalizeReplyToMessageID(params.ReplyToMessageID)
+
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to start confirm transaction")
@@ -184,6 +189,7 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 		ExpiresAt:                   expiresAt,
 		SyncedToSenderPrimary:       params.IsPrimary,
 		DeliveredToRecipientPrimary: false,
+		ReplyToMessageID:            params.ReplyToMessageID,
 	})
 	if dbErr != nil {
 		// Handle PK duplicate key violation (race condition: concurrent confirm requests)
@@ -265,4 +271,5 @@ type ConfirmChatUploadParams struct {
 	IsPrimary             bool
 	RecipientKeysRevision int32
 	SenderKeysRevision    int32
+	ReplyToMessageID      *uuid.UUID
 }

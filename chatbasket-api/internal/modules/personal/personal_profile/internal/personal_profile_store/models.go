@@ -131,6 +131,7 @@ type Message struct {
 	ReadByRecipient             bool       `json:"read_by_recipient"`
 	ReadAckedBySender           bool       `json:"read_acked_by_sender"`
 	ReadAt                      *time.Time `json:"read_at"`
+	ReplyToMessageID            *uuid.UUID `json:"reply_to_message_id"`
 }
 
 type MessageSyncAction struct {
@@ -150,6 +151,17 @@ type PendingUpload struct {
 	ExpiresAt  time.Time `json:"expires_at"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+type PersonalSseOutbox struct {
+	ID               uuid.UUID  `json:"id"`
+	Command          string     `json:"command"`
+	TargetUserID     uuid.UUID  `json:"target_user_id"`
+	TargetSessionID  *uuid.UUID `json:"target_session_id"`
+	ExcludeSessionID *uuid.UUID `json:"exclude_session_id"`
+	Payload          []byte     `json:"payload"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ExpiresAt        time.Time  `json:"expires_at"`
 }
 
 type QrLoginRequest struct {

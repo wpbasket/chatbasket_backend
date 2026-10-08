@@ -42,7 +42,7 @@ func TestSendMessage_Idempotency_MessageAlreadyExists(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at"}
+		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
 
 	mockPool.ExpectQuery(`SELECT (.+) FROM messages WHERE id =`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
@@ -54,7 +54,7 @@ func TestSendMessage_Idempotency_MessageAlreadyExists(t *testing.T) {
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
 		),
 	)
 
@@ -146,8 +146,8 @@ func TestSendMessage_Idempotency_MessageDoesNotExist(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at"}
-	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "test-content", "text", pgxmock.AnyArg(), true, pgxmock.AnyArg()).WillReturnRows(
+		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "test-content", "text", pgxmock.AnyArg(), true, pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
 			"test-content", "text",
@@ -157,7 +157,7 @@ func TestSendMessage_Idempotency_MessageDoesNotExist(t *testing.T) {
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
 		),
 	)
 
@@ -242,7 +242,7 @@ func TestSendMessage_Idempotency_TOCTOURaceConflict(t *testing.T) {
 	)
 
 	// 3. Mock CreateMessage returning unique_violation error (Code: 23505)
-	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "test-content", "text", pgxmock.AnyArg(), true, pgxmock.AnyArg()).WillReturnError(
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "test-content", "text", pgxmock.AnyArg(), true, pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnError(
 		&pgconn.PgError{Code: "23505", Message: "duplicate key value violates unique constraint"},
 	)
 
@@ -256,7 +256,7 @@ func TestSendMessage_Idempotency_TOCTOURaceConflict(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at"}
+		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
 
 	mockPool.ExpectQuery(`SELECT (.+) FROM messages WHERE id =`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
@@ -268,7 +268,7 @@ func TestSendMessage_Idempotency_TOCTOURaceConflict(t *testing.T) {
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
 		),
 	)
 

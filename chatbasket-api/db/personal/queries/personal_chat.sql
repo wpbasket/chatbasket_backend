@@ -126,7 +126,8 @@ INSERT INTO
         message_type,
         expires_at,
         synced_to_sender_primary,
-        delivered_to_recipient_primary
+        delivered_to_recipient_primary,
+        reply_to_message_id
     )
 VALUES (
         $1,
@@ -137,7 +138,8 @@ VALUES (
         $6,
         $7,
         $8,
-        $9
+        $9,
+        $10
     )
 RETURNING
     *;
@@ -403,7 +405,8 @@ INSERT INTO
         file_token_expiry,
         expires_at,
         synced_to_sender_primary,
-        delivered_to_recipient_primary
+        delivered_to_recipient_primary,
+        reply_to_message_id
     )
 VALUES (
         $1,
@@ -421,7 +424,8 @@ VALUES (
         $13,
         $14,
         $15,
-        $16
+        $16,
+        $17
     )
 RETURNING
     *;

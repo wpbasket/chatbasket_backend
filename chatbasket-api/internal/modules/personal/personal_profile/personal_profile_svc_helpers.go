@@ -245,7 +245,7 @@ func (ps *profileService) GetUserCoreProfile(ctx context.Context, userID uuid.UU
 }
 
 // IsUserLockedForDeletion probes whether users.id is currently locked by an
-// account-deletion transaction. Uses SELECT ... FOR UPDATE NOWAIT on a
+// account-deletion transaction. Uses SELECT ... FOR KEY SHARE NOWAIT on a
 // pool-bound (autocommit) connection, so the probe holds its own lock only
 // for the statement duration: (true, nil) instantly when the deleter holds
 // the row (Postgres 55P03 lock_not_available), (false, nil) when free.

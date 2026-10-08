@@ -151,6 +151,33 @@ func (m *Manager[T]) IsSessionActive(userID uuid.UUID, sessionUUID uuid.UUID) bo
 	return active
 }
 
+// HasUser checks if the user has at least one active connection on this local server node.
+func (m *Manager[T]) HasUser(userID uuid.UUID) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	userConns, exists := m.conns[userID]
+	return exists && len(userConns) > 0
+}
+
+// HasUserExcept checks if the user has at least one active connection on this local server node
+// other than excludeSessionUUID.
+func (m *Manager[T]) HasUserExcept(userID uuid.UUID, excludeSessionUUID uuid.UUID) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	userConns, exists := m.conns[userID]
+	if !exists || len(userConns) == 0 {
+		return false
+	}
+	for suid := range userConns {
+		if suid != excludeSessionUUID {
+			return true
+		}
+	}
+	return false
+}
+
 // BroadcastToUser sends an SSE event to ALL connected sessions of a user on this node.
 func (m *Manager[T]) BroadcastToUser(userID uuid.UUID, event T) {
 	m.mu.RLock()

@@ -189,7 +189,7 @@ func TestGetPendingMessagesHandler_BlockFiltering(t *testing.T) {
 		"delivered_to_recipient", "delivered_to_recipient_primary", "synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient", "delivery_attempts",
 		"expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id",
 	}).AddRow(
 		uuid.New(), uuid.New(), senderA, userID,
 		msgAContent, msgAType, nil, nil,
@@ -197,7 +197,7 @@ func TestGetPendingMessagesHandler_BlockFiltering(t *testing.T) {
 		nil, nil, nil, nil,
 		false, false, false,
 		false, false, int32(0),
-		nowTime.Add(1*time.Hour), nowTime, nowTime, false, false, nil,
+		nowTime.Add(1*time.Hour), nowTime, nowTime, false, false, nil, nil,
 	).AddRow(
 		uuid.New(), uuid.New(), senderB, userID,
 		msgBContent, msgBType, nil, nil,
@@ -205,7 +205,7 @@ func TestGetPendingMessagesHandler_BlockFiltering(t *testing.T) {
 		nil, nil, nil, nil,
 		false, false, false,
 		false, false, int32(0),
-		nowTime.Add(1*time.Hour), nowTime.Add(1*time.Second), nowTime, false, false, nil,
+		nowTime.Add(1*time.Hour), nowTime.Add(1*time.Second), nowTime, false, false, nil, nil,
 	)
 
 	// Recipient stream: fetched up to maxTotalCapacity (2x limit) with a nil
@@ -225,7 +225,7 @@ func TestGetPendingMessagesHandler_BlockFiltering(t *testing.T) {
 			"delivered_to_recipient", "delivered_to_recipient_primary", "synced_to_sender_primary",
 			"deleted_by_sender", "deleted_by_recipient", "delivery_attempts",
 			"expires_at", "created_at", "updated_at",
-			"read_by_recipient", "read_acked_by_sender", "read_at",
+			"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id",
 		}))
 
 	ctx := context.Background()

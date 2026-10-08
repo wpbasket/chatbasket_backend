@@ -44,6 +44,7 @@ message Message {
   bool readAckedBySender = 20;
   optional google.protobuf.Timestamp readAt = 21;
   bool isConsumed = 22;
+  optional string replyToMessageId = 23;
 }
 
 message CheckEligibilityRequest {
@@ -87,6 +88,7 @@ message SendMessageRequest {
   string messageType = 4;
   int32 recipientKeysRevision = 5;
   int32 senderKeysRevision = 6;
+  optional string replyToMessageId = 7;
 }
 
 message GetMessagesRequest {
@@ -184,6 +186,7 @@ message ConfirmChatUploadRequest {
   string messageType = 5;
   int32 recipientKeysRevision = 6;
   int32 senderKeysRevision = 7;
+  optional string replyToMessageId = 8;
 }
 
 message ConfirmChatUploadResponse {
@@ -197,6 +200,7 @@ message ConfirmChatUploadResponse {
   string downloadUrl = 8;
   google.protobuf.Timestamp createdAt = 9;
   google.protobuf.Timestamp expiresAt = 10;
+  optional string replyToMessageId = 11;
 }
 
 message GetFileURLRequest {
