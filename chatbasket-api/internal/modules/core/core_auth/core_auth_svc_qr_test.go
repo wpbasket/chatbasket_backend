@@ -24,7 +24,7 @@ func setupTestAuthServiceQR(t *testing.T) (*AuthService, pgxmock.PgxPoolIface) {
 
 	store := core_auth_store.New(mock)
 	svc := &AuthService{
-		GlobalService:   services.NewGlobalService("https://chatbasket.live"),
+		GlobalService:   services.NewGlobalService("https://chatbasket.me"),
 		PostgresQuerier: store,
 		PostgresQueries: store,
 		Pool:            nil,

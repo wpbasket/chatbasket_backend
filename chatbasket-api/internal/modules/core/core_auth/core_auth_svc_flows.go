@@ -162,7 +162,7 @@ func buildOTPEmail(otpType, otp string) (subject, htmlBody, textBody string) {
         </td></tr>
         <tr><td style="padding:24px 32px 28px 32px;border-top:1px solid #e4e7eb;">
           <p style="margin:0;font-size:12px;line-height:1.6;color:#7b8794;">You're receiving this email because a verification was requested for this address on ChatBasket.</p>
-          <p style="margin:8px 0 0 0;font-size:12px;line-height:1.6;color:#7b8794;">This is an automated message, please do not reply. Need help? Contact <a href="mailto:support@chatbasket.live" style="color:#2563eb;text-decoration:underline;">support@chatbasket.live</a></p>
+          <p style="margin:8px 0 0 0;font-size:12px;line-height:1.6;color:#7b8794;">This is an automated message, please do not reply. Need help? Contact <a href="mailto:support@chatbasket.me" style="color:#2563eb;text-decoration:underline;">support@chatbasket.me</a></p>
         </td></tr>
       </table>
     </td></tr>
@@ -187,7 +187,7 @@ account remains secure.
 —
 You're receiving this email because a verification was requested for this
 address on ChatBasket. This is an automated message, please do not reply.
-Need help? Contact support@chatbasket.live
+Need help? Contact support@chatbasket.me
 `, c.Headline, c.Purpose, otp)
 
 	return c.Subject, htmlBody, textBody

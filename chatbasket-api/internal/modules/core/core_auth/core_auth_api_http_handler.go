@@ -74,7 +74,7 @@ func (h *authHandler) AccountVerification(c *echo.Context) error {
 		// Determine cookie security based on host (targeting local frontend at 8081)
 		origin := c.Request().Header.Get("Origin")
 		isLocal := strings.Contains(origin, "localhost:8081")
-		cookieDomain := "chatbasket.live"
+		cookieDomain := "chatbasket.me"
 		cookieSecure := true
 		if isLocal {
 			cookieDomain = "" // Browser defaults to current host (localhost)
@@ -164,7 +164,7 @@ func (h *authHandler) LoginVerification(c *echo.Context) error {
 		// Determine cookie security based on host (targeting local frontend at 8081)
 		origin := c.Request().Header.Get("Origin")
 		isLocal := strings.Contains(origin, "localhost:8081")
-		cookieDomain := "chatbasket.live"
+		cookieDomain := "chatbasket.me"
 		cookieSecure := true
 		if isLocal {
 			cookieDomain = "" // Browser defaults to current host (localhost)

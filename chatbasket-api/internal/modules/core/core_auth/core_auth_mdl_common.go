@@ -44,7 +44,7 @@ type ConfirmEmailUpdatePayload struct {
 // The clear path must mirror every attribute of the set path (including
 // SameSite) or browsers may keep the old cookie on some setups.
 const (
-	webCookieDomain    = "chatbasket.live"
+	webCookieDomain    = "chatbasket.me"
 	webCookieLocalHost = "localhost:8081"
 )
 

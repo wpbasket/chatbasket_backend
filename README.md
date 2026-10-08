@@ -7,7 +7,7 @@
 
 > **A simplified yet highly secure production-grade backend for the Chatbasket application.**
 >
-> **View Live Deployment:** [https://chatbasket.live](https://chatbasket.live)
+> **View Live Deployment:** [https://chatbasket.me](https://chatbasket.me)
 
 ## 🚀 Overview
 

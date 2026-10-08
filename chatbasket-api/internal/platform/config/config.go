@@ -91,7 +91,7 @@ func Load() (*Config, error) {
 
 	corsOrigin := os.Getenv("CORS_ORIGIN")
 	if corsOrigin == "" {
-		corsOrigin = "https://chatbasket.live"
+		corsOrigin = "https://chatbasket.me"
 	}
 
 	dbSelector := os.Getenv("DB_SELECTOR")

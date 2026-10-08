@@ -126,7 +126,7 @@ func (h *authHandler) QRCallback(c *echo.Context) error {
 
 	origin := c.Request().Header.Get("Origin")
 	isLocal := strings.Contains(origin, "localhost:8081")
-	cookieDomain := "chatbasket.live"
+	cookieDomain := "chatbasket.me"
 	cookieSecure := true
 	if isLocal {
 		cookieDomain = ""

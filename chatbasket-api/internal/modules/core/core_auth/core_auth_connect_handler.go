@@ -37,7 +37,7 @@ func (s *authConnectServer) setWebCookies(header http.Header, origin string, use
 	}
 
 	isLocal := strings.Contains(origin, "localhost:8081")
-	cookieDomain := "chatbasket.live"
+	cookieDomain := "chatbasket.me"
 	cookieSecure := true
 	if isLocal {
 		cookieDomain = ""
