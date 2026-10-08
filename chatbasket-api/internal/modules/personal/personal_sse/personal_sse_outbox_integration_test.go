@@ -42,9 +42,9 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 	pool, err := pgxpool.New(ctx, url)
 	require.NoError(t, err)
 	t.Cleanup(func() { pool.Close() })
-	// Migration 013 must be applied.
+	// Migration 012 must be applied.
 	_, err = pool.Exec(ctx, "SELECT 1 FROM personal_sse_outbox LIMIT 1")
-	require.NoError(t, err, "personal_sse_outbox missing: apply migration 013")
+	require.NoError(t, err, "personal_sse_outbox missing: apply migration 012")
 	return pool
 }
 

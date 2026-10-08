@@ -92,6 +92,9 @@ message_type TEXT NOT NULL DEFAULT 'text' CHECK (
     )
 ),
 
+-- Message Reply & Quoting
+reply_to_message_id UUID,
+
 -- File Attachment Fields
 file_id TEXT,
 file_name TEXT,
