@@ -171,12 +171,6 @@ This repository is listed under GitNexus **group(s): cb-group** (see `~/.gitnexu
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
-
-## Workflow Command Files
-
-When the user asks to run any workflow file, **check `/personaldata/cb/.agents/commands/` first** — it holds the predefined command files. Follow the file.
-
-List the folder first to find the exact workflow file.
 ---
 name: gitnexus-debugging
 description: "Use when the user is debugging a bug, tracing an error, or asking why something fails. Examples: \"Why is X failing?\", \"Where does this error come from?\", \"Trace this bug\""
