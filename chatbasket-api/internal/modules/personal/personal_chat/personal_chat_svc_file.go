@@ -42,7 +42,11 @@ func (s *chatService) GenerateMessageFileURLs(ctx context.Context, msg personal_
 	_, objectKey := clients.ParseFilePrefix(*msg.FileID)
 	downloadURL, err := client.GenerateDownloadURL(ctx, client.ChatBucket(), objectKey, r2PresignedURLLifetime)
 	if err != nil {
-		return "", "", kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to generate download URL: "+err.Error())
+		// Signing can fail on a misconfigured or mid-rotation R2 client. That is a
+		// retryable condition for the caller — the object may still exist — so it
+		// must not be reported as "media gone", and the SDK detail stays in logs.
+		log.Printf("[GenerateMessageFileURLs] presign failed for %s: %v", *msg.FileID, err)
+		return "", "", kit.NewError(http.StatusServiceUnavailable, "media_url_unavailable", "File URL temporarily unavailable")
 	}
 	viewURL := ""
 	isMedia := msg.MessageType == "image" || msg.MessageType == "video" || msg.MessageType == "audio"
@@ -63,7 +67,15 @@ func (s *chatService) GetFileURLHandler(ctx context.Context, payload *GetFileURL
 	}
 	message, err := s.PostgresQueries.GetMessageByID(ctx, messageID)
 	if err != nil {
-		return nil, kit.NewError(http.StatusNotFound, "not_found", "Message not found")
+		// Only "no row" means the media is permanently unreachable. Any other
+		// failure (pool exhaustion, timeout, connection loss) is transient and
+		// must stay indistinguishable from a retryable server error: the client
+		// ACKs on 404, and an ACK lets the relay delete the only remaining copy.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusNotFound, "media_not_found", "Message not found")
+		}
+		log.Printf("[GetFileURL] message lookup failed for %s: %v", messageID, err)
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to load message")
 	}
 	viewURL, downloadURL, fileErr := s.GenerateMessageFileURLs(ctx, message, userID)
 	if fileErr != nil {
