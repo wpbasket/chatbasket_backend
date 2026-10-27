@@ -107,12 +107,16 @@ func (s *chatService) PresignChatUpload(ctx context.Context, params PresignChatU
 	if err := validateChatMessageType(params.MessageType); err != nil {
 		return nil, kit.NewError(http.StatusBadRequest, "invalid_request", err.Error())
 	}
-	eligibility, _, _, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
+	eligibility, _, recipientKeysRevision, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
 	if err != nil {
 		return nil, err
 	}
 	if eligibility != EligibilityAllowed {
 		return nil, messagingEligibilityError(eligibility)
+	}
+	if staleErr := s.checkRevisionStaleness(ctx, params.SenderID, params.RecipientID, params.SenderKeysRevision, params.RecipientKeysRevision, recipientKeysRevision); staleErr != nil {
+		log.Printf("[E2EE] PresignChatUpload: STALE KEYS — sender %s recipient %s: %v", params.SenderID.UuidUserId, params.RecipientID, staleErr)
+		return nil, staleErr
 	}
 	accountName := s.R2Pool.NextChatAccount()
 	client := s.accountClient(accountName)
@@ -148,6 +152,19 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 				return &existingMsg, nil
 			}
 		}
+	}
+
+	eligibility, _, recipientKeysRevision, err := s.CheckMessagingEligibility(ctx, params.SenderID, params.RecipientID)
+	if err != nil {
+		return nil, err
+	}
+	if eligibility != EligibilityAllowed {
+		log.Printf("[E2EE] ConfirmChatUpload: BLOCKED — eligibility=%s for sender %s → recipient %s", eligibility, params.SenderID.UuidUserId, params.RecipientID)
+		return nil, messagingEligibilityError(eligibility)
+	}
+	if staleErr := s.checkRevisionStaleness(ctx, params.SenderID, params.RecipientID, params.SenderKeysRevision, params.RecipientKeysRevision, recipientKeysRevision); staleErr != nil {
+		log.Printf("[E2EE] ConfirmChatUpload: STALE KEYS — sender %s recipient %s: %v", params.SenderID.UuidUserId, params.RecipientID, staleErr)
+		return nil, staleErr
 	}
 
 	if err := s.validateReplyToMessage(ctx, params.ReplyToMessageID, params.MessageID, params.SenderID.UuidUserId, params.RecipientID); err != nil {

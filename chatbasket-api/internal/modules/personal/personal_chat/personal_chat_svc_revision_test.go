@@ -605,3 +605,118 @@ func TestSendMessage_RevisionStaleness_NotContacts(t *testing.T) {
 		assert.NotEqual(t, "recipient_keys_stale", pe.Kind())
 	}
 }
+
+func TestPresignChatUpload_RevisionStaleness_RejectsStaleRevision(t *testing.T) {
+	senderID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
+	recipientID := uuid.New()
+
+	profileProvider := &mockProfileProvider{
+		getE2EEPublicKeyFunc: func(ctx context.Context, userID uuid.UUID) (*string, int32, error) {
+			key := "recipient-public-key-44-chars-base64-enc"
+			return &key, 6, nil // Current revision is 6
+		},
+		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
+			return &personal_profile.UserCoreProfile{
+				ID:             userID,
+				IsAdminBlocked: false,
+				ProfileType:    "public",
+			}, nil
+		},
+	}
+
+	contactProvider := &mockContactProvider{
+		isAlreadyContactFunc: func(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error) {
+			return true, nil
+		},
+	}
+
+	svc := &chatService{
+		AuthProvider:    &mockAuthProvider{},
+		ProfileProvider: profileProvider,
+		ContactProvider: contactProvider,
+	}
+
+	params := PresignChatUploadParams{
+		SenderID:              senderID,
+		RecipientID:           recipientID,
+		MessageType:           "image",
+		RecipientKeysRevision: 5, // Stale revision (5 when current is 6)
+		SenderKeysRevision:    0,
+	}
+
+	_, err := svc.PresignChatUpload(context.Background(), params)
+
+	require.Error(t, err)
+	if pe, ok := err.(kit.ProcessedError); ok {
+		assert.Equal(t, "keys_stale", pe.Kind())
+		if dpe, ok := err.(kit.DetailedProcessedError); ok {
+			details := dpe.Details().(*rpc_common_modelv1.StaleKeysErrorDetails)
+			assert.Equal(t, string(StaleSideRecipient), details.StaleSide)
+			assert.Equal(t, int32(6), details.RecipientKeysRevision)
+		} else {
+			t.Errorf("Expected DetailedProcessedError, got %T", err)
+		}
+	} else {
+		t.Errorf("Expected ProcessedError, got %T", err)
+	}
+}
+
+func TestConfirmChatUpload_RevisionStaleness_RejectsStaleRevision(t *testing.T) {
+	senderID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
+	recipientID := uuid.New()
+
+	profileProvider := &mockProfileProvider{
+		getE2EEPublicKeyFunc: func(ctx context.Context, userID uuid.UUID) (*string, int32, error) {
+			key := "recipient-public-key-44-chars-base64-enc"
+			return &key, 6, nil // Current revision is 6
+		},
+		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
+			return &personal_profile.UserCoreProfile{
+				ID:             userID,
+				IsAdminBlocked: false,
+				ProfileType:    "public",
+			}, nil
+		},
+	}
+
+	contactProvider := &mockContactProvider{
+		isAlreadyContactFunc: func(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error) {
+			return true, nil
+		},
+	}
+
+	svc := &chatService{
+		AuthProvider:    &mockAuthProvider{},
+		ProfileProvider: profileProvider,
+		ContactProvider: contactProvider,
+	}
+
+	params := ConfirmChatUploadParams{
+		MessageID:             uuid.New(),
+		SenderID:              senderID,
+		RecipientID:           recipientID,
+		FileID:                "test_file_id",
+		Content:               "e2ee_wrapped_key",
+		MessageType:           "image",
+		IsPrimary:             true,
+		RecipientKeysRevision: 5, // Stale revision (5 when current is 6)
+		SenderKeysRevision:    0,
+	}
+
+	_, err := svc.ConfirmChatUpload(context.Background(), params)
+
+	require.Error(t, err)
+	if pe, ok := err.(kit.ProcessedError); ok {
+		assert.Equal(t, "keys_stale", pe.Kind())
+		if dpe, ok := err.(kit.DetailedProcessedError); ok {
+			details := dpe.Details().(*rpc_common_modelv1.StaleKeysErrorDetails)
+			assert.Equal(t, string(StaleSideRecipient), details.StaleSide)
+			assert.Equal(t, int32(6), details.RecipientKeysRevision)
+		} else {
+			t.Errorf("Expected DetailedProcessedError, got %T", err)
+		}
+	} else {
+		t.Errorf("Expected ProcessedError, got %T", err)
+	}
+}
+
