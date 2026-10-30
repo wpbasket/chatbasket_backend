@@ -89,7 +89,7 @@ func (h *chatHandler) RequestHistorySync(c *echo.Context) error {
 				},
 			},
 		}
-		go h.personalSseManager.BroadcastToUserSession(userID.UuidUserId, primarySessionID, sseEvent)
+		go h.personalSseManager.BroadcastToUserSession(userID.UuidUserId, primarySessionID, sseEvent, false)
 	}
 
 	return c.JSON(http.StatusOK, HistorySyncRequestResponse{
@@ -136,7 +136,7 @@ func (h *chatHandler) UploadHistorySync(c *echo.Context) error {
 				},
 			},
 		}
-		go h.personalSseManager.BroadcastToUserSession(userID.UuidUserId, requesterSessionID, sseEvent)
+		go h.personalSseManager.BroadcastToUserSession(userID.UuidUserId, requesterSessionID, sseEvent, false)
 	}
 
 	return c.JSON(http.StatusOK, kit.StatusOkay{Status: true})

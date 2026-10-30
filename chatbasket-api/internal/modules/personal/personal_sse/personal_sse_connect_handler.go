@@ -7,6 +7,7 @@ import (
 
 	rpc_personal_ssev1 "chatbasket-api/gen/proto/personal/personal_sse"
 	rpc_personal_ssev1connect "chatbasket-api/gen/proto/personal/personal_sse/rpc_personal_ssev1connect"
+	"chatbasket-api/internal/platform/connect_sse"
 	"chatbasket-api/internal/platform/kit"
 
 	"connectrpc.com/connect"
@@ -53,7 +54,12 @@ func (s *personalSseConnectHandler) StreamEvents(ctx context.Context, req *conne
 		return kit.ParseIntoRpcError(kit.NewError(http.StatusInternalServerError, "internal_error", "stream manager unavailable"))
 	}
 
-	conn, ok := s.personalSseManager.Register(userID.UuidUserId, sessionUUID, isPrimary)
+	connectionID, err := uuid.Parse(req.Header().Get(connect_sse.SSEConnectionIDHeader))
+	if err != nil || connectionID == uuid.Nil {
+		return kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "invalid_connection_id", "x-sse-connection-id header is required and must be a valid, non-nil UUID"))
+	}
+
+	conn, ok := s.personalSseManager.Register(userID.UuidUserId, sessionUUID, connectionID, isPrimary)
 	if !ok {
 		return kit.ParseIntoRpcError(kit.NewError(http.StatusTooManyRequests, "rate_limit", "max stream connections reached"))
 	}

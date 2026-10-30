@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"chatbasket-api/internal/platform/connect_sse"
+
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -22,7 +24,7 @@ func Register(e *echo.Echo, corsOrigin string) {
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{corsOrigin},
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "x-api-key", "Connect-Protocol-Version", "Connect-Timeout-Ms", "Grpc-Timeout", "X-Grpc-Web", "X-User-Agent"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "x-api-key", "Connect-Protocol-Version", "Connect-Timeout-Ms", "Grpc-Timeout", "X-Grpc-Web", "X-User-Agent", connect_sse.SSEConnectionIDHeader},
 		ExposeHeaders:    []string{"Connect-Content-Encoding", "Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
 		AllowCredentials: true,
 		MaxAge:           86400, // Remember preflight answers for 24 hours.

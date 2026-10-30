@@ -36,6 +36,7 @@ func TestInlineSizeEstimate_ExactForAllShapes(t *testing.T) {
 		{Command: cmdBroadcastToUser, TargetUserID: uuid.New()},
 		{Command: cmdBroadcastToUserExcept, TargetUserID: uuid.New(), ExcludeSessionUUID: &[]uuid.UUID{uuid.New()}[0]},
 		{Command: cmdBroadcastToUserSession, TargetUserID: uuid.New(), TargetSessionUUID: &[]uuid.UUID{uuid.New()}[0]},
+		{Command: cmdBroadcastToUserSession, TargetUserID: uuid.New(), TargetSessionUUID: &[]uuid.UUID{uuid.New()}[0], DeliverToAllSessionStreams: true},
 		{Command: cmdUnregisterUserConnections, TargetUserID: uuid.New()},
 	}
 	for _, shape := range shapes {
@@ -73,7 +74,7 @@ func TestHasLocalTarget_FiltersNonLocalUsers(t *testing.T) {
 	}))
 
 	// Register sessionA1 for userA
-	conn, ok := mgr.Register(uA, sA1, false)
+	conn, ok := mgr.Register(uA, sA1, uuid.New(), false)
 	assert.True(t, ok)
 
 	// cmdBroadcastToUser: uA is present, uB is not
@@ -113,7 +114,7 @@ func TestHasLocalTarget_FiltersNonLocalUsers(t *testing.T) {
 	}))
 
 	// Register sA2 for uA: now exclude sA1 should return true
-	conn2, ok := mgr.Register(uA, sA2, false)
+	conn2, ok := mgr.Register(uA, sA2, uuid.New(), false)
 	assert.True(t, ok)
 	assert.True(t, mgr.hasLocalTarget(postgresSsePayload{
 		Command:            cmdBroadcastToUserExcept,
@@ -152,7 +153,7 @@ func TestDispatchResolved_DeliversLocally(t *testing.T) {
 	mgr := NewManager(nil)
 	userID := uuid.New()
 	sessionID := uuid.New()
-	conn, ok := mgr.Register(userID, sessionID, false)
+	conn, ok := mgr.Register(userID, sessionID, uuid.New(), false)
 	assert.True(t, ok)
 	defer mgr.Unregister(conn)
 
@@ -171,6 +172,39 @@ func TestDispatchResolved_DeliversLocally(t *testing.T) {
 		assert.True(t, proto.Equal(want, got), "dispatched event must equal original")
 	default:
 		t.Fatal("registered session did not receive dispatched event")
+	}
+}
+
+func TestDispatchResolved_SessionTargeted_AllSessionStreams(t *testing.T) {
+	mgr := NewManager(nil)
+	userID := uuid.New()
+	sessionID := uuid.New()
+	conn1, ok1 := mgr.Register(userID, sessionID, uuid.New(), false)
+	conn2, ok2 := mgr.Register(userID, sessionID, uuid.New(), false)
+	assert.True(t, ok1 && ok2)
+	defer mgr.Unregister(conn1)
+	defer mgr.Unregister(conn2)
+
+	want := &rpc_personal_ssev1.PersonalSseEvent{Timestamp: timestamppb.Now()}
+	raw, err := marshalEventBytes(want)
+	assert.NoError(t, err)
+	evt, err := unmarshalEventBytes(raw)
+	assert.NoError(t, err)
+
+	mgr.dispatchResolved(postgresSsePayload{
+		Command:                    cmdBroadcastToUserSession,
+		TargetUserID:               userID,
+		TargetSessionUUID:          &sessionID,
+		DeliverToAllSessionStreams: true,
+	}, evt)
+
+	for i, ch := range []<-chan *rpc_personal_ssev1.PersonalSseEvent{conn1.Send, conn2.Send} {
+		select {
+		case got := <-ch:
+			assert.True(t, proto.Equal(want, got), "conn[%d] must receive the event", i)
+		default:
+			t.Fatalf("conn[%d] did not receive dispatched event", i)
+		}
 	}
 }
 

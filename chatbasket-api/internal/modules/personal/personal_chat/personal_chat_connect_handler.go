@@ -902,7 +902,7 @@ func (s *chatConnectServer) RequestHistorySync(ctx context.Context, req *connect
 				},
 			},
 		}
-		go s.personalSseManager.BroadcastToUserSession(userID.UuidUserId, primarySessionID, sseEvent)
+		go s.personalSseManager.BroadcastToUserSession(userID.UuidUserId, primarySessionID, sseEvent, false)
 	}
 
 	return connect.NewResponse(&rpc_personal_chatv1.RequestHistorySyncResponse{
@@ -957,7 +957,7 @@ func (s *chatConnectServer) UploadHistorySync(ctx context.Context, req *connect.
 				},
 			},
 		}
-		go s.personalSseManager.BroadcastToUserSession(userID.UuidUserId, requesterSessionID, sseEvent)
+		go s.personalSseManager.BroadcastToUserSession(userID.UuidUserId, requesterSessionID, sseEvent, false)
 	}
 
 	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{Status: true}), nil

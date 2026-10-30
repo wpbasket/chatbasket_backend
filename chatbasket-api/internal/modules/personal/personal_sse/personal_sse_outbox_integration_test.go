@@ -307,7 +307,7 @@ func TestIntegration_WorkerDeliversToLocalSession(t *testing.T) {
 
 	userID := uuid.New()
 	sessionID := uuid.New()
-	conn, ok := mgr.Register(userID, sessionID, false)
+	conn, ok := mgr.Register(userID, sessionID, uuid.New(), false)
 	require.True(t, ok)
 	defer mgr.Unregister(conn)
 
@@ -346,7 +346,7 @@ func TestIntegration_EdgeCase_PoisonPillCorruptedPayload(t *testing.T) {
 
 	targetUser := uuid.New()
 	sessID := uuid.New()
-	conn, ok := mgr.Register(targetUser, sessID, false)
+	conn, ok := mgr.Register(targetUser, sessID, uuid.New(), false)
 	require.True(t, ok)
 	defer mgr.Unregister(conn)
 
@@ -380,7 +380,7 @@ func TestIntegration_EdgeCase_GhostOutboxID(t *testing.T) {
 
 	targetUser := uuid.New()
 	sessID := uuid.New()
-	conn, ok := mgr.Register(targetUser, sessID, false)
+	conn, ok := mgr.Register(targetUser, sessID, uuid.New(), false)
 	require.True(t, ok)
 	defer mgr.Unregister(conn)
 
@@ -407,7 +407,7 @@ func TestIntegration_EdgeCase_DisconnectRaceCondition(t *testing.T) {
 
 	targetUser := uuid.New()
 	sessID := uuid.New()
-	conn, ok := mgr.Register(targetUser, sessID, false)
+	conn, ok := mgr.Register(targetUser, sessID, uuid.New(), false)
 	require.True(t, ok)
 
 	_, raw := bigTestEvent(t)
@@ -446,7 +446,7 @@ func TestIntegration_EdgeCase_InterleavedLargeAndSmallEvents(t *testing.T) {
 
 	targetUser := uuid.New()
 	sessID := uuid.New()
-	conn, ok := mgr.Register(targetUser, sessID, false)
+	conn, ok := mgr.Register(targetUser, sessID, uuid.New(), false)
 	require.True(t, ok)
 	defer mgr.Unregister(conn)
 
@@ -525,7 +525,7 @@ func TestIntegration_EdgeCase_ZeroLeakedConnections(t *testing.T) {
 
 	targetUser := uuid.New()
 	sessID := uuid.New()
-	conn, ok := mgr.Register(targetUser, sessID, false)
+	conn, ok := mgr.Register(targetUser, sessID, uuid.New(), false)
 	require.True(t, ok)
 	defer mgr.Unregister(conn)
 
@@ -580,9 +580,9 @@ func TestIntegration_EdgeCase_MultiSessionTargetingAndExclusion(t *testing.T) {
 	desktopSess := uuid.New()
 	tabletSess := uuid.New()
 
-	phoneConn, ok1 := mgr.Register(targetUser, phoneSess, false)
-	desktopConn, ok2 := mgr.Register(targetUser, desktopSess, false)
-	tabletConn, ok3 := mgr.Register(targetUser, tabletSess, false)
+	phoneConn, ok1 := mgr.Register(targetUser, phoneSess, uuid.New(), false)
+	desktopConn, ok2 := mgr.Register(targetUser, desktopSess, uuid.New(), false)
+	tabletConn, ok3 := mgr.Register(targetUser, tabletSess, uuid.New(), false)
 	require.True(t, ok1 && ok2 && ok3)
 	defer func() {
 		mgr.Unregister(phoneConn)
@@ -694,7 +694,7 @@ func TestIntegration_EdgeCase_RapidSessionFlapping(t *testing.T) {
 			defer flapperWg.Done()
 			for !stopFlapping.Load() {
 				sessID := uuid.New()
-				conn, ok := mgr.Register(targetUser, sessID, false)
+				conn, ok := mgr.Register(targetUser, sessID, uuid.New(), false)
 				if ok {
 					time.Sleep(100 * time.Microsecond)
 					mgr.Unregister(conn)

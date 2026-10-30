@@ -21,7 +21,7 @@ import (
 //
 // By embedding *connect_sse.Manager, the following 3 local-node methods are automatically promoted
 // and DO NOT require any redundant wrapper methods:
-//  1. Register(userID, sessionUUID, isPrimary)    -> registers a new stream connection on this node
+//  1. Register(userID, sessionUUID, connectionID, isPrimary) -> registers a new stream connection on this node
 //  2. Unregister(conn)                           -> unregisters and closes a connection on this node
 //  3. IsSessionActive(userID, sessionUUID)        -> checks if a session is currently active on this node
 //
@@ -107,8 +107,9 @@ func (m *Manager) BroadcastToUserExcept(userID uuid.UUID, excludeSessionUUID uui
 	})
 }
 
-// BroadcastToUserSession publishes to Postgres NOTIFY targeting a single specific session across all nodes.
-func (m *Manager) BroadcastToUserSession(userID uuid.UUID, targetSessionUUID uuid.UUID, event *rpc_personal_ssev1.PersonalSseEvent) {
+// BroadcastToUserSession publishes to Postgres NOTIFY targeting one or all streams
+// of a specific session, per node, according to deliverToAllSessionStreams.
+func (m *Manager) BroadcastToUserSession(userID uuid.UUID, targetSessionUUID uuid.UUID, event *rpc_personal_ssev1.PersonalSseEvent, deliverToAllSessionStreams bool) {
 	if m == nil || m.pool == nil {
 		return
 	}
@@ -121,9 +122,10 @@ func (m *Manager) BroadcastToUserSession(userID uuid.UUID, targetSessionUUID uui
 			return err
 		}
 		return m.routeAndNotify(ctx, postgresSsePayload{
-			Command:           cmdBroadcastToUserSession,
-			TargetUserID:      userID,
-			TargetSessionUUID: &targetSessionUUID,
+			Command:                    cmdBroadcastToUserSession,
+			TargetUserID:               userID,
+			TargetSessionUUID:          &targetSessionUUID,
+			DeliverToAllSessionStreams: deliverToAllSessionStreams,
 		}, eventBytes)
 	})
 }

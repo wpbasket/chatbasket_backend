@@ -21,7 +21,7 @@ const sseNotificationChannel = "personal_sse_events"
 const (
 	cmdBroadcastToUser           = "broadcast_to_user"           // broadcast to all sessions of a user
 	cmdBroadcastToUserExcept     = "broadcast_to_user_except"    // broadcast to all sessions of a user except one
-	cmdBroadcastToUserSession    = "broadcast_to_user_session"   // broadcast to one specific session
+	cmdBroadcastToUserSession    = "broadcast_to_user_session"   // broadcast to one or all streams of a specific session per node
 	cmdUnregisterSession         = "unregister_session"          // close one specific session on all nodes
 	cmdUnregisterUserConnections = "unregister_user_connections" // close all sessions of a user on all nodes
 )
@@ -38,12 +38,13 @@ const (
 //     Payloads over the inline threshold route via the personal_sse_outbox
 //     table with only the row id in NOTIFY (see routeAndNotify).
 type postgresSsePayload struct {
-	Command            string     `json:"cmd"`
-	TargetUserID       uuid.UUID  `json:"uid"`
-	TargetSessionUUID  *uuid.UUID `json:"tsuid,omitempty"`
-	ExcludeSessionUUID *uuid.UUID `json:"esuid,omitempty"`
-	ProtoEventBase64   string     `json:"evt,omitempty"`
-	OutboxID           *uuid.UUID `json:"oid,omitempty"`
+	Command                    string     `json:"cmd"`
+	TargetUserID               uuid.UUID  `json:"uid"`
+	TargetSessionUUID          *uuid.UUID `json:"tsuid,omitempty"`
+	ExcludeSessionUUID         *uuid.UUID `json:"esuid,omitempty"`
+	DeliverToAllSessionStreams bool       `json:"all_session_streams,omitempty"`
+	ProtoEventBase64           string     `json:"evt,omitempty"`
+	OutboxID                   *uuid.UUID `json:"oid,omitempty"`
 }
 
 // StartListener runs a resilient, auto-reconnecting loop to listen for NOTIFY events on Postgres channel 'personal_sse_events'.
@@ -232,7 +233,7 @@ func (m *Manager) dispatchResolved(payload postgresSsePayload, sseEvent *rpc_per
 		if payload.TargetSessionUUID != nil {
 			targetUUID = *payload.TargetSessionUUID
 		}
-		m.Manager.BroadcastToUserSession(payload.TargetUserID, targetUUID, sseEvent)
+		m.Manager.BroadcastToUserSession(payload.TargetUserID, targetUUID, sseEvent, payload.DeliverToAllSessionStreams)
 
 	case cmdUnregisterSession:
 		var sessionUUID uuid.UUID
