@@ -105,9 +105,11 @@ func (s *chatConnectServer) SendMessage(ctx context.Context, req *connect.Reques
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	// SSE Broadcast: SendMessageSseEvent to recipient and sender's other devices
+	// SSE Broadcast: SendMessageSseEvent to the recipient and to EVERY sender stream.
+	// Sibling tabs of the same browser share the session and the shared local store,
+	// but only the authoring tab runs confirmSentMessage(); the echo lets them mirror
+	// the confirmed row into their own memory (the authoring tab dedupes it).
 	if s.personalSseManager != nil {
-		sessionUUID, _ := kit.GetConnectRpcSessionUUID(ctx)
 		recipientUUID, _ := uuid.Parse(res.RecipientId)
 
 		// To recipient: is_from_me = false
@@ -137,7 +139,7 @@ func (s *chatConnectServer) SendMessage(ctx context.Context, req *connect.Reques
 				},
 			},
 		}
-		go s.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, senderSseEvent)
+		go s.personalSseManager.BroadcastToUser(userID.UuidUserId, senderSseEvent)
 	}
 
 	return connect.NewResponse(res), nil
@@ -559,7 +561,9 @@ func (s *chatConnectServer) UnsendMessage(ctx context.Context, req *connect.Requ
 		return nil, kit.ParseIntoRpcError(svcErr)
 	}
 
-	// SSE Broadcast: UnsendMessageSseEvent to recipient and sender's other devices
+	// SSE Broadcast: UnsendMessageSseEvent to the recipient and to EVERY sender stream.
+	// The acting tab has already applied the unsend locally; re-applying the echo is
+	// idempotent (tombstone upsert, memory no-op), while sibling tabs need it live.
 	if s.personalSseManager != nil {
 		chatUUID, _ := uuid.Parse(req.Msg.ChatId)
 		chat, err := s.chatService.PostgresQueries.GetChatByID(ctx, chatUUID)
@@ -586,10 +590,8 @@ func (s *chatConnectServer) UnsendMessage(ctx context.Context, req *connect.Requ
 				},
 			}
 
-			sessionUUID, _ := kit.GetConnectRpcSessionUUID(ctx)
-
 			go s.personalSseManager.BroadcastToUser(recipientID, sseEvent)
-			go s.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, sseEvent)
+			go s.personalSseManager.BroadcastToUser(userID.UuidUserId, sseEvent)
 		}
 	}
 
@@ -643,8 +645,9 @@ func (s *chatConnectServer) DeleteMessageForMe(ctx context.Context, req *connect
 			},
 		}
 
-		sessionUUID, _ := kit.GetConnectRpcSessionUUID(ctx)
-		go s.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, sseEvent)
+		// Every sender stream needs the live deletion: the acting tab re-applies it
+		// idempotently, sibling tabs would otherwise stay stale until reload.
+		go s.personalSseManager.BroadcastToUser(userID.UuidUserId, sseEvent)
 	}
 
 	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{Status: true, Message: "success"}), nil
@@ -846,9 +849,8 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 			},
 		}
 
-		sessionUUID, _ := kit.GetConnectRpcSessionUUID(ctx)
 		go s.personalSseManager.BroadcastToUser(recipientUUID, recipientSseEvent)
-		go s.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, senderSseEvent)
+		go s.personalSseManager.BroadcastToUser(userID.UuidUserId, senderSseEvent)
 	}
 
 	return connect.NewResponse(confirmRes), nil

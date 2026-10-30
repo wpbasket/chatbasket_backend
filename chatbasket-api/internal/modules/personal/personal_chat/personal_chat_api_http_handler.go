@@ -101,9 +101,10 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 		return svcErr
 	}
 
-	// SSE Broadcast: SendMessageSseEvent to recipient and sender's other devices
+	// SSE Broadcast: SendMessageSseEvent to the recipient and to EVERY sender stream.
+	// Sibling tabs share the session and the shared local store; the echo lets them
+	// mirror the confirmed row into their own memory (the authoring tab dedupes it).
 	if h.personalSseManager != nil {
-		sessionUUID, _ := kit.ExtractSessionUUID(c)
 		recipientUUID, _ := uuid.Parse(resp.RecipientId)
 
 		// To recipient: is_from_me = false
@@ -122,7 +123,7 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 		}
 		go h.personalSseManager.BroadcastToUser(recipientUUID, recipientSseEvent)
 
-		// To sender's other devices: is_from_me = true
+		// To every sender stream: is_from_me = true
 		senderSseEvent := &rpc_personal_ssev1.PersonalSseEvent{
 			Timestamp: timestamppb.Now(),
 			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
@@ -133,7 +134,7 @@ func (h *chatHandler) SendMessage(c *echo.Context) error {
 				},
 			},
 		}
-		go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, senderSseEvent)
+		go h.personalSseManager.BroadcastToUser(userID.UuidUserId, senderSseEvent)
 	}
 
 	return c.JSON(http.StatusOK, resp)
@@ -522,10 +523,8 @@ func (h *chatHandler) UnsendMessage(c *echo.Context) error {
 				},
 			}
 
-			sessionUUID, _ := kit.ExtractSessionUUID(c)
-
 			go h.personalSseManager.BroadcastToUser(recipientID, sseEvent)
-			go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, sseEvent)
+			go h.personalSseManager.BroadcastToUser(userID.UuidUserId, sseEvent)
 		}
 	}
 
@@ -574,8 +573,7 @@ func (h *chatHandler) DeleteMessageForMe(c *echo.Context) error {
 			},
 		}
 
-		sessionUUID, _ := kit.ExtractSessionUUID(c)
-		go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, sseEvent)
+		go h.personalSseManager.BroadcastToUser(userID.UuidUserId, sseEvent)
 	}
 
 	return c.JSON(http.StatusOK, kit.StatusOkay{Status: true, Message: "success"})
@@ -759,9 +757,8 @@ func (h *chatHandler) ConfirmUpload(c *echo.Context) error {
 			},
 		}
 
-		sessionUUID, _ := kit.ExtractSessionUUID(c)
 		go h.personalSseManager.BroadcastToUser(recipientUUID, recipientSseEvent)
-		go h.personalSseManager.BroadcastToUserExcept(userID.UuidUserId, sessionUUID, senderSseEvent)
+		go h.personalSseManager.BroadcastToUser(userID.UuidUserId, senderSseEvent)
 	}
 	return c.JSON(http.StatusOK, confirmResponse)
 }
