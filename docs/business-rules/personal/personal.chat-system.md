@@ -131,7 +131,7 @@ These icons only appear on messages **you sent**:
 
 ### 2.5 P2P WebRTC Sync Architecture (Secondary ↔ Primary) [Future — Not Implemented]
 
-> **Status: Future / Not Implemented.** Current production uses server-staged E2EE `history_sync` (`011_history_sync.up.sql`, `history_sync_svc.go`). The WebRTC architecture below is preserved as a future design.
+> **Status: Future / Not Implemented.** Current production uses server-staged E2EE `history_sync` (`011_personal_history_sync.up.sql`, `history_sync_svc.go`). The WebRTC architecture below is preserved as a future design.
 
 #### 2.5.1 Design rationale
 To reduce backend bandwidth and latency, secondary devices (web/other native) synchronize **directly with the primary device** using WebRTC peer-to-peer connections.
@@ -285,7 +285,7 @@ Temporary message relay storage. Messages are **ephemeral** — payloads and R2 
 - `chat_id` (UUID, NOT NULL) — References chats(id)
 - `sender_id` (UUID, NOT NULL) — References users(id)
 - `recipient_id` (UUID, NOT NULL) — References users(id)
-- `sender_session_id` (UUID, NOT NULL) — Sender session that authored the message (migration `013`)
+- `sender_session_id` (UUID, NOT NULL) — Sender session that authored the message
 - `content` (TEXT, NOT NULL) — E2EE ciphertext (`MaxMessageContentLength = 25000` enforced in Go)
 - `message_type` (TEXT, NOT NULL, DEFAULT 'text') — One of: `text`, `image`, `video`, `audio`, `file`, `unsent`
 - `reply_to_message_id` (UUID) — Optional referenced message UUID
@@ -371,7 +371,7 @@ Relay for cross-device synchronization of unsend and delete-for-me actions. Thes
 
 ---
 
-#### A.1.4 message_history (migration `014`)
+#### A.1.4 message_history (migration `013`)
 Append-only tombstone table of message IDs (`PRIMARY KEY (id, created_at)`), range-partitioned daily on `created_at`. Prevents duplicate re-inserts after a message row is purged from `messages`. Daily partitions (`-1d..+7d`) and drops older than 33 days are managed by `personal_chat_svc_partitions.go`.
 
 ---

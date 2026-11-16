@@ -107,6 +107,7 @@ type Message struct {
 	ChatID                      uuid.UUID  `json:"chat_id"`
 	SenderID                    uuid.UUID  `json:"sender_id"`
 	RecipientID                 uuid.UUID  `json:"recipient_id"`
+	SenderSessionID             uuid.UUID  `json:"sender_session_id"`
 	Content                     string     `json:"content"`
 	MessageType                 string     `json:"message_type"`
 	ReplyToMessageID            *uuid.UUID `json:"reply_to_message_id"`
@@ -132,7 +133,6 @@ type Message struct {
 	ReadByRecipient             bool       `json:"read_by_recipient"`
 	ReadAckedBySender           bool       `json:"read_acked_by_sender"`
 	ReadAt                      *time.Time `json:"read_at"`
-	SenderSessionID             uuid.UUID  `json:"sender_session_id"`
 }
 
 type MessageHistory struct {

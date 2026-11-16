@@ -240,7 +240,7 @@ VALUES (
         $11
     )
 RETURNING
-    id, chat_id, sender_id, recipient_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at, sender_session_id
+    id, chat_id, sender_id, recipient_id, sender_session_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at
 `
 
 type CreateMessageParams struct {
@@ -280,6 +280,7 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.ChatID,
 		&i.SenderID,
 		&i.RecipientID,
+		&i.SenderSessionID,
 		&i.Content,
 		&i.MessageType,
 		&i.ReplyToMessageID,
@@ -305,7 +306,6 @@ func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (M
 		&i.ReadByRecipient,
 		&i.ReadAckedBySender,
 		&i.ReadAt,
-		&i.SenderSessionID,
 	)
 	return i, err
 }
@@ -354,7 +354,7 @@ VALUES (
         $18
     )
 RETURNING
-    id, chat_id, sender_id, recipient_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at, sender_session_id
+    id, chat_id, sender_id, recipient_id, sender_session_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at
 `
 
 type CreateMessageWithFileParams struct {
@@ -408,6 +408,7 @@ func (q *Queries) CreateMessageWithFile(ctx context.Context, arg CreateMessageWi
 		&i.ChatID,
 		&i.SenderID,
 		&i.RecipientID,
+		&i.SenderSessionID,
 		&i.Content,
 		&i.MessageType,
 		&i.ReplyToMessageID,
@@ -433,7 +434,6 @@ func (q *Queries) CreateMessageWithFile(ctx context.Context, arg CreateMessageWi
 		&i.ReadByRecipient,
 		&i.ReadAckedBySender,
 		&i.ReadAt,
-		&i.SenderSessionID,
 	)
 	return i, err
 }
@@ -788,7 +788,7 @@ func (q *Queries) GetChatByParticipants(ctx context.Context, arg GetChatByPartic
 }
 
 const getChatMessages = `-- name: GetChatMessages :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at, sender_session_id
+SELECT id, chat_id, sender_id, recipient_id, sender_session_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at
 FROM messages
 WHERE
     chat_id = $1
@@ -842,6 +842,7 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 			&i.ChatID,
 			&i.SenderID,
 			&i.RecipientID,
+			&i.SenderSessionID,
 			&i.Content,
 			&i.MessageType,
 			&i.ReplyToMessageID,
@@ -867,7 +868,6 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 			&i.ReadByRecipient,
 			&i.ReadAckedBySender,
 			&i.ReadAt,
-			&i.SenderSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -880,7 +880,7 @@ func (q *Queries) GetChatMessages(ctx context.Context, arg GetChatMessagesParams
 }
 
 const getExpiredMessagesWithFiles = `-- name: GetExpiredMessagesWithFiles :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at, sender_session_id
+SELECT id, chat_id, sender_id, recipient_id, sender_session_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at
 FROM messages
 WHERE (
         expires_at < now()
@@ -914,6 +914,7 @@ func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpire
 			&i.ChatID,
 			&i.SenderID,
 			&i.RecipientID,
+			&i.SenderSessionID,
 			&i.Content,
 			&i.MessageType,
 			&i.ReplyToMessageID,
@@ -939,7 +940,6 @@ func (q *Queries) GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpire
 			&i.ReadByRecipient,
 			&i.ReadAckedBySender,
 			&i.ReadAt,
-			&i.SenderSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -1013,7 +1013,7 @@ func (q *Queries) GetHistorySyncRequest(ctx context.Context, arg GetHistorySyncR
 }
 
 const getMessageByID = `-- name: GetMessageByID :one
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at, sender_session_id FROM messages WHERE id = $1 LIMIT 1
+SELECT id, chat_id, sender_id, recipient_id, sender_session_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at FROM messages WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error) {
@@ -1024,6 +1024,7 @@ func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, er
 		&i.ChatID,
 		&i.SenderID,
 		&i.RecipientID,
+		&i.SenderSessionID,
 		&i.Content,
 		&i.MessageType,
 		&i.ReplyToMessageID,
@@ -1049,7 +1050,6 @@ func (q *Queries) GetMessageByID(ctx context.Context, id uuid.UUID) (Message, er
 		&i.ReadByRecipient,
 		&i.ReadAckedBySender,
 		&i.ReadAt,
-		&i.SenderSessionID,
 	)
 	return i, err
 }
@@ -1438,7 +1438,7 @@ func (q *Queries) GetMessagesForUnsendBatch(ctx context.Context, messageIds []uu
 }
 
 const getMessagesWithFilesByChatID = `-- name: GetMessagesWithFilesByChatID :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at, sender_session_id FROM messages
+SELECT id, chat_id, sender_id, recipient_id, sender_session_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at FROM messages
 WHERE chat_id = $1 AND file_id IS NOT NULL
 `
 
@@ -1456,6 +1456,7 @@ func (q *Queries) GetMessagesWithFilesByChatID(ctx context.Context, chatID uuid.
 			&i.ChatID,
 			&i.SenderID,
 			&i.RecipientID,
+			&i.SenderSessionID,
 			&i.Content,
 			&i.MessageType,
 			&i.ReplyToMessageID,
@@ -1481,7 +1482,6 @@ func (q *Queries) GetMessagesWithFilesByChatID(ctx context.Context, chatID uuid.
 			&i.ReadByRecipient,
 			&i.ReadAckedBySender,
 			&i.ReadAt,
-			&i.SenderSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -1497,7 +1497,7 @@ const getMessagesWithFilesForBlockedUsers = `-- name: GetMessagesWithFilesForBlo
 
 
 
-SELECT m.id, m.chat_id, m.sender_id, m.recipient_id, m.content, m.message_type, m.reply_to_message_id, m.file_id, m.file_name, m.file_size, m.file_mime_type, m.file_token_id, m.file_token_secret, m.file_token_expiry, m.thumbnail_file_id, m.thumbnail_token_id, m.thumbnail_token_secret, m.delivered_to_recipient, m.delivered_to_recipient_primary, m.synced_to_sender_primary, m.deleted_by_sender, m.deleted_by_recipient, m.delivery_attempts, m.expires_at, m.created_at, m.updated_at, m.read_by_recipient, m.read_acked_by_sender, m.read_at, m.sender_session_id
+SELECT m.id, m.chat_id, m.sender_id, m.recipient_id, m.sender_session_id, m.content, m.message_type, m.reply_to_message_id, m.file_id, m.file_name, m.file_size, m.file_mime_type, m.file_token_id, m.file_token_secret, m.file_token_expiry, m.thumbnail_file_id, m.thumbnail_token_id, m.thumbnail_token_secret, m.delivered_to_recipient, m.delivered_to_recipient_primary, m.synced_to_sender_primary, m.deleted_by_sender, m.deleted_by_recipient, m.delivery_attempts, m.expires_at, m.created_at, m.updated_at, m.read_by_recipient, m.read_acked_by_sender, m.read_at
 FROM messages m
 INNER JOIN chats c ON m.chat_id = c.id
 INNER JOIN user_blocks ub ON (
@@ -1534,6 +1534,7 @@ func (q *Queries) GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg G
 			&i.ChatID,
 			&i.SenderID,
 			&i.RecipientID,
+			&i.SenderSessionID,
 			&i.Content,
 			&i.MessageType,
 			&i.ReplyToMessageID,
@@ -1559,7 +1560,6 @@ func (q *Queries) GetMessagesWithFilesForBlockedUsers(ctx context.Context, arg G
 			&i.ReadByRecipient,
 			&i.ReadAckedBySender,
 			&i.ReadAt,
-			&i.SenderSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -1639,7 +1639,7 @@ func (q *Queries) GetMessagesWithFilesForUserUnion(ctx context.Context, arg GetM
 }
 
 const getPendingMessagesForRecipient = `-- name: GetPendingMessagesForRecipient :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at, sender_session_id
+SELECT id, chat_id, sender_id, recipient_id, sender_session_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at
 FROM messages
 WHERE
     recipient_id = $1
@@ -1682,6 +1682,7 @@ func (q *Queries) GetPendingMessagesForRecipient(ctx context.Context, arg GetPen
 			&i.ChatID,
 			&i.SenderID,
 			&i.RecipientID,
+			&i.SenderSessionID,
 			&i.Content,
 			&i.MessageType,
 			&i.ReplyToMessageID,
@@ -1707,7 +1708,6 @@ func (q *Queries) GetPendingMessagesForRecipient(ctx context.Context, arg GetPen
 			&i.ReadByRecipient,
 			&i.ReadAckedBySender,
 			&i.ReadAt,
-			&i.SenderSessionID,
 		); err != nil {
 			return nil, err
 		}
@@ -1720,7 +1720,7 @@ func (q *Queries) GetPendingMessagesForRecipient(ctx context.Context, arg GetPen
 }
 
 const getPendingSenderSyncMessages = `-- name: GetPendingSenderSyncMessages :many
-SELECT id, chat_id, sender_id, recipient_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at, sender_session_id
+SELECT id, chat_id, sender_id, recipient_id, sender_session_id, content, message_type, reply_to_message_id, file_id, file_name, file_size, file_mime_type, file_token_id, file_token_secret, file_token_expiry, thumbnail_file_id, thumbnail_token_id, thumbnail_token_secret, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, deleted_by_sender, deleted_by_recipient, delivery_attempts, expires_at, created_at, updated_at, read_by_recipient, read_acked_by_sender, read_at
 FROM messages
 WHERE
     sender_id = $1
@@ -1763,6 +1763,7 @@ func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendi
 			&i.ChatID,
 			&i.SenderID,
 			&i.RecipientID,
+			&i.SenderSessionID,
 			&i.Content,
 			&i.MessageType,
 			&i.ReplyToMessageID,
@@ -1788,7 +1789,6 @@ func (q *Queries) GetPendingSenderSyncMessages(ctx context.Context, arg GetPendi
 			&i.ReadByRecipient,
 			&i.ReadAckedBySender,
 			&i.ReadAt,
-			&i.SenderSessionID,
 		); err != nil {
 			return nil, err
 		}

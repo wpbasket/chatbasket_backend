@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS messages (
     chat_id                             UUID            NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
     sender_id                           UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     recipient_id                        UUID            NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_session_id                   UUID            NOT NULL,     -- Which sender session authored this message. Set only from the session middleware at insert.
 
 -- Message content (encrypted at device level in future E2EE phase)
 content TEXT NOT NULL,

@@ -153,18 +153,16 @@ chatbasket_backend/
 │   │   │   │   ├── 005_personal_token_system.up.sql
 │   │   │   │   ├── 006_personal_chat_system.down.sql
 │   │   │   │   ├── 006_personal_chat_system.up.sql
-│   │   │   │   ├── 007_block_sync_actions_cleanup.down.sql
-│   │   │   │   ├── 007_block_sync_actions_cleanup.up.sql
-│   │   │   │   ├── 010_pending_uploads.down.sql
-│   │   │   │   ├── 010_pending_uploads.up.sql
-│   │   │   │   ├── 011_history_sync.down.sql
-│   │   │   │   ├── 011_history_sync.up.sql
-│   │   │   │   ├── 012_sse_outbox.down.sql
-│   │   │   │   ├── 012_sse_outbox.up.sql
-│   │   │   │   ├── 013_message_sender_secondary_sync.down.sql
-│   │   │   │   ├── 013_message_sender_secondary_sync.up.sql
-│   │   │   │   ├── 014_message_history.down.sql
-│   │   │   │   └── 014_message_history.up.sql
+│   │   │   │   ├── 007_personal_block_sync_actions_cleanup.down.sql
+│   │   │   │   ├── 007_personal_block_sync_actions_cleanup.up.sql
+│   │   │   │   ├── 010_personal_pending_uploads.down.sql
+│   │   │   │   ├── 010_personal_pending_uploads.up.sql
+│   │   │   │   ├── 011_personal_history_sync.down.sql
+│   │   │   │   ├── 011_personal_history_sync.up.sql
+│   │   │   │   ├── 012_personal_sse_outbox.down.sql
+│   │   │   │   ├── 012_personal_sse_outbox.up.sql
+│   │   │   │   ├── 013_personal_message_history.down.sql
+│   │   │   │   └── 013_personal_message_history.up.sql
 │   │   │   └── queries/
 │   │   │       ├── pending_uploads.sql
 │   │   │       ├── personal_chat.sql
@@ -591,7 +589,8 @@ chatbasket/
 │       ├── 01a1719e-179d-707a-842c-98c90ae00099-65037/
 │       ├── 01a18bb1-68a0-7742-8f9b-cb96aaa74db1-42347/
 │       ├── 01a18bb2-320e-7742-8f9b-cb98ec3d8fa2-42347/
-│       └── 01a18bb3-0494-7742-8f9b-cb9a6db30213-42347/
+│       ├── 01a18bb3-0494-7742-8f9b-cb9a6db30213-42347/
+│       └── 01a1da3d-4caf-72c2-a2a6-b0a18fd1ad31-10000/
 ├── .thinkrail/
 │   └── context/
 │       └── .gitignore
@@ -769,6 +768,7 @@ chatbasket/
 │   │   │   ├── chat.storage.localSeq.test.ts
 │   │   │   ├── chat.storage.merge.test.ts
 │   │   │   ├── chat_list_tick_normalize.test.ts
+│   │   │   ├── chat_storage_cross_context.web.test.ts
 │   │   │   ├── delete_chat_ids.test.ts
 │   │   │   ├── delete_chat_ids.web.test.ts
 │   │   │   ├── delete_chat_media_order.native.test.ts
@@ -785,6 +785,7 @@ chatbasket/
 │   │   │   ├── payload_policy.web.test.ts
 │   │   │   ├── permanently_rejected.native.test.ts
 │   │   │   ├── permanently_rejected.web.test.ts
+│   │   │   ├── profile_storage_lifecycle.web.test.ts
 │   │   │   ├── receipt_write_race.native.test.ts
 │   │   │   ├── receipt_write_race.web.test.ts
 │   │   │   ├── sqlite_key.test.ts
@@ -794,7 +795,8 @@ chatbasket/
 │   │   │   ├── tombstone.index.web.test.ts
 │   │   │   ├── tombstone.storage.native.test.ts
 │   │   │   ├── tombstone.storage.web.test.ts
-│   │   │   └── tombstone.web_upgrade.test.ts
+│   │   │   ├── tombstone.web_upgrade.test.ts
+│   │   │   └── vault_lifecycle.web.test.ts
 │   │   └── utils/
 │   │       ├── commonUtils/
 │   │       │   └── util.date.test.ts
@@ -1123,6 +1125,7 @@ chatbasket/
 │   │   │   │   ├── personal.storage.contacts.ts
 │   │   │   │   └── personal.storage.device.ts
 │   │   │   ├── README_STORAGE.md
+│   │   │   ├── storage.idb.ts
 │   │   │   ├── storage.init.ts
 │   │   │   └── storage.wrapper.ts
 │   │   └── README_API_ARCHITECTURE.md
