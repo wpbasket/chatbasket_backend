@@ -149,7 +149,75 @@ func (s *AuthService) QRCallback(ctx context.Context, qrTokenStr string, platfor
 	}, nil
 }
 
-// CleanupQRLoginRequests forcefully deletes expired tokens.
+const (
+	qrCleanupBatchSize     = 5000
+	qrCleanupThrottleSleep = 50 * time.Millisecond
+	qrCleanupTotalBudget   = 10 * time.Minute
+)
+
+// CleanupQRLoginRequests forcefully deletes expired tokens in bounded batches of 5000 rows.
+// It enforces two layers of budget protection over a 10-minute interval:
+// 1. Soft Active Work Limit (70% / 7 minutes): Stops starting new delete query cycles if elapsed time reaches 70% of the budget.
+// 2. Safety Buffer (30% / 3 minutes): Leaves the remaining 30% of time idle so database resources settle before the next 10-minute interval.
+// 3. Early Exit: Terminates immediately once all expired tokens are cleared (rows < 5000).
+// 4. Hard Stop Timeout (100%): Cancels the active query using a context timeout if execution overruns the total budget.
 func (s *AuthService) CleanupQRLoginRequests(ctx context.Context) error {
-	return s.PostgresQuerier.CleanupExpiredQRLoginRequests(ctx)
+	budget := qrCleanupTotalBudget
+	if deadline, ok := ctx.Deadline(); ok {
+		if d := time.Until(deadline); d > 0 && d < budget {
+			budget = d
+		}
+	}
+	return s.CleanupQRLoginRequestsWithBudget(ctx, budget)
+}
+
+// CleanupQRLoginRequestsWithBudget forcefully deletes expired tokens within a custom budget.
+func (s *AuthService) CleanupQRLoginRequestsWithBudget(ctx context.Context, budget time.Duration) error {
+	start := time.Now()
+	// Allocate 70% of the budget for initiating new active batches. Keep 30% as a safety margin.
+	workBudget := (budget * 70) / 100
+
+	for time.Since(start) < workBudget {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		timeLeft := budget - time.Since(start)
+		if timeLeft <= 0 {
+			break
+		}
+
+		queryCtx, cancel := context.WithTimeout(ctx, timeLeft)
+		rows, err := s.MaintenanceQuerier.CleanupExpiredQRLoginRequestsBatch(queryCtx, qrCleanupBatchSize)
+		cancel()
+
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				return nil
+			}
+			return err
+		}
+
+		// When fewer rows than the batch limit were deleted (including 0), all expired requests are cleared early.
+		if rows < qrCleanupBatchSize {
+			return nil
+		}
+
+		// If the 70% active work budget has been reached, stop immediately without sleeping into the safety buffer.
+		if time.Since(start) >= workBudget {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(qrCleanupThrottleSleep):
+		}
+	}
+	return nil
 }

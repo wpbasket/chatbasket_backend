@@ -842,23 +842,6 @@ func (q *Queries) TryLockUserNoWait(ctx context.Context, id uuid.UUID) (int32, e
 	return locked, err
 }
 
-const updateAvatarFileID = `-- name: UpdateAvatarFileID :exec
-UPDATE avatars
-SET file_id = $2
-WHERE user_id = $1 AND avatar_type = 'profile'
-`
-
-type UpdateAvatarFileIDParams struct {
-	UserID uuid.UUID `json:"user_id"`
-	FileID *string   `json:"file_id"`
-}
-
-// Updates only the file_id for the main profile avatar (token columns unused per spec §3.C).
-func (q *Queries) UpdateAvatarFileID(ctx context.Context, arg UpdateAvatarFileIDParams) error {
-	_, err := q.db.Exec(ctx, updateAvatarFileID, arg.UserID, arg.FileID)
-	return err
-}
-
 const updateUserProfile = `-- name: UpdateUserProfile :exec
 UPDATE users
 SET

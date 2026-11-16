@@ -17,12 +17,12 @@ import (
 // Register initializes the Auth module dependencies and registers its routes.
 func Register(group *echo.Group, authService *AuthService, personalSseManager *personal_sse.Manager) {
 	qrHub := NewQRHub()
-	// Start Postgres listener for QR WebRTC syncing
+	// Start Postgres listener for QR login WebSocket notifications
 	go StartPostgresListener(context.Background(), authService.Pool, qrHub)
 
-	// Start Cleanup Worker
+	// Start Cleanup Worker (CleanupQRLoginRequests hardcodes a 10m budget tuned for this 10m ticker)
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(10 * time.Minute)
 		for range ticker.C {
 			_ = authService.CleanupQRLoginRequests(context.Background())
 		}

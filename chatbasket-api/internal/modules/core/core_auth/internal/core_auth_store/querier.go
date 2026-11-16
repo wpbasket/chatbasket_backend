@@ -13,14 +13,7 @@ import (
 type Querier interface {
 	ApproveQRLogin(ctx context.Context, arg ApproveQRLoginParams) (uuid.UUID, error)
 	CheckEmailExists(ctx context.Context, email string) (bool, error)
-	// Checks if the user already has a central device
-	CheckHasCentralDevice(ctx context.Context, authUserID uuid.UUID) (bool, error)
-	// ======================================
-	// Auth Queries
-	// ======================================
-	// Checks if a session is valid for a specific user and not expired
-	CheckSessionIsValid(ctx context.Context, arg CheckSessionIsValidParams) (bool, error)
-	CleanupExpiredQRLoginRequests(ctx context.Context) error
+	CleanupExpiredQRLoginRequestsBatch(ctx context.Context, batchSize int32) (int64, error)
 	// Count active sessions that have a key for a user
 	CountActiveKeyedSessionsForUser(ctx context.Context, authUserID uuid.UUID) (int64, error)
 	CreateAuthUser(ctx context.Context, arg CreateAuthUserParams) (AuthUser, error)
@@ -29,10 +22,8 @@ type Querier interface {
 	CreateVerificationCode(ctx context.Context, arg CreateVerificationCodeParams) (VerificationCode, error)
 	CreateVerificationCodeWithUpdateID(ctx context.Context, arg CreateVerificationCodeWithUpdateIDParams) (VerificationCode, error)
 	DeleteAllUserSessions(ctx context.Context, authUserID uuid.UUID) error
-	DeleteAllVerificationCodesForEmail(ctx context.Context, arg DeleteAllVerificationCodesForEmailParams) error
 	// Delete auth user (cascade will automatically delete sessions and verification_codes)
 	DeleteAuthUser(ctx context.Context, id uuid.UUID) error
-	DeleteSession(ctx context.Context, arg DeleteSessionParams) error
 	DeleteSessionByToken(ctx context.Context, arg DeleteSessionByTokenParams) error
 	DeleteVerificationCode(ctx context.Context, id uuid.UUID) error
 	ExchangeQRLogin(ctx context.Context, id uuid.UUID) (*uuid.UUID, error)
@@ -52,11 +43,14 @@ type Querier interface {
 	// ======================================
 	// Keys Revision Queries
 	// ======================================
-	// Get the current keys_revision for a user (atomic read)
+	// Get the current keys_revision for a user
 	GetKeysRevision(ctx context.Context, id uuid.UUID) (int32, error)
 	// Get keys_revision for multiple users in a single query
 	GetKeysRevisions(ctx context.Context, userIds []uuid.UUID) ([]GetKeysRevisionsRow, error)
 	GetQRLoginRequest(ctx context.Context, id uuid.UUID) (GetQRLoginRequestRow, error)
+	// ======================================
+	// Auth Queries
+	// ======================================
 	GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByToken(ctx context.Context, arg GetSessionByTokenParams) (Session, error)
 	// Returns user's primary device session (for Phase 6 messaging eligibility)
@@ -76,8 +70,6 @@ type Querier interface {
 	// ======================================
 	// Save or update the E2EE public key for a specific session (must be active)
 	SaveSessionE2EEPublicKey(ctx context.Context, arg SaveSessionE2EEPublicKeyParams) (uuid.UUID, error)
-	// Sets is_central = true for a specific session
-	SetSessionCentral(ctx context.Context, arg SetSessionCentralParams) error
 	// Sets is_central = true for a session identified by token hash
 	SetSessionCentralByToken(ctx context.Context, arg SetSessionCentralByTokenParams) error
 	UpdateAuthUserEmail(ctx context.Context, arg UpdateAuthUserEmailParams) error

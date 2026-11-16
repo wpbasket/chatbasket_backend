@@ -2,7 +2,6 @@ package personal_chat
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -84,6 +82,11 @@ func (s *chatConnectServer) SendMessage(ctx context.Context, req *connect.Reques
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
+	sessionUUID, err := kit.GetConnectRpcSessionUUID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
 	if req == nil || req.Msg == nil {
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
@@ -100,7 +103,7 @@ func (s *chatConnectServer) SendMessage(ctx context.Context, req *connect.Reques
 		RecipientKeysRevision: req.Msg.RecipientKeysRevision,
 		SenderKeysRevision:    req.Msg.SenderKeysRevision,
 		ReplyToMessageID:      req.Msg.ReplyToMessageId,
-	}, userID, isPrimary)
+	}, userID, isPrimary, sessionUUID)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
@@ -128,7 +131,7 @@ func (s *chatConnectServer) SendMessage(ctx context.Context, req *connect.Reques
 		}
 		go s.personalSseManager.BroadcastToUser(recipientUUID, recipientSseEvent)
 
-		// To sender's other devices: is_from_me = true
+		// To every sender stream: is_from_me = true
 		senderSseEvent := &rpc_personal_ssev1.PersonalSseEvent{
 			Timestamp: timestamppb.Now(),
 			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
@@ -194,51 +197,45 @@ func (s *chatConnectServer) AcknowledgeDelivery(ctx context.Context, req *connec
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
-	sessionID, _ := kit.GetConnectRpcSessionID(ctx)
+	isPrimary, _ := kit.GetConnectRpcIsPrimary(ctx)
 
-	messageID, parseErr := uuid.Parse(req.Msg.MessageId)
-	if parseErr != nil {
-		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "invalid_message_id", "Invalid message_id"))
-	}
-
-	// 1. Fetch message info BEFORE acknowledgment (it might be deleted from relay during ACK)
-	message, msgErr := s.chatService.PostgresQueries.GetMessageByID(ctx, messageID)
-	if errors.Is(msgErr, pgx.ErrNoRows) {
-		// Idempotency: Message already fully acknowledged and deleted from relay table.
-		return connect.NewResponse(&rpc_personal_chatv1.AcknowledgeDeliveryResponse{Acknowledged: true}), nil
-	} else if msgErr != nil {
-		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusInternalServerError, "internal_server_error", "Internal server error"))
-	}
-
-	res, err := s.chatService.AcknowledgeDeliveryHandler(ctx, &AcknowledgeDeliveryPayload{
+	resp, deliveryGroups, err := s.chatService.AcknowledgeDeliveryHandler(ctx, &AcknowledgeDeliveryPayload{
 		MessageID:      req.Msg.MessageId,
 		AcknowledgedBy: req.Msg.AcknowledgedBy,
 		Success:        req.Msg.Success,
-	}, userID, sessionID)
+	}, userID, isPrimary)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
-	// 2. SSE Broadcast: AcknowledgeDeliverySseEvent to sender (if acknowledgedBy == "recipient")
-	if req.Msg.AcknowledgedBy == "recipient" && s.personalSseManager != nil {
-		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
-			Timestamp: timestamppb.Now(),
-			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
-				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
-					Event: &rpc_personal_chatv1.ChatSsePayload_AcknowledgeDeliverySseEvent{
-						AcknowledgeDeliverySseEvent: &rpc_personal_chatv1.AcknowledgeDeliverySsePayload{
-							ChatId:      message.ChatID.String(),
-							MessageIds:  []string{req.Msg.MessageId},
-							DeliveredAt: timestamppb.New(message.CreatedAt),
+	// SSE Broadcast per distinct (SenderID, ChatID) group asynchronously without blocking endpoint response
+	// Only broadcast newly delivered messages (strictly excluding already-delivered and non-existent messages)
+	if req.Msg.AcknowledgedBy == "recipient" && s.personalSseManager != nil && len(deliveryGroups) > 0 {
+		go func(groups []AckDeliveryGroup) {
+			for _, group := range groups {
+				if group.SenderID == uuid.Nil || group.ChatID == uuid.Nil || len(group.MessageIDs) == 0 {
+					continue
+				}
+				sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+					Timestamp: timestamppb.Now(),
+					Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+						ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+							Event: &rpc_personal_chatv1.ChatSsePayload_AcknowledgeDeliverySseEvent{
+								AcknowledgeDeliverySseEvent: &rpc_personal_chatv1.AcknowledgeDeliverySsePayload{
+									ChatId:      group.ChatID.String(),
+									MessageIds:  group.MessageIDs,
+									DeliveredAt: timestamppb.New(group.LatestCreatedAt),
+								},
+							},
 						},
 					},
-				},
-			},
-		}
-		go s.personalSseManager.BroadcastToUser(message.SenderID, sseEvent)
+				}
+				s.personalSseManager.BroadcastToUser(group.SenderID, sseEvent)
+			}
+		}(deliveryGroups)
 	}
 
-	return connect.NewResponse(res), nil
+	return connect.NewResponse(resp), nil
 }
 
 func (s *chatConnectServer) AcknowledgeDeliveryBatch(ctx context.Context, req *connect.Request[rpc_personal_chatv1.AckDeliveryBatchPayload]) (*connect.Response[rpc_personal_chatv1.AckDeliveryBatchResponse], error) {
@@ -251,59 +248,43 @@ func (s *chatConnectServer) AcknowledgeDeliveryBatch(ctx context.Context, req *c
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
-	sessionID, _ := kit.GetConnectRpcSessionID(ctx)
+	isPrimary, _ := kit.GetConnectRpcIsPrimary(ctx)
 
-	var chatID uuid.UUID
-	var senderID uuid.UUID
-	var latestCreatedAt time.Time
-	var acknowledgedMessageIds []string
-
-	// 1. Fetch info and perform acknowledgments
-	for i, msgIDStr := range req.Msg.MessageIds {
-		messageID, err := uuid.Parse(msgIDStr)
-		if err != nil {
-			continue
-		}
-
-		// Fetch message info BEFORE it's potentially deleted
-		if msg, msgErr := s.chatService.PostgresQueries.GetMessageByID(ctx, messageID); msgErr == nil {
-			if i == 0 {
-				chatID = msg.ChatID
-				senderID = msg.SenderID
-			}
-			if msg.CreatedAt.After(latestCreatedAt) {
-				latestCreatedAt = msg.CreatedAt
-			}
-		}
-
-		ackErr := s.chatService.AcknowledgeDelivery(ctx, messageID, req.Msg.AcknowledgedBy, sessionID, userID)
-		if ackErr == nil {
-			acknowledgedMessageIds = append(acknowledgedMessageIds, msgIDStr)
-		}
+	res, ackErr := s.chatService.AcknowledgeDeliveryBatch(ctx, req.Msg.MessageIds, req.Msg.AcknowledgedBy, isPrimary, userID)
+	if ackErr != nil {
+		return nil, kit.ParseIntoRpcError(ackErr)
 	}
 
-	// 2. SSE Broadcast: single delivery_ack with all message_ids (strict DB timestamp only)
-	if req.Msg.AcknowledgedBy == "recipient" && s.personalSseManager != nil && chatID != uuid.Nil && senderID != uuid.Nil && !latestCreatedAt.IsZero() && len(acknowledgedMessageIds) > 0 {
-		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
-			Timestamp: timestamppb.Now(),
-			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
-				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
-					Event: &rpc_personal_chatv1.ChatSsePayload_AcknowledgeDeliverySseEvent{
-						AcknowledgeDeliverySseEvent: &rpc_personal_chatv1.AcknowledgeDeliverySsePayload{
-							ChatId:      chatID.String(),
-							MessageIds:  acknowledgedMessageIds,
-							DeliveredAt: timestamppb.New(latestCreatedAt),
+	// SSE Broadcast per distinct (SenderID, ChatID) group asynchronously without blocking endpoint response
+	if req.Msg.AcknowledgedBy == "recipient" && s.personalSseManager != nil && len(res.DeliveryGroups) > 0 {
+		go func(groups []AckDeliveryGroup) {
+			for _, group := range groups {
+				if group.SenderID == uuid.Nil || group.ChatID == uuid.Nil || len(group.MessageIDs) == 0 {
+					continue
+				}
+				sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+					Timestamp: timestamppb.Now(),
+					Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+						ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+							Event: &rpc_personal_chatv1.ChatSsePayload_AcknowledgeDeliverySseEvent{
+								AcknowledgeDeliverySseEvent: &rpc_personal_chatv1.AcknowledgeDeliverySsePayload{
+									ChatId:      group.ChatID.String(),
+									MessageIds:  group.MessageIDs,
+									DeliveredAt: timestamppb.New(group.LatestCreatedAt),
+								},
+							},
 						},
 					},
-				},
-			},
-		}
-		go s.personalSseManager.BroadcastToUser(senderID, sseEvent)
+				}
+				s.personalSseManager.BroadcastToUser(group.SenderID, sseEvent)
+			}
+		}(res.DeliveryGroups)
 	}
 
 	return connect.NewResponse(&rpc_personal_chatv1.AckDeliveryBatchResponse{
-		AcknowledgedCount:      int32(len(acknowledgedMessageIds)),
-		AcknowledgedMessageIds: acknowledgedMessageIds,
+		AcknowledgedCount:             res.AcknowledgedCount,
+		AcknowledgedMessageIds:        res.AcknowledgedMessageIDs,
+		PermanentlyRejectedMessageIds: res.PermanentlyRejectedIDs,
 	}), nil
 }
 
@@ -321,8 +302,11 @@ func (s *chatConnectServer) AcknowledgeReadReceiptBatch(ctx context.Context, req
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
+	if len(req.Msg.MessageIds) > MaxMessageIDsPerRequest {
+		return nil, kit.ParseIntoRpcError(ErrTooManyMessageIDs)
+	}
+
 	res, err := s.chatService.AcknowledgeReadReceiptBatch(ctx, &AckReadReceiptBatchPayload{
-		ChatID:     req.Msg.ChatId,
 		MessageIDs: req.Msg.MessageIds,
 	}, userID, isPrimary)
 	if err != nil {
@@ -346,46 +330,43 @@ func (s *chatConnectServer) AcknowledgeAndReadBatch(ctx context.Context, req *co
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
-	res, chatID, svcErr := s.chatService.AcknowledgeAndReadBatch(ctx, &AckAndReadBatchPayload{
+	if len(req.Msg.MessageIds) > MaxMessageIDsPerRequest {
+		return nil, kit.ParseIntoRpcError(ErrTooManyMessageIDs)
+	}
+
+	out, svcErr := s.chatService.AcknowledgeAndReadBatch(ctx, &AckAndReadBatchPayload{
 		MessageIDs: req.Msg.MessageIds,
 	}, userID, isPrimary)
 	if svcErr != nil {
 		return nil, kit.ParseIntoRpcError(svcErr)
 	}
 
-	// SSE Broadcast: MarkChatReadSseEvent to other participant
-	if s.personalSseManager != nil && chatID != uuid.Nil && len(res.ReadMessages) > 0 {
-		if chat, chatErr := s.chatService.PostgresQueries.GetChatByID(ctx, chatID); chatErr == nil {
-			var otherUserID uuid.UUID
-			if chat.Participant1ID == userID.UuidUserId {
-				otherUserID = chat.Participant2ID
-			} else if chat.Participant2ID == userID.UuidUserId {
-				otherUserID = chat.Participant1ID
-			}
-
-			if otherUserID != uuid.Nil {
-				readAtStr := chat.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")
-				sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
-					Timestamp: timestamppb.Now(),
-					Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
-						ChatModule: &rpc_personal_chatv1.ChatSsePayload{
-							Event: &rpc_personal_chatv1.ChatSsePayload_MarkChatReadSseEvent{
-								MarkChatReadSseEvent: &rpc_personal_chatv1.MarkChatReadSsePayload{
-									ChatId:       chatID.String(),
-									ReaderId:     userID.StringUserId,
-									ReadAt:       readAtStr,
-									ReadMessages: res.ReadMessages,
-								},
-							},
+	// SSE Broadcast: MarkChatReadSseEvent to other participant asynchronously without blocking endpoint response
+	// Only broadcast newly read messages (strictly excluding already-true and non-existent messages)
+	if s.personalSseManager != nil && out.OtherUserID != uuid.Nil && len(out.NewlyRead) > 0 {
+		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_MarkChatReadSseEvent{
+						MarkChatReadSseEvent: &rpc_personal_chatv1.MarkChatReadSsePayload{
+							ChatId:       out.ChatID.String(),
+							ReaderId:     userID.StringUserId,
+							ReadAt:       formatChatTimestamp(out.ReadAt),
+							ReadMessages: out.NewlyRead,
 						},
 					},
-				}
-				go s.personalSseManager.BroadcastToUser(otherUserID, sseEvent)
-			}
+				},
+			},
 		}
+		go s.personalSseManager.BroadcastToUser(out.OtherUserID, sseEvent)
 	}
 
-	return connect.NewResponse(res), nil
+	return connect.NewResponse(&rpc_personal_chatv1.AckAndReadBatchResponse{
+		AcknowledgedCount:             int32(len(out.Receipts)),
+		ReadMessages:                  out.Receipts,
+		PermanentlyRejectedMessageIds: out.PermanentlyRejectedIDs,
+	}), nil
 }
 
 func (s *chatConnectServer) GetUserChats(ctx context.Context, req *connect.Request[rpc_personal_chatv1.GetUserChatsRequest]) (*connect.Response[rpc_personal_chatv1.GetUserChatsResponse], error) {
@@ -488,57 +469,47 @@ func (s *chatConnectServer) MarkChatRead(ctx context.Context, req *connect.Reque
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
-	readReceipts, svcErr := s.chatService.MarkChatRead(ctx, &MarkChatReadPayload{
-		ChatID:     req.Msg.ChatId,
+	if len(req.Msg.MessageIds) > MaxMessageIDsPerRequest {
+		return nil, kit.ParseIntoRpcError(ErrTooManyMessageIDs)
+	}
+
+	out, svcErr := s.chatService.MarkChatRead(ctx, &MarkChatReadPayload{
 		MessageIDs: req.Msg.MessageIds,
 	}, userID, isPrimary)
 	if svcErr != nil {
 		return nil, kit.ParseIntoRpcError(svcErr)
 	}
 
-	chatUUID, _ := uuid.Parse(req.Msg.ChatId)
-	chat, chatErr := s.chatService.PostgresQueries.GetChatByID(ctx, chatUUID)
-	readAtStr := ""
-	if chatErr == nil && len(readReceipts) > 0 {
-		readAtStr = chat.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")
-		// SSE Broadcast: MarkChatReadSseEvent to other participant
-		if s.personalSseManager != nil {
-			var otherUserID uuid.UUID
-			if chat.Participant1ID == userID.UuidUserId {
-				otherUserID = chat.Participant2ID
-			} else if chat.Participant2ID == userID.UuidUserId {
-				otherUserID = chat.Participant1ID
-			}
-
-			if otherUserID != uuid.Nil {
-				sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
-					Timestamp: timestamppb.Now(),
-					Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
-						ChatModule: &rpc_personal_chatv1.ChatSsePayload{
-							Event: &rpc_personal_chatv1.ChatSsePayload_MarkChatReadSseEvent{
-								MarkChatReadSseEvent: &rpc_personal_chatv1.MarkChatReadSsePayload{
-									ChatId:       req.Msg.ChatId,
-									ReaderId:     userID.StringUserId,
-									ReadAt:       readAtStr,
-									ReadMessages: readReceipts,
-								},
-							},
+	// SSE Broadcast: MarkChatReadSseEvent to other participant asynchronously without blocking endpoint response
+	// Only broadcast newly read messages (strictly excluding already-true and non-existent messages)
+	if s.personalSseManager != nil && out.OtherUserID != uuid.Nil && len(out.NewlyRead) > 0 {
+		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_MarkChatReadSseEvent{
+						MarkChatReadSseEvent: &rpc_personal_chatv1.MarkChatReadSsePayload{
+							ChatId:       out.ChatID.String(),
+							ReaderId:     userID.StringUserId,
+							ReadAt:       formatChatTimestamp(out.ReadAt),
+							ReadMessages: out.NewlyRead,
 						},
 					},
-				}
-				go s.personalSseManager.BroadcastToUser(otherUserID, sseEvent)
-			}
+				},
+			},
 		}
+		go s.personalSseManager.BroadcastToUser(out.OtherUserID, sseEvent)
 	}
 
 	return connect.NewResponse(&rpc_personal_chatv1.MarkChatReadResponse{
-		Status:       true,
-		ReadAt:       readAtStr,
-		ReadMessages: readReceipts,
+		Status:                        true,
+		ReadAt:                        formatChatTimestamp(out.ReadAt),
+		ReadMessages:                  out.Receipts,
+		PermanentlyRejectedMessageIds: out.PermanentlyRejectedIDs,
 	}), nil
 }
 
-func (s *chatConnectServer) UnsendMessage(ctx context.Context, req *connect.Request[rpc_personal_chatv1.UnsendMessageRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
+func (s *chatConnectServer) UnsendMessage(ctx context.Context, req *connect.Request[rpc_personal_chatv1.UnsendMessageRequest]) (*connect.Response[rpc_personal_chatv1.UnsendMessageResponse], error) {
 	userID, err := kit.GetConnectRpcUserID(ctx)
 	if err != nil {
 		return nil, kit.ParseIntoRpcError(err)
@@ -553,8 +524,11 @@ func (s *chatConnectServer) UnsendMessage(ctx context.Context, req *connect.Requ
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
-	svcErr := s.chatService.UnsendMessageHandler(ctx, &UnsendMessagePayload{
-		ChatID:     req.Msg.ChatId,
+	if len(req.Msg.MessageIds) > MaxMessageIDsPerRequest {
+		return nil, kit.ParseIntoRpcError(ErrTooManyMessageIDs)
+	}
+
+	out, svcErr := s.chatService.UnsendMessageHandler(ctx, &UnsendMessagePayload{
 		MessageIDs: req.Msg.MessageIds,
 	}, userID, isPrimary)
 	if svcErr != nil {
@@ -562,40 +536,35 @@ func (s *chatConnectServer) UnsendMessage(ctx context.Context, req *connect.Requ
 	}
 
 	// SSE Broadcast: UnsendMessageSseEvent to the recipient and to EVERY sender stream.
-	// The acting tab has already applied the unsend locally; re-applying the echo is
-	// idempotent (tombstone upsert, memory no-op), while sibling tabs need it live.
-	if s.personalSseManager != nil {
-		chatUUID, _ := uuid.Parse(req.Msg.ChatId)
-		chat, err := s.chatService.PostgresQueries.GetChatByID(ctx, chatUUID)
-		if err == nil {
-			var recipientID uuid.UUID
-			if chat.Participant1ID == userID.UuidUserId {
-				recipientID = chat.Participant2ID
-			} else {
-				recipientID = chat.Participant1ID
-			}
-
-			sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
-				Timestamp: timestamppb.Now(),
-				Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
-					ChatModule: &rpc_personal_chatv1.ChatSsePayload{
-						Event: &rpc_personal_chatv1.ChatSsePayload_UnsendMessageSseEvent{
-							UnsendMessageSseEvent: &rpc_personal_chatv1.UnsendMessageSsePayload{
-								ChatId:     req.Msg.ChatId,
-								MessageIds: req.Msg.MessageIds,
-								SenderId:   userID.StringUserId,
-							},
+	// Only broadcast newly unsent messages (strictly excluding already-true, non-existent, and ineligible messages)
+	if s.personalSseManager != nil && out.ChatID != uuid.Nil && len(out.NewlyUnsentIDs) > 0 {
+		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+			Timestamp: timestamppb.Now(),
+			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+					Event: &rpc_personal_chatv1.ChatSsePayload_UnsendMessageSseEvent{
+						UnsendMessageSseEvent: &rpc_personal_chatv1.UnsendMessageSsePayload{
+							ChatId:     out.ChatID.String(),
+							MessageIds: out.NewlyUnsentIDs,
+							SenderId:   userID.StringUserId,
 						},
 					},
 				},
-			}
-
-			go s.personalSseManager.BroadcastToUser(recipientID, sseEvent)
-			go s.personalSseManager.BroadcastToUser(userID.UuidUserId, sseEvent)
+			},
 		}
+		go func(rID uuid.UUID, sID uuid.UUID, evt *rpc_personal_ssev1.PersonalSseEvent) {
+			if rID != uuid.Nil {
+				s.personalSseManager.BroadcastToUser(rID, evt)
+			}
+			s.personalSseManager.BroadcastToUser(sID, evt)
+		}(out.RecipientID, userID.UuidUserId, sseEvent)
 	}
 
-	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{Status: true, Message: "success"}), nil
+	return connect.NewResponse(&rpc_personal_chatv1.UnsendMessageResponse{
+		AcknowledgedCount:             int32(len(out.AcknowledgedIDs)),
+		AcknowledgedMessageIds:        out.AcknowledgedIDs,
+		PermanentlyRejectedMessageIds: out.PermanentlyRejectedIDs,
+	}), nil
 }
 
 func (s *chatConnectServer) DeleteMessageForMe(ctx context.Context, req *connect.Request[rpc_personal_chatv1.DeleteMessageForMeRequest]) (*connect.Response[rpc_common_modelv1.StatusOkay], error) {
@@ -613,41 +582,41 @@ func (s *chatConnectServer) DeleteMessageForMe(ctx context.Context, req *connect
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
 
-	svcErr := s.chatService.DeleteMessageForMeHandler(ctx, &DeleteMessageForMePayload{
+	if len(req.Msg.MessageIds) > MaxMessageIDsPerRequest {
+		return nil, kit.ParseIntoRpcError(ErrTooManyMessageIDs)
+	}
+
+	groups, svcErr := s.chatService.DeleteMessageForMeHandler(ctx, &DeleteMessageForMePayload{
 		MessageIDs: req.Msg.MessageIds,
 	}, userID, isPrimary)
 	if svcErr != nil {
 		return nil, kit.ParseIntoRpcError(svcErr)
 	}
 
-	// SSE Broadcast: DeleteMessageForMeSseEvent to sender's other devices
-	if s.personalSseManager != nil {
-		var chatID string
-		if len(req.Msg.MessageIds) > 0 {
-			if msgUUID, parseErr := uuid.Parse(req.Msg.MessageIds[0]); parseErr == nil {
-				if msg, lookupErr := s.chatService.PostgresQueries.GetMessageByID(ctx, msgUUID); lookupErr == nil {
-					chatID = msg.ChatID.String()
+	// Smart SSE Broadcast: Asynchronously broadcast without blocking the endpoint response
+	if s.personalSseManager != nil && len(groups) > 0 {
+		go func(targetUserID uuid.UUID, grps []DeleteForMeGroup) {
+			for _, g := range grps {
+				chatIDStr := ""
+				if g.ChatID != uuid.Nil {
+					chatIDStr = g.ChatID.String()
 				}
-			}
-		}
-
-		sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
-			Timestamp: timestamppb.Now(),
-			Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
-				ChatModule: &rpc_personal_chatv1.ChatSsePayload{
-					Event: &rpc_personal_chatv1.ChatSsePayload_DeleteMessageForMeSseEvent{
-						DeleteMessageForMeSseEvent: &rpc_personal_chatv1.DeleteMessageForMeSsePayload{
-							ChatId:     chatID,
-							MessageIds: req.Msg.MessageIds,
+				sseEvent := &rpc_personal_ssev1.PersonalSseEvent{
+					Timestamp: timestamppb.Now(),
+					Payload: &rpc_personal_ssev1.PersonalSseEvent_ChatModule{
+						ChatModule: &rpc_personal_chatv1.ChatSsePayload{
+							Event: &rpc_personal_chatv1.ChatSsePayload_DeleteMessageForMeSseEvent{
+								DeleteMessageForMeSseEvent: &rpc_personal_chatv1.DeleteMessageForMeSsePayload{
+									ChatId:     chatIDStr,
+									MessageIds: g.MessageIDs,
+								},
+							},
 						},
 					},
-				},
-			},
-		}
-
-		// Every sender stream needs the live deletion: the acting tab re-applies it
-		// idempotently, sibling tabs would otherwise stay stale until reload.
-		go s.personalSseManager.BroadcastToUser(userID.UuidUserId, sseEvent)
+				}
+				s.personalSseManager.BroadcastToUser(targetUserID, sseEvent)
+			}
+		}(userID.UuidUserId, groups)
 	}
 
 	return connect.NewResponse(&rpc_common_modelv1.StatusOkay{Status: true, Message: "success"}), nil
@@ -733,6 +702,11 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 		return nil, kit.ParseIntoRpcError(err)
 	}
 
+	sessionUUID, err := kit.GetConnectRpcSessionUUID(ctx)
+	if err != nil {
+		return nil, kit.ParseIntoRpcError(err)
+	}
+
 	if req == nil || req.Msg == nil {
 		return nil, kit.ParseIntoRpcError(kit.NewError(http.StatusBadRequest, "bad_request", "invalid request payload"))
 	}
@@ -772,6 +746,7 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 		Content:               req.Msg.Content,
 		MessageType:           req.Msg.MessageType,
 		IsPrimary:             isPrimary,
+		SessionUUID:           sessionUUID,
 		RecipientKeysRevision: req.Msg.RecipientKeysRevision,
 		SenderKeysRevision:    req.Msg.SenderKeysRevision,
 		ReplyToMessageID:      replyToUUID,
@@ -797,7 +772,7 @@ func (s *chatConnectServer) ConfirmUpload(ctx context.Context, req *connect.Requ
 		ReplyToMessageId:   uuidPtrToStringPtr(message.ReplyToMessageID),
 	}
 
-	// SSE Broadcast: ConfirmFileMessageUploadSseEvent to recipient and sender's other devices
+	// SSE Broadcast: ConfirmFileMessageUploadSseEvent to the recipient and to EVERY sender stream
 	if s.personalSseManager != nil {
 		protoMsg := &rpc_personal_chatv1.Message{
 			MessageId:             message.ID.String(),

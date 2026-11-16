@@ -45,31 +45,6 @@ func (q *Queries) AcceptContactRequest(ctx context.Context, arg AcceptContactReq
 	return outcome, err
 }
 
-const deleteAndInsertContactRequest = `-- name: DeleteAndInsertContactRequest :exec
-WITH deleted AS (
-    DELETE FROM contact_requests
-    WHERE requester_user_id = $2 AND receiver_user_id = $3
-    RETURNING requester_user_id
-)
-INSERT INTO contact_requests (id, requester_user_id, receiver_user_id, status)
-SELECT $1, $2, $3, 'pending'
-WHERE EXISTS (SELECT 1 FROM deleted) OR NOT EXISTS (
-    SELECT 1 FROM contact_requests 
-    WHERE requester_user_id = $2 AND receiver_user_id = $3
-)
-`
-
-type DeleteAndInsertContactRequestParams struct {
-	ID              uuid.UUID `json:"id"`
-	RequesterUserID uuid.UUID `json:"requester_user_id"`
-	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
-}
-
-func (q *Queries) DeleteAndInsertContactRequest(ctx context.Context, arg DeleteAndInsertContactRequestParams) error {
-	_, err := q.db.Exec(ctx, deleteAndInsertContactRequest, arg.ID, arg.RequesterUserID, arg.ReceiverUserID)
-	return err
-}
-
 const deleteContact = `-- name: DeleteContact :one
 WITH deleted AS (
     DELETE FROM user_contacts AS uc
@@ -91,24 +66,6 @@ func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (i
 	var removed int64
 	err := row.Scan(&removed)
 	return removed, err
-}
-
-const getContactRequestStatus = `-- name: GetContactRequestStatus :one
-SELECT status::text FROM contact_requests
-WHERE requester_user_id = $1 AND receiver_user_id = $2
-LIMIT 1
-`
-
-type GetContactRequestStatusParams struct {
-	RequesterUserID uuid.UUID `json:"requester_user_id"`
-	ReceiverUserID  uuid.UUID `json:"receiver_user_id"`
-}
-
-func (q *Queries) GetContactRequestStatus(ctx context.Context, arg GetContactRequestStatusParams) (string, error) {
-	row := q.db.QueryRow(ctx, getContactRequestStatus, arg.RequesterUserID, arg.ReceiverUserID)
-	var status string
-	err := row.Scan(&status)
-	return status, err
 }
 
 const getPendingContactRequestsLite = `-- name: GetPendingContactRequestsLite :many

@@ -1,6 +1,6 @@
 # Chatbasket Backend
 
-<img src="https://img.shields.io/badge/Go-1.26.4-00ADD8?style=flat-square&logo=go" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
+<img src="https://img.shields.io/badge/Go-1.27.1-00ADD8?style=flat-square&logo=go" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
 <img src="https://img.shields.io/badge/Architecture-clean-success?style=flat-square" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
 <img src="https://img.shields.io/badge/Security-privacy--first-blueviolet?style=flat-square" height="28" style="margin-left: 10px;border-radius: 10px; margin-bottom: 10px;">
 

@@ -104,7 +104,7 @@ func StartPostgresListener(ctx context.Context, pool *pgxpool.Pool, hub *QRHub) 
 		}
 
 		// Payload expected format: "<uuid>_<event_type>"
-		// Example: "f47ac10b-58cc-4372-a567-0e02b2c3d479_signal"
+		// Example: "f47ac10b-58cc-4372-a567-0e02b2c3d479_approve"
 		payload := notification.Payload
 		if len(payload) <= 37 || payload[36] != '_' {
 			log.Printf("[QRHub] Ignoring malformed payload: %q", payload)

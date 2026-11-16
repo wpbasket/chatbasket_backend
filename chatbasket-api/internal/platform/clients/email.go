@@ -203,7 +203,7 @@ func signRelayRequest(secret []byte, timestamp, nonce, path string, body []byte)
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// WaitEmails waits for all background email tasks to complete, ported from utils/emailUtils.go
+// WaitEmails waits for all background email tasks to complete.
 func WaitEmails() {
 	emailWG.Wait()
 }

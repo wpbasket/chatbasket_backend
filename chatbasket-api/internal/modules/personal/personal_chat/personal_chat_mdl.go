@@ -22,19 +22,20 @@ const (
 const (
 	MaxFileSize             = 100 * 1024 * 1024
 	DefaultMessageTTL       = 30 * 24 * time.Hour
-	StorageFullTTL          = 7 * 24 * time.Hour
 	MaxDeliveryAttempts     = 5
 	MaxMessageContentLength = 25000
+	MaxMessageIDsPerRequest = 200
 )
 
 // validateMessageContentLength caps content at 25,000 to protect DB, memory, and SSE fanout across both bytes and runes:
-// - 4,000 characters: the general message limit (user-typed text —
-//   the input box counts UTF-16 units, so basic 2-unit emojis allow
-//   roughly 2,000, while compound emojis like flags or families take
-//   4-7+ units each and fit fewer; 3-byte Asian/Hindi scripts are the
-//   heaviest real input at ~16.9KB wire bytes after E2EE + base64)
-// - 150 characters: reply/quote snippet, auto-appended by the client, not typed (~700 bytes metadata)
-// - Multi-device sessions (up to 6 recipient + sender sync devices): ~2,000 bytes
+//   - 4,000 characters: the general message limit (user-typed text —
+//     the input box counts UTF-16 units, so basic 2-unit emojis allow
+//     roughly 2,000, while compound emojis like flags or families take
+//     4-7+ units each and fit fewer; 3-byte Asian/Hindi scripts are the
+//     heaviest real input at ~16.9KB wire bytes after E2EE + base64)
+//   - 150 characters: reply/quote snippet, auto-appended by the client, not typed (~700 bytes metadata)
+//   - Multi-device sessions (up to 6 recipient + sender sync devices): ~2,000 bytes
+//
 // Worst-case peak ≈ 19.6KB, so 25,000 leaves a ~5.4KB buffer while staying
 // far under the 64KB SSE event ceiling. See MESSAGE_PAYLOAD_SIZING_FORMULA.md.
 func validateMessageContentLength(content string) error {
@@ -121,19 +122,28 @@ type AcknowledgeDeliveryResponse struct {
 }
 
 type AckDeliveryBatchResponse struct {
-	AcknowledgedCount      int      `json:"acknowledgedCount"`
-	AcknowledgedMessageIds []string `json:"acknowledgedMessageIds"`
+	AcknowledgedCount             int      `json:"acknowledgedCount"`
+	AcknowledgedMessageIds        []string `json:"acknowledgedMessageIds"`
+	PermanentlyRejectedMessageIds []string `json:"permanentlyRejectedMessageIds"`
 }
 
 type AckReadReceiptBatchResponse struct {
-	AcknowledgedCount      int      `json:"acknowledgedCount"`
-	AcknowledgedMessageIds []string `json:"acknowledgedMessageIds"`
+	AcknowledgedCount             int      `json:"acknowledgedCount"`
+	AcknowledgedMessageIds        []string `json:"acknowledgedMessageIds"`
+	PermanentlyRejectedMessageIds []string `json:"permanentlyRejectedMessageIds"`
+}
+
+type UnsendMessageResponse struct {
+	AcknowledgedCount             int      `json:"acknowledgedCount"`
+	AcknowledgedMessageIds        []string `json:"acknowledgedMessageIds"`
+	PermanentlyRejectedMessageIds []string `json:"permanentlyRejectedMessageIds"`
 }
 
 type MarkChatReadResponse struct {
-	Status       bool                              `json:"status"`
-	ReadAt       string                            `json:"readAt"`
-	ReadMessages []*rpc_personal_chatv1.MessageReadReceipt `json:"readMessages"`
+	Status                        bool                                      `json:"status"`
+	ReadAt                        string                                    `json:"readAt"`
+	ReadMessages                  []*rpc_personal_chatv1.MessageReadReceipt `json:"readMessages"`
+	PermanentlyRejectedMessageIds []string                                  `json:"permanentlyRejectedMessageIds"`
 }
 
 type GetFileURLResponse struct {
@@ -150,9 +160,9 @@ type PresignChatUploadResponse struct {
 
 // ConfirmChatUploadPayload is the request body for POST /chat/confirm.
 type ConfirmChatUploadPayload struct {
-	MessageID             string `json:"messageId" validate:"required,uuid"`
-	FileID                string `json:"fileId" validate:"required"`
-	RecipientID           string `json:"recipientId" validate:"required,uuid"`
+	MessageID             string  `json:"messageId" validate:"required,uuid"`
+	FileID                string  `json:"fileId" validate:"required"`
+	RecipientID           string  `json:"recipientId" validate:"required,uuid"`
 	Content               string  `json:"content" validate:"required,max=25000"`
 	MessageType           string  `json:"messageType" validate:"required,oneof=image video audio file"`
 	RecipientKeysRevision int32   `json:"recipientKeysRevision"`
@@ -189,7 +199,6 @@ type GetSyncActionsResponse struct {
 	Count   int                  `json:"count"`
 }
 
-
 // ──────────────────────────────────────────────────────────────────────────────
 // Stale keys error — returned when client's keys_revision is out of date.
 // The details are passed to kit.NewErrorWithDetails in the chat service.
@@ -206,13 +215,12 @@ const (
 
 // StaleKeysErrorDetails carries the fresh keys and revisions for the stale side(s)
 type StaleKeysErrorDetails struct {
-	StaleSide              StaleSide `json:"staleSide"`
-	SenderKeysRevision     int32     `json:"senderKeysRevision,omitempty"`
-	RecipientKeysRevision  int32     `json:"recipientKeysRevision,omitempty"`
-	SenderActiveKeys       []string  `json:"senderActiveKeys,omitempty"`
-	RecipientActiveKeys    []string  `json:"recipientActiveKeys,omitempty"`
+	StaleSide             StaleSide `json:"staleSide"`
+	SenderKeysRevision    int32     `json:"senderKeysRevision,omitempty"`
+	RecipientKeysRevision int32     `json:"recipientKeysRevision,omitempty"`
+	SenderActiveKeys      []string  `json:"senderActiveKeys,omitempty"`
+	RecipientActiveKeys   []string  `json:"recipientActiveKeys,omitempty"`
 }
-
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Request Payloads
@@ -227,8 +235,8 @@ type CreateChatPayload struct {
 }
 
 type SendMessagePayload struct {
-	MessageID             string `json:"messageId" validate:"required,uuid"`
-	RecipientID           string `json:"recipientId" validate:"required,uuid"`
+	MessageID             string  `json:"messageId" validate:"required,uuid"`
+	RecipientID           string  `json:"recipientId" validate:"required,uuid"`
 	Content               string  `json:"content" validate:"required,max=25000"`
 	MessageType           string  `json:"messageType" validate:"required,oneof=text image video audio file"`
 	RecipientKeysRevision int32   `json:"recipientKeysRevision"`
@@ -240,6 +248,20 @@ type AcknowledgeDeliveryPayload struct {
 	MessageID      string `json:"messageId" validate:"required,uuid"`
 	AcknowledgedBy string `json:"acknowledgedBy" validate:"required,oneof=recipient sender"`
 	Success        bool   `json:"success"`
+}
+
+type AckDeliveryGroup struct {
+	SenderID        uuid.UUID
+	ChatID          uuid.UUID
+	MessageIDs      []string
+	LatestCreatedAt time.Time
+}
+
+type AckDeliveryBatchResult struct {
+	AcknowledgedCount      int32
+	AcknowledgedMessageIDs []string
+	DeliveryGroups         []AckDeliveryGroup
+	PermanentlyRejectedIDs []string
 }
 
 type GetMessagesPayload struct {
@@ -254,7 +276,6 @@ type AckAndReadBatchPayload struct {
 }
 
 type MarkChatReadPayload struct {
-	ChatID     string   `json:"chatId" validate:"required,uuid"`
 	MessageIDs []string `json:"messageIds" validate:"omitempty,dive,uuid"`
 }
 
@@ -263,12 +284,16 @@ type GetFileURLPayload struct {
 }
 
 type UnsendMessagePayload struct {
-	ChatID     string   `json:"chatId" validate:"required,uuid"`
 	MessageIDs []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
 }
 
 type DeleteMessageForMePayload struct {
 	MessageIDs []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
+}
+
+type DeleteForMeGroup struct {
+	ChatID     uuid.UUID `json:"chatId"`
+	MessageIDs []string  `json:"messageIds"`
 }
 
 type GetSyncActionsPayload struct {
@@ -293,7 +318,6 @@ type AckDeliveryBatchPayload struct {
 }
 
 type AckReadReceiptBatchPayload struct {
-	ChatID     string   `json:"chatId" validate:"required,uuid"`
 	MessageIDs []string `json:"messageIds" validate:"required,min=1,dive,uuid"`
 }
 
@@ -340,8 +364,61 @@ type SendMessageParams struct {
 	Content               string
 	MessageType           string
 	IsPrimary             bool
+	SessionUUID           uuid.UUID
 	RecipientKeysRevision int32
 	SenderKeysRevision    int32
 	ReplyToMessageID      *uuid.UUID
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// SSE Outcome Types
+// ──────────────────────────────────────────────────────────────────────────────
+
+const chatTimestampLayout = "2006-01-02T15:04:05.999999999Z07:00"
+
+// markChatReadOutcome is the complete, transport-agnostic result of the
+// in-chat MarkChatRead endpoint. Receipts powers the endpoint response (new +
+// already-read messages for client idempotency); NewlyRead powers the SSE
+// broadcast and contains only the rows that actually transitioned in this call.
+// PermanentlyRejectedIDs lists the request IDs that can never succeed.
+type markChatReadOutcome struct {
+	Receipts               []*rpc_personal_chatv1.MessageReadReceipt
+	NewlyRead              []*rpc_personal_chatv1.MessageReadReceipt
+	ChatID                 uuid.UUID
+	OtherUserID            uuid.UUID
+	ReadAt                 time.Time
+	PermanentlyRejectedIDs []string
+}
+
+// ackAndReadBatchOutcome is the complete, transport-agnostic result of the
+// AcknowledgeAndReadBatch endpoint. Receipts powers the endpoint response (new +
+// already-read messages for client idempotency); NewlyRead powers the SSE
+// broadcast and contains only the rows that actually transitioned in this call.
+// PermanentlyRejectedIDs lists the request IDs that can never succeed.
+type ackAndReadBatchOutcome struct {
+	Receipts               []*rpc_personal_chatv1.MessageReadReceipt
+	NewlyRead              []*rpc_personal_chatv1.MessageReadReceipt
+	ChatID                 uuid.UUID
+	OtherUserID            uuid.UUID
+	ReadAt                 time.Time
+	PermanentlyRejectedIDs []string
+}
+
+// unsendOutcome is the complete result of an unsend operation.
+// AcknowledgedIDs is the response payload; NewlyUnsentIDs is the SSE payload
+// and contains only rows that this call actually transitioned.
+// PermanentlyRejectedIDs lists the request IDs that can never succeed.
+type unsendOutcome struct {
+	AcknowledgedIDs        []string
+	ChatID                 uuid.UUID
+	RecipientID            uuid.UUID
+	NewlyUnsentIDs         []string
+	PermanentlyRejectedIDs []string
+}
+
+func formatChatTimestamp(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(chatTimestampLayout)
+}

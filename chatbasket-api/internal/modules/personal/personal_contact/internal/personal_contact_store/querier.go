@@ -12,9 +12,7 @@ import (
 
 type Querier interface {
 	AcceptContactRequest(ctx context.Context, arg AcceptContactRequestParams) (string, error)
-	DeleteAndInsertContactRequest(ctx context.Context, arg DeleteAndInsertContactRequestParams) error
 	DeleteContact(ctx context.Context, arg DeleteContactParams) (int64, error)
-	GetContactRequestStatus(ctx context.Context, arg GetContactRequestStatusParams) (string, error)
 	GetPendingContactRequestsLite(ctx context.Context, receiverUserID uuid.UUID) ([]GetPendingContactRequestsLiteRow, error)
 	GetSentContactRequestsLite(ctx context.Context, requesterUserID uuid.UUID) ([]GetSentContactRequestsLiteRow, error)
 	GetSingleUserContactLite(ctx context.Context, arg GetSingleUserContactLiteParams) (GetSingleUserContactLiteRow, error)

@@ -1,8 +1,10 @@
 package personal_chat
 
 import (
-	"chatbasket-api/internal/platform/kit"
+	"fmt"
 	"net/http"
+
+	"chatbasket-api/internal/platform/kit"
 )
 
 const (
@@ -15,6 +17,11 @@ const (
 	EligibilityNoPrimaryDevice   = "no_primary_device"
 	EligibilityRecipientNotFound = "recipient_not_found"
 	EligibilityNoE2EE            = "no_e2ee"
+)
+
+// Module-specific error definitions
+var (
+	ErrTooManyMessageIDs = kit.NewError(http.StatusBadRequest, "invalid_request", fmt.Sprintf("Cannot process more than %d message IDs per request", MaxMessageIDsPerRequest))
 )
 
 func messagingEligibilityError(eligibility string) error {
@@ -38,4 +45,3 @@ func messagingEligibilityError(eligibility string) error {
 
 	return kit.NewError(http.StatusForbidden, errType, eligibility)
 }
-

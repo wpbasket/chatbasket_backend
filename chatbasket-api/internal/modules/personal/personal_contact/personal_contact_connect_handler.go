@@ -37,7 +37,6 @@ func (s *contactConnectServer) GetContacts(ctx context.Context, req *connect.Req
 	return connect.NewResponse(res), nil
 }
 
-// Stubs for remaining methods to satisfy rpc_personal_contactv1connect.ContactServiceHandler interface
 func (s *contactConnectServer) CheckContactExistance(ctx context.Context, req *connect.Request[rpc_personal_contactv1.CheckContactExistanceRequest]) (*connect.Response[rpc_personal_contactv1.CheckContactExistanceResponse], error) {
 	userID, err := kit.GetConnectRpcUserID(ctx)
 	if err != nil {

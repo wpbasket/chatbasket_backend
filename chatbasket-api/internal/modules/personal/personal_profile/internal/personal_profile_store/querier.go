@@ -96,8 +96,6 @@ type Querier interface {
 	// holds the row (FOR UPDATE), never waits. Uses FOR KEY SHARE so concurrent
 	// message sends and foreign-key checks (which also use KEY SHARE) do not conflict.
 	TryLockUserNoWait(ctx context.Context, id uuid.UUID) (int32, error)
-	// Updates only the file_id for the main profile avatar (token columns unused per spec §3.C).
-	UpdateAvatarFileID(ctx context.Context, arg UpdateAvatarFileIDParams) error
 	// Updates user profile fields
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) error
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"chatbasket-api/internal/platform/kit"
@@ -24,11 +25,14 @@ func setupTestAuthServiceQR(t *testing.T) (*AuthService, pgxmock.PgxPoolIface) {
 
 	store := core_auth_store.New(mock)
 	svc := &AuthService{
-		GlobalService:   services.NewGlobalService("https://chatbasket.me"),
-		PostgresQuerier: store,
-		PostgresQueries: store,
-		Pool:            nil,
-		AuthSecret:      []byte("test-secret"),
+		GlobalService:      services.NewGlobalService("https://chatbasket.me"),
+		PostgresQuerier:    store,
+		PostgresQueries:    store,
+		Pool:               nil,
+		MaintenanceQuerier: store,
+		MaintenanceQueries: store,
+		MaintenancePool:    nil,
+		AuthSecret:         []byte("test-secret"),
 	}
 	return svc, mock
 }
@@ -202,4 +206,94 @@ func TestQRCallback_InvalidSignature(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "signature")
 	assert.Nil(t, resp)
+}
+
+func TestCleanupQRLoginRequests_BatchedLoop(t *testing.T) {
+	svc, mock := setupTestAuthServiceQR(t)
+	defer mock.Close()
+
+	// 1st batch: deletes 5,000 rows (full batch -> should continue to next batch)
+	mock.ExpectExec("WITH batch AS").
+		WithArgs(int32(5000)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 5000))
+
+	// 2nd batch: deletes 120 rows (< 5000 rows -> should terminate loop)
+	mock.ExpectExec("WITH batch AS").
+		WithArgs(int32(5000)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 120))
+
+	err := svc.CleanupQRLoginRequests(context.Background())
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCleanupQRLoginRequests_ContextCancelled(t *testing.T) {
+	svc, mock := setupTestAuthServiceQR(t)
+	defer mock.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel context
+
+	err := svc.CleanupQRLoginRequests(ctx)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestCleanupQRLoginRequests_DBError(t *testing.T) {
+	svc, mock := setupTestAuthServiceQR(t)
+	defer mock.Close()
+
+	mock.ExpectExec("WITH batch AS").
+		WithArgs(int32(5000)).
+		WillReturnError(errors.New("db disk failure"))
+
+	err := svc.CleanupQRLoginRequests(context.Background())
+	assert.ErrorContains(t, err, "db disk failure")
+}
+
+func TestCleanupQRLoginRequests_BudgetSoftLimit(t *testing.T) {
+	svc, mock := setupTestAuthServiceQR(t)
+	defer mock.Close()
+
+	// Budget: 60ms. 70% Work Budget: 42ms (leaving 30% / 18ms safety buffer).
+	// Iteration 1: elapsed 0ms (< 42ms) -> executes query, returns 5000 rows.
+	// Throttle: 50ms pause.
+	// Iteration 2: elapsed ~50ms (>= 42ms) -> Soft budget limit (70%) hit! Loop terminates cleanly.
+	mock.ExpectExec("WITH batch AS").
+		WithArgs(int32(5000)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 5000))
+
+	err := svc.CleanupQRLoginRequestsWithBudget(context.Background(), 60*time.Millisecond)
+	assert.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCleanupQRLoginRequests_UsesMaintenanceQuerierNotMainQuerier(t *testing.T) {
+	mainMock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mainMock.Close()
+
+	maintMock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer maintMock.Close()
+
+	mainStore := core_auth_store.New(mainMock)
+	maintStore := core_auth_store.New(maintMock)
+
+	svc := &AuthService{
+		GlobalService:      services.NewGlobalService("https://chatbasket.me"),
+		PostgresQuerier:    mainStore,
+		PostgresQueries:    mainStore,
+		MaintenanceQuerier: maintStore,
+		MaintenanceQueries: maintStore,
+		AuthSecret:         []byte("test-secret"),
+	}
+
+	maintMock.ExpectExec("WITH batch AS").
+		WithArgs(int32(5000)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 42))
+
+	err = svc.CleanupQRLoginRequests(context.Background())
+	require.NoError(t, err)
+	assert.NoError(t, mainMock.ExpectationsWereMet())
+	assert.NoError(t, maintMock.ExpectationsWereMet())
 }

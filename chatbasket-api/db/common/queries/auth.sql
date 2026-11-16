@@ -2,17 +2,6 @@
 -- Auth Queries
 -- ======================================
 
--- name: CheckSessionIsValid :one
--- Checks if a session is valid for a specific user and not expired
-SELECT EXISTS (
-        SELECT 1
-        FROM sessions
-        WHERE
-            token_hash = $1
-            AND auth_user_id = $2
-            AND expires_at > now()
-    );
-
 -- name: GetSessionByID :one
 SELECT * FROM sessions WHERE id = $1;
 
@@ -100,9 +89,6 @@ SELECT * FROM verification_codes WHERE id = $1 AND type = $2;
 -- name: DeleteVerificationCode :exec
 DELETE FROM verification_codes WHERE id = $1;
 
--- name: DeleteAllVerificationCodesForEmail :exec
-DELETE FROM verification_codes WHERE email = $1 AND type = $2;
-
 -- name: UpdateAuthUserPassword :exec
 UPDATE auth_users SET password_hash = $2 WHERE id = $1;
 
@@ -135,9 +121,6 @@ SET
 RETURNING
     *;
 
--- name: DeleteSession :exec
-DELETE FROM sessions WHERE id = $1 AND auth_user_id = $2;
-
 -- name: DeleteAllUserSessions :exec
 DELETE FROM sessions WHERE auth_user_id = $1;
 -- name: DeleteSessionByToken :exec
@@ -147,15 +130,6 @@ DELETE FROM sessions WHERE token_hash = $1 AND auth_user_id = $2;
 -- Sets is_central = false for ALL sessions of this user (Upgrade preparation)
 UPDATE sessions SET is_central = FALSE WHERE auth_user_id = $1;
 
--- name: SetSessionCentral :exec
--- Sets is_central = true for a specific session
-UPDATE sessions
-SET
-    is_central = TRUE
-WHERE
-    id = $1
-    AND auth_user_id = $2;
-
 -- name: SetSessionCentralByToken :exec
 -- Sets is_central = true for a session identified by token hash
 UPDATE sessions
@@ -164,16 +138,6 @@ SET
 WHERE
     token_hash = $1
     AND auth_user_id = $2;
-
--- name: CheckHasCentralDevice :one
--- Checks if the user already has a central device
-SELECT EXISTS (
-        SELECT 1
-        FROM sessions
-        WHERE
-            auth_user_id = $1
-            AND is_central = TRUE
-    );
 
 -- name: UpdateSessionDeviceToken :exec
 UPDATE sessions

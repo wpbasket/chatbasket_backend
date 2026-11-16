@@ -2,12 +2,14 @@ package personal_chat
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
 	"chatbasket-api/internal/modules/personal/personal_profile"
 	"chatbasket-api/internal/platform/kit"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pashagolub/pgxmock/v5"
@@ -34,7 +36,7 @@ func TestSendMessage_Idempotency_MessageAlreadyExists(t *testing.T) {
 
 	// 2. Mock GetMessageByID query returning the existing message
 	msgCols := []string{"id", "chat_id", "sender_id", "recipient_id",
-		"content", "message_type",
+		"content", "message_type", "reply_to_message_id",
 		"file_id", "file_name", "file_size", "file_mime_type",
 		"file_token_id", "file_token_secret", "file_token_expiry",
 		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
@@ -42,19 +44,21 @@ func TestSendMessage_Idempotency_MessageAlreadyExists(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
+		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"sender_session_id"}
 
 	mockPool.ExpectQuery(`SELECT (.+) FROM messages WHERE id =`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
-			"test-content", "text",
+			"test-content", "text", nil,
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			uuid.New(),
 		),
 	)
 
@@ -104,7 +108,7 @@ func TestSendMessage_Idempotency_MessageDoesNotExist(t *testing.T) {
 		},
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: false,
 				ProfileType:    "public",
 			}, nil
@@ -113,6 +117,9 @@ func TestSendMessage_Idempotency_MessageDoesNotExist(t *testing.T) {
 
 	// 1. Mock CheckMessageExists query returning FALSE (does not exist yet)
 	mockPool.ExpectQuery(`SELECT EXISTS.*messages`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(false),
+	)
+	mockPool.ExpectQuery(`SELECT EXISTS.*message_history`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows([]string{"exists"}).AddRow(false),
 	)
 
@@ -138,7 +145,7 @@ func TestSendMessage_Idempotency_MessageDoesNotExist(t *testing.T) {
 
 	// 3. Mock CreateMessage query
 	msgCols := []string{"id", "chat_id", "sender_id", "recipient_id",
-		"content", "message_type",
+		"content", "message_type", "reply_to_message_id",
 		"file_id", "file_name", "file_size", "file_mime_type",
 		"file_token_id", "file_token_secret", "file_token_expiry",
 		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
@@ -146,20 +153,25 @@ func TestSendMessage_Idempotency_MessageDoesNotExist(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
-	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "test-content", "text", pgxmock.AnyArg(), true, pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"sender_session_id"}
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "test-content", "text", pgxmock.AnyArg(), true, pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
-			"test-content", "text",
+			"test-content", "text", nil,
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			uuid.New(),
 		),
 	)
+
+	// 3b. Mock RecordMessageHistory query
+	mockPool.ExpectExec(`INSERT INTO message_history`).WithArgs(messageID, pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 	// 4. Mock UpdateChatStatus
 	mockPool.ExpectExec(`UPDATE.*chats`).WithArgs(chatID, pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -209,7 +221,7 @@ func TestSendMessage_Idempotency_TOCTOURaceConflict(t *testing.T) {
 		},
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: false,
 				ProfileType:    "public",
 			}, nil
@@ -218,6 +230,9 @@ func TestSendMessage_Idempotency_TOCTOURaceConflict(t *testing.T) {
 
 	// 1. Mock CheckMessageExists returning FALSE (TOCTOU: both think it doesn't exist)
 	mockPool.ExpectQuery(`SELECT EXISTS.*messages`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(false),
+	)
+	mockPool.ExpectQuery(`SELECT EXISTS.*message_history`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows([]string{"exists"}).AddRow(false),
 	)
 
@@ -242,13 +257,13 @@ func TestSendMessage_Idempotency_TOCTOURaceConflict(t *testing.T) {
 	)
 
 	// 3. Mock CreateMessage returning unique_violation error (Code: 23505)
-	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "test-content", "text", pgxmock.AnyArg(), true, pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnError(
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "test-content", "text", pgxmock.AnyArg(), true, pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnError(
 		&pgconn.PgError{Code: "23505", Message: "duplicate key value violates unique constraint"},
 	)
 
 	// 4. Mock GetMessageByID queries returning the existing message
 	msgCols := []string{"id", "chat_id", "sender_id", "recipient_id",
-		"content", "message_type",
+		"content", "message_type", "reply_to_message_id",
 		"file_id", "file_name", "file_size", "file_mime_type",
 		"file_token_id", "file_token_secret", "file_token_expiry",
 		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
@@ -256,19 +271,21 @@ func TestSendMessage_Idempotency_TOCTOURaceConflict(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
+		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"sender_session_id"}
 
 	mockPool.ExpectQuery(`SELECT (.+) FROM messages WHERE id =`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
-			"test-content", "text",
+			"test-content", "text", nil,
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			uuid.New(),
 		),
 	)
 
@@ -295,6 +312,108 @@ func TestSendMessage_Idempotency_TOCTOURaceConflict(t *testing.T) {
 	require.NoError(t, sendErr)
 	assert.Equal(t, messageID, msg.ID)
 	assert.Equal(t, "test-content", msg.Content)
+
+	require.NoError(t, mockPool.ExpectationsWereMet())
+}
+
+func TestSendMessage_Idempotency_MessageAlreadyPurgedFromRelay(t *testing.T) {
+	senderID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
+	recipientID := uuid.New()
+	messageID := uuid.New()
+
+	mockPool, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mockPool.Close()
+	store := personal_chat_store.New(mockPool)
+
+	// 1. CheckMessageExists returns FALSE (already deleted from relay)
+	mockPool.ExpectQuery(`SELECT EXISTS.*messages`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(false),
+	)
+
+	// 2. CheckMessageHistoryExists returns TRUE (was recorded in history table when created)
+	mockPool.ExpectQuery(`SELECT EXISTS.*message_history`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(true),
+	)
+
+	svc := &chatService{
+		AuthProvider:    &mockAuthProvider{},
+		ProfileProvider: &mockProfileProvider{},
+		ContactProvider: &mockContactProvider{},
+		PostgresQuerier: store,
+		PostgresQueries: store,
+	}
+
+	msg, sendErr := svc.SendMessage(context.Background(), SendMessageParams{
+		MessageID:             messageID,
+		SenderID:              senderID,
+		RecipientID:           recipientID,
+		Content:               "test-content",
+		MessageType:           "text",
+		IsPrimary:             true,
+		RecipientKeysRevision: 5,
+		SenderKeysRevision:    0,
+	})
+
+	require.Error(t, sendErr)
+	assert.Nil(t, msg)
+
+	pe, ok := sendErr.(kit.ProcessedError)
+	require.True(t, ok, "expected error to be kit.ProcessedError")
+	assert.Equal(t, http.StatusConflict, pe.Status())
+	assert.Equal(t, "message_already_purged", pe.Kind())
+	assert.Contains(t, pe.Error(), "Message was already delivered and purged from relay")
+
+	require.NoError(t, mockPool.ExpectationsWereMet())
+}
+
+func TestConfirmChatUpload_Idempotency_MessageAlreadyPurgedFromRelay(t *testing.T) {
+	senderID := kit.UserId{UuidUserId: uuid.New(), StringUserId: uuid.New().String()}
+	recipientID := uuid.New()
+	messageID := uuid.New()
+
+	mockPool, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mockPool.Close()
+	store := personal_chat_store.New(mockPool)
+
+	// 1. CheckMessageExists returns FALSE
+	mockPool.ExpectQuery(`SELECT EXISTS.*messages`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(false),
+	)
+
+	// 2. CheckMessageHistoryExists returns TRUE
+	mockPool.ExpectQuery(`SELECT EXISTS.*message_history`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(true),
+	)
+
+	svc := &chatService{
+		AuthProvider:    &mockAuthProvider{},
+		ProfileProvider: &mockProfileProvider{},
+		ContactProvider: &mockContactProvider{},
+		PostgresQuerier: store,
+		PostgresQueries: store,
+	}
+
+	msg, err := svc.ConfirmChatUpload(context.Background(), ConfirmChatUploadParams{
+		MessageID:             messageID,
+		SenderID:              senderID,
+		RecipientID:           recipientID,
+		FileID:                "test-file-id",
+		Content:               "test-content",
+		MessageType:           "file",
+		IsPrimary:             true,
+		RecipientKeysRevision: 5,
+		SenderKeysRevision:    0,
+	})
+
+	require.Error(t, err)
+	assert.Nil(t, msg)
+
+	pe, ok := err.(kit.ProcessedError)
+	require.True(t, ok, "expected error to be kit.ProcessedError")
+	assert.Equal(t, http.StatusConflict, pe.Status())
+	assert.Equal(t, "message_already_purged", pe.Kind())
 
 	require.NoError(t, mockPool.ExpectationsWereMet())
 }

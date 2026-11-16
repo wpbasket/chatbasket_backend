@@ -13,13 +13,13 @@ import (
 
 const getKeysRevision = `-- name: GetKeysRevision :one
 
-SELECT keys_revision FROM auth_users WHERE id = $1 FOR UPDATE
+SELECT keys_revision FROM auth_users WHERE id = $1
 `
 
 // ======================================
 // Keys Revision Queries
 // ======================================
-// Get the current keys_revision for a user (atomic read)
+// Get the current keys_revision for a user
 func (q *Queries) GetKeysRevision(ctx context.Context, id uuid.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, getKeysRevision, id)
 	var keys_revision int32

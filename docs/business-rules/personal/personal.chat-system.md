@@ -10,8 +10,8 @@ A sender **can send a message** to a recipient only if all are true:
    - `user_blocks(sender -> recipient)` does not exist
    - `user_blocks(recipient -> sender)` does not exist
 4. **Primary device rules satisfied**
-    - Both the sender and recipient must have an active primary device (native only)
-    - Web sessions cannot send/receive messages if their own account has no active primary device
+   - Both the sender and recipient must have an active primary device (`is_central = TRUE` and unexpired).
+   - Intended policy is native-only (enforced on manual switching via `SetCentralDevice`, which rejects `web`); **temporarily**, `CreateSessionFlow` auto-promotes the first session on any platform (including `web`) to primary when no primary exists so web messaging works without a native device.
 5. **Neither user is admin-blocked**
    - `users(id=sender).is_admin_blocked` is FALSE
    - `users(id=recipient).is_admin_blocked` is FALSE
@@ -23,9 +23,9 @@ A sender **can send a message** to a recipient only if all are true:
 ### 2.1 Core idea
 The system operates as a **primary-device-centric relay**. The backend acts as a **temporary bridge**, not a permanent message vault.
 
-- **Native (Primary Device)**: The authoritative source of truth. Each primary native platform (iOS/Android) stores the full, encrypted chat history. It is responsible for acknowledging receipt to the backend to trigger relay purging and for serving P2P sync requests to secondary devices.
-- **Secondary Devices (Web/Native)**: Additional sessions that provide a window into the account. They receive real-time updates via ConnectSSE streams but rely on P2P sync with the Primary Device for history already purged from the relay.
-- **Backend (Relay)**: Messages are stored temporarily and pushed to **all online devices** via ConnectSSE. The relay row is only purged after explicit acknowledgement from the **Primary devices of both participants**.
+- **Native (Primary Device)**: The authoritative source of truth. Each primary native platform (iOS/Android) stores the full, encrypted chat history. It is responsible for acknowledging receipt to the backend to trigger relay purging and for serving Encrypted History Sync (`history_sync`) requests to secondary devices.
+- **Secondary Devices (Web/Native)**: Additional sessions that provide a window into the account. They receive real-time updates via ConnectSSE streams and rely on Encrypted History Sync (`history_sync`) with the Primary Device for history already purged from the relay.
+- **Backend (Relay)**: Messages are stored temporarily and pushed to **all online devices** via ConnectSSE. Payloads and attached R2 files are stripped once the **Primary devices of both participants** acknowledge delivery/sync; the lightweight row is hard-deleted once read receipts are also acknowledged by both sides (or upon TTL expiry, unsend, or block).
 
 
 ### 2.2 Message Delivery & Backend Relay
@@ -36,20 +36,25 @@ The system prioritizes real-time delivery while ensuring Primary devices maintai
 1.  **ConnectSSE Push**: When a message is sent, the backend immediately broadcasts it to **all active SSE stream connections** for both the sender and recipient (including all Primary and Secondary devices).
 2.  **Relay Fetch (`/pending`)**: If a device (Primary or Secondary) was offline during the push, it can fetch missed messages directly from the backend **as long as the message remains in the relay**. Both Primary and Secondary devices fetch all available relay messages for their user account.
 3.  **Client ACK Boundaries**: The client application manages `isPrimary` (`isCentral`) on launch. Primary devices issue sender-sync ACKs (`synced_to_sender_primary`) and primary-recipient ACKs; Secondary devices consume and display relay messages without issuing primary-only ACKs.
-4.  **P2P Sync / History Sync**: Once a message is purged from the relay, secondary devices retrieve historical messages via P2P sync (WebRTC) or Encrypted History Sync with their Primary device.
+4.  **Encrypted History Sync (`history_sync`)**: Once a message is purged from the relay, secondary devices retrieve historical messages from their Primary device via server-staged E2EE `history_sync` (`RequestHistorySync` → `FetchHistorySync` → `UploadHistorySync` → `DownloadHistorySync` → `AcknowledgeHistorySync`; 10-minute TTL, up to 90 MB ciphertext). Direct WebRTC P2P sync is **[Future]**.
 
-#### 2.2.2 Backend Purging Rules (Double-Primary Acknowledgement)
-The backend relay is governed by strict "Double-Primary Acknowledgement" rules:
+#### 2.2.2 Backend Purging Rules (Two-Stage Relay Lifecycle)
+The backend relay follows a two-stage purge lifecycle governed by Double-Primary Acknowledgement and read-receipt completion:
 
-- **Storage**: Messages persist in the `messages` table until fully acknowledged.
+- **Storage**: Messages persist in the `messages` table until purged (or expired after `DefaultMessageTTL` = 30 days). A companion partitioned tombstone table (`message_history`) retains `(id, created_at)` for 33 days to reject duplicate re-sends after a row is purged.
 - **Acknowledgement**:
-    - **Any device** can send a delivery ACK to mark the message as "delivered" (updating the double-grey-tick UI).
-    - **Only Primary devices** can trigger the `delivered_to_recipient_primary` and `synced_to_sender_primary` flags.
-- **Purge Condition**: A message is eligible for hard deletion from the backend relay **only when both** of the following are true:
-    1.  `synced_to_sender_primary = TRUE` (Sender's Primary has confirmed receipt).
-    2.  `delivered_to_recipient_primary = TRUE` (Recipient's Primary has confirmed receipt).
-- **File Messages**: For messages with type `image`, `video`, `audio`, or `file`, the message record contains the file metadata directly. When such a message is purged, the associated files and thumbnails are **permanently deleted** from the backend storage.
-- **Consequence**: Once purged, the backend no longer has any copy of the message, its metadata, or its files. New secondary devices or re-installed primaries appearing after this point must rely on P2P sync or backups.
+    - **Any recipient device** can send a delivery ACK to set `delivered_to_recipient = TRUE`.
+    - **Only Primary devices** can set `delivered_to_recipient_primary = TRUE` and `synced_to_sender_primary = TRUE`, or send `AcknowledgeReadReceiptBatch` (`read_acked_by_sender = TRUE`).
+- **Stage 1 — Payload & R2 File Strip (Double-Primary Delivery/Sync)**: Once both `synced_to_sender_primary = TRUE` and `delivered_to_recipient_primary = TRUE` are true (and read receipts are not yet complete), the server keeps the row for read-receipt tracking but strips the payload (`StripDeliveredMessagePayload`: clears `content` and nulls `file_*`/`thumbnail_*` columns) and deletes the attached R2 file (`pending_uploads` registration + async R2 delete).
+- **Stage 2 — Hard Deletion**: A message row is hard-deleted from `messages` (`deleteMessageFromRelay` / `CleanupFullyAcknowledgedReadMessagesInChat` / `CleanupDatabaseOnly`) only when:
+    1. `synced_to_sender_primary = TRUE`
+    2. `delivered_to_recipient_primary = TRUE`
+    3. `read_by_recipient = TRUE`
+    4. `read_acked_by_sender = TRUE`
+    5. `file_id IS NULL` (R2 object already stripped/deleted)
+    *(Rows are also hard-deleted on TTL expiry, block cleanup, or account deletion.)*
+- **File Messages**: For messages with type `image`, `video`, `audio`, or `file`, the encrypted message `content` envelope carries original file metadata (`fileName`, `fileSize`, `fileMimeType`) — the backend stores those columns as `NULL` and only tracks the R2 `file_id`. There is no separate backend thumbnail upload or deletion.
+- **Consequence**: Once Stage 1 strips the payload/file (and after Stage 2 deletes the row), the backend no longer holds the ciphertext or R2 object. Secondary devices or newly linked primaries must retrieve prior history via Encrypted History Sync (`history_sync`) or local backups.
 
 
 ### 2.3 Edge-case policies (defaults)
@@ -57,7 +62,7 @@ These are the default policies to implement unless product requirements change:
 
 - **Account creation**
   - Can happen from web or native
-  - Sending or receiving messages is **not allowed** until user has an active primary device (native only)
+  - Sending or receiving messages is **not allowed** until the user has an active primary device (intended: native-only; **temporarily**, `CreateSessionFlow` auto-promotes the first session on any platform, including `web`, when no primary exists)
 
 - **Recipient primary offline**
   - Queue on backend until delivery
@@ -70,17 +75,15 @@ These are the default policies to implement unless product requirements change:
 
 - **Blocking Policy**
   - **Strict Scope**: These rules apply **only** to the two specific users involved in the block. It does not affect their interactions with other users in the system.
-  - **Hard Barrier**: As soon as a block is created, the system immediately stops all new message attempts between these two users. The sender will receive an error.
-  - **Automatic Cleanup**: Creating a block automatically deletes the contact relationship in **both** directions for these two users. They are removed from each other's lists instantly.
-  - **Relay Purge**: Creating a block immediately clears pending message sync actions. The messages themselves (and any associated files) are physically deleted asynchronously by the background worker cleanup job.
+  - **Hard Barrier**: As soon as a block is created, the system immediately stops all new message attempts between these two users. The sender will receive a generic error (`user_blocked` / `action_not_permitted`) without leaking block direction.
+  - **Relationship Preservation (Hard Exclusion)**: Creating a block does **not** delete `user_contacts` or `contact_requests`. Relationships are preserved in the DB and hidden at query time (`GetContactableProfilesForViewer`, `GetContactableUserIDs`), making them self-healing upon unblock (see `personal.profile&contact-system.md` §5.2).
+  - **Relay Purge**: Creating a block fires `cleanup_sync_actions_on_block` (DB trigger) and `CleanupChatMessagesForBlockAsync` (async deletion of the shared chat's `messages` rows and R2 files), backed by the hourly `CleanupExpiredMessages` and `CleanupDatabaseOnly` background workers.
 
 - **Account deletion**
   - Delete all interconnected data (FK cascade)
 
 - **Storage full on primary device**
-  - Retry delivery
-  - Notify user
-  - TTL default: **7 days** for “storage full” delivery failures
+  - Retry delivery (all relay messages use `DefaultMessageTTL` = **30 days**)
 
 - **Primary switching**
   - Require old primary online
@@ -89,8 +92,7 @@ These are the default policies to implement unless product requirements change:
 
 ### 2.4 Chat Status & Receipts
 
-Messages go through 4 visual states. Since the relay deletes messages after both primaries acknowledge them, we store delivery/read timestamps on the `chats` table so the status survives even after messages are purged.
-
+Messages go through 4 visual states tracked per message. Because the relay retains stripped message rows until read receipts are acknowledged by both sides, discrete delivery and read flags survive Stage 1 payload stripping and drive real-time SSE and catch-up sync.
 
 #### 2.4.1 The 4 Tick States (Sender Side Only)
 These icons only appear on messages **you sent**:
@@ -99,57 +101,37 @@ These icons only appear on messages **you sent**:
 |-------|------|-----------------|
 | Pending | 🕒 Clock | Message saved locally, server hasn't confirmed yet |
 | Sent | ✅ Single grey tick | Server confirmed the message (any sender device, Primary or Secondary) |
-| Delivered | ✅✅ Double grey tick | Any recipient device (Primary or Secondary) received the message |
-| Read | ✅✅ Double green tick | Recipient opened the chat on any device (Primary or Secondary) |
-
+| Delivered | ✅✅ Double grey tick | Any recipient device (Primary or Secondary) acknowledged delivery (`delivered_to_recipient = TRUE`) |
+| Read | ✅✅ Double green/primary tick | Recipient opened the chat and marked the message read (`read_by_recipient = TRUE`) |
 
 #### 2.4.2 How Status is Tracked
 
-**Two separate tracking systems work together:**
-
-**System 1 — Per-message flags** (on the `messages` table):
+**Per-message flags** (on the `messages` table):
 - `delivered_to_recipient`: Set to `TRUE` when any recipient device confirms receipt.
-- `delivered_to_recipient_primary`: Set to `TRUE` only when the recipient's **Primary** device confirms. This flag controls when the server can delete the message from the relay.
-- There is no per-message "read" flag.
-- **Important**: These flags only exist while the message is in the relay. Once both primaries acknowledge (`delivered_to_recipient_primary = TRUE` AND `synced_to_sender_primary = TRUE`), the message is deleted and these flags are gone.
+- `delivered_to_recipient_primary`: Set to `TRUE` only when the recipient's **Primary** device confirms receipt (required for Stage 1 payload stripping).
+- `synced_to_sender_primary`: Set to `TRUE` when the sender's **Primary** device confirms receipt (or at send time if sent from the Primary device).
+- `read_by_recipient` & `read_at`: Set to `TRUE` and `now()` when any recipient device reads the message (`MarkChatRead` / `AcknowledgeAndReadBatch`). Requires `delivered_to_recipient = TRUE` (`chk_messages_read_prerequisite`).
+- `read_acked_by_sender`: Set to `TRUE` when the sender's **Primary** device confirms receipt of the read receipt (`AcknowledgeReadReceiptBatch`). Requires `read_by_recipient = TRUE` (`chk_messages_read_ack_prerequisite`), and enables Stage 2 hard deletion.
 
-**System 2 — Chat-level timestamps** (on the `chats` table):
-- `p1_last_delivered_at` / `p2_last_delivered_at`: Records the time of the latest delivered message for participant 1 and participant 2 respectively. This timestamp can only move forward, never backward (the SQL uses `GREATEST()`).
-- `p1_last_read_at` / `p2_last_read_at`: Set to `now()` whenever participant 1 or participant 2 opens a chat.
-- The backend returns the **other** participant's values to the frontend as `other_user_last_delivered_at` and `other_user_last_read_at` (calculated in the `GetUserChats` query).
-
-**Why do we need System 2?** Because messages get deleted from the relay after both primaries acknowledge them. Once deleted, we can no longer check per-message flags. The chat-level timestamps survive forever on the `chats` table and allow the inbox to still show the correct tick icon.
-
+**Chat-level metadata** (on the `chats` table):
+- `p1_last_delivered_at` / `p2_last_delivered_at`: High-water mark of the latest delivered message `created_at` per participant (advanced via `GREATEST()`).
+- `p1_last_read_at` / `p2_last_read_at`: Timestamp of the participant's latest `MarkChatRead` / `AcknowledgeAndReadBatch` (`now()`).
+- `p1_unread_count` / `p2_unread_count`: Incremented on send, decremented on unsend, reset to `0` on read.
+- `GetMessagesResponse` returns `otherUserLastReadAt` and `otherUserLastDeliveredAt`; `GetUserChatsResponse` (`rpc_personal_chat.v1.Chat`) returns only chat identity and participant profile fields (not status timestamps, unread counts, or previews).
 
 #### 2.4.3 How the Frontend Decides Which Tick to Show
+`MessageBubble` and `ChatListItem` derive outgoing ticks via `deriveOutgoingTick` directly from the message's own persisted flags (`readByRecipient`, `deliveredToRecipient`, and server ACK status), without timestamp-watermark guessing.
 
-The frontend checks status in this order (first match wins):
+#### 2.4.4 When Flags & Timestamps Get Updated
+- **`AcknowledgeDelivery` / `AcknowledgeDeliveryBatch`** (recipient): Marks only the requested `messageIds` with `delivered_to_recipient = TRUE` (and `delivered_to_recipient_primary = TRUE` if Primary), advances `last_delivered_at` via `UpdateChatLastDeliveredAt`, and emits `AcknowledgeDeliverySseEvent` to the sender.
+- **`AcknowledgeDelivery` / `AcknowledgeDeliveryBatch`** (sender Primary): Marks only the requested `messageIds` with `synced_to_sender_primary = TRUE`.
+- **`MarkChatRead`** (recipient): Requires messages to already have `delivered_to_recipient = TRUE`. Resets `unread_count = 0` and sets `last_read_at = now()` (`ResetChatReadStatus`), marks the requested `messageIds` with `read_by_recipient = TRUE` and `read_at = now()`, and emits `MarkChatReadSseEvent` to the sender. Does not modify `last_delivered_at` or `delivered_to_recipient_primary`.
+- **`AcknowledgeAndReadBatch`** (recipient): Atomically performs delivery ACK (`UpdateChatLastDeliveredAt` + delivery flags) and read marking (`ResetChatReadStatus` + `MarkMessagesAsRead`) in a single transaction, then emits `MarkChatReadSseEvent` to the sender.
+- **`AcknowledgeReadReceiptBatch`** (sender Primary): Marks `read_acked_by_sender = TRUE` on the requested `messageIds` and triggers Stage 2 relay cleanup.
 
-1. **Is it Read?** → Compare `message.created_at <= other_user_last_read_at + 10s`. If yes → Double green tick.
-2. **Is it Delivered?** → Check if `delivered_to_recipient == TRUE` OR `message.created_at <= other_user_last_delivered_at + 10s`. If yes → Double grey tick.
-3. **Otherwise** → Single grey tick (Sent).
+### 2.5 P2P WebRTC Sync Architecture (Secondary ↔ Primary) [Future — Not Implemented]
 
-The **+10 second buffer** is added to handle small timing differences between devices and the server.
-
-This same logic runs in three places:
-- `GetUserChats` query (backend, for the inbox preview — without the 10s buffer)
-- `ChatListItem.tsx` (frontend, for the inbox preview — with 10s buffer)
-- `[chat_id].tsx` `MessageItemWrapper` (frontend, for each message inside a chat — with 10s buffer)
-
-
-#### 2.4.4 When Do These Timestamps Get Updated?
-
-**When a message is received** (recipient's device calls `AcknowledgeDelivery`):
-- The per-message `delivered_to_recipient` flag is set to `TRUE`.
-- The chat's `last_delivered_at` timestamp advances to that message's `created_at` time.
-- If the device is Primary: also sets `delivered_to_recipient_primary = TRUE`, and bulk-marks all older text messages as primary-delivered too.
-
-**When a chat is opened** (user calls `MarkChatRead`):
-- The user's `unread_count` resets to 0.
-- Both `last_read_at` and `last_delivered_at` jump to `now()`.
-- If the device is Primary: bulk-sets `delivered_to_recipient_primary = TRUE` for all undelivered messages in that chat. Secondary devices never do this bulk update.
-
-### 2.5 P2P WebRTC Sync Architecture (Secondary ↔ Primary)
+> **Status: Future / Not Implemented.** Current production uses server-staged E2EE `history_sync` (`011_history_sync.up.sql`, `history_sync_svc.go`). The WebRTC architecture below is preserved as a future design.
 
 #### 2.5.1 Design rationale
 To reduce backend bandwidth and latency, secondary devices (web/other native) synchronize **directly with the primary device** using WebRTC peer-to-peer connections.
@@ -296,49 +278,66 @@ Stores 1v1 chat metadata. This table is **never deleted** (unlike messages) and 
 ---
 
 #### A.1.2 messages
-Temporary message relay storage. Messages are **ephemeral** — they are deleted after both primary devices acknowledge receipt.
+Temporary message relay storage. Messages are **ephemeral** — payloads and R2 files are stripped after double-primary delivery/sync (Stage 1), and rows are hard-deleted after read receipts are acknowledged by both sides (Stage 2) or on TTL expiry / unsend / block.
 
 **Columns:**
-- `id` (UUID, Primary Key) — Message identifier, Go-generated
+- `id` (UUID, Primary Key) — Message identifier, client-generated
 - `chat_id` (UUID, NOT NULL) — References chats(id)
 - `sender_id` (UUID, NOT NULL) — References users(id)
 - `recipient_id` (UUID, NOT NULL) — References users(id)
-- `content` (TEXT, NOT NULL, max 5000 chars) — Message content
+- `sender_session_id` (UUID, NOT NULL) — Sender session that authored the message (migration `013`)
+- `content` (TEXT, NOT NULL) — E2EE ciphertext (`MaxMessageContentLength = 25000` enforced in Go)
 - `message_type` (TEXT, NOT NULL, DEFAULT 'text') — One of: `text`, `image`, `video`, `audio`, `file`, `unsent`
-- `file_id` (TEXT) — File identifier for media messages
-- `file_name` (TEXT) — Original file name
-- `file_size` (BIGINT) — File size in bytes, max 100MB
-- `file_mime_type` (TEXT) — MIME type of the file
-- `file_token_id` (TEXT) — File access token ID
-- `file_token_secret` (TEXT) — File access token secret
-- `file_token_expiry` (TIMESTAMPTZ) — File token expiration
-- `thumbnail_file_id` (TEXT) — Thumbnail file ID for media
-- `thumbnail_token_id` (TEXT) — Thumbnail access token ID
-- `thumbnail_token_secret` (TEXT) — Thumbnail access token secret
+- `reply_to_message_id` (UUID) — Optional referenced message UUID
+- `file_id` (TEXT) — R2 prefixed file identifier for media messages (nullable)
+- `file_name` (TEXT) — Legacy/unused for E2EE uploads (`NULL`)
+- `file_size` (BIGINT) — Legacy/unused for E2EE uploads (`NULL`), DB check max 100MB (`104857600`)
+- `file_mime_type` (TEXT) — Legacy/unused for E2EE uploads (`NULL`)
+- `file_token_id` (TEXT) — Legacy/unused (`NULL`)
+- `file_token_secret` (TEXT) — Legacy/unused (`NULL`)
+- `file_token_expiry` (TIMESTAMPTZ) — Legacy/unused (`NULL`)
+- `thumbnail_file_id` (TEXT) — Legacy/unused (`NULL`)
+- `thumbnail_token_id` (TEXT) — Legacy/unused (`NULL`)
+- `thumbnail_token_secret` (TEXT) — Legacy/unused (`NULL`)
 - `delivered_to_recipient` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Any recipient device confirmed receipt
-- `delivered_to_recipient_primary` (BOOLEAN, DEFAULT FALSE) — Recipient's **Primary** device confirmed receipt (controls relay purge)
-- `synced_to_sender_primary` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Sender's Primary device confirmed receipt
+- `delivered_to_recipient_primary` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Recipient's **Primary** device confirmed receipt
+- `synced_to_sender_primary` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Sender's **Primary** device confirmed receipt
 - `deleted_by_sender` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Sender deleted this message for themselves
 - `deleted_by_recipient` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Recipient deleted this message for themselves
-- `delivery_attempts` (INTEGER, NOT NULL, DEFAULT 0) — Number of delivery attempts
-- `expires_at` (TIMESTAMPTZ, NOT NULL) — 30-day TTL default
+- `read_by_recipient` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Recipient marked the message read
+- `read_acked_by_sender` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Sender's Primary acknowledged the read receipt
+- `read_at` (TIMESTAMPTZ) — When recipient read the message
+- `delivery_attempts` (INTEGER, NOT NULL, DEFAULT 0) — Delivery attempt counter
+- `expires_at` (TIMESTAMPTZ, NOT NULL) — 30-day TTL default (`DefaultMessageTTL`)
 - `created_at` (TIMESTAMPTZ, NOT NULL) — Record creation timestamp
 - `updated_at` (TIMESTAMPTZ, NOT NULL) — Record last update timestamp
 
 **Constraints:**
-- `sender_id != recipient_id` (no self-messages)
-- File size max 100MB
-- Text/unsent messages must have `file_id = NULL`; media messages must have `file_id IS NOT NULL`
-- Foreign keys to chats(id) and users(id) with CASCADE delete
+- `sender_id != recipient_id` (`messages_valid_participants`)
+- `file_size IS NULL OR file_size <= 104857600` (`messages_file_size_limit`)
+- `messages_file_type_validation`: `'text'` requires `file_id IS NULL`; `'unsent'` allows any `file_id`; media types (`image`, `video`, `audio`, `file`) require `file_id IS NOT NULL` OR `(delivered_to_recipient_primary = TRUE AND synced_to_sender_primary = TRUE)`
+- `chk_messages_read_prerequisite`: `read_by_recipient = FALSE OR delivered_to_recipient = TRUE`
+- `chk_messages_read_ack_prerequisite`: `read_acked_by_sender = FALSE OR read_by_recipient = TRUE`
+- Foreign keys to `chats(id)` and `users(id)` with `ON DELETE CASCADE`
 
 **Indexes:**
 - Primary key on `id`
-- `(recipient_id, delivered_to_recipient, expires_at)` WHERE `delivered_to_recipient = FALSE` — Pending delivery queue
-- `(sender_id, synced_to_sender_primary, expires_at)` WHERE `synced_to_sender_primary = FALSE` — Pending sender sync queue
-- `(expires_at)` WHERE `expires_at IS NOT NULL` — TTL cleanup job
-- `(chat_id, created_at DESC)` — Chat history retrieval
-- `(file_id)` WHERE `file_id IS NOT NULL` — File cleanup
-- `(file_token_expiry)` WHERE `file_id IS NOT NULL AND file_token_expiry IS NOT NULL` — Expired file tokens
+- `idx_messages_pending_delivery` (`recipient_id, delivered_to_recipient, expires_at`) WHERE `delivered_to_recipient = FALSE`
+- `idx_messages_pending_sender_sync` (`sender_id, synced_to_sender_primary, expires_at`) WHERE `synced_to_sender_primary = FALSE`
+- `idx_messages_expired` (`expires_at`) WHERE `expires_at IS NOT NULL`
+- `idx_messages_chat_history` (`chat_id, created_at DESC`)
+- `idx_messages_file_cleanup` (`file_id`) WHERE `file_id IS NOT NULL`
+- `idx_messages_expired_file_tokens` (`file_token_expiry`) WHERE `file_id IS NOT NULL AND file_token_expiry IS NOT NULL`
+- `idx_messages_files_sender_id` (`sender_id, id`) WHERE `file_id IS NOT NULL`
+- `idx_messages_files_recipient_id` (`recipient_id, id`) WHERE `file_id IS NOT NULL`
+- `idx_messages_expired_no_file` (`expires_at`) WHERE `file_id IS NULL`
+- `idx_messages_ack_no_file` (`created_at`) WHERE `file_id IS NULL AND delivered_to_recipient_primary = TRUE AND synced_to_sender_primary = TRUE AND read_by_recipient = TRUE AND read_acked_by_sender = TRUE`
+- `idx_messages_chat_no_file` (`chat_id`) WHERE `file_id IS NULL`
+- `idx_messages_unread` (`chat_id, recipient_id, read_by_recipient`) WHERE `read_by_recipient = FALSE`
+- `idx_messages_read_unacked` (`chat_id, sender_id, read_by_recipient, read_acked_by_sender`) WHERE `read_by_recipient = TRUE AND read_acked_by_sender = FALSE`
+- `idx_messages_recipient_keyset` (`recipient_id, created_at ASC, id ASC`) WHERE `deleted_by_recipient = FALSE`
+- `idx_messages_sender_keyset` (`sender_id, created_at ASC, id ASC`) WHERE `deleted_by_sender = FALSE`
+- `idx_messages_chat_keyset` (`chat_id, created_at ASC, id ASC`)
 
 **Triggers:**
 - `messages_timestamps_trigger` — Automatic timestamp management via `set_timestamps()`
@@ -352,18 +351,40 @@ Relay for cross-device synchronization of unsend and delete-for-me actions. Thes
 - `id` (UUID, Primary Key) — Sync action identifier
 - `user_id` (UUID, NOT NULL) — The user whose Primary device should receive this action, references users(id)
 - `action_type` (TEXT, NOT NULL) — One of: `unsend`, `delete_for_me`
-- `payload` (JSONB, NOT NULL) — Action-specific data (contains message_ids, chat_id, etc.)
+- `payload` (JSONB, NOT NULL) — Action-specific data (`messageIds`, and `chatId` for `unsend`)
 - `delivered_to_primary` (BOOLEAN, NOT NULL, DEFAULT FALSE) — Whether the Primary device has acknowledged this action
 - `created_at` (TIMESTAMPTZ, NOT NULL) — Record creation timestamp
 - `updated_at` (TIMESTAMPTZ, NOT NULL) — Record last update timestamp
 
 **Constraints:**
 - `action_type` must be one of: `unsend`, `delete_for_me`
-- Foreign key to users(id) with CASCADE delete
+- Foreign key to `users(id)` with `ON DELETE CASCADE`
 
 **Indexes:**
 - Primary key on `id`
-- `(user_id, delivered_to_primary, created_at)` — Fetching pending actions for a user
+- `idx_sync_actions_user_pending` (`user_id, delivered_to_primary, created_at`) — Fetching pending actions for a user
+- `idx_sync_actions_created_at` (`created_at`) — 30-day retention cleanup
+- `idx_sync_actions_payload_chat_id` (`((payload->>'chatId')::uuid)`) — Expression index for blocked-user cleanup
 
 **Triggers:**
 - `sync_actions_timestamps_trigger` — Automatic timestamp management via `set_timestamps()`
+
+---
+
+#### A.1.4 message_history (migration `014`)
+Append-only tombstone table of message IDs (`PRIMARY KEY (id, created_at)`), range-partitioned daily on `created_at`. Prevents duplicate re-inserts after a message row is purged from `messages`. Daily partitions (`-1d..+7d`) and drops older than 33 days are managed by `personal_chat_svc_partitions.go`.
+
+---
+
+#### A.1.5 history_sync (migration `011`)
+Tracks server-staged E2EE history synchronization requests between a secondary device and the primary device (`id`, `user_id`, `session_id` unique, `chats_json` JSONB, `payload` JSONB nullable, `expires_at` 10-minute TTL).
+
+---
+
+#### A.1.6 pending_uploads (migration `010`)
+Tracks presigned R2 uploads awaiting confirmation and expired/deleted R2 files awaiting cleanup (`file_id` PK, `bucket_name`, `r2_key`, `expires_at` 2-hour TTL for presigns or born-expired for deletions).
+
+---
+
+#### A.1.7 personal_sse_outbox (migration `012`)
+Cluster fanout outbox for SSE events exceeding the inline `pg_notify` payload cutoff (`id`, `command`, `target_user_id`, `target_session_id`, `exclude_session_id`, `payload` BYTEA, `created_at`, `expires_at` 3-minute TTL).

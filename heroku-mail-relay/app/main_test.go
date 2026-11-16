@@ -1,16 +1,19 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -626,7 +629,7 @@ func testConfig() Config {
 // TestBuildMIMEMessageDerivesPlainText proves the MIME path is unaffected by
 // the transport change: an empty text_body still yields a text/plain part.
 func TestBuildMIMEMessageDerivesPlainText(t *testing.T) {
-	msg, err := buildMIMEMessage(testConfig(), "user@example.com", "Your OTP", "<p>Code: <b>123456</b></p>", "", "otp-login")
+	msg, err := buildMIMEMessage(testConfig(), []string{"user@example.com"}, "Your OTP", "<p>Code: <b>123456</b></p>", "", "otp-login")
 	if err != nil {
 		t.Fatalf("buildMIMEMessage failed: %v", err)
 	}
@@ -647,7 +650,7 @@ func TestBuildMIMEMessageDerivesPlainText(t *testing.T) {
 // TestBuildMIMEMessageStripsHeaderInjection guards the CR/LF sanitisation that
 // used to sit behind the JSON handler.
 func TestBuildMIMEMessageStripsHeaderInjection(t *testing.T) {
-	msg, err := buildMIMEMessage(testConfig(), "user@example.com\r\nBcc: attacker@example.com", "OTP\r\nX-Evil: 1", "<p>hi</p>", "hi", "")
+	msg, err := buildMIMEMessage(testConfig(), []string{"user@example.com\r\nBcc: attacker@example.com"}, "OTP\r\nX-Evil: 1", "<p>hi</p>", "hi", "")
 	if err != nil {
 		t.Fatalf("buildMIMEMessage failed: %v", err)
 	}
@@ -665,3 +668,203 @@ func TestBuildMIMEMessageStripsHeaderInjection(t *testing.T) {
 		t.Error("expected the recipient CR/LF to be stripped in place")
 	}
 }
+
+func TestBuildMIMEMessageMultipleRecipients(t *testing.T) {
+	msg, err := buildMIMEMessage(testConfig(), []string{"alice@example.com", "bob@example.com"}, "Multi-Recipient", "<p>hi</p>", "hi", "")
+	if err != nil {
+		t.Fatalf("buildMIMEMessage failed: %v", err)
+	}
+
+	out := string(msg)
+	if !strings.Contains(out, "To: alice@example.com, bob@example.com\r\n") {
+		t.Errorf("expected To header to contain joined recipients, got:\n%s", out)
+	}
+}
+
+// fakeSMTPServer captures SMTP commands and envelope recipients for testing delivery.
+type fakeSMTPServer struct {
+	listener   net.Listener
+	recipients []string
+	messages   []string
+	mu         sync.Mutex
+	done       chan struct{}
+}
+
+func startFakeSMTP(t *testing.T) *fakeSMTPServer {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen on local port: %v", err)
+	}
+	s := &fakeSMTPServer{
+		listener: ln,
+		done:     make(chan struct{}),
+	}
+	go s.serve()
+	t.Cleanup(func() {
+		ln.Close()
+		<-s.done
+	})
+	return s
+}
+
+func (s *fakeSMTPServer) serve() {
+	defer close(s.done)
+	for {
+		conn, err := s.listener.Accept()
+		if err != nil {
+			return
+		}
+		go s.handleConn(conn)
+	}
+}
+
+func (s *fakeSMTPServer) handleConn(conn net.Conn) {
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	writer := bufio.NewWriter(conn)
+
+	// Send initial greeting
+	writer.WriteString("220 127.0.0.1 ESMTP Service Ready\r\n")
+	writer.Flush()
+
+	inData := false
+	var dataBuf strings.Builder
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+
+		if inData {
+			if line == ".\r\n" {
+				inData = false
+				s.mu.Lock()
+				s.messages = append(s.messages, dataBuf.String())
+				s.mu.Unlock()
+				dataBuf.Reset()
+				writer.WriteString("250 OK: message queued\r\n")
+				writer.Flush()
+			} else {
+				dataBuf.WriteString(line)
+			}
+			continue
+		}
+
+		upper := strings.ToUpper(strings.TrimSpace(line))
+		switch {
+		case strings.HasPrefix(upper, "EHLO") || strings.HasPrefix(upper, "HELO"):
+			writer.WriteString("250-127.0.0.1\r\n250-AUTH PLAIN\r\n250 8BITMIME\r\n")
+			writer.Flush()
+		case strings.HasPrefix(upper, "AUTH PLAIN"):
+			writer.WriteString("235 2.7.0 Authentication successful\r\n")
+			writer.Flush()
+		case strings.HasPrefix(upper, "MAIL FROM:"):
+			writer.WriteString("250 OK\r\n")
+			writer.Flush()
+		case strings.HasPrefix(upper, "RCPT TO:"):
+			rcpt := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "RCPT TO:"))
+			rcpt = strings.Trim(rcpt, "<>")
+			s.mu.Lock()
+			s.recipients = append(s.recipients, rcpt)
+			s.mu.Unlock()
+			writer.WriteString("250 OK\r\n")
+			writer.Flush()
+		case strings.HasPrefix(upper, "DATA"):
+			inData = true
+			writer.WriteString("354 Start mail input; end with <CRLF>.<CRLF>\r\n")
+			writer.Flush()
+		case strings.HasPrefix(upper, "QUIT"):
+			writer.WriteString("221 2.0.0 Service closing transmission channel\r\n")
+			writer.Flush()
+			return
+		case strings.HasPrefix(upper, "RSET"):
+			writer.WriteString("250 OK\r\n")
+			writer.Flush()
+		case strings.HasPrefix(upper, "NOOP"):
+			writer.WriteString("250 OK\r\n")
+			writer.Flush()
+		default:
+			writer.WriteString("502 Command not implemented\r\n")
+			writer.Flush()
+		}
+	}
+}
+
+func TestSendEmailDeliversToMultipleRecipients(t *testing.T) {
+	smtpServer := startFakeSMTP(t)
+	host, port, _ := net.SplitHostPort(smtpServer.listener.Addr().String())
+
+	cfg := Config{
+		SMTPHost:     host,
+		SMTPPort:     port,
+		SMTPUser:     "user",
+		SMTPPass:     "pass",
+		SMTPFrom:     "sender@example.com",
+		SMTPFromName: "Sender",
+	}
+
+	drainQueue()
+	t.Cleanup(drainQueue)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		wg.Wait()
+	}()
+
+	wg.Add(1)
+	go emailWorker(ctx, 1, cfg)
+
+	recipients := []string{"alice@example.com", "bob@example.com", "carol@example.com"}
+	job := emailJob{
+		To:       recipients,
+		Subject:  "Important Multi-Recipient Notice",
+		Body:     "<p>Hello Alice, Bob, and Carol</p>",
+		TextBody: "Hello Alice, Bob, and Carol",
+		RefID:    "test-multi-recipient",
+	}
+
+	if err := validateEmailJob(job); err != nil {
+		t.Fatalf("validateEmailJob failed: %v", err)
+	}
+
+	jobQueue <- job
+
+	// Wait for worker to deliver to SMTP
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		smtpServer.mu.Lock()
+		count := len(smtpServer.recipients)
+		smtpServer.mu.Unlock()
+		if count >= len(recipients) || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	smtpServer.mu.Lock()
+	received := append([]string(nil), smtpServer.recipients...)
+	messages := append([]string(nil), smtpServer.messages...)
+	smtpServer.mu.Unlock()
+
+	if len(received) != len(recipients) {
+		t.Fatalf("expected %d envelope recipients, got %d: %v", len(recipients), len(received), received)
+	}
+	for i, want := range recipients {
+		if received[i] != want {
+			t.Errorf("recipient %d = %q, want %q", i, received[i], want)
+		}
+	}
+
+	if len(messages) == 0 {
+		t.Fatal("expected at least 1 message sent to SMTP")
+	}
+	for _, want := range recipients {
+		if !strings.Contains(messages[0], want) {
+			t.Errorf("message headers missing recipient %q", want)
+		}
+	}
+}
+

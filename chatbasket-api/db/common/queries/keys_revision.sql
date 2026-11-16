@@ -3,8 +3,8 @@
 -- ======================================
 
 -- name: GetKeysRevision :one
--- Get the current keys_revision for a user (atomic read)
-SELECT keys_revision FROM auth_users WHERE id = $1 FOR UPDATE;
+-- Get the current keys_revision for a user
+SELECT keys_revision FROM auth_users WHERE id = $1;
 
 -- name: IncrementKeysRevision :exec
 -- Increment keys_revision by one (atomic)

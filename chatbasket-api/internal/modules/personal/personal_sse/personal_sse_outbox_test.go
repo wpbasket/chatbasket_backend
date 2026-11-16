@@ -10,8 +10,10 @@ import (
 	"time"
 
 	rpc_personal_ssev1 "chatbasket-api/gen/proto/personal/personal_sse"
+	"chatbasket-api/internal/modules/personal/personal_sse/internal/personal_sse_store"
 
 	"github.com/google/uuid"
+	"github.com/pashagolub/pgxmock/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -61,7 +63,7 @@ func TestShouldUseOutbox_Boundary(t *testing.T) {
 }
 
 func TestHasLocalTarget_FiltersNonLocalUsers(t *testing.T) {
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	uA := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	uB := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 	sA1 := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
@@ -131,7 +133,7 @@ func TestHasLocalTarget_FiltersNonLocalUsers(t *testing.T) {
 }
 
 func TestEnqueueOutbox_DropsWhenFull(t *testing.T) {
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	p := postgresSsePayload{Command: cmdBroadcastToUser, TargetUserID: uuid.New()}
 
 	for i := 0; i < outboxQueueCapacity; i++ {
@@ -150,7 +152,7 @@ func TestEnqueueOutbox_DropsWhenFull(t *testing.T) {
 }
 
 func TestDispatchResolved_DeliversLocally(t *testing.T) {
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	userID := uuid.New()
 	sessionID := uuid.New()
 	conn, ok := mgr.Register(userID, sessionID, uuid.New(), false)
@@ -176,7 +178,7 @@ func TestDispatchResolved_DeliversLocally(t *testing.T) {
 }
 
 func TestDispatchResolved_SessionTargeted_AllSessionStreams(t *testing.T) {
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	userID := uuid.New()
 	sessionID := uuid.New()
 	conn1, ok1 := mgr.Register(userID, sessionID, uuid.New(), false)
@@ -211,7 +213,7 @@ func TestDispatchResolved_SessionTargeted_AllSessionStreams(t *testing.T) {
 func TestProcessOutboxPayload_SkipsNonLocal(t *testing.T) {
 	// Pool is nil: any DB touch would panic. Clean return proves the
 	// presence check runs before the fetch.
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	oid := uuid.New()
 	mgr.processOutboxPayload(context.Background(), postgresSsePayload{
 		Command:      cmdBroadcastToUser,
@@ -221,7 +223,7 @@ func TestProcessOutboxPayload_SkipsNonLocal(t *testing.T) {
 }
 
 func TestQueueBufferSaturation_300Burst(t *testing.T) {
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	p := postgresSsePayload{
 		Command:      cmdBroadcastToUser,
 		TargetUserID: uuid.New(),
@@ -250,7 +252,7 @@ func TestQueueBufferSaturation_300Burst(t *testing.T) {
 }
 
 func TestWorkerCleanShutdownUnderLoad(t *testing.T) {
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var wg sync.WaitGroup
@@ -282,7 +284,7 @@ func TestWorkerCleanShutdownUnderLoad(t *testing.T) {
 }
 
 func TestWorkerPanicRecovery(t *testing.T) {
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -309,10 +311,82 @@ func TestWorkerPanicRecovery(t *testing.T) {
 
 func TestRouteAndNotify_RejectsOverCeiling(t *testing.T) {
 	// No pool needed: rejection happens before any database touch.
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	p := postgresSsePayload{Command: cmdBroadcastToUser, TargetUserID: uuid.New()}
 
 	err := mgr.routeAndNotify(context.Background(), p, make([]byte, maxEventBytes+1))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ceiling")
+}
+
+func TestSweepOutbox_ThrottleSleep(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	mgr := &Manager{
+		maintenancePostgresQueries: personal_sse_store.New(mock),
+	}
+
+	// 1st batch deletes full batch (1000 rows) -> triggers 50ms throttle pause
+	mock.ExpectExec("WITH batch AS").
+		WithArgs(int32(1000)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 1000))
+
+	// 2nd batch deletes 0 rows -> loop exits
+	mock.ExpectExec("WITH batch AS").
+		WithArgs(int32(1000)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 0))
+
+	t0 := time.Now()
+	mgr.sweepOutbox(context.Background())
+	elapsed := time.Since(t0)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+	assert.GreaterOrEqual(t, elapsed, 50*time.Millisecond, "must throttle for at least 50ms between full batches")
+}
+
+func TestSweepOutbox_EarlyExit(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	mgr := &Manager{
+		maintenancePostgresQueries: personal_sse_store.New(mock),
+	}
+
+	// Partial batch deletes 25 rows (< 1000) -> should exit immediately without sleep
+	mock.ExpectExec("WITH batch AS").
+		WithArgs(int32(1000)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 25))
+
+	t0 := time.Now()
+	mgr.sweepOutbox(context.Background())
+	elapsed := time.Since(t0)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+	assert.Less(t, elapsed, 40*time.Millisecond, "partial batch must exit immediately without throttle pause")
+}
+
+func TestSweepOutbox_UsesMaintenanceQueriesNotMainQueries(t *testing.T) {
+	mainMock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mainMock.Close()
+
+	maintMock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer maintMock.Close()
+
+	mgr := &Manager{
+		postgresQueries:            personal_sse_store.New(mainMock),
+		maintenancePostgresQueries: personal_sse_store.New(maintMock),
+	}
+
+	maintMock.ExpectExec("WITH batch AS").
+		WithArgs(int32(1000)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 10))
+
+	mgr.sweepOutbox(context.Background())
+	assert.NoError(t, mainMock.ExpectationsWereMet())
+	assert.NoError(t, maintMock.ExpectationsWereMet())
 }

@@ -19,8 +19,9 @@ import (
 // may need to participate in a transaction take a pgx.Tx parameter. When tx is
 // non-nil, the method binds to that transaction; otherwise it uses the global pool.
 type Service struct {
-	store  *pending_uploads_store.Queries
-	r2Pool *clients.R2ClientPool // needed by cleanup job for R2 deletes
+	store            *pending_uploads_store.Queries
+	maintenanceStore *pending_uploads_store.Queries
+	r2Pool           *clients.R2ClientPool // needed by cleanup job for R2 deletes
 }
 
 // PendingUpload is the public DTO returned by Service methods.
@@ -31,12 +32,13 @@ type PendingUpload struct {
 	ExpiresAt  time.Time
 }
 
-// NewService creates a new Service backed by the given DBTX-compatible pool.
+// NewService creates a new Service backed by the given DBTX-compatible pools.
 // r2Pool is required for the cleanup job to delete R2 objects.
-func NewService(db pending_uploads_store.DBTX, r2Pool *clients.R2ClientPool) *Service {
+func NewService(db pending_uploads_store.DBTX, maintenanceDB pending_uploads_store.DBTX, r2Pool *clients.R2ClientPool) *Service {
 	return &Service{
-		store:  pending_uploads_store.New(db),
-		r2Pool: r2Pool,
+		store:            pending_uploads_store.New(db),
+		maintenanceStore: pending_uploads_store.New(maintenanceDB),
+		r2Pool:           r2Pool,
 	}
 }
 
@@ -118,36 +120,68 @@ func (s *Service) RemoveTx(ctx context.Context, tx pgx.Tx, fileID string) error 
 // Stale Pending Upload Cleanup (matches chat CleanupExpiredMessages pattern)
 // ──────────────────────────────────────────────────────────────────────────────
 
-// CleanupExpiredPendingUploads picks up expired pending uploads in batches,
-// deletes their R2 objects, then deletes the DB rows. Matches the chat
-// CleanupExpiredMessages pattern. Runs as a background job via StartCleanupJob.
-//
-// Per spec §6.C:
-//   - Phase 1: Batch keyset-paginated R2 cleanup + DB delete
-//   - Phase 2: Final bulk sweep for any rows the batched loop couldn't process
-func (s *Service) CleanupExpiredPendingUploads(ctx context.Context) error {
-	log.Printf("[PendingUploads Cleanup] Starting cleanup of expired pending uploads")
-	const batchSize = 100
+const (
+	pendingUploadsCleanupTotalBudget = 20 * time.Minute
+	pendingUploadsBatchSize          = 100
+	pendingUploadsBatchTimeout       = 2 * time.Minute
+)
 
-	// Phase 1: Batched keyset-paginated cleanup
+// CleanupExpiredPendingUploads picks up expired pending uploads in batches,
+// deletes their R2 objects, then deletes the DB rows. Runs as a background job via StartCleanupJob.
+// It follows a budget pattern over a 20-minute interval:
+//   - Soft Active Work Limit (85% / 17 minutes): Stops initiating new batches once elapsed time reaches 85% of the budget.
+//   - Ongoing Batch Completion: In-flight R2 and DB work is not cancelled by the job budget,
+//     but each batch has a 2-minute hard ceiling so a hung call cannot park the worker forever.
+//     The ceiling fits inside the 15% (3 minutes) safety buffer.
+//   - Early Exit: Terminates immediately once all expired uploads are cleared (fewer than batchSize returned).
+func (s *Service) CleanupExpiredPendingUploads(ctx context.Context) error {
+	budget := pendingUploadsCleanupTotalBudget
+	if deadline, ok := ctx.Deadline(); ok {
+		if d := time.Until(deadline); d > 0 && d < budget {
+			budget = d
+		}
+	}
+
+	log.Printf("[PendingUploads Cleanup] Starting cleanup of expired pending uploads (budget: %v)", budget)
+	start := time.Now()
+	workBudget := (budget * 85) / 100
+
 	lastFileID := ""
 	for {
-		expiredUploads, err := s.store.GetExpiredPendingUploadsBatch(ctx, pending_uploads_store.GetExpiredPendingUploadsBatchParams{
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Soft active work limit: Do not trigger a new batch if 85% work budget has been reached
+		if time.Since(start) >= workBudget {
+			log.Printf("[PendingUploads Cleanup] 85%% work budget reached (%v elapsed >= %v work budget), stopping before new batch", time.Since(start), workBudget)
+			break
+		}
+
+		// Ongoing batch must run to completion without being cancelled mid-batch,
+		// but it still needs a hard ceiling so a hung database call cannot park
+		// the cleanup goroutine forever.
+		batchCtx, batchCancel := context.WithTimeout(context.WithoutCancel(ctx), pendingUploadsBatchTimeout)
+		expiredUploads, err := s.maintenanceStore.GetExpiredPendingUploadsBatch(batchCtx, pending_uploads_store.GetExpiredPendingUploadsBatchParams{
 			LastFileID: lastFileID,
-			BatchSize:  int32(batchSize),
+			BatchSize:  int32(pendingUploadsBatchSize),
 		})
 		if err != nil {
+			batchCancel()
 			log.Printf("[PendingUploads Cleanup] ERROR: Failed to fetch expired pending uploads: %v", err)
 			break
 		}
 		if len(expiredUploads) == 0 {
+			batchCancel()
 			break
 		}
 		log.Printf("[PendingUploads Cleanup] Processing %d expired pending uploads (Cursor: %s)", len(expiredUploads), lastFileID)
+
 		// Concurrent R2 deletes — 20-way parallelism (kit.MaxConcurrentDeletes).
-		// Wrap s.deleteR2PendingObject to match kit.DeleteFunc signature.
+		// Note: The ongoing batch runs to completion without being force-killed by the budget.
 		deleteFn := func(ctx context.Context, fileID string) error {
-			// Look up bucket + key for this fileID
 			for _, p := range expiredUploads {
 				if p.FileID == fileID {
 					return s.deleteR2PendingObject(ctx, p.FileID, p.BucketName, p.R2Key)
@@ -159,25 +193,35 @@ func (s *Service) CleanupExpiredPendingUploads(ctx context.Context) error {
 		for _, p := range expiredUploads {
 			fileIDs = append(fileIDs, p.FileID)
 		}
-		r2Errors := kit.DeleteFilesBatch(ctx, fileIDs, deleteFn)
+		r2Errors := kit.DeleteFilesBatch(batchCtx, fileIDs, deleteFn)
 		for i, p := range expiredUploads {
 			if r2Errors[i] != nil {
-				// R2 failed (real error) — skip DB delete, retry next cycle
 				log.Printf("[PendingUploads Cleanup] WARNING: R2 delete failed for %s: %v", p.FileID, r2Errors[i])
 				continue
 			}
-			// R2 succeeded (or file was already gone) — safe to delete DB row
-			if err := s.store.DeletePendingUpload(ctx, p.FileID); err != nil {
+			if err := s.maintenanceStore.DeletePendingUpload(batchCtx, p.FileID); err != nil {
 				log.Printf("[PendingUploads Cleanup] WARNING: Failed to delete expired pending upload record %s: %v", p.FileID, err)
 			}
 		}
-		if len(expiredUploads) < batchSize {
+
+		// The batch is complete; release its deadline before deciding whether
+		// to start another batch.
+		batchCancel()
+
+		// If fewer rows than batchSize were returned, all expired uploads are cleared early.
+		if len(expiredUploads) < pendingUploadsBatchSize {
 			break
 		}
 		lastFileID = expiredUploads[len(expiredUploads)-1].FileID
+
+		// If 85% work budget is reached after completing this batch, do not start another batch
+		if time.Since(start) >= workBudget {
+			log.Printf("[PendingUploads Cleanup] 85%% work budget reached after batch completion (%v elapsed >= %v work budget), stopping", time.Since(start), workBudget)
+			break
+		}
 	}
 
-	log.Printf("[PendingUploads Cleanup] Cleanup process completed successfully")
+	log.Printf("[PendingUploads Cleanup] Cleanup process completed (elapsed: %v)", time.Since(start))
 	return nil
 }
 
@@ -191,7 +235,7 @@ func (s *Service) deleteR2PendingObject(ctx context.Context, fileID, bucket, key
 		return nil
 	}
 	if !s.r2Pool.HasClient(accountName) {
-		// Per spec §3.E: account retired, skip R2 delete (safe — DB delete will follow)
+		// Account retired: skip R2 delete (safe — DB delete will follow)
 		log.Printf("[PendingUploads Cleanup] WARNING: Account '%s' not in pool, skipping R2 delete for %s", accountName, fileID)
 		return nil
 	}

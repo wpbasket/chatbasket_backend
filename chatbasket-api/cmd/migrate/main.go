@@ -22,8 +22,8 @@ and 'db/personal/migrations' directories. It supports two operation modes :
      -file string   Specific migration file name to run. (Required)
 
    Usage Examples:
-     go run main.go -url="DATABASE_URL_PG_TESTING" -folder="common" -file="001_init.up.sql"
-     go run main.go -url="DATABASE_URL_PG_DEV" -folder="personal" -file="002_users.down.sql"
+     go run main.go -url="DATABASE_URL_PG_TESTING" -folder="common" -file="001_auth_init.up.sql"
+     go run main.go -url="DATABASE_URL_PG_DEV" -folder="personal" -file="002_personal_contact_system.down.sql"
 
    Note: The order of command-line flags does not matter.
 */
@@ -159,7 +159,7 @@ func main() {
 				dbLabel = ""
 			}
 		default:
-			fmt.Printf("%sInvalid selection. Please choose 1-6.%s\n", colorRed, colorReset)
+			fmt.Printf("%sInvalid selection. Please choose 1-4.%s\n", colorRed, colorReset)
 		}
 	}
 

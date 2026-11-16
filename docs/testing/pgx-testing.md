@@ -41,8 +41,8 @@ Notes:
 - **Limitation with Concrete `*pgxpool.Pool`**:
   - `pgxmock` implements a `PgxPoolIface` interface, which cannot be cast or assigned to fields of concrete type `*pgxpool.Pool`.
   - To respect production types, we use a **Split Testing Strategy**:
-    - **Unit Tests**: Test non-transaction methods using `pgxmock` by setting `Pool: nil` / `(*pgxpool.Pool)(nil)` on the service.
-    - **Integration Tests**: Test transaction-heavy methods (calling `Pool.Begin(ctx)`) against a real testing database pool.
+    - **Unit Tests**: Test non-transaction methods (and methods that guard `s.Pool != nil`, such as `SendMessage`, `MarkChatRead`, `AcknowledgeAndReadBatch`, `UnsendMessageHandler`, `DeleteMessageForMe`) using `pgxmock` with `Pool: nil`.
+    - **Integration Tests**: Test methods that require `Pool.Begin(ctx)` (e.g., `ConfirmChatUpload`, `deleteMessageFromRelay`, real tx rollback/locking) against a real testing database pool.
 
 ## 2. Integration tests: use testing DB URL
 
@@ -95,7 +95,8 @@ Notes:
 See:
 
 ```text
-chatbasket-api/internal/modules/personal/personal_chat/personal_chat_e2ee_test.go
+chatbasket-api/internal/modules/core/core_auth/core_auth_svc_e2ee_test.go
+chatbasket-api/internal/modules/personal/personal_chat/personal_chat_svc_revision_test.go
 ```
 
 Covers:
@@ -104,4 +105,4 @@ Covers:
 - `WithArgs`
 - `WillReturnRows`
 - `ExpectationsWereMet`
-- E2EE public-key response fields
+- E2EE session keys, `keys_revision`, and key-revision staleness checks

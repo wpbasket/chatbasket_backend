@@ -35,7 +35,7 @@ type DetailedProcessedError interface {
 
 // --- Standard Error Models (DTOs) ---
 
-// ApiError is the standard JSON error response, ported from chatbasket-api/model/error.go
+// ApiError is the standard JSON error response.
 type ApiError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -165,7 +165,7 @@ func GlobalErrorHandler(c *echo.Context, err error) {
 
 // --- External Adaptors (Library Helpers) ---
 
-// GetStatusCodeFromError extracts the HTTP status code from an error, ported from utils/errorUtils.go
+// GetStatusCodeFromError extracts the HTTP status code from an error.
 func GetStatusCodeFromError(err error) int {
 	// Go 1.26: Using errors.AsType[T] for type-safe error handling
 	if he, ok := errors.AsType[*echo.HTTPError](err); ok {
@@ -174,13 +174,13 @@ func GetStatusCodeFromError(err error) int {
 	return http.StatusInternalServerError // fallback for non-HTTP errors
 }
 
-// PostgresError is specialized for database failures, ported from utils/errorUtils.go
+// PostgresError holds extracted pgx/pgconn error details.
 type PostgresError struct {
 	Message string
 	PgError *pgconn.PgError
 }
 
-// GetPostgresError extracts pgx-specific error details, ported from utils/errorUtils.go
+// GetPostgresError extracts pgx-specific error details.
 func GetPostgresError(err error) *PostgresError {
 	if err == nil {
 		return nil

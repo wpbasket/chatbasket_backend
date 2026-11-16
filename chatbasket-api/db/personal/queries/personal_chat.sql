@@ -110,6 +110,9 @@ ORDER BY c.updated_at DESC;
 -- name: GetChatByID :one
 SELECT * FROM chats WHERE id = $1 LIMIT 1;
 
+-- name: GetChatByIDForNoKeyUpdate :one
+SELECT * FROM chats WHERE id = $1 LIMIT 1 FOR NO KEY UPDATE;
+
 
 -- ===========================================
 -- Message Operations
@@ -126,6 +129,7 @@ INSERT INTO
         message_type,
         expires_at,
         synced_to_sender_primary,
+        sender_session_id,
         delivered_to_recipient_primary,
         reply_to_message_id
     )
@@ -139,7 +143,8 @@ VALUES (
         $7,
         $8,
         $9,
-        $10
+        $10,
+        $11
     )
 RETURNING
     *;
@@ -181,47 +186,28 @@ ORDER BY created_at ASC, id ASC
 LIMIT $2;
 
 
--- name: MarkMessageDeliveredToRecipient :exec
-UPDATE messages
-SET
-    delivered_to_recipient = TRUE,
-    updated_at = now()
-WHERE
-    id = $1
-    AND delivered_to_recipient = FALSE;
-
 -- name: MarkMessagesDeliveredToRecipientBatch :many
 UPDATE messages
 SET
-    delivered_to_recipient = TRUE,
-    updated_at = now()
+    delivered_to_recipient = TRUE
 WHERE
     id = ANY(sqlc.arg('message_ids')::uuid[])
     AND recipient_id = $1
     AND delivered_to_recipient = FALSE
-RETURNING id, chat_id, sender_id, created_at;
-
--- name: MarkMessageDeliveredToRecipientPrimary :exec
-UPDATE messages
-SET
-    delivered_to_recipient_primary = TRUE,
-    delivered_to_recipient = TRUE,
-    updated_at = now()
-WHERE
-    id = $1
-    AND delivered_to_recipient_primary = FALSE;
+    AND expires_at > now()
+RETURNING id, chat_id, sender_id, file_id, delivered_to_recipient_primary, synced_to_sender_primary, read_by_recipient, read_acked_by_sender, created_at;
 
 -- name: MarkMessagesDeliveredToRecipientPrimaryBatch :many
 UPDATE messages
 SET
     delivered_to_recipient = TRUE,
-    delivered_to_recipient_primary = TRUE,
-    updated_at = now()
+    delivered_to_recipient_primary = TRUE
 WHERE
     id = ANY(sqlc.arg('message_ids')::uuid[])
     AND recipient_id = $1
     AND delivered_to_recipient_primary = FALSE
-RETURNING id, chat_id, sender_id, created_at;
+    AND expires_at > now()
+RETURNING id, chat_id, sender_id, file_id, delivered_to_recipient_primary, synced_to_sender_primary, read_by_recipient, read_acked_by_sender, created_at;
 
 -- name: StripDeliveredMessagePayload :exec
 UPDATE messages
@@ -242,28 +228,44 @@ WHERE
     AND delivered_to_recipient_primary = TRUE
     AND synced_to_sender_primary = TRUE;
 
--- name: MarkMessageSyncedToSenderPrimary :exec
+-- name: MarkMessagesSyncedToSenderPrimaryBatch :many
 UPDATE messages
 SET
-    synced_to_sender_primary = TRUE,
-    updated_at = now()
+    synced_to_sender_primary = TRUE
 WHERE
-    id = $1
-    AND synced_to_sender_primary = FALSE;
+    id = ANY(sqlc.arg('message_ids')::uuid[])
+    AND sender_id = $1
+    AND synced_to_sender_primary = FALSE
+    AND expires_at > now()
+RETURNING id, chat_id, sender_id, file_id, delivered_to_recipient_primary, synced_to_sender_primary, read_by_recipient, read_acked_by_sender, created_at;
 
 -- name: DeleteMessage :exec
 DELETE FROM messages WHERE id = $1;
 
--- name: UpdateMessageToUnsent :exec
+-- name: UpdateMessageToUnsent :execrows
 UPDATE messages
 SET
     content = 'Message unsent',
-    message_type = 'unsent',
-    updated_at = now()
+    message_type = 'unsent'
 WHERE
-    id = $1;
+    id = $1
+    AND message_type != 'unsent'
+    AND read_by_recipient = FALSE
+    AND expires_at > now();
 
--- name: ClearMessageFileFields :exec
+-- name: UpdateMessagesToUnsentBatch :many
+UPDATE messages
+SET
+    content = 'Message unsent',
+    message_type = 'unsent'
+WHERE
+    id = ANY(sqlc.arg('message_ids')::uuid[])
+    AND message_type != 'unsent'
+    AND read_by_recipient = FALSE
+    AND expires_at > now()
+RETURNING id;
+
+-- name: ClearMessagesFileFieldsBatch :exec
 UPDATE messages
 SET
     file_id = NULL,
@@ -275,28 +277,30 @@ SET
     file_token_expiry = NULL,
     updated_at = now()
 WHERE
-    id = $1;
+    id = ANY(sqlc.arg('message_ids')::uuid[]);
 
 
--- name: MarkMessageDeletedBySender :exec
+-- name: MarkMessagesDeletedBySenderBatch :execrows
 UPDATE messages
 SET
     deleted_by_sender = TRUE,
     synced_to_sender_primary = TRUE,
     updated_at = now()
 WHERE
-    id = $1
-    AND sender_id = $2;
+    id = ANY(sqlc.arg('message_ids')::uuid[])
+    AND sender_id = sqlc.arg('sender_id')
+    AND deleted_by_sender = FALSE;
 
--- name: MarkMessageDeletedByRecipient :exec
+-- name: MarkMessagesDeletedByRecipientBatch :execrows
 UPDATE messages
 SET
     deleted_by_recipient = TRUE,
     delivered_to_recipient_primary = TRUE,
     updated_at = now()
 WHERE
-    id = $1
-    AND recipient_id = $2;
+    id = ANY(sqlc.arg('message_ids')::uuid[])
+    AND recipient_id = sqlc.arg('recipient_id')
+    AND deleted_by_recipient = FALSE;
 
 -- name: MarkMessagesAsRead :many
 UPDATE messages
@@ -309,24 +313,121 @@ WHERE
     AND id = ANY(sqlc.arg('message_ids')::uuid[])
     AND delivered_to_recipient = TRUE
     AND read_by_recipient = FALSE
+    AND expires_at > now()
 RETURNING id, read_at;
 
 -- name: MarkMessagesReadAckedBySender :many
+-- Scoped by the caller's sender_id and the IDs only, so the rows may come from
+-- any chats. RETURNING chat_id gives each row's chat for the cleanup sweep.
 UPDATE messages
 SET
     read_acked_by_sender = TRUE
 WHERE
-    chat_id = $1
-    AND sender_id = $2
+    sender_id = $1
     AND id = ANY(sqlc.arg('message_ids')::uuid[])
     AND read_by_recipient = TRUE
     AND read_acked_by_sender = FALSE
-RETURNING id;
+    AND expires_at > now()
+RETURNING id, chat_id, sender_id, file_id, delivered_to_recipient_primary, synced_to_sender_primary, read_by_recipient, read_acked_by_sender, created_at;
 
--- name: GetMessagesByIds :many
-SELECT id, chat_id, sender_id, recipient_id, read_by_recipient, read_at, read_acked_by_sender
+-- name: GetMessagesForMarkChatRead :many
+SELECT
+    id,
+    chat_id,
+    sender_id,
+    recipient_id,
+    read_by_recipient,
+    read_at,
+    read_acked_by_sender,
+    created_at,
+    expires_at
 FROM messages
 WHERE id = ANY(sqlc.arg('message_ids')::uuid[]);
+
+-- name: GetMessagesForReadAckBatch :many
+SELECT
+    id,
+    chat_id,
+    sender_id,
+    recipient_id,
+    file_id,
+    delivered_to_recipient_primary,
+    synced_to_sender_primary,
+    read_by_recipient,
+    read_at,
+    read_acked_by_sender,
+    created_at,
+    expires_at
+FROM messages
+WHERE id = ANY(sqlc.arg('message_ids')::uuid[]);
+
+-- name: GetMessagesForAckAndReadBatch :many
+SELECT
+    id,
+    chat_id,
+    sender_id,
+    recipient_id,
+    file_id,
+    delivered_to_recipient,
+    delivered_to_recipient_primary,
+    synced_to_sender_primary,
+    read_by_recipient,
+    read_acked_by_sender,
+    read_at,
+    created_at,
+    expires_at
+FROM messages
+WHERE id = ANY(sqlc.arg('message_ids')::uuid[]);
+
+-- name: GetMessagesForDeliveryAckBatch :many
+SELECT
+    id,
+    chat_id,
+    sender_id,
+    recipient_id,
+    file_id,
+    delivered_to_recipient,
+    delivered_to_recipient_primary,
+    synced_to_sender_primary,
+    read_by_recipient,
+    read_at,
+    read_acked_by_sender,
+    created_at,
+    expires_at
+FROM messages
+WHERE id = ANY(sqlc.arg('message_ids')::uuid[]);
+
+-- name: GetMessagesForDeleteForMeBatch :many
+SELECT
+    id,
+    chat_id,
+    sender_id,
+    recipient_id,
+    file_id,
+    delivered_to_recipient_primary,
+    synced_to_sender_primary,
+    read_by_recipient,
+    read_acked_by_sender,
+    deleted_by_sender,
+    deleted_by_recipient,
+    expires_at
+FROM messages
+WHERE
+    id = ANY(sqlc.arg('message_ids')::uuid[]);
+
+-- name: GetMessagesForUnsendBatch :many
+SELECT
+    id,
+    chat_id,
+    sender_id,
+    recipient_id,
+    message_type,
+    file_id,
+    read_by_recipient,
+    expires_at
+FROM messages
+WHERE
+    id = ANY(sqlc.arg('message_ids')::uuid[]);
 
 -- name: CleanupFullyAcknowledgedReadMessagesInChat :exec
 DELETE FROM messages
@@ -405,6 +506,7 @@ INSERT INTO
         file_token_expiry,
         expires_at,
         synced_to_sender_primary,
+        sender_session_id,
         delivered_to_recipient_primary,
         reply_to_message_id
     )
@@ -425,7 +527,8 @@ VALUES (
         $14,
         $15,
         $16,
-        $17
+        $17,
+        $18
     )
 RETURNING
     *;
@@ -470,6 +573,18 @@ WHERE
     id = sqlc.arg ('id')
     AND last_message_id = sqlc.arg ('last_message_id');
 
+-- name: UpdateChatUnsendPreviewBatch :exec
+UPDATE chats
+SET
+    p1_last_message_content = 'Message unsent',
+    p2_last_message_content = 'Message unsent',
+    p1_last_message_type = 'unsent',
+    p2_last_message_type = 'unsent',
+    updated_at = now()
+WHERE
+    id = sqlc.arg('id')
+    AND last_message_id = ANY(sqlc.arg('message_ids')::uuid[]);
+
 -- name: UpdateChatUnsendDecrement :exec
 UPDATE chats
 SET
@@ -491,7 +606,7 @@ SET
 WHERE
     id = sqlc.arg ('id');
 
--- name: ResetChatReadStatus :exec
+-- name: ResetChatReadStatus :one
 UPDATE chats
 SET
     p1_unread_count = CASE
@@ -516,7 +631,8 @@ WHERE
     AND (
         participant_1_id = $2
         OR participant_2_id = $2
-    );
+    )
+RETURNING updated_at;
 
 -- name: GetExpiredMessagesWithFiles :many
 SELECT *
@@ -550,6 +666,24 @@ VALUES ($1, $2, $3, $4, now())
 RETURNING
     *;
 
+-- name: CreateSyncActionsBatch :execrows
+INSERT INTO message_sync_actions (
+    id,
+    user_id,
+    action_type,
+    payload,
+    created_at,
+    updated_at
+)
+SELECT
+    gen_random_uuid(),
+    sqlc.arg('user_id'),
+    'delete_for_me',
+    jsonb_build_object('messageIds', jsonb_build_array(unnested_id::text)),
+    now(),
+    now()
+FROM unnest(sqlc.arg('message_ids')::uuid[]) AS unnested_id;
+
 -- name: GetPendingSyncActions :many
 SELECT *
 FROM message_sync_actions
@@ -567,22 +701,22 @@ DELETE FROM message_sync_actions WHERE id = $1;
 -- Per-Participant Preview Operations
 -- ===========================================
 
--- name: ClearLastMessageForParticipant :exec
--- Clears the last message preview for a specific participant only (used by Delete for Me).
--- Only fires if the deleted message is the current preview message.
+-- name: ClearLastMessageForParticipantBatch :execrows
+-- Clears the last message preview for a specific participant across all matching chats (used by batch Delete for Me).
+-- Only fires for chats where last_message_id matches any of the deleted messages.
 UPDATE chats
 SET
     p1_last_message_content = CASE
         WHEN participant_1_id = sqlc.arg ('user_id') THEN NULL
         ELSE p1_last_message_content
     END,
-    p2_last_message_content = CASE
-        WHEN participant_2_id = sqlc.arg ('user_id') THEN NULL
-        ELSE p2_last_message_content
-    END,
     p1_last_message_type = CASE
         WHEN participant_1_id = sqlc.arg ('user_id') THEN NULL
         ELSE p1_last_message_type
+    END,
+    p2_last_message_content = CASE
+        WHEN participant_2_id = sqlc.arg ('user_id') THEN NULL
+        ELSE p2_last_message_content
     END,
     p2_last_message_type = CASE
         WHEN participant_2_id = sqlc.arg ('user_id') THEN NULL
@@ -590,8 +724,7 @@ SET
     END,
     updated_at = now()
 WHERE
-    id = sqlc.arg ('chat_id')
-    AND last_message_id = sqlc.arg ('message_id');
+    last_message_id = ANY(sqlc.arg ('message_ids')::uuid[]);
 
 -- name: UpdateChatLastDeliveredAt :exec
 UPDATE chats
@@ -672,6 +805,13 @@ WHERE id = $1 AND user_id = $2 AND session_id = $3;
 
 
 
+-- name: DeleteExpiredMessagesWithFilesBatch :execrows
+-- Deletes exactly the expired rows whose IDs are supplied, after their files
+-- have been removed from R2. TTL supersedes relay delivery.
+DELETE FROM messages
+WHERE id = ANY(sqlc.arg('message_ids')::uuid[])
+  AND expires_at < now();
+
 -- name: DeleteExpiredMessagesWithoutFilesBatch :execrows
 -- Bounded cleanup batch: deletes expired messages without attached files.
 -- Controlled from Go with a batch_size parameter and a time budget.
@@ -690,10 +830,10 @@ WHERE m.id = batch.id;
 -- Controlled from Go with a batch_size parameter and a time budget.
 WITH batch AS (
   SELECT id FROM messages
-  WHERE file_id IS NULL 
-    AND delivered_to_recipient_primary = TRUE 
-    AND synced_to_sender_primary = TRUE 
-    AND read_by_recipient = TRUE 
+  WHERE file_id IS NULL
+    AND delivered_to_recipient_primary = TRUE
+    AND synced_to_sender_primary = TRUE
+    AND read_by_recipient = TRUE
     AND read_acked_by_sender = TRUE
   FOR UPDATE SKIP LOCKED
   LIMIT sqlc.arg('batch_size')
@@ -725,7 +865,7 @@ WHERE m.id = batch.id;
 -- Controlled from Go with a batch_size parameter and a time budget.
 WITH batch AS (
   SELECT msa.id FROM message_sync_actions msa
-  JOIN chats c ON (msa.payload::jsonb->>'chat_id')::uuid = c.id
+  JOIN chats c ON (msa.payload::jsonb->>'chatId')::uuid = c.id
   JOIN user_blocks ub ON (
     (c.participant_1_id = ub.blocker_user_id AND c.participant_2_id = ub.blocked_user_id)
     OR (c.participant_1_id = ub.blocked_user_id AND c.participant_2_id = ub.blocker_user_id)
@@ -774,7 +914,7 @@ FROM history_sync
 WHERE id = $1 AND user_id = $2;
 
 -- name: GetMessagesWithFilesByChatID :many
-SELECT * FROM messages 
+SELECT * FROM messages
 WHERE chat_id = $1 AND file_id IS NOT NULL;
 
 -- name: DeleteMessagesByChatID :exec
@@ -814,3 +954,16 @@ SELECT id
 FROM chats
 WHERE participant_1_id = $1 OR participant_2_id = $1
 FOR UPDATE;
+
+-- name: RecordMessageHistory :exec
+-- Records message ID in the append-only partitioned history table for deduplication
+INSERT INTO message_history (id, created_at)
+VALUES ($1, $2)
+ON CONFLICT (id, created_at) DO NOTHING;
+
+-- name: CheckMessageHistoryExists :one
+-- Checks whether a message ID has ever been recorded in the history/tombstone table
+SELECT EXISTS (
+    SELECT 1 FROM message_history WHERE id = $1
+);
+

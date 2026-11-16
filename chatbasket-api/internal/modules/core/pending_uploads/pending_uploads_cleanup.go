@@ -13,10 +13,10 @@ type PendingUploadsCleanupService interface {
 }
 
 // StartCleanupJob starts a background goroutine that periodically deletes expired
-// pending uploads AND their associated R2 objects. Matches the
-// StartMessageCleanupJob pattern from personal_chat.
+// pending uploads AND their associated R2 objects.
+// CleanupExpiredPendingUploads hardcodes a 20m budget tuned for a 20m interval.
 //
-// Per spec §6.C:
+// Behavior:
 //
 //	The worker queries the pending_uploads table for all records where expires_at is in the past.
 //	For each expired upload record:
@@ -28,7 +28,7 @@ func StartCleanupJob(service PendingUploadsCleanupService, interval time.Duratio
 	log.Printf("[PendingUploads Cleanup] Starting background job with interval: %v (startup delay: 5m)", interval)
 
 	go func() {
-		// 1. Initial delay of 5 minutes before the first run
+		// 1. Initial delay of 5 minutes so server startup and initial traffic settle before background sweeps.
 		time.Sleep(5 * time.Minute)
 
 		ctx := context.Background()

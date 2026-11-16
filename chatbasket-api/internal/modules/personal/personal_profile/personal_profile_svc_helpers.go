@@ -99,7 +99,6 @@ func DecryptUsername(encryptedB64 string, encryptionKey []byte) (string, error) 
 }
 
 // ShouldExposeAvatar determines if a user's avatar should be visible based on global and user-level privacy restrictions.
-// Ported from contact_service.go for full fidelity and centralized privacy logic.
 func ShouldExposeAvatar(globalRestrictProfile, exceptionGlobalProfile, globalRestrictAvatar, exceptionGlobalAvatar, userRestrictProfile, userRestrictAvatar bool) bool {
 	if globalRestrictProfile {
 		return exceptionGlobalProfile

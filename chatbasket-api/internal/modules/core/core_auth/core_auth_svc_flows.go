@@ -267,7 +267,7 @@ func (s *AuthService) CreateSessionFlow(ctx context.Context, userID uuid.UUID, p
 	expiresAt := time.Now().Add(3 * 365 * 24 * time.Hour)
 	sid, _ := uuid.NewV7()
 
-	// Logic: If user has NO primary device, and this is a native platform, make this the primary device.
+	// Intended logic: native-only primary device. Temporarily, if no primary device exists, any platform (including web) is auto-promoted below.
 	isPrimary := false
 	primaryDeviceName := ""
 	primaryKey := ""

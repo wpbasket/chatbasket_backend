@@ -43,18 +43,27 @@ type contactService struct {
 	GlobalService                          *services.GlobalService
 	PostgresQuerier                        personal_contact_store.Querier
 	PostgresQueries                        *personal_contact_store.Queries
+	Pool                                   *pgxpool.Pool
+	MaintenanceQuerier                     personal_contact_store.Querier
+	MaintenanceQueries                     *personal_contact_store.Queries
+	MaintenancePool                        *pgxpool.Pool
 	personalProfilePersonalContactProvider personalProfilePersonalContactProvider
 	chatCleanupProvider                    ChatCleanupProvider
 	PersonalUsernameKey                    []byte
 	PersonalContactKey                     []byte
 }
 
-func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool, personalProfilePersonalContactProvider personalProfilePersonalContactProvider, personalUsernameKey []byte, personalContactKey []byte) *contactService {
+func NewContactService(globalService *services.GlobalService, pool *pgxpool.Pool, maintenancePool *pgxpool.Pool, personalProfilePersonalContactProvider personalProfilePersonalContactProvider, personalUsernameKey []byte, personalContactKey []byte) *contactService {
 	store := personal_contact_store.New(pool)
+	maintenanceStore := personal_contact_store.New(maintenancePool)
 	return &contactService{
 		GlobalService:                          globalService,
 		PostgresQuerier:                        store,
 		PostgresQueries:                        store,
+		Pool:                                   pool,
+		MaintenanceQuerier:                     maintenanceStore,
+		MaintenanceQueries:                     maintenanceStore,
+		MaintenancePool:                        maintenancePool,
 		personalProfilePersonalContactProvider: personalProfilePersonalContactProvider,
 		PersonalUsernameKey:                    personalUsernameKey,
 		PersonalContactKey:                     personalContactKey,

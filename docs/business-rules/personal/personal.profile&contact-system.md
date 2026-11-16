@@ -236,6 +236,7 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   1. Payload must not be null and contact user ID must not be empty
   2. Contact user ID must be valid UUID format
   3. User cannot accept their own request (returns "self_action_not_allowed" error)
+  4. Block/privacy check via `checkBlockStatus` (`action_not_permitted` for user block, or `BlockStatusFlags` for admin/private block)
 - Database operation:
   - Atomically deletes request from contact_requests and inserts one-way contact relationship into user_contacts with nickname = NULL
   - Returns outcome: "accepted" or "not_found"
@@ -253,6 +254,7 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   1. Payload must not be null and contact user ID must not be empty
   2. Contact user ID must be valid UUID format
   3. User cannot reject their own request (returns "self_action_not_allowed" error)
+  4. Block/privacy check via `checkBlockStatus` (`action_not_permitted` for user block, or `BlockStatusFlags` for admin/private block)
 - Database operation:
   - Deletes request from contact_requests
   - Returns outcome: "declined" or "not_found"
@@ -269,6 +271,7 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   1. Payload must not be null and contact user ID must not be empty
   2. Contact user ID must be valid UUID format
   3. User cannot undo another user's request (returns "self_action_not_allowed" error)
+  4. Block/privacy check via `checkBlockStatus` (`action_not_permitted` for user block, or `BlockStatusFlags` for admin/private block)
 - Database operation:
   - Deletes the pending request record entirely
 - Response messages:
@@ -303,6 +306,7 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   2. Each contact user ID must be non-empty after trimming
   3. Each contact user ID must be valid UUID format
   4. User cannot delete themselves as contact (returns "self_action_not_allowed" error)
+  5. Batch block/privacy check via `IsBlockedBetweenUsersBatch`: rejects if requester is admin-blocked (`self_admin_blocked`); if all targets are blocked, returns `action_not_permitted` (single pure user block), `BlockStatusFlags` (single admin/private block), or `all_contacts_blocked`; for mixed batches, deletes only unblocked targets
 - Batch deletion support:
   - Accepts array of contact user IDs
   - Deduplicates IDs using map to prevent duplicate operations
@@ -336,8 +340,9 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   1. Payload must not be null and contact user ID must not be empty
   2. Contact user ID must be valid UUID format
   3. User cannot update nickname for themselves (returns "self_action_not_allowed" error)
-  4. Contact must exist (returns "contact_not_found" error)
-  5. Nickname validation:
+  4. Block/privacy check via `checkBlockStatus` (`action_not_permitted` for user block, or `BlockStatusFlags` for admin/private block)
+  5. Contact must exist (returns "contact_not_found" error)
+  6. Nickname validation:
      - Trims whitespace before validation
      - If trimmed string is empty: Sets nickname to null (removes nickname)
      - If trimmed string exceeds 40 characters (Unicode character count): Returns "invalid_nickname_length" error
@@ -411,8 +416,9 @@ Hard exclusions do not delete the underlying relationship (e.g., the contact rec
   - Returns `rpc_personal_contact.v1.UnblockUserResponse` (`{ "status": true, "message": "user_unblocked", "contact": <Contact?>, "isInContacts": <bool>, "isInPeopleWhoAddedYou": <bool> }`).
 
 ### 5.4 Message Cleanup on Block
-- System automatically deletes message sync actions between users in both directions
-- Ensures no message_sync_actions remain after block is created
+- `cleanup_sync_actions_on_block` trigger fires on `user_blocks` insert to delete `message_sync_actions` for the shared chat between both users.
+- `BlockUser` triggers `CleanupChatMessagesForBlockAsync` in the background to register attached chat files in `pending_uploads`, delete the shared chat's `messages` rows transactionally, and delete the R2 objects asynchronously.
+- Hourly background workers (`CleanupExpiredMessages` and `CleanupDatabaseOnly`) also sweep any remaining blocked-user messages, R2 files, and sync actions.
 
 ### 5.5 Block Cascade Behavior
 - If user account is deleted: All block records are automatically removed via ON DELETE CASCADE
@@ -542,9 +548,9 @@ All contact and chat queries use identical LEFT JOIN pattern:
 ### 7.3 Primary Device Requirements
 
 #### 7.3.1 Platform Restriction
-- The primary device must be a native mobile platform (iOS or Android)
-- Web sessions cannot be designated as primary device
-- Platform values: 'ios', 'android', or 'web'
+- Intended policy: the primary device must be a native mobile platform (`ios` or `android`); `web` sessions cannot be manually promoted via `SetCentralDevice`.
+- Temporary behavior: `CreateSessionFlow` auto-promotes the first session on any platform (including `web`) when no primary session exists.
+- Platform values: `'ios'`, `'android'`, or `'web'`.
 
 #### 7.3.2 Device Switching Rules
 - Switching primary device should require the old primary device to be online
@@ -625,16 +631,16 @@ Stores plaintext usernames with random identifiers unlinked to user accounts.
 ---
 
 #### 8.1.3 avatars
-Stores user avatar information and access tokens.
+Stores user profile avatar records (Cloudflare R2 file references).
 
 **Columns:**
 - `id` (UUID, Primary Key) - Avatar record identifier
 - `user_id` (UUID, NOT NULL) - User identifier, references users(id)
-- `file_id` (TEXT) - File identifier for the avatar (nullable)
+- `file_id` (TEXT) - R2 prefixed file identifier for the avatar (nullable)
 - `avatar_type` (TEXT, NOT NULL, DEFAULT 'profile') - Avatar type
-- `token_id` (TEXT) - Access token identifier
-- `token_secret` (TEXT) - Access token secret
-- `token_expiry` (TIMESTAMPTZ) - Token expiration timestamp (current implementation requests now + 1 year)
+- `token_id` (TEXT) - Legacy/unused (`NULL`)
+- `token_secret` (TEXT) - Legacy/unused (`NULL`)
+- `token_expiry` (TIMESTAMPTZ) - Legacy/unused (`NULL`)
 - `created_at` (TIMESTAMPTZ, NOT NULL) - Record creation timestamp
 - `updated_at` (TIMESTAMPTZ, NOT NULL) - Record last update timestamp
 
@@ -653,11 +659,9 @@ Stores user avatar information and access tokens.
 **Triggers:**
 - `avatars_timestamps_trigger` - Automatic timestamp management via set_timestamps()
 
-**Token Management:**
-- Tokens expire after 1 year from creation (current implementation)
-- Refresh triggered if token is expired or expiry is invalid
-- Empty file_id returns null (no avatar)
-
+**URL Serving:**
+- `GetAvatarURL` generates a 15-minute R2 presigned GET URL from `file_id` (`r2PresignedURLLifetime`)
+- Empty/nil `file_id` returns `null` (no avatar)
 ---
 
 #### 8.1.4 sessions
@@ -671,6 +675,7 @@ Stores user session information including primary device designation.
 - `platform` (TEXT) - Platform type: 'ios', 'android', or 'web'
 - `device_name` (TEXT) - Human-readable device name
 - `is_central` (BOOLEAN, NOT NULL, DEFAULT FALSE) - Primary device designation
+- `e2ee_public_key` (CHAR(44)) - Base64-encoded X25519 public key for the session (`NULL` if E2EE not initialized)
 - `user_agent` (TEXT) - Browser/app user agent string
 - `ip_address` (TEXT) - IP address of the session
 - `expires_at` (TIMESTAMPTZ, NOT NULL) - Session expiration timestamp
@@ -682,6 +687,7 @@ Stores user session information including primary device designation.
 - Unique constraint on `token_hash`
 - Foreign key to auth_users(id) with CASCADE delete
 - Platform must be one of: 'ios', 'android', or 'web'
+- `e2ee_public_key IS NULL OR length(e2ee_public_key) = 44` (`sessions_e2ee_public_key_length_check`)
 
 **Indexes:**
 - Primary key on `id`
@@ -776,6 +782,7 @@ Stores block relationships between users.
 - Primary key on `id`
 - Unique index on `(blocker_user_id, blocked_user_id)`
 - Index on `blocked_user_id` for reverse lookups
+- `idx_user_blocks_pair_p1` on `(blocker_user_id, blocked_user_id)` and `idx_user_blocks_pair_p2` on `(blocked_user_id, blocker_user_id)` for bidirectional block-cleanup joins
 
 **Triggers:**
 - `user_blocks_timestamps_trigger` - Automatic timestamp management via set_timestamps()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -37,6 +38,13 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 	msgExpiredID := uuid.New()
 	msgAckedID := uuid.New()
 	msgBlockedID := uuid.New()
+
+	// Separate non-blocked pair so the fully-acknowledged gate is observable.
+	gateUser1ID := uuid.New()
+	gateUser2ID := uuid.New()
+	gateChatID := uuid.New()
+	gateAckedID := uuid.New()
+	gateExpiredID := uuid.New()
 
 	syncActionBlockedID := uuid.New()
 	syncActionOldID := uuid.New()
@@ -114,11 +122,11 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 	}
 	defer pool.Exec(ctx, "DELETE FROM user_blocks WHERE id = $1", userBlockID)
 
-	// Create Message A: Expired (no file_id)
+	// Create Message A: Expired (no file_id).
 	_, err = pool.Exec(ctx, `
-		INSERT INTO messages (id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, expires_at, created_at, updated_at) 
-		VALUES ($1, $2, $3, $4, 'Expired Msg', 'text', true, true, true, now() - INTERVAL '1 day', now(), now())`,
-		msgExpiredID, chatID, blockerID, blockedID)
+		INSERT INTO messages (id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, sender_session_id, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'Expired Msg', 'text', true, true, true, $5, now() - INTERVAL '1 day', now(), now())`,
+		msgExpiredID, chatID, blockerID, blockedID, sessionID)
 	if err != nil {
 		t.Fatalf("Failed to insert expired message: %v", err)
 	}
@@ -126,9 +134,9 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 
 	// Create Message B: Fully Acknowledged (no file_id, expires in future)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO messages (id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, expires_at, created_at, updated_at) 
-		VALUES ($1, $2, $3, $4, 'Acked Msg', 'text', true, true, true, now() + INTERVAL '1 day', now(), now())`,
-		msgAckedID, chatID, blockerID, blockedID)
+		INSERT INTO messages (id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, sender_session_id, read_by_recipient, read_acked_by_sender, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'Acked Msg', 'text', true, true, true, $5, true, true, now() + INTERVAL '1 day', now(), now())`,
+		msgAckedID, chatID, blockerID, blockedID, sessionID)
 	if err != nil {
 		t.Fatalf("Failed to insert acknowledged message: %v", err)
 	}
@@ -136,16 +144,79 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 
 	// Create Message C: Blocked User Chat Message (no file_id, expires in future)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO messages (id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, expires_at, created_at, updated_at) 
-		VALUES ($1, $2, $3, $4, 'Blocked Msg', 'text', false, false, false, now() + INTERVAL '1 day', now(), now())`,
-		msgBlockedID, chatID, blockerID, blockedID)
+		INSERT INTO messages (id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, sender_session_id, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'Blocked Msg', 'text', false, false, false, $5, now() + INTERVAL '1 day', now(), now())`,
+		msgBlockedID, chatID, blockerID, blockedID, sessionID)
 	if err != nil {
 		t.Fatalf("Failed to insert blocked chat message: %v", err)
 	}
 	defer pool.Exec(ctx, "DELETE FROM messages WHERE id = $1", msgBlockedID)
 
-	// Create Sync Action A: Blocked User Chat Sync Action
-	syncActionBlockedPayload := fmt.Sprintf(`{"chat_id": "%s"}`, chatID.String())
+	// Gate pair: a second chat WITHOUT a block, so the fully-acknowledged batch
+	// is the only job that can touch these rows.
+	gate1Sum := sha256.Sum256([]byte(gateUser1ID.String()))
+	gate2Sum := sha256.Sum256([]byte(gateUser2ID.String()))
+	_, err = pool.Exec(ctx, `
+		INSERT INTO auth_users (id, name, email, password_hash, is_email_verified, keys_revision, created_at, updated_at)
+		VALUES ($1, 'Gate One', $2, 'hash', true, 1, now(), now()),
+		       ($3, 'Gate Two', $4, 'hash', true, 1, now(), now())`,
+		gateUser1ID, fmt.Sprintf("gate1-%s@test.com", gateUser1ID.String()),
+		gateUser2ID, fmt.Sprintf("gate2-%s@test.com", gateUser2ID.String()))
+	if err != nil {
+		t.Fatalf("Failed to insert gate auth_users: %v", err)
+	}
+	defer pool.Exec(ctx, "DELETE FROM auth_users WHERE id IN ($1, $2)", gateUser1ID, gateUser2ID)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO users (id, name, profile_type, hmac_sha256_hex_username, b64_cipher_chacha20poly1305_username, created_at, updated_at)
+		VALUES ($1, 'Gate One', 'personal', $2, 'cipher3', now(), now()),
+		       ($3, 'Gate Two', 'personal', $4, 'cipher4', now(), now())`,
+		gateUser1ID, hex.EncodeToString(gate1Sum[:]), gateUser2ID, hex.EncodeToString(gate2Sum[:]))
+	if err != nil {
+		t.Fatalf("Failed to insert gate users: %v", err)
+	}
+	defer pool.Exec(ctx, "DELETE FROM users WHERE id IN ($1, $2)", gateUser1ID, gateUser2ID)
+
+	gateP1ID := gateUser1ID
+	gateP2ID := gateUser2ID
+	if gateP1ID.String() > gateP2ID.String() {
+		gateP1ID, gateP2ID = gateP2ID, gateP1ID
+	}
+	_, err = pool.Exec(ctx, `
+		INSERT INTO chats (id, participant_1_id, participant_2_id, p1_unread_count, p2_unread_count, created_at, updated_at)
+		VALUES ($1, $2, $3, 0, 0, now(), now())`,
+		gateChatID, gateP1ID, gateP2ID)
+	if err != nil {
+		t.Fatalf("Failed to insert gate chat: %v", err)
+	}
+	defer pool.Exec(ctx, "DELETE FROM chats WHERE id = $1", gateChatID)
+
+	// Fully acknowledged -> must be deleted by the batch.
+	_, err = pool.Exec(ctx, `
+		INSERT INTO messages (id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, sender_session_id, read_by_recipient, read_acked_by_sender, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'Gate Acked', 'text', true, true, true, $5, true, true, now() + INTERVAL '1 day', now(), now())`,
+		gateAckedID, gateChatID, gateUser1ID, gateUser2ID, sessionID)
+	if err != nil {
+		t.Fatalf("Failed to insert gate acknowledged message: %v", err)
+	}
+	defer pool.Exec(ctx, "DELETE FROM messages WHERE id = $1", gateAckedID)
+
+	// Expired without read ACK -> TTL exception still deletes it.
+	_, err = pool.Exec(ctx, `
+		INSERT INTO messages (id, chat_id, sender_id, recipient_id, content, message_type, delivered_to_recipient, delivered_to_recipient_primary, synced_to_sender_primary, sender_session_id, read_by_recipient, read_acked_by_sender, expires_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'Gate Expired', 'text', true, true, true, $5, true, false, now() - INTERVAL '1 day', now(), now())`,
+		gateExpiredID, gateChatID, gateUser1ID, gateUser2ID, sessionID)
+	if err != nil {
+		t.Fatalf("Failed to insert gate expired message: %v", err)
+	}
+	defer pool.Exec(ctx, "DELETE FROM messages WHERE id = $1", gateExpiredID)
+
+	// Create Sync Action A: Blocked User Chat Sync Action (using actual Go model serialization)
+	syncActionBlockedBytes, err := json.Marshal(SyncActionPayload{ChatID: chatID.String()})
+	if err != nil {
+		t.Fatalf("Failed to marshal SyncActionPayload: %v", err)
+	}
+	syncActionBlockedPayload := string(syncActionBlockedBytes)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO message_sync_actions (id, user_id, action_type, payload, delivered_to_primary, created_at, updated_at) 
 		VALUES ($1, $2, 'unsend', $3::jsonb, false, now(), now())`,
@@ -156,7 +227,11 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 	defer pool.Exec(ctx, "DELETE FROM message_sync_actions WHERE id = $1", syncActionBlockedID)
 
 	// Create Sync Action B: Old Sync Action (>30 days old)
-	syncActionOldPayload := `{"chat_id": "00000000-0000-0000-0000-000000000000"}`
+	syncActionOldBytes, err := json.Marshal(SyncActionPayload{ChatID: "00000000-0000-0000-0000-000000000000"})
+	if err != nil {
+		t.Fatalf("Failed to marshal SyncActionPayload: %v", err)
+	}
+	syncActionOldPayload := string(syncActionOldBytes)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO message_sync_actions (id, user_id, action_type, payload, delivered_to_primary, created_at, updated_at) 
 		VALUES ($1, $2, 'unsend', $3::jsonb, false, now(), now())`,
@@ -192,7 +267,7 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 	defer pool.Exec(ctx, "DELETE FROM history_sync WHERE id = $1", historySyncID)
 
 	// 4. Initialize Chat Service
-	s := NewChatService(nil, pool, nil, nil, nil, nil, nil)
+	s := NewChatService(nil, pool, pool, nil, nil, nil, nil, nil)
 
 	// Update statistics so query planner uses expression indexes for bulk tables
 	_, err = pool.Exec(ctx, "ANALYZE message_sync_actions")
@@ -234,6 +309,22 @@ func TestCleanupDatabaseOnlyIntegration(t *testing.T) {
 		t.Errorf("Failed to check blocked message: %v", err)
 	} else if count != 0 {
 		t.Error("Blocked message was not deleted!")
+	}
+
+	// Gate: fully acknowledged -> deleted.
+	err = pool.QueryRow(ctx, "SELECT count(*) FROM messages WHERE id = $1", gateAckedID).Scan(&count)
+	if err != nil {
+		t.Errorf("Failed to check gate acknowledged message: %v", err)
+	} else if count != 0 {
+		t.Error("Fully acknowledged message was not deleted!")
+	}
+
+	// TTL exception: expired rows are deleted regardless of read ACK.
+	err = pool.QueryRow(ctx, "SELECT count(*) FROM messages WHERE id = $1", gateExpiredID).Scan(&count)
+	if err != nil {
+		t.Errorf("Failed to check gate expired message: %v", err)
+	} else if count != 0 {
+		t.Error("Expired message was not deleted by TTL cleanup!")
 	}
 
 	// Check Blocked Sync Action
@@ -378,7 +469,7 @@ func TestCleanupDatabaseOnlyCancellation(t *testing.T) {
 	}
 	defer pool.Close()
 
-	s := NewChatService(nil, pool, nil, nil, nil, nil, nil)
+	s := NewChatService(nil, pool, pool, nil, nil, nil, nil, nil)
 
 	// Since ctx is cancelled, CleanupDatabaseOnly must immediately abort and return context.Canceled
 	err = s.CleanupDatabaseOnly(ctx)
@@ -399,4 +490,3 @@ func getTestDSN(t *testing.T) string {
 	}
 	return dsn
 }
-

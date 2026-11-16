@@ -215,7 +215,7 @@ func NewR2ClientPool(cfg *appconfig.R2PoolConfig) (*R2ClientPool, error) {
 
 // SetActiveAccounts updates the list of accounts used for round-robin.
 // Removed accounts will not receive new uploads but remain in the map for
-// safe retrieval/deletion of existing files (per spec §3.B).
+// safe retrieval/deletion of existing files.
 func (p *R2ClientPool) SetActiveAccounts(names []string) {
 	if len(names) == 0 {
 		p.activeChatAccounts = p.activeChatAccounts[:0]
@@ -282,7 +282,7 @@ func (p *R2ClientPool) GetClient(fileID string) *R2Client {
 }
 
 // GetClientByAccount returns the R2 client for a given account name directly.
-// Falls back to the primary client if the account name is empty or retired (per spec §3.E).
+// Falls back to the primary client if the account name is empty or retired.
 func (p *R2ClientPool) GetClientByAccount(accountName string) *R2Client {
 	if accountName != "" {
 		if client, ok := p.clients[accountName]; ok {

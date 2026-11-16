@@ -23,52 +23,6 @@ func (q *Queries) CheckEmailExists(ctx context.Context, email string) (bool, err
 	return exists, err
 }
 
-const checkHasCentralDevice = `-- name: CheckHasCentralDevice :one
-SELECT EXISTS (
-        SELECT 1
-        FROM sessions
-        WHERE
-            auth_user_id = $1
-            AND is_central = TRUE
-    )
-`
-
-// Checks if the user already has a central device
-func (q *Queries) CheckHasCentralDevice(ctx context.Context, authUserID uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, checkHasCentralDevice, authUserID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const checkSessionIsValid = `-- name: CheckSessionIsValid :one
-
-SELECT EXISTS (
-        SELECT 1
-        FROM sessions
-        WHERE
-            token_hash = $1
-            AND auth_user_id = $2
-            AND expires_at > now()
-    )
-`
-
-type CheckSessionIsValidParams struct {
-	TokenHash  string    `json:"token_hash"`
-	AuthUserID uuid.UUID `json:"auth_user_id"`
-}
-
-// ======================================
-// Auth Queries
-// ======================================
-// Checks if a session is valid for a specific user and not expired
-func (q *Queries) CheckSessionIsValid(ctx context.Context, arg CheckSessionIsValidParams) (bool, error) {
-	row := q.db.QueryRow(ctx, checkSessionIsValid, arg.TokenHash, arg.AuthUserID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const createAuthUser = `-- name: CreateAuthUser :one
 INSERT INTO
     auth_users (
@@ -290,20 +244,6 @@ func (q *Queries) DeleteAllUserSessions(ctx context.Context, authUserID uuid.UUI
 	return err
 }
 
-const deleteAllVerificationCodesForEmail = `-- name: DeleteAllVerificationCodesForEmail :exec
-DELETE FROM verification_codes WHERE email = $1 AND type = $2
-`
-
-type DeleteAllVerificationCodesForEmailParams struct {
-	Email string `json:"email"`
-	Type  string `json:"type"`
-}
-
-func (q *Queries) DeleteAllVerificationCodesForEmail(ctx context.Context, arg DeleteAllVerificationCodesForEmailParams) error {
-	_, err := q.db.Exec(ctx, deleteAllVerificationCodesForEmail, arg.Email, arg.Type)
-	return err
-}
-
 const deleteAuthUser = `-- name: DeleteAuthUser :exec
 DELETE FROM auth_users WHERE id = $1
 `
@@ -311,20 +251,6 @@ DELETE FROM auth_users WHERE id = $1
 // Delete auth user (cascade will automatically delete sessions and verification_codes)
 func (q *Queries) DeleteAuthUser(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteAuthUser, id)
-	return err
-}
-
-const deleteSession = `-- name: DeleteSession :exec
-DELETE FROM sessions WHERE id = $1 AND auth_user_id = $2
-`
-
-type DeleteSessionParams struct {
-	ID         uuid.UUID `json:"id"`
-	AuthUserID uuid.UUID `json:"auth_user_id"`
-}
-
-func (q *Queries) DeleteSession(ctx context.Context, arg DeleteSessionParams) error {
-	_, err := q.db.Exec(ctx, deleteSession, arg.ID, arg.AuthUserID)
 	return err
 }
 
@@ -449,9 +375,13 @@ func (q *Queries) GetCentralSession(ctx context.Context, authUserID uuid.UUID) (
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
+
 SELECT id, auth_user_id, token_hash, device_token, platform, device_name, is_central, e2ee_public_key, user_agent, ip_address, expires_at, created_at, updated_at FROM sessions WHERE id = $1
 `
 
+// ======================================
+// Auth Queries
+// ======================================
 func (q *Queries) GetSessionByID(ctx context.Context, id uuid.UUID) (Session, error) {
 	row := q.db.QueryRow(ctx, getSessionByID, id)
 	var i Session
@@ -581,26 +511,6 @@ WHERE
 
 func (q *Queries) ResetVerifyErrors(ctx context.Context, authUserID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, resetVerifyErrors, authUserID)
-	return err
-}
-
-const setSessionCentral = `-- name: SetSessionCentral :exec
-UPDATE sessions
-SET
-    is_central = TRUE
-WHERE
-    id = $1
-    AND auth_user_id = $2
-`
-
-type SetSessionCentralParams struct {
-	ID         uuid.UUID `json:"id"`
-	AuthUserID uuid.UUID `json:"auth_user_id"`
-}
-
-// Sets is_central = true for a specific session
-func (q *Queries) SetSessionCentral(ctx context.Context, arg SetSessionCentralParams) error {
-	_, err := q.db.Exec(ctx, setSessionCentral, arg.ID, arg.AuthUserID)
 	return err
 }
 

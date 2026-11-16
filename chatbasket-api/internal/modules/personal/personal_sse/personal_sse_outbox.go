@@ -65,11 +65,12 @@ func shouldUseOutbox(payload postgresSsePayload, eventBytes []byte) bool {
 // sweepBatchSize bounds one DELETE so a huge orphan pile makes progress
 // batch by batch instead of rolling back one giant statement on timeout.
 const sweepBatchSize = 1000
+const sweepThrottleSleep = 50 * time.Millisecond
 
 // StartSweeper deletes expired outbox rows periodically. Rows are retained
 // for outboxTTL to allow all cluster nodes to hydrate during multi-node fanout.
 func (m *Manager) StartSweeper(ctx context.Context) {
-	if m == nil || m.pool == nil {
+	if m == nil || m.maintenancePool == nil {
 		return
 	}
 	ticker := time.NewTicker(outboxSweepInterval)
@@ -79,18 +80,30 @@ func (m *Manager) StartSweeper(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sctx, scancel := context.WithTimeout(ctx, sweepTimeout)
-			for {
-				n, err := m.postgresQueries.DeleteExpiredSseOutboxBatch(sctx, sweepBatchSize)
-				if err != nil {
-					log.Printf("[personal_sse] outbox sweep failed: %v", err)
-					break
-				}
-				if n == 0 || sctx.Err() != nil {
-					break
-				}
-			}
-			scancel()
+			m.sweepOutbox(ctx)
+		}
+	}
+}
+
+func (m *Manager) sweepOutbox(ctx context.Context) {
+	sctx, scancel := context.WithTimeout(ctx, sweepTimeout)
+	defer scancel()
+	for {
+		n, err := m.maintenancePostgresQueries.DeleteExpiredSseOutboxBatch(sctx, sweepBatchSize)
+		if err != nil {
+			log.Printf("[personal_sse] outbox sweep failed: %v", err)
+			break
+		}
+		// If 0 rows were deleted or fewer than batchSize were deleted, all expired rows are cleared early.
+		if n == 0 || n < sweepBatchSize || sctx.Err() != nil {
+			break
+		}
+		select {
+		case <-sctx.Done():
+		case <-time.After(sweepThrottleSleep):
+		}
+		if sctx.Err() != nil {
+			break
 		}
 	}
 }

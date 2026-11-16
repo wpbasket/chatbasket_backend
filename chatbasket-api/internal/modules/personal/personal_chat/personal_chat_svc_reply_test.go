@@ -8,6 +8,7 @@ import (
 
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
 	"chatbasket-api/internal/platform/kit"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v5"
@@ -17,7 +18,7 @@ import (
 
 func replyMsgCols() []string {
 	return []string{"id", "chat_id", "sender_id", "recipient_id",
-		"content", "message_type",
+		"content", "message_type", "reply_to_message_id",
 		"file_id", "file_name", "file_size", "file_mime_type",
 		"file_token_id", "file_token_secret", "file_token_expiry",
 		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
@@ -25,7 +26,8 @@ func replyMsgCols() []string {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
+		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"sender_session_id"}
 }
 
 func addStoredMessage(mock pgxmock.PgxPoolIface, msgID, chatID, senderID, recipientID uuid.UUID) {
@@ -33,13 +35,14 @@ func addStoredMessage(mock pgxmock.PgxPoolIface, msgID, chatID, senderID, recipi
 	mock.ExpectQuery(`SELECT (.+) FROM messages WHERE id =`).WithArgs(msgID).WillReturnRows(
 		pgxmock.NewRows(replyMsgCols()).AddRow(
 			msgID, chatID, senderID, recipientID,
-			"orig-content", "text",
+			"orig-content", "text", nil,
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
 			false, false, false,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			uuid.New(),
 		),
 	)
 }
@@ -175,6 +178,7 @@ func TestSendMessage_WithValidReplyStoresID(t *testing.T) {
 	chatID := uuid.New()
 	messageID := uuid.New()
 	replyID := uuid.New()
+	sessionID := uuid.New()
 	now := time.Now()
 
 	mock, err := pgxmock.NewPool()
@@ -191,6 +195,9 @@ func TestSendMessage_WithValidReplyStoresID(t *testing.T) {
 
 	// Idempotency: new message does not exist.
 	mock.ExpectQuery(`SELECT EXISTS.*messages`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(false),
+	)
+	mock.ExpectQuery(`SELECT EXISTS.*message_history`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows([]string{"exists"}).AddRow(false),
 	)
 	// Reply target exists in the same conversation.
@@ -210,13 +217,14 @@ func TestSendMessage_WithValidReplyStoresID(t *testing.T) {
 			int32(0), int32(0), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, now, now,
 		),
 	)
-	mock.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "reply", "text", pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), &replyID).WillReturnRows(
+	mock.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "reply", "text", pgxmock.AnyArg(), true, sessionID, pgxmock.AnyArg(), &replyID).WillReturnRows(
 		pgxmock.NewRows(replyMsgCols()).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
-			"reply", "text", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-			false, false, true, false, false, int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, &replyID,
+			"reply", "text", &replyID, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			false, false, true, false, false, int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, sessionID,
 		),
 	)
+	mock.ExpectExec(`INSERT INTO message_history`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectExec(`UPDATE.*chats`).WithArgs(chatID, pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 	svc := &chatService{
@@ -234,6 +242,7 @@ func TestSendMessage_WithValidReplyStoresID(t *testing.T) {
 		Content:               "reply",
 		MessageType:           "text",
 		IsPrimary:             true,
+		SessionUUID:           sessionID,
 		RecipientKeysRevision: 5,
 		SenderKeysRevision:    0,
 		ReplyToMessageID:      &replyID,
@@ -250,6 +259,7 @@ func TestSendMessage_WithNilUUIDReplyPersistsNull(t *testing.T) {
 	chatID := uuid.New()
 	messageID := uuid.New()
 	nilID := uuid.Nil
+	sessionID := uuid.New()
 	now := time.Now()
 
 	mock, err := pgxmock.NewPool()
@@ -268,6 +278,9 @@ func TestSendMessage_WithNilUUIDReplyPersistsNull(t *testing.T) {
 	mock.ExpectQuery(`SELECT EXISTS.*messages`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows([]string{"exists"}).AddRow(false),
 	)
+	mock.ExpectQuery(`SELECT EXISTS.*message_history`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(false),
+	)
 	// uuid.Nil skips the reply-target lookup in the validator (early-allow).
 
 	chatCols := []string{"id", "participant_1_id", "participant_2_id",
@@ -284,14 +297,15 @@ func TestSendMessage_WithNilUUIDReplyPersistsNull(t *testing.T) {
 			int32(0), int32(0), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, now, now,
 		),
 	)
-	// The 10th INSERT arg must be NULL (typed nil), never &uuid.Nil.
-	mock.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "hi", "text", pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), (*uuid.UUID)(nil)).WillReturnRows(
+	// The reply arg must be NULL (typed nil), never &uuid.Nil.
+	mock.ExpectQuery(`INSERT INTO.*messages`).WithArgs(messageID, chatID, senderID.UuidUserId, recipientID, "hi", "text", pgxmock.AnyArg(), true, sessionID, pgxmock.AnyArg(), (*uuid.UUID)(nil)).WillReturnRows(
 		pgxmock.NewRows(replyMsgCols()).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
-			"hi", "text", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-			false, false, true, false, false, int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
+			"hi", "text", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+			false, false, true, false, false, int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, sessionID,
 		),
 	)
+	mock.ExpectExec(`INSERT INTO message_history`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mock.ExpectExec(`UPDATE.*chats`).WithArgs(chatID, pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 	svc := &chatService{
@@ -309,6 +323,7 @@ func TestSendMessage_WithNilUUIDReplyPersistsNull(t *testing.T) {
 		Content:               "hi",
 		MessageType:           "text",
 		IsPrimary:             true,
+		SessionUUID:           sessionID,
 		RecipientKeysRevision: 5,
 		ReplyToMessageID:      &nilID,
 	})
@@ -336,6 +351,9 @@ func TestSendMessage_WithCrossConversationReplyRejected(t *testing.T) {
 	}
 
 	mock.ExpectQuery(`SELECT EXISTS.*messages`).WithArgs(messageID).WillReturnRows(
+		pgxmock.NewRows([]string{"exists"}).AddRow(false),
+	)
+	mock.ExpectQuery(`SELECT EXISTS.*message_history`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows([]string{"exists"}).AddRow(false),
 	)
 	// Reply target belongs to a different pair.
@@ -399,13 +417,13 @@ func TestSendMessage_IdempotentRetry_PreservesReplyID(t *testing.T) {
 	mock.ExpectQuery(`SELECT (.+) FROM messages WHERE id =`).WithArgs(messageID).WillReturnRows(
 		pgxmock.NewRows(replyMsgCols()).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
-			"reply", "text",
+			"reply", "text", &replyID,
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
 			false, false, true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, &replyID,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, uuid.New(),
 		),
 	)
 
@@ -460,13 +478,13 @@ func TestGetMessagesHandler_SurfacesReplyID(t *testing.T) {
 	mock.ExpectQuery(`SELECT (.+) FROM messages`).WithArgs(chatID, int32(50), sessionCreatedAt, userID, (*time.Time)(nil), (*uuid.UUID)(nil)).WillReturnRows(
 		pgxmock.NewRows(replyMsgCols()).AddRow(
 			messageID, chatID, otherID, userID,
-			"cipher", "text",
+			"cipher", "text", &replyID,
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
 			false, false, false,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, &replyID,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, uuid.New(),
 		),
 	)
 
@@ -518,25 +536,26 @@ func TestGetPendingMessagesHandler_SurfacesReplyID(t *testing.T) {
 
 	msgCols := []string{
 		"id", "chat_id", "sender_id", "recipient_id",
-		"content", "message_type", "file_id", "file_name",
+		"content", "message_type", "reply_to_message_id", "file_id", "file_name",
 		"file_size", "file_mime_type", "file_token_id", "file_token_secret",
 		"file_token_expiry", "thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
 		"delivered_to_recipient", "delivered_to_recipient_primary", "synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient", "delivery_attempts",
 		"expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id",
+		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"sender_session_id",
 	}
 	// Recipient stream: one reply-carrying message.
 	mockPool.ExpectQuery("SELECT (.+) FROM messages").
 		WithArgs(userID, int32(200), sessionCreatedAt, (*time.Time)(nil), (*uuid.UUID)(nil)).
 		WillReturnRows(pgxmock.NewRows(msgCols).AddRow(
 			uuid.New(), uuid.New(), sender, userID,
-			"reply cipher", "text", nil, nil,
+			"reply cipher", "text", &replyID, nil, nil,
 			nil, nil, nil, nil,
 			nil, nil, nil, nil,
 			false, false, false,
 			false, false, int32(0),
-			nowTime.Add(1*time.Hour), nowTime, nowTime, false, false, nil, &replyID,
+			nowTime.Add(1*time.Hour), nowTime, nowTime, false, false, nil, uuid.New(),
 		))
 
 	// Sender stream: empty.

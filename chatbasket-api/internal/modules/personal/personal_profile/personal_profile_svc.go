@@ -46,19 +46,26 @@ type profileService struct {
 	PostgresQuerier     personal_profile_store.Querier
 	PostgresQueries     *personal_profile_store.Queries
 	Pool                *pgxpool.Pool
+	MaintenanceQuerier  personal_profile_store.Querier
+	MaintenanceQueries  *personal_profile_store.Queries
+	MaintenancePool     *pgxpool.Pool
 	AuthProvider        coreAuthProfileProvider
 	PersonalUsernameKey []byte
 	R2Pool              *clients.R2ClientPool
 	PendingUploads      pendingUploadsProfileProvider
 }
 
-func NewProfileService(globalService *services.GlobalService, pool *pgxpool.Pool, authProvider coreAuthProfileProvider, personalUsernameKey []byte, pendingUploads pendingUploadsProfileProvider, r2Pool *clients.R2ClientPool) *profileService {
+func NewProfileService(globalService *services.GlobalService, pool *pgxpool.Pool, maintenancePool *pgxpool.Pool, authProvider coreAuthProfileProvider, personalUsernameKey []byte, pendingUploads pendingUploadsProfileProvider, r2Pool *clients.R2ClientPool) *profileService {
 	store := personal_profile_store.New(pool)
+	maintenanceStore := personal_profile_store.New(maintenancePool)
 	return &profileService{
 		GlobalService:       globalService,
 		PostgresQuerier:     store,
 		PostgresQueries:     store,
 		Pool:                pool,
+		MaintenanceQuerier:  maintenanceStore,
+		MaintenanceQueries:  maintenanceStore,
+		MaintenancePool:     maintenancePool,
 		AuthProvider:        authProvider,
 		PersonalUsernameKey: personalUsernameKey,
 		R2Pool:              r2Pool,
@@ -466,7 +473,7 @@ func (ps *profileService) deleteAvatarFromR2(ctx context.Context, fileID string)
 		return ps.R2Pool.PrimaryProfileClient().DeleteFile(ctx, ps.R2Pool.PrimaryProfileClient().ProfileBucket(), fileID)
 	}
 	if !ps.R2Pool.HasClient(accountName) {
-		// Per spec §3.E: account retired, skip R2 delete (safe — DB delete will follow)
+		// Account retired: skip R2 delete (safe — DB delete will follow)
 		log.Printf("[Avatar Cleanup] WARNING: Account '%s' not in pool, skipping R2 delete for stale avatar %s", accountName, fileID)
 		return nil
 	}

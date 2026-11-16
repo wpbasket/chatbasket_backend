@@ -109,6 +109,7 @@ type Message struct {
 	RecipientID                 uuid.UUID  `json:"recipient_id"`
 	Content                     string     `json:"content"`
 	MessageType                 string     `json:"message_type"`
+	ReplyToMessageID            *uuid.UUID `json:"reply_to_message_id"`
 	FileID                      *string    `json:"file_id"`
 	FileName                    *string    `json:"file_name"`
 	FileSize                    *int64     `json:"file_size"`
@@ -131,7 +132,12 @@ type Message struct {
 	ReadByRecipient             bool       `json:"read_by_recipient"`
 	ReadAckedBySender           bool       `json:"read_acked_by_sender"`
 	ReadAt                      *time.Time `json:"read_at"`
-	ReplyToMessageID            *uuid.UUID `json:"reply_to_message_id"`
+	SenderSessionID             uuid.UUID  `json:"sender_session_id"`
+}
+
+type MessageHistory struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type MessageSyncAction struct {

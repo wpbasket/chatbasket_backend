@@ -117,7 +117,7 @@ type ChatServiceClient interface {
 	ConfirmUpload(context.Context, *connect.Request[personal_chat.ConfirmChatUploadRequest]) (*connect.Response[personal_chat.ConfirmChatUploadResponse], error)
 	GetFileURL(context.Context, *connect.Request[personal_chat.GetFileURLRequest]) (*connect.Response[personal_chat.GetFileURLResponse], error)
 	MarkChatRead(context.Context, *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[personal_chat.MarkChatReadResponse], error)
-	UnsendMessage(context.Context, *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[model.StatusOkay], error)
+	UnsendMessage(context.Context, *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[personal_chat.UnsendMessageResponse], error)
 	DeleteMessageForMe(context.Context, *connect.Request[personal_chat.DeleteMessageForMeRequest]) (*connect.Response[model.StatusOkay], error)
 	GetSyncActions(context.Context, *connect.Request[personal_chat.GetSyncActionsRequest]) (*connect.Response[personal_chat.GetSyncActionsResponse], error)
 	AcknowledgeSyncAction(context.Context, *connect.Request[personal_chat.AcknowledgeSyncActionRequest]) (*connect.Response[model.StatusOkay], error)
@@ -223,7 +223,7 @@ func NewChatServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(chatServiceMethods.ByName("MarkChatRead")),
 			connect.WithClientOptions(opts...),
 		),
-		unsendMessage: connect.NewClient[personal_chat.UnsendMessageRequest, model.StatusOkay](
+		unsendMessage: connect.NewClient[personal_chat.UnsendMessageRequest, personal_chat.UnsendMessageResponse](
 			httpClient,
 			baseURL+ChatServiceUnsendMessageProcedure,
 			connect.WithSchema(chatServiceMethods.ByName("UnsendMessage")),
@@ -296,7 +296,7 @@ type chatServiceClient struct {
 	confirmUpload               *connect.Client[personal_chat.ConfirmChatUploadRequest, personal_chat.ConfirmChatUploadResponse]
 	getFileURL                  *connect.Client[personal_chat.GetFileURLRequest, personal_chat.GetFileURLResponse]
 	markChatRead                *connect.Client[personal_chat.MarkChatReadRequest, personal_chat.MarkChatReadResponse]
-	unsendMessage               *connect.Client[personal_chat.UnsendMessageRequest, model.StatusOkay]
+	unsendMessage               *connect.Client[personal_chat.UnsendMessageRequest, personal_chat.UnsendMessageResponse]
 	deleteMessageForMe          *connect.Client[personal_chat.DeleteMessageForMeRequest, model.StatusOkay]
 	getSyncActions              *connect.Client[personal_chat.GetSyncActionsRequest, personal_chat.GetSyncActionsResponse]
 	acknowledgeSyncAction       *connect.Client[personal_chat.AcknowledgeSyncActionRequest, model.StatusOkay]
@@ -378,7 +378,7 @@ func (c *chatServiceClient) MarkChatRead(ctx context.Context, req *connect.Reque
 }
 
 // UnsendMessage calls rpc_personal_chat.v1.ChatService.UnsendMessage.
-func (c *chatServiceClient) UnsendMessage(ctx context.Context, req *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[model.StatusOkay], error) {
+func (c *chatServiceClient) UnsendMessage(ctx context.Context, req *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[personal_chat.UnsendMessageResponse], error) {
 	return c.unsendMessage.CallUnary(ctx, req)
 }
 
@@ -438,7 +438,7 @@ type ChatServiceHandler interface {
 	ConfirmUpload(context.Context, *connect.Request[personal_chat.ConfirmChatUploadRequest]) (*connect.Response[personal_chat.ConfirmChatUploadResponse], error)
 	GetFileURL(context.Context, *connect.Request[personal_chat.GetFileURLRequest]) (*connect.Response[personal_chat.GetFileURLResponse], error)
 	MarkChatRead(context.Context, *connect.Request[personal_chat.MarkChatReadRequest]) (*connect.Response[personal_chat.MarkChatReadResponse], error)
-	UnsendMessage(context.Context, *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[model.StatusOkay], error)
+	UnsendMessage(context.Context, *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[personal_chat.UnsendMessageResponse], error)
 	DeleteMessageForMe(context.Context, *connect.Request[personal_chat.DeleteMessageForMeRequest]) (*connect.Response[model.StatusOkay], error)
 	GetSyncActions(context.Context, *connect.Request[personal_chat.GetSyncActionsRequest]) (*connect.Response[personal_chat.GetSyncActionsResponse], error)
 	AcknowledgeSyncAction(context.Context, *connect.Request[personal_chat.AcknowledgeSyncActionRequest]) (*connect.Response[model.StatusOkay], error)
@@ -707,7 +707,7 @@ func (UnimplementedChatServiceHandler) MarkChatRead(context.Context, *connect.Re
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.MarkChatRead is not implemented"))
 }
 
-func (UnimplementedChatServiceHandler) UnsendMessage(context.Context, *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[model.StatusOkay], error) {
+func (UnimplementedChatServiceHandler) UnsendMessage(context.Context, *connect.Request[personal_chat.UnsendMessageRequest]) (*connect.Response[personal_chat.UnsendMessageResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("rpc_personal_chat.v1.ChatService.UnsendMessage is not implemented"))
 }
 

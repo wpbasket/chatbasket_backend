@@ -1,14 +1,16 @@
 package core_auth
 
 import (
+	"context"
+	"errors"
 	"log"
 	rpc_common_modelv1 "chatbasket-api/gen/proto/common/model"
 	rpc_core_authv1 "chatbasket-api/gen/proto/core/core_auth"
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"chatbasket-api/internal/platform/clients"
 	"chatbasket-api/internal/platform/kit"
-	"context"
 	"net/http"
+
 	"time"
 
 	"github.com/google/uuid"
@@ -253,7 +255,10 @@ func (s *AuthService) ConfirmPasswordUpdate(ctx context.Context, payload *Confir
 		Type: "password_update",
 	})
 	if err != nil {
-		return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Internal server error")
 	}
 
 	// 4. Verify update_id matches
@@ -410,7 +415,10 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 		Type: "email_update",
 	})
 	if err != nil {
-		return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Internal server error")
 	}
 
 	// 4. Verify update_id matches
@@ -472,7 +480,7 @@ func (s *AuthService) ConfirmEmailUpdate(ctx context.Context, payload *ConfirmEm
 //   1. Checks rate limit & validates payload.
 //   2. Begins a PostgreSQL transaction (pgx.Tx).
 //   3. Validates OTP and deletes the verification code within tx.
-//   4. Calls RegisterCleanupFilesTx on registered cleanup providers (profile, chat) to discover
+//   4. Calls RegisterProfileCleanupTx and RegisterChatCleanupFilesTx on registered cleanup providers to discover
 //      avatar and all chat message files in batched loop and register them in pending_uploads within tx.
 //   5. Deletes the auth_user row (triggering PostgreSQL ON DELETE CASCADE across all 17 relational tables).
 //   6. Commits the transaction atomically.
@@ -508,7 +516,10 @@ func (s *AuthService) DeletePersonalAccount(ctx context.Context, payload *Delete
 		Type: "account_deletion",
 	})
 	if err != nil {
-		return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Internal server error")
 	}
 
 	// 6. Verify update_id matches
@@ -540,7 +551,7 @@ func (s *AuthService) DeletePersonalAccount(ctx context.Context, payload *Delete
 
 	// 10. Lock users.id FIRST (same door the messaging gate probes with NOWAIT).
 	// Held until commit: any send involving this user fails instantly with
-	// account_deletion_in_progress instead of slipping a message in.
+	// messaging_not_allowed (and avatar operations fail with account_deletion_in_progress) instead of slipping in.
 	if s.profileCleanupProvider != nil {
 		if err := s.profileCleanupProvider.LockUserForDeletionTx(ctx, tx, userID); err != nil {
 			log.Printf("[DeletePersonalAccount] ERROR: LockUserForDeletionTx failed for user %s: %v", userID, err)
@@ -591,7 +602,7 @@ func (s *AuthService) DeletePersonalAccount(ctx context.Context, payload *Delete
 
 	log.Printf("[DeletePersonalAccount] Successfully deleted user account %s in transaction (avatar files: %d, chat files: %d)", userID, len(avatarFileIDs), len(chatFileIDs))
 
-	// 15. Post-commit: Execute Cloudflare R2 deletions asynchronously in the background
+	// 14. Post-commit: Execute Cloudflare R2 deletions asynchronously in the background
 	if len(avatarFileIDs) > 0 && s.profileCleanupProvider != nil {
 		go func(files []string, provider personalProfileAuthCleanupProvider) {
 			bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)

@@ -1,4 +1,4 @@
-﻿package clients
+package clients
 
 import (
 	"chatbasket-api/internal/platform/config"
@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ConnectPostgres creates a new PostgreSQL connection pool, ported from chatbasket-api/db/pool.go:NewPool
+// ConnectPostgres creates a new PostgreSQL connection pool.
 func ConnectPostgres(ctx context.Context, cfg *config.PostgresConfig) (*pgxpool.Pool, error) {
 	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {

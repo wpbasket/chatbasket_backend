@@ -8,20 +8,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
-// R2 Presigned URL lifetime (per spec §3.D — 15 minutes)
+// R2 Presigned URL lifetime (15 minutes)
 const r2PresignedURLLifetime = 15 * time.Minute
 
-// Pending upload TTL (per spec §4.A — 2 hours)
+// Pending upload TTL (2 hours)
 const pendingUploadTTL = 2 * time.Hour
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -142,15 +143,21 @@ func (s *chatService) PresignChatUpload(ctx context.Context, params PresignChatU
 
 // ConfirmChatUpload verifies the pending upload, creates the message record,
 // deletes the pending_uploads row, and updates chat status — all in a single
-// transaction. Per spec §6.A.3.
+// transaction.
 func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatUploadParams) (*personal_chat_store.Message, error) {
 	// Idempotency check:
 	if s.PostgresQueries != nil && params.MessageID != uuid.Nil {
+		// Tier 1: Check active messages table
 		if exists, err := s.PostgresQueries.CheckMessageExists(ctx, params.MessageID); err == nil && exists {
 			log.Printf("[E2EE] ConfirmChatUpload: IDEMPOTENT RETRY — message %s already exists. Fetching existing message.", params.MessageID)
 			if existingMsg, err := s.PostgresQueries.GetMessageByID(ctx, params.MessageID); err == nil {
 				return &existingMsg, nil
 			}
+		}
+		// Tier 2: Check message_history table (purged tombstone)
+		if recorded, err := s.PostgresQueries.CheckMessageHistoryExists(ctx, params.MessageID); err == nil && recorded {
+			log.Printf("[E2EE] ConfirmChatUpload: DUPLICATE BLOCKED — message %s was already delivered and purged from relay.", params.MessageID)
+			return nil, kit.NewError(http.StatusConflict, "message_already_purged", "Message was already delivered and purged from relay")
 		}
 	}
 
@@ -200,13 +207,13 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 	content := params.Content
 
 	message, dbErr := qtx.CreateMessageWithFile(ctx, personal_chat_store.CreateMessageWithFileParams{
-		ID:                          params.MessageID,
-		ChatID:                      chat.ID,
-		SenderID:                    params.SenderID.UuidUserId,
-		RecipientID:                 params.RecipientID,
-		Content:                     content,
-		MessageType:                 params.MessageType,
-		FileID:                      &fileID,
+		ID:          params.MessageID,
+		ChatID:      chat.ID,
+		SenderID:    params.SenderID.UuidUserId,
+		RecipientID: params.RecipientID,
+		Content:     content,
+		MessageType: params.MessageType,
+		FileID:      &fileID,
 		// E2EE media uploads are ciphertext; original name/MIME/size live inside the
 		// encrypted message content envelope, not in backend metadata.
 		FileName:                    nil,
@@ -217,6 +224,7 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 		FileTokenExpiry:             nil,
 		ExpiresAt:                   expiresAt,
 		SyncedToSenderPrimary:       params.IsPrimary,
+		SenderSessionID:             params.SessionUUID,
 		DeliveredToRecipientPrimary: false,
 		ReplyToMessageID:            params.ReplyToMessageID,
 	})
@@ -231,6 +239,14 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 			}
 		}
 		return nil, kit.NewError(http.StatusInternalServerError, "message_create_failed", pgErr.Message)
+	}
+
+	if err := qtx.RecordMessageHistory(ctx, personal_chat_store.RecordMessageHistoryParams{
+		ID:        message.ID,
+		CreatedAt: message.CreatedAt,
+	}); err != nil {
+		log.Printf("[E2EE] ConfirmChatUpload: failed to record message history for %s: %v", message.ID, err)
+		return nil, kit.NewError(http.StatusInternalServerError, "message_history_record_failed", err.Error())
 	}
 
 	// 4. Update chat status (in tx)
@@ -260,10 +276,10 @@ func (s *chatService) ConfirmChatUpload(ctx context.Context, params ConfirmChatU
 // ──────────────────────────────────────────────────────────────────────────────
 
 // DeleteChatFile removes a file from R2. Idempotent (handles NoSuchKey internally).
-// If account prefix references a missing account (retired per spec §3.E), falls
-// back to primary client.
+// Unprefixed legacy IDs use the primary chat client; if an account prefix is not
+// in the pool (retired account), it logs a warning and skips R2 deletion.
 func (s *chatService) DeleteChatFile(ctx context.Context, fileID string) error {
-	if fileID == "" {
+	if fileID == "" || s.R2Pool == nil {
 		return nil
 	}
 	accountName, objectKey := clients.ParseFilePrefix(fileID)
@@ -298,6 +314,7 @@ type ConfirmChatUploadParams struct {
 	Content               string
 	MessageType           string
 	IsPrimary             bool
+	SessionUUID           uuid.UUID
 	RecipientKeysRevision int32
 	SenderKeysRevision    int32
 	ReplyToMessageID      *uuid.UUID

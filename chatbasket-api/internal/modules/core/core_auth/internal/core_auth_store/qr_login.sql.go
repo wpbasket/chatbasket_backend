@@ -31,14 +31,24 @@ func (q *Queries) ApproveQRLogin(ctx context.Context, arg ApproveQRLoginParams) 
 	return id, err
 }
 
-const cleanupExpiredQRLoginRequests = `-- name: CleanupExpiredQRLoginRequests :exec
-DELETE FROM qr_login_requests
-WHERE expires_at < NOW()
+const cleanupExpiredQRLoginRequestsBatch = `-- name: CleanupExpiredQRLoginRequestsBatch :execrows
+WITH batch AS (
+    SELECT id FROM qr_login_requests
+    WHERE expires_at < now()
+    FOR UPDATE SKIP LOCKED
+    LIMIT $1
+)
+DELETE FROM qr_login_requests AS q
+USING batch
+WHERE q.id = batch.id
 `
 
-func (q *Queries) CleanupExpiredQRLoginRequests(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, cleanupExpiredQRLoginRequests)
-	return err
+func (q *Queries) CleanupExpiredQRLoginRequestsBatch(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupExpiredQRLoginRequestsBatch, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createQRLoginRequest = `-- name: CreateQRLoginRequest :one

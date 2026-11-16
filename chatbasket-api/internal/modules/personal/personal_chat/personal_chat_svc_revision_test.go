@@ -52,7 +52,7 @@ func (m *mockProfileProvider) GetUserCoreProfile(ctx context.Context, userID uui
 		return m.getUserCoreProfileFunc(ctx, userID)
 	}
 	return &personal_profile.UserCoreProfile{
-		ID:            userID,
+		ID:             userID,
 		IsAdminBlocked: false,
 		ProfileType:    "public",
 	}, nil
@@ -75,13 +75,13 @@ func (m *mockProfileProvider) GetContactableUserIDs(ctx context.Context, viewerI
 
 // mockContactProvider implements personalContactPersonalChatProvider interface
 type mockContactProvider struct {
-	isAlreadyContactFunc       func(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error)
+	isAlreadyContactFunc        func(ctx context.Context, ownerID uuid.UUID, contactID uuid.UUID) (bool, error)
 	getMessagingBlockStatusFunc func(ctx context.Context, user1ID uuid.UUID, user2ID uuid.UUID) (int32, error)
 }
 
 // mockAuthProvider implements coreAuthChatProvider interface
 type mockAuthProvider struct {
-	isSessionCentralFunc       func(ctx context.Context, userID uuid.UUID, sessionToken string) (bool, error)
+	isSessionCentralFunc        func(ctx context.Context, userID uuid.UUID, sessionToken string) (bool, error)
 	getUserPrimarySessionIDFunc func(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 }
 
@@ -134,7 +134,7 @@ func TestSendMessage_RevisionStaleness_RejectsStaleRevision(t *testing.T) {
 		},
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: false,
 				ProfileType:    "public",
 			}, nil
@@ -239,7 +239,7 @@ func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
 
 	// CreateMessage mock — returns a valid Message row
 	msgCols := []string{"id", "chat_id", "sender_id", "recipient_id",
-		"content", "message_type",
+		"content", "message_type", "reply_to_message_id",
 		"file_id", "file_name", "file_size", "file_mime_type",
 		"file_token_id", "file_token_secret", "file_token_expiry",
 		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
@@ -247,20 +247,25 @@ func TestSendMessage_RevisionStaleness_AcceptsCurrentRevision(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
-	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"sender_session_id"}
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
-			"Hello", "text",
+			"Hello", "text", nil,
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			uuid.New(),
 		),
 	)
+
+	// RecordMessageHistory mock — history tombstone table
+	mockPool.ExpectExec(`INSERT INTO message_history`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 	// UpdateChatStatus mock — fire and forget, returning no rows
 	mockPool.ExpectExec(`UPDATE.*chats`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -341,7 +346,7 @@ func TestSendMessage_RevisionStaleness_AcceptsZeroRevision(t *testing.T) {
 	)
 
 	msgCols := []string{"id", "chat_id", "sender_id", "recipient_id",
-		"content", "message_type",
+		"content", "message_type", "reply_to_message_id",
 		"file_id", "file_name", "file_size", "file_mime_type",
 		"file_token_id", "file_token_secret", "file_token_expiry",
 		"thumbnail_file_id", "thumbnail_token_id", "thumbnail_token_secret",
@@ -349,20 +354,23 @@ func TestSendMessage_RevisionStaleness_AcceptsZeroRevision(t *testing.T) {
 		"synced_to_sender_primary",
 		"deleted_by_sender", "deleted_by_recipient",
 		"delivery_attempts", "expires_at", "created_at", "updated_at",
-		"read_by_recipient", "read_acked_by_sender", "read_at", "reply_to_message_id"}
-	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
+		"read_by_recipient", "read_acked_by_sender", "read_at",
+		"sender_session_id"}
+	mockPool.ExpectQuery(`INSERT INTO.*messages`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnRows(
 		pgxmock.NewRows(msgCols).AddRow(
 			messageID, chatID, senderID.UuidUserId, recipientID,
-			"Hello", "text",
+			"Hello", "text", nil,
 			nil, nil, nil, nil,
 			nil, nil, nil,
 			nil, nil, nil,
 			false, false,
 			true,
 			false, false,
-			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil, nil,
+			int32(0), now.Add(DefaultMessageTTL), now, now, false, false, nil,
+			uuid.New(),
 		),
 	)
+	mockPool.ExpectExec(`INSERT INTO message_history`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 	mockPool.ExpectExec(`UPDATE.*chats`).WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 	svc := &chatService{
@@ -399,7 +407,7 @@ func TestSendMessage_RevisionStaleness_ErrorFetchingRevision(t *testing.T) {
 		},
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: false,
 				ProfileType:    "public",
 			}, nil
@@ -453,7 +461,7 @@ func TestSendMessage_RevisionStaleness_LargeRevisionJump(t *testing.T) {
 		},
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: false,
 				ProfileType:    "public",
 			}, nil
@@ -513,7 +521,7 @@ func TestSendMessage_RevisionStaleness_RecipientNotEligible(t *testing.T) {
 	profileProvider := &mockProfileProvider{
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: true, // Admin blocked
 				ProfileType:    "public",
 			}, nil
@@ -565,7 +573,7 @@ func TestSendMessage_RevisionStaleness_NotContacts(t *testing.T) {
 	profileProvider := &mockProfileProvider{
 		getUserCoreProfileFunc: func(ctx context.Context, userID uuid.UUID) (*personal_profile.UserCoreProfile, error) {
 			return &personal_profile.UserCoreProfile{
-				ID:            userID,
+				ID:             userID,
 				IsAdminBlocked: false,
 				ProfileType:    "public",
 			}, nil
@@ -719,4 +727,3 @@ func TestConfirmChatUpload_RevisionStaleness_RejectsStaleRevision(t *testing.T) 
 		t.Errorf("Expected ProcessedError, got %T", err)
 	}
 }
-

@@ -7,6 +7,7 @@ import (
 	"chatbasket-api/internal/platform/kit"
 	"chatbasket-api/internal/platform/services"
 	"context"
+	"errors"
 	"log"
 	"net/http"
 
@@ -35,20 +36,27 @@ type AuthService struct {
 	PostgresQuerier        core_auth_store.Querier  // For regular queries (interface)
 	PostgresQueries        *core_auth_store.Queries // For transactions (concrete type with WithTx)
 	Pool                   *pgxpool.Pool            // For raw DB execution (like NOTIFY)
+	MaintenanceQuerier     core_auth_store.Querier  // For background maintenance queries (interface)
+	MaintenanceQueries     *core_auth_store.Queries // For background maintenance transactions (concrete type with WithTx)
+	MaintenancePool        *pgxpool.Pool            // For background maintenance raw DB execution
 	AuthSecret             []byte
 	profileCleanupProvider personalProfileAuthCleanupProvider
 	chatCleanupProvider    personalChatAuthCleanupProvider
 }
 
 // NewAuthService creates a new AuthService instance.
-func NewAuthService(globalService *services.GlobalService, pool *pgxpool.Pool, authSecret []byte) *AuthService {
+func NewAuthService(globalService *services.GlobalService, pool *pgxpool.Pool, maintenancePool *pgxpool.Pool, authSecret []byte) *AuthService {
 	store := core_auth_store.New(pool)
+	maintenanceStore := core_auth_store.New(maintenancePool)
 	return &AuthService{
-		GlobalService:   globalService,
-		PostgresQuerier: store,
-		PostgresQueries: store,
-		Pool:            pool,
-		AuthSecret:      authSecret,
+		GlobalService:      globalService,
+		PostgresQuerier:    store,
+		PostgresQueries:    store,
+		Pool:               pool,
+		MaintenanceQuerier: maintenanceStore,
+		MaintenanceQueries: maintenanceStore,
+		MaintenancePool:    maintenancePool,
+		AuthSecret:         authSecret,
 	}
 }
 
@@ -377,7 +385,10 @@ func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotP
 		Type: "password_reset",
 	})
 	if err != nil {
-		return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusNotFound, "not_found", "Verification code not found or expired")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Internal server error")
 	}
 
 	// 4. Verify updateId matches (flow validation)
@@ -416,7 +427,7 @@ func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotP
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to hash password: "+err.Error())
 	}
 
-	// 7. Update password
+	// 9. Update password
 	err = s.PostgresQuerier.UpdateAuthUserPassword(ctx, core_auth_store.UpdateAuthUserPasswordParams{
 		ID:           userID,
 		PasswordHash: hashedPassword,
@@ -425,7 +436,7 @@ func (s *AuthService) VerifyForgotPassword(ctx context.Context, payload *ForgotP
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to update password")
 	}
 
-	// 8. Delete verification code
+	// 10. Delete verification code
 	if err := s.PostgresQuerier.DeleteVerificationCode(ctx, userID); err != nil {
 		return nil, kit.NewError(http.StatusInternalServerError, "internal_server_error", "Failed to delete verification code")
 	}

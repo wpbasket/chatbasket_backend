@@ -8,7 +8,6 @@ import (
 	"chatbasket-api/internal/modules/core/core_auth/internal/core_auth_store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pashagolub/pgxmock/v5"
 	"github.com/stretchr/testify/assert"
 )
@@ -29,24 +28,6 @@ func setupTestAuthServiceE2EE(t *testing.T) (*AuthService, pgxmock.PgxPoolIface)
 	return svc, mock
 }
 
-// setupTestAuthServiceE2EEWithPool creates a test auth service with a mock pool for transaction tests
-func setupTestAuthServiceE2EEWithPool(t *testing.T) (*AuthService, pgxmock.PgxPoolIface) {
-	mock, err := pgxmock.NewPool()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-
-	store := core_auth_store.New(mock)
-	// For transaction tests, we need to use the mock as a pool
-	// pgxmock.NewPool() returns an interface that implements pgxpool.Pool methods
-	svc := &AuthService{
-		PostgresQuerier: store,
-		PostgresQueries: store,
-		Pool:            (*pgxpool.Pool)(nil), // Will be set by individual tests
-		AuthSecret:      []byte("test-secret"),
-	}
-	return svc, mock
-}
 
 // ============================================================================
 // SaveSessionE2EEPublicKey Tests
@@ -206,7 +187,7 @@ func TestGetKeysRevision_Success(t *testing.T) {
 
 	userID := uuid.New()
 
-	mock.ExpectQuery(`SELECT keys_revision FROM auth_users WHERE id = \$1 FOR UPDATE`).
+	mock.ExpectQuery(`(?i)SELECT keys_revision FROM auth_users WHERE id = \$1$`).
 		WithArgs(userID).
 		WillReturnRows(pgxmock.NewRows([]string{"keys_revision"}).AddRow(5))
 
@@ -221,12 +202,12 @@ func TestGetKeysRevision_UserNotFound(t *testing.T) {
 
 	userID := uuid.New()
 
-	mock.ExpectQuery(`SELECT keys_revision FROM auth_users WHERE id = \$1 FOR UPDATE`).
+	mock.ExpectQuery(`(?i)SELECT keys_revision FROM auth_users WHERE id = \$1$`).
 		WithArgs(userID).
 		WillReturnError(pgx.ErrNoRows)
 
 	revision, err := svc.GetKeysRevision(context.Background(), userID)
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, pgx.ErrNoRows)
 	assert.Equal(t, int32(0), revision)
 }
 

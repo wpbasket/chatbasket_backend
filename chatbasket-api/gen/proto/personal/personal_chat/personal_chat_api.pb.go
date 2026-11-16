@@ -1299,8 +1299,11 @@ type AckDeliveryBatchResponse struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	AcknowledgedCount      int32                  `protobuf:"varint,1,opt,name=acknowledgedCount,proto3" json:"acknowledgedCount,omitempty"`
 	AcknowledgedMessageIds []string               `protobuf:"bytes,2,rep,name=acknowledgedMessageIds,proto3" json:"acknowledgedMessageIds,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// Request IDs that can never succeed for this caller: malformed or unknown
+	// IDs, messages the caller neither sent nor received, and expired messages.
+	PermanentlyRejectedMessageIds []string `protobuf:"bytes,3,rep,name=permanentlyRejectedMessageIds,proto3" json:"permanentlyRejectedMessageIds,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *AckDeliveryBatchResponse) Reset() {
@@ -1347,10 +1350,18 @@ func (x *AckDeliveryBatchResponse) GetAcknowledgedMessageIds() []string {
 	return nil
 }
 
+func (x *AckDeliveryBatchResponse) GetPermanentlyRejectedMessageIds() []string {
+	if x != nil {
+		return x.PermanentlyRejectedMessageIds
+	}
+	return nil
+}
+
+// The client never names a chat, and the IDs may come from different chats:
+// the server checks each message row on its own.
 type AckReadReceiptBatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ChatId        string                 `protobuf:"bytes,1,opt,name=chatId,proto3" json:"chatId,omitempty"`
-	MessageIds    []string               `protobuf:"bytes,2,rep,name=messageIds,proto3" json:"messageIds,omitempty"`
+	MessageIds    []string               `protobuf:"bytes,1,rep,name=messageIds,proto3" json:"messageIds,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1385,13 +1396,6 @@ func (*AckReadReceiptBatchRequest) Descriptor() ([]byte, []int) {
 	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *AckReadReceiptBatchRequest) GetChatId() string {
-	if x != nil {
-		return x.ChatId
-	}
-	return ""
-}
-
 func (x *AckReadReceiptBatchRequest) GetMessageIds() []string {
 	if x != nil {
 		return x.MessageIds
@@ -1403,8 +1407,11 @@ type AckReadReceiptBatchResponse struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	AcknowledgedCount      int32                  `protobuf:"varint,1,opt,name=acknowledgedCount,proto3" json:"acknowledgedCount,omitempty"`
 	AcknowledgedMessageIds []string               `protobuf:"bytes,2,rep,name=acknowledgedMessageIds,proto3" json:"acknowledgedMessageIds,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// Request IDs that can never succeed for this caller: malformed or unknown
+	// IDs, messages the caller neither sent nor received, and expired messages.
+	PermanentlyRejectedMessageIds []string `protobuf:"bytes,3,rep,name=permanentlyRejectedMessageIds,proto3" json:"permanentlyRejectedMessageIds,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *AckReadReceiptBatchResponse) Reset() {
@@ -1447,6 +1454,13 @@ func (x *AckReadReceiptBatchResponse) GetAcknowledgedCount() int32 {
 func (x *AckReadReceiptBatchResponse) GetAcknowledgedMessageIds() []string {
 	if x != nil {
 		return x.AcknowledgedMessageIds
+	}
+	return nil
+}
+
+func (x *AckReadReceiptBatchResponse) GetPermanentlyRejectedMessageIds() []string {
+	if x != nil {
+		return x.PermanentlyRejectedMessageIds
 	}
 	return nil
 }
@@ -1499,8 +1513,11 @@ type AckAndReadBatchResponse struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	AcknowledgedCount int32                  `protobuf:"varint,1,opt,name=acknowledgedCount,proto3" json:"acknowledgedCount,omitempty"`
 	ReadMessages      []*MessageReadReceipt  `protobuf:"bytes,2,rep,name=readMessages,proto3" json:"readMessages,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Request IDs that can never succeed for this caller: malformed or unknown
+	// IDs, messages the caller neither sent nor received, and expired messages.
+	PermanentlyRejectedMessageIds []string `protobuf:"bytes,3,rep,name=permanentlyRejectedMessageIds,proto3" json:"permanentlyRejectedMessageIds,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *AckAndReadBatchResponse) Reset() {
@@ -1543,6 +1560,13 @@ func (x *AckAndReadBatchResponse) GetAcknowledgedCount() int32 {
 func (x *AckAndReadBatchResponse) GetReadMessages() []*MessageReadReceipt {
 	if x != nil {
 		return x.ReadMessages
+	}
+	return nil
+}
+
+func (x *AckAndReadBatchResponse) GetPermanentlyRejectedMessageIds() []string {
+	if x != nil {
+		return x.PermanentlyRejectedMessageIds
 	}
 	return nil
 }
@@ -2047,10 +2071,10 @@ func (x *MessageReadReceipt) GetReadAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// The chat comes from the message rows on the server; the client never names it.
 type MarkChatReadRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ChatId        string                 `protobuf:"bytes,1,opt,name=chatId,proto3" json:"chatId,omitempty"`
-	MessageIds    []string               `protobuf:"bytes,2,rep,name=messageIds,proto3" json:"messageIds,omitempty"`
+	MessageIds    []string               `protobuf:"bytes,1,rep,name=messageIds,proto3" json:"messageIds,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2085,13 +2109,6 @@ func (*MarkChatReadRequest) Descriptor() ([]byte, []int) {
 	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{28}
 }
 
-func (x *MarkChatReadRequest) GetChatId() string {
-	if x != nil {
-		return x.ChatId
-	}
-	return ""
-}
-
 func (x *MarkChatReadRequest) GetMessageIds() []string {
 	if x != nil {
 		return x.MessageIds
@@ -2100,12 +2117,15 @@ func (x *MarkChatReadRequest) GetMessageIds() []string {
 }
 
 type MarkChatReadResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        bool                   `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	ReadAt        string                 `protobuf:"bytes,2,opt,name=readAt,proto3" json:"readAt,omitempty"`
-	ReadMessages  []*MessageReadReceipt  `protobuf:"bytes,3,rep,name=readMessages,proto3" json:"readMessages,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Status       bool                   `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	ReadAt       string                 `protobuf:"bytes,2,opt,name=readAt,proto3" json:"readAt,omitempty"`
+	ReadMessages []*MessageReadReceipt  `protobuf:"bytes,3,rep,name=readMessages,proto3" json:"readMessages,omitempty"`
+	// Request IDs that can never succeed for this caller: malformed or unknown
+	// IDs, messages the caller neither sent nor received, and expired messages.
+	PermanentlyRejectedMessageIds []string `protobuf:"bytes,4,rep,name=permanentlyRejectedMessageIds,proto3" json:"permanentlyRejectedMessageIds,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *MarkChatReadResponse) Reset() {
@@ -2159,10 +2179,17 @@ func (x *MarkChatReadResponse) GetReadMessages() []*MessageReadReceipt {
 	return nil
 }
 
+func (x *MarkChatReadResponse) GetPermanentlyRejectedMessageIds() []string {
+	if x != nil {
+		return x.PermanentlyRejectedMessageIds
+	}
+	return nil
+}
+
+// The chat comes from the message rows on the server; the client never names it.
 type UnsendMessageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ChatId        string                 `protobuf:"bytes,1,opt,name=chatId,proto3" json:"chatId,omitempty"`
-	MessageIds    []string               `protobuf:"bytes,2,rep,name=messageIds,proto3" json:"messageIds,omitempty"`
+	MessageIds    []string               `protobuf:"bytes,1,rep,name=messageIds,proto3" json:"messageIds,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2197,16 +2224,71 @@ func (*UnsendMessageRequest) Descriptor() ([]byte, []int) {
 	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{30}
 }
 
-func (x *UnsendMessageRequest) GetChatId() string {
-	if x != nil {
-		return x.ChatId
-	}
-	return ""
-}
-
 func (x *UnsendMessageRequest) GetMessageIds() []string {
 	if x != nil {
 		return x.MessageIds
+	}
+	return nil
+}
+
+type UnsendMessageResponse struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	AcknowledgedCount      int32                  `protobuf:"varint,1,opt,name=acknowledgedCount,proto3" json:"acknowledgedCount,omitempty"`
+	AcknowledgedMessageIds []string               `protobuf:"bytes,2,rep,name=acknowledgedMessageIds,proto3" json:"acknowledgedMessageIds,omitempty"`
+	// Request IDs that can never succeed for this caller: malformed or unknown
+	// IDs, messages the caller neither sent nor received, and expired messages.
+	PermanentlyRejectedMessageIds []string `protobuf:"bytes,3,rep,name=permanentlyRejectedMessageIds,proto3" json:"permanentlyRejectedMessageIds,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
+}
+
+func (x *UnsendMessageResponse) Reset() {
+	*x = UnsendMessageResponse{}
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnsendMessageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnsendMessageResponse) ProtoMessage() {}
+
+func (x *UnsendMessageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnsendMessageResponse.ProtoReflect.Descriptor instead.
+func (*UnsendMessageResponse) Descriptor() ([]byte, []int) {
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *UnsendMessageResponse) GetAcknowledgedCount() int32 {
+	if x != nil {
+		return x.AcknowledgedCount
+	}
+	return 0
+}
+
+func (x *UnsendMessageResponse) GetAcknowledgedMessageIds() []string {
+	if x != nil {
+		return x.AcknowledgedMessageIds
+	}
+	return nil
+}
+
+func (x *UnsendMessageResponse) GetPermanentlyRejectedMessageIds() []string {
+	if x != nil {
+		return x.PermanentlyRejectedMessageIds
 	}
 	return nil
 }
@@ -2220,7 +2302,7 @@ type DeleteMessageForMeRequest struct {
 
 func (x *DeleteMessageForMeRequest) Reset() {
 	*x = DeleteMessageForMeRequest{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[31]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2232,7 +2314,7 @@ func (x *DeleteMessageForMeRequest) String() string {
 func (*DeleteMessageForMeRequest) ProtoMessage() {}
 
 func (x *DeleteMessageForMeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[31]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2245,7 +2327,7 @@ func (x *DeleteMessageForMeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteMessageForMeRequest.ProtoReflect.Descriptor instead.
 func (*DeleteMessageForMeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{31}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *DeleteMessageForMeRequest) GetMessageIds() []string {
@@ -2265,7 +2347,7 @@ type SyncActionPayload struct {
 
 func (x *SyncActionPayload) Reset() {
 	*x = SyncActionPayload{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[32]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2277,7 +2359,7 @@ func (x *SyncActionPayload) String() string {
 func (*SyncActionPayload) ProtoMessage() {}
 
 func (x *SyncActionPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[32]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2290,7 +2372,7 @@ func (x *SyncActionPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncActionPayload.ProtoReflect.Descriptor instead.
 func (*SyncActionPayload) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{32}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *SyncActionPayload) GetMessageIds() []string {
@@ -2321,7 +2403,7 @@ type SyncAction struct {
 
 func (x *SyncAction) Reset() {
 	*x = SyncAction{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[33]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2333,7 +2415,7 @@ func (x *SyncAction) String() string {
 func (*SyncAction) ProtoMessage() {}
 
 func (x *SyncAction) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[33]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2346,7 +2428,7 @@ func (x *SyncAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncAction.ProtoReflect.Descriptor instead.
 func (*SyncAction) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{33}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SyncAction) GetId() string {
@@ -2400,7 +2482,7 @@ type GetSyncActionsRequest struct {
 
 func (x *GetSyncActionsRequest) Reset() {
 	*x = GetSyncActionsRequest{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[34]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2412,7 +2494,7 @@ func (x *GetSyncActionsRequest) String() string {
 func (*GetSyncActionsRequest) ProtoMessage() {}
 
 func (x *GetSyncActionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[34]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2425,7 +2507,7 @@ func (x *GetSyncActionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSyncActionsRequest.ProtoReflect.Descriptor instead.
 func (*GetSyncActionsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{34}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetSyncActionsRequest) GetLimit() int32 {
@@ -2445,7 +2527,7 @@ type GetSyncActionsResponse struct {
 
 func (x *GetSyncActionsResponse) Reset() {
 	*x = GetSyncActionsResponse{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[35]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2457,7 +2539,7 @@ func (x *GetSyncActionsResponse) String() string {
 func (*GetSyncActionsResponse) ProtoMessage() {}
 
 func (x *GetSyncActionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[35]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2470,7 +2552,7 @@ func (x *GetSyncActionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSyncActionsResponse.ProtoReflect.Descriptor instead.
 func (*GetSyncActionsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{35}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *GetSyncActionsResponse) GetActions() []*SyncAction {
@@ -2496,7 +2578,7 @@ type AcknowledgeSyncActionRequest struct {
 
 func (x *AcknowledgeSyncActionRequest) Reset() {
 	*x = AcknowledgeSyncActionRequest{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[36]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2508,7 +2590,7 @@ func (x *AcknowledgeSyncActionRequest) String() string {
 func (*AcknowledgeSyncActionRequest) ProtoMessage() {}
 
 func (x *AcknowledgeSyncActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[36]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2521,7 +2603,7 @@ func (x *AcknowledgeSyncActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcknowledgeSyncActionRequest.ProtoReflect.Descriptor instead.
 func (*AcknowledgeSyncActionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{36}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *AcknowledgeSyncActionRequest) GetActionId() string {
@@ -2541,7 +2623,7 @@ type RequestHistorySyncRequest struct {
 
 func (x *RequestHistorySyncRequest) Reset() {
 	*x = RequestHistorySyncRequest{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[37]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2553,7 +2635,7 @@ func (x *RequestHistorySyncRequest) String() string {
 func (*RequestHistorySyncRequest) ProtoMessage() {}
 
 func (x *RequestHistorySyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[37]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2566,7 +2648,7 @@ func (x *RequestHistorySyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestHistorySyncRequest.ProtoReflect.Descriptor instead.
 func (*RequestHistorySyncRequest) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{37}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *RequestHistorySyncRequest) GetChatsCipher() string {
@@ -2592,7 +2674,7 @@ type RequestHistorySyncResponse struct {
 
 func (x *RequestHistorySyncResponse) Reset() {
 	*x = RequestHistorySyncResponse{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[38]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2604,7 +2686,7 @@ func (x *RequestHistorySyncResponse) String() string {
 func (*RequestHistorySyncResponse) ProtoMessage() {}
 
 func (x *RequestHistorySyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[38]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2617,7 +2699,7 @@ func (x *RequestHistorySyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestHistorySyncResponse.ProtoReflect.Descriptor instead.
 func (*RequestHistorySyncResponse) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{38}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RequestHistorySyncResponse) GetRequestId() string {
@@ -2637,7 +2719,7 @@ type UploadHistorySyncRequest struct {
 
 func (x *UploadHistorySyncRequest) Reset() {
 	*x = UploadHistorySyncRequest{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[39]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2649,7 +2731,7 @@ func (x *UploadHistorySyncRequest) String() string {
 func (*UploadHistorySyncRequest) ProtoMessage() {}
 
 func (x *UploadHistorySyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[39]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2662,7 +2744,7 @@ func (x *UploadHistorySyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadHistorySyncRequest.ProtoReflect.Descriptor instead.
 func (*UploadHistorySyncRequest) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{39}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *UploadHistorySyncRequest) GetRequestId() string {
@@ -2688,7 +2770,7 @@ type DownloadHistorySyncRequest struct {
 
 func (x *DownloadHistorySyncRequest) Reset() {
 	*x = DownloadHistorySyncRequest{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[40]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2700,7 +2782,7 @@ func (x *DownloadHistorySyncRequest) String() string {
 func (*DownloadHistorySyncRequest) ProtoMessage() {}
 
 func (x *DownloadHistorySyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[40]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2713,7 +2795,7 @@ func (x *DownloadHistorySyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadHistorySyncRequest.ProtoReflect.Descriptor instead.
 func (*DownloadHistorySyncRequest) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{40}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *DownloadHistorySyncRequest) GetRequestId() string {
@@ -2732,7 +2814,7 @@ type DownloadHistorySyncResponse struct {
 
 func (x *DownloadHistorySyncResponse) Reset() {
 	*x = DownloadHistorySyncResponse{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[41]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2744,7 +2826,7 @@ func (x *DownloadHistorySyncResponse) String() string {
 func (*DownloadHistorySyncResponse) ProtoMessage() {}
 
 func (x *DownloadHistorySyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[41]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2757,7 +2839,7 @@ func (x *DownloadHistorySyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadHistorySyncResponse.ProtoReflect.Descriptor instead.
 func (*DownloadHistorySyncResponse) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{41}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *DownloadHistorySyncResponse) GetPayloadCipher() string {
@@ -2776,7 +2858,7 @@ type AcknowledgeHistorySyncRequest struct {
 
 func (x *AcknowledgeHistorySyncRequest) Reset() {
 	*x = AcknowledgeHistorySyncRequest{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[42]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2788,7 +2870,7 @@ func (x *AcknowledgeHistorySyncRequest) String() string {
 func (*AcknowledgeHistorySyncRequest) ProtoMessage() {}
 
 func (x *AcknowledgeHistorySyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[42]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2801,7 +2883,7 @@ func (x *AcknowledgeHistorySyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcknowledgeHistorySyncRequest.ProtoReflect.Descriptor instead.
 func (*AcknowledgeHistorySyncRequest) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{42}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *AcknowledgeHistorySyncRequest) GetRequestId() string {
@@ -2823,7 +2905,7 @@ type FetchHistorySyncRequest struct {
 
 func (x *FetchHistorySyncRequest) Reset() {
 	*x = FetchHistorySyncRequest{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[43]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2835,7 +2917,7 @@ func (x *FetchHistorySyncRequest) String() string {
 func (*FetchHistorySyncRequest) ProtoMessage() {}
 
 func (x *FetchHistorySyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[43]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2848,7 +2930,7 @@ func (x *FetchHistorySyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchHistorySyncRequest.ProtoReflect.Descriptor instead.
 func (*FetchHistorySyncRequest) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{43}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *FetchHistorySyncRequest) GetRequestId() string {
@@ -2868,7 +2950,7 @@ type FetchHistorySyncResponse struct {
 
 func (x *FetchHistorySyncResponse) Reset() {
 	*x = FetchHistorySyncResponse{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[44]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2880,7 +2962,7 @@ func (x *FetchHistorySyncResponse) String() string {
 func (*FetchHistorySyncResponse) ProtoMessage() {}
 
 func (x *FetchHistorySyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[44]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2893,7 +2975,7 @@ func (x *FetchHistorySyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchHistorySyncResponse.ProtoReflect.Descriptor instead.
 func (*FetchHistorySyncResponse) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{44}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *FetchHistorySyncResponse) GetChatsCipher() string {
@@ -2921,7 +3003,7 @@ type AcknowledgeDeliverySsePayload struct {
 
 func (x *AcknowledgeDeliverySsePayload) Reset() {
 	*x = AcknowledgeDeliverySsePayload{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[45]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2933,7 +3015,7 @@ func (x *AcknowledgeDeliverySsePayload) String() string {
 func (*AcknowledgeDeliverySsePayload) ProtoMessage() {}
 
 func (x *AcknowledgeDeliverySsePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[45]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2946,7 +3028,7 @@ func (x *AcknowledgeDeliverySsePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AcknowledgeDeliverySsePayload.ProtoReflect.Descriptor instead.
 func (*AcknowledgeDeliverySsePayload) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{45}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *AcknowledgeDeliverySsePayload) GetChatId() string {
@@ -2982,7 +3064,7 @@ type MarkChatReadSsePayload struct {
 
 func (x *MarkChatReadSsePayload) Reset() {
 	*x = MarkChatReadSsePayload{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[46]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2994,7 +3076,7 @@ func (x *MarkChatReadSsePayload) String() string {
 func (*MarkChatReadSsePayload) ProtoMessage() {}
 
 func (x *MarkChatReadSsePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[46]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3007,7 +3089,7 @@ func (x *MarkChatReadSsePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkChatReadSsePayload.ProtoReflect.Descriptor instead.
 func (*MarkChatReadSsePayload) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{46}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *MarkChatReadSsePayload) GetChatId() string {
@@ -3049,7 +3131,7 @@ type UnsendMessageSsePayload struct {
 
 func (x *UnsendMessageSsePayload) Reset() {
 	*x = UnsendMessageSsePayload{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[47]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3061,7 +3143,7 @@ func (x *UnsendMessageSsePayload) String() string {
 func (*UnsendMessageSsePayload) ProtoMessage() {}
 
 func (x *UnsendMessageSsePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[47]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3074,7 +3156,7 @@ func (x *UnsendMessageSsePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnsendMessageSsePayload.ProtoReflect.Descriptor instead.
 func (*UnsendMessageSsePayload) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{47}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *UnsendMessageSsePayload) GetChatId() string {
@@ -3108,7 +3190,7 @@ type DeleteMessageForMeSsePayload struct {
 
 func (x *DeleteMessageForMeSsePayload) Reset() {
 	*x = DeleteMessageForMeSsePayload{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[48]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3120,7 +3202,7 @@ func (x *DeleteMessageForMeSsePayload) String() string {
 func (*DeleteMessageForMeSsePayload) ProtoMessage() {}
 
 func (x *DeleteMessageForMeSsePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[48]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3133,7 +3215,7 @@ func (x *DeleteMessageForMeSsePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteMessageForMeSsePayload.ProtoReflect.Descriptor instead.
 func (*DeleteMessageForMeSsePayload) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{48}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *DeleteMessageForMeSsePayload) GetChatId() string {
@@ -3160,7 +3242,7 @@ type RequestHistorySyncSsePayload struct {
 
 func (x *RequestHistorySyncSsePayload) Reset() {
 	*x = RequestHistorySyncSsePayload{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[49]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3172,7 +3254,7 @@ func (x *RequestHistorySyncSsePayload) String() string {
 func (*RequestHistorySyncSsePayload) ProtoMessage() {}
 
 func (x *RequestHistorySyncSsePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[49]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3185,7 +3267,7 @@ func (x *RequestHistorySyncSsePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestHistorySyncSsePayload.ProtoReflect.Descriptor instead.
 func (*RequestHistorySyncSsePayload) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{49}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *RequestHistorySyncSsePayload) GetRequestId() string {
@@ -3211,7 +3293,7 @@ type UploadHistorySyncSsePayload struct {
 
 func (x *UploadHistorySyncSsePayload) Reset() {
 	*x = UploadHistorySyncSsePayload{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[50]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3223,7 +3305,7 @@ func (x *UploadHistorySyncSsePayload) String() string {
 func (*UploadHistorySyncSsePayload) ProtoMessage() {}
 
 func (x *UploadHistorySyncSsePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[50]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3236,7 +3318,7 @@ func (x *UploadHistorySyncSsePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadHistorySyncSsePayload.ProtoReflect.Descriptor instead.
 func (*UploadHistorySyncSsePayload) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{50}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *UploadHistorySyncSsePayload) GetRequestId() string {
@@ -3267,7 +3349,7 @@ type ChatSsePayload struct {
 
 func (x *ChatSsePayload) Reset() {
 	*x = ChatSsePayload{}
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[51]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3279,7 +3361,7 @@ func (x *ChatSsePayload) String() string {
 func (*ChatSsePayload) ProtoMessage() {}
 
 func (x *ChatSsePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[51]
+	mi := &file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3292,7 +3374,7 @@ func (x *ChatSsePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatSsePayload.ProtoReflect.Descriptor instead.
 func (*ChatSsePayload) Descriptor() ([]byte, []int) {
-	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{51}
+	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ChatSsePayload) GetEvent() isChatSsePayload_Event {
@@ -3567,25 +3649,27 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\n" +
 	"messageIds\x18\x01 \x03(\tR\n" +
 	"messageIds\x12&\n" +
-	"\x0eacknowledgedBy\x18\x02 \x01(\tR\x0eacknowledgedBy\"\x80\x01\n" +
+	"\x0eacknowledgedBy\x18\x02 \x01(\tR\x0eacknowledgedBy\"\xc6\x01\n" +
 	"\x18AckDeliveryBatchResponse\x12,\n" +
 	"\x11acknowledgedCount\x18\x01 \x01(\x05R\x11acknowledgedCount\x126\n" +
-	"\x16acknowledgedMessageIds\x18\x02 \x03(\tR\x16acknowledgedMessageIds\"T\n" +
-	"\x1aAckReadReceiptBatchRequest\x12\x16\n" +
-	"\x06chatId\x18\x01 \x01(\tR\x06chatId\x12\x1e\n" +
+	"\x16acknowledgedMessageIds\x18\x02 \x03(\tR\x16acknowledgedMessageIds\x12D\n" +
+	"\x1dpermanentlyRejectedMessageIds\x18\x03 \x03(\tR\x1dpermanentlyRejectedMessageIds\"<\n" +
+	"\x1aAckReadReceiptBatchRequest\x12\x1e\n" +
 	"\n" +
-	"messageIds\x18\x02 \x03(\tR\n" +
-	"messageIds\"\x83\x01\n" +
+	"messageIds\x18\x01 \x03(\tR\n" +
+	"messageIds\"\xc9\x01\n" +
 	"\x1bAckReadReceiptBatchResponse\x12,\n" +
 	"\x11acknowledgedCount\x18\x01 \x01(\x05R\x11acknowledgedCount\x126\n" +
-	"\x16acknowledgedMessageIds\x18\x02 \x03(\tR\x16acknowledgedMessageIds\"8\n" +
+	"\x16acknowledgedMessageIds\x18\x02 \x03(\tR\x16acknowledgedMessageIds\x12D\n" +
+	"\x1dpermanentlyRejectedMessageIds\x18\x03 \x03(\tR\x1dpermanentlyRejectedMessageIds\"8\n" +
 	"\x16AckAndReadBatchPayload\x12\x1e\n" +
 	"\n" +
 	"messageIds\x18\x01 \x03(\tR\n" +
-	"messageIds\"\x95\x01\n" +
+	"messageIds\"\xdb\x01\n" +
 	"\x17AckAndReadBatchResponse\x12,\n" +
 	"\x11acknowledgedCount\x18\x01 \x01(\x05R\x11acknowledgedCount\x12L\n" +
-	"\freadMessages\x18\x02 \x03(\v2(.rpc_personal_chat.v1.MessageReadReceiptR\freadMessages\"\xc4\x01\n" +
+	"\freadMessages\x18\x02 \x03(\v2(.rpc_personal_chat.v1.MessageReadReceiptR\freadMessages\x12D\n" +
+	"\x1dpermanentlyRejectedMessageIds\x18\x03 \x03(\tR\x1dpermanentlyRejectedMessageIds\"\xc4\x01\n" +
 	"\x18PresignChatUploadRequest\x12 \n" +
 	"\vrecipientId\x18\x01 \x01(\tR\vrecipientId\x12 \n" +
 	"\vmessageType\x18\x02 \x01(\tR\vmessageType\x124\n" +
@@ -3626,21 +3710,24 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\vdownloadUrl\x18\x02 \x01(\tR\vdownloadUrl\"f\n" +
 	"\x12MessageReadReceipt\x12\x1c\n" +
 	"\tmessageId\x18\x01 \x01(\tR\tmessageId\x122\n" +
-	"\x06readAt\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x06readAt\"M\n" +
-	"\x13MarkChatReadRequest\x12\x16\n" +
-	"\x06chatId\x18\x01 \x01(\tR\x06chatId\x12\x1e\n" +
+	"\x06readAt\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x06readAt\"5\n" +
+	"\x13MarkChatReadRequest\x12\x1e\n" +
 	"\n" +
-	"messageIds\x18\x02 \x03(\tR\n" +
-	"messageIds\"\x94\x01\n" +
+	"messageIds\x18\x01 \x03(\tR\n" +
+	"messageIds\"\xda\x01\n" +
 	"\x14MarkChatReadResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\bR\x06status\x12\x16\n" +
 	"\x06readAt\x18\x02 \x01(\tR\x06readAt\x12L\n" +
-	"\freadMessages\x18\x03 \x03(\v2(.rpc_personal_chat.v1.MessageReadReceiptR\freadMessages\"N\n" +
-	"\x14UnsendMessageRequest\x12\x16\n" +
-	"\x06chatId\x18\x01 \x01(\tR\x06chatId\x12\x1e\n" +
+	"\freadMessages\x18\x03 \x03(\v2(.rpc_personal_chat.v1.MessageReadReceiptR\freadMessages\x12D\n" +
+	"\x1dpermanentlyRejectedMessageIds\x18\x04 \x03(\tR\x1dpermanentlyRejectedMessageIds\"6\n" +
+	"\x14UnsendMessageRequest\x12\x1e\n" +
 	"\n" +
-	"messageIds\x18\x02 \x03(\tR\n" +
-	"messageIds\";\n" +
+	"messageIds\x18\x01 \x03(\tR\n" +
+	"messageIds\"\xc3\x01\n" +
+	"\x15UnsendMessageResponse\x12,\n" +
+	"\x11acknowledgedCount\x18\x01 \x01(\x05R\x11acknowledgedCount\x126\n" +
+	"\x16acknowledgedMessageIds\x18\x02 \x03(\tR\x16acknowledgedMessageIds\x12D\n" +
+	"\x1dpermanentlyRejectedMessageIds\x18\x03 \x03(\tR\x1dpermanentlyRejectedMessageIds\";\n" +
 	"\x19DeleteMessageForMeRequest\x12\x1e\n" +
 	"\n" +
 	"messageIds\x18\x01 \x03(\tR\n" +
@@ -3723,7 +3810,7 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	" ConfirmFileMessageUploadSseEvent\x18\x06 \x01(\v2\x1d.rpc_personal_chat.v1.MessageH\x00R ConfirmFileMessageUploadSseEvent\x12t\n" +
 	"\x1aRequestHistorySyncSseEvent\x18\a \x01(\v22.rpc_personal_chat.v1.RequestHistorySyncSsePayloadH\x00R\x1aRequestHistorySyncSseEvent\x12q\n" +
 	"\x19UploadHistorySyncSseEvent\x18\b \x01(\v21.rpc_personal_chat.v1.UploadHistorySyncSsePayloadH\x00R\x19UploadHistorySyncSseEventB\a\n" +
-	"\x05event2\xfc\x13\n" +
+	"\x05event2\x88\x14\n" +
 	"\vChatService\x12q\n" +
 	"\x10CheckEligibility\x12-.rpc_personal_chat.v1.CheckEligibilityRequest\x1a..rpc_personal_chat.v1.CheckEligibilityResponse\x12_\n" +
 	"\n" +
@@ -3740,8 +3827,8 @@ const file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc = "" +
 	"\rConfirmUpload\x12..rpc_personal_chat.v1.ConfirmChatUploadRequest\x1a/.rpc_personal_chat.v1.ConfirmChatUploadResponse\x12_\n" +
 	"\n" +
 	"GetFileURL\x12'.rpc_personal_chat.v1.GetFileURLRequest\x1a(.rpc_personal_chat.v1.GetFileURLResponse\x12e\n" +
-	"\fMarkChatRead\x12).rpc_personal_chat.v1.MarkChatReadRequest\x1a*.rpc_personal_chat.v1.MarkChatReadResponse\x12\\\n" +
-	"\rUnsendMessage\x12*.rpc_personal_chat.v1.UnsendMessageRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12f\n" +
+	"\fMarkChatRead\x12).rpc_personal_chat.v1.MarkChatReadRequest\x1a*.rpc_personal_chat.v1.MarkChatReadResponse\x12h\n" +
+	"\rUnsendMessage\x12*.rpc_personal_chat.v1.UnsendMessageRequest\x1a+.rpc_personal_chat.v1.UnsendMessageResponse\x12f\n" +
 	"\x12DeleteMessageForMe\x12/.rpc_personal_chat.v1.DeleteMessageForMeRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12k\n" +
 	"\x0eGetSyncActions\x12+.rpc_personal_chat.v1.GetSyncActionsRequest\x1a,.rpc_personal_chat.v1.GetSyncActionsResponse\x12l\n" +
 	"\x15AcknowledgeSyncAction\x122.rpc_personal_chat.v1.AcknowledgeSyncActionRequest\x1a\x1f.rpc_common_model.v1.StatusOkay\x12w\n" +
@@ -3763,7 +3850,7 @@ func file_proto_personal_personal_chat_personal_chat_api_proto_rawDescGZIP() []b
 	return file_proto_personal_personal_chat_personal_chat_api_proto_rawDescData
 }
 
-var file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_proto_personal_personal_chat_personal_chat_api_proto_goTypes = []any{
 	(*Chat)(nil),                          // 0: rpc_personal_chat.v1.Chat
 	(*Message)(nil),                       // 1: rpc_personal_chat.v1.Message
@@ -3796,70 +3883,71 @@ var file_proto_personal_personal_chat_personal_chat_api_proto_goTypes = []any{
 	(*MarkChatReadRequest)(nil),           // 28: rpc_personal_chat.v1.MarkChatReadRequest
 	(*MarkChatReadResponse)(nil),          // 29: rpc_personal_chat.v1.MarkChatReadResponse
 	(*UnsendMessageRequest)(nil),          // 30: rpc_personal_chat.v1.UnsendMessageRequest
-	(*DeleteMessageForMeRequest)(nil),     // 31: rpc_personal_chat.v1.DeleteMessageForMeRequest
-	(*SyncActionPayload)(nil),             // 32: rpc_personal_chat.v1.SyncActionPayload
-	(*SyncAction)(nil),                    // 33: rpc_personal_chat.v1.SyncAction
-	(*GetSyncActionsRequest)(nil),         // 34: rpc_personal_chat.v1.GetSyncActionsRequest
-	(*GetSyncActionsResponse)(nil),        // 35: rpc_personal_chat.v1.GetSyncActionsResponse
-	(*AcknowledgeSyncActionRequest)(nil),  // 36: rpc_personal_chat.v1.AcknowledgeSyncActionRequest
-	(*RequestHistorySyncRequest)(nil),     // 37: rpc_personal_chat.v1.RequestHistorySyncRequest
-	(*RequestHistorySyncResponse)(nil),    // 38: rpc_personal_chat.v1.RequestHistorySyncResponse
-	(*UploadHistorySyncRequest)(nil),      // 39: rpc_personal_chat.v1.UploadHistorySyncRequest
-	(*DownloadHistorySyncRequest)(nil),    // 40: rpc_personal_chat.v1.DownloadHistorySyncRequest
-	(*DownloadHistorySyncResponse)(nil),   // 41: rpc_personal_chat.v1.DownloadHistorySyncResponse
-	(*AcknowledgeHistorySyncRequest)(nil), // 42: rpc_personal_chat.v1.AcknowledgeHistorySyncRequest
-	(*FetchHistorySyncRequest)(nil),       // 43: rpc_personal_chat.v1.FetchHistorySyncRequest
-	(*FetchHistorySyncResponse)(nil),      // 44: rpc_personal_chat.v1.FetchHistorySyncResponse
-	(*AcknowledgeDeliverySsePayload)(nil), // 45: rpc_personal_chat.v1.AcknowledgeDeliverySsePayload
-	(*MarkChatReadSsePayload)(nil),        // 46: rpc_personal_chat.v1.MarkChatReadSsePayload
-	(*UnsendMessageSsePayload)(nil),       // 47: rpc_personal_chat.v1.UnsendMessageSsePayload
-	(*DeleteMessageForMeSsePayload)(nil),  // 48: rpc_personal_chat.v1.DeleteMessageForMeSsePayload
-	(*RequestHistorySyncSsePayload)(nil),  // 49: rpc_personal_chat.v1.RequestHistorySyncSsePayload
-	(*UploadHistorySyncSsePayload)(nil),   // 50: rpc_personal_chat.v1.UploadHistorySyncSsePayload
-	(*ChatSsePayload)(nil),                // 51: rpc_personal_chat.v1.ChatSsePayload
-	(*timestamppb.Timestamp)(nil),         // 52: google.protobuf.Timestamp
-	(*model.StatusOkay)(nil),              // 53: rpc_common_model.v1.StatusOkay
+	(*UnsendMessageResponse)(nil),         // 31: rpc_personal_chat.v1.UnsendMessageResponse
+	(*DeleteMessageForMeRequest)(nil),     // 32: rpc_personal_chat.v1.DeleteMessageForMeRequest
+	(*SyncActionPayload)(nil),             // 33: rpc_personal_chat.v1.SyncActionPayload
+	(*SyncAction)(nil),                    // 34: rpc_personal_chat.v1.SyncAction
+	(*GetSyncActionsRequest)(nil),         // 35: rpc_personal_chat.v1.GetSyncActionsRequest
+	(*GetSyncActionsResponse)(nil),        // 36: rpc_personal_chat.v1.GetSyncActionsResponse
+	(*AcknowledgeSyncActionRequest)(nil),  // 37: rpc_personal_chat.v1.AcknowledgeSyncActionRequest
+	(*RequestHistorySyncRequest)(nil),     // 38: rpc_personal_chat.v1.RequestHistorySyncRequest
+	(*RequestHistorySyncResponse)(nil),    // 39: rpc_personal_chat.v1.RequestHistorySyncResponse
+	(*UploadHistorySyncRequest)(nil),      // 40: rpc_personal_chat.v1.UploadHistorySyncRequest
+	(*DownloadHistorySyncRequest)(nil),    // 41: rpc_personal_chat.v1.DownloadHistorySyncRequest
+	(*DownloadHistorySyncResponse)(nil),   // 42: rpc_personal_chat.v1.DownloadHistorySyncResponse
+	(*AcknowledgeHistorySyncRequest)(nil), // 43: rpc_personal_chat.v1.AcknowledgeHistorySyncRequest
+	(*FetchHistorySyncRequest)(nil),       // 44: rpc_personal_chat.v1.FetchHistorySyncRequest
+	(*FetchHistorySyncResponse)(nil),      // 45: rpc_personal_chat.v1.FetchHistorySyncResponse
+	(*AcknowledgeDeliverySsePayload)(nil), // 46: rpc_personal_chat.v1.AcknowledgeDeliverySsePayload
+	(*MarkChatReadSsePayload)(nil),        // 47: rpc_personal_chat.v1.MarkChatReadSsePayload
+	(*UnsendMessageSsePayload)(nil),       // 48: rpc_personal_chat.v1.UnsendMessageSsePayload
+	(*DeleteMessageForMeSsePayload)(nil),  // 49: rpc_personal_chat.v1.DeleteMessageForMeSsePayload
+	(*RequestHistorySyncSsePayload)(nil),  // 50: rpc_personal_chat.v1.RequestHistorySyncSsePayload
+	(*UploadHistorySyncSsePayload)(nil),   // 51: rpc_personal_chat.v1.UploadHistorySyncSsePayload
+	(*ChatSsePayload)(nil),                // 52: rpc_personal_chat.v1.ChatSsePayload
+	(*timestamppb.Timestamp)(nil),         // 53: google.protobuf.Timestamp
+	(*model.StatusOkay)(nil),              // 54: rpc_common_model.v1.StatusOkay
 }
 var file_proto_personal_personal_chat_personal_chat_api_proto_depIdxs = []int32{
-	52, // 0: rpc_personal_chat.v1.Chat.createdAt:type_name -> google.protobuf.Timestamp
-	52, // 1: rpc_personal_chat.v1.Chat.updatedAt:type_name -> google.protobuf.Timestamp
-	52, // 2: rpc_personal_chat.v1.Message.createdAt:type_name -> google.protobuf.Timestamp
-	52, // 3: rpc_personal_chat.v1.Message.expiresAt:type_name -> google.protobuf.Timestamp
-	52, // 4: rpc_personal_chat.v1.Message.readAt:type_name -> google.protobuf.Timestamp
-	52, // 5: rpc_personal_chat.v1.CreateChatResponse.createdAt:type_name -> google.protobuf.Timestamp
-	52, // 6: rpc_personal_chat.v1.CreateChatResponse.updatedAt:type_name -> google.protobuf.Timestamp
+	53, // 0: rpc_personal_chat.v1.Chat.createdAt:type_name -> google.protobuf.Timestamp
+	53, // 1: rpc_personal_chat.v1.Chat.updatedAt:type_name -> google.protobuf.Timestamp
+	53, // 2: rpc_personal_chat.v1.Message.createdAt:type_name -> google.protobuf.Timestamp
+	53, // 3: rpc_personal_chat.v1.Message.expiresAt:type_name -> google.protobuf.Timestamp
+	53, // 4: rpc_personal_chat.v1.Message.readAt:type_name -> google.protobuf.Timestamp
+	53, // 5: rpc_personal_chat.v1.CreateChatResponse.createdAt:type_name -> google.protobuf.Timestamp
+	53, // 6: rpc_personal_chat.v1.CreateChatResponse.updatedAt:type_name -> google.protobuf.Timestamp
 	0,  // 7: rpc_personal_chat.v1.GetUserChatsResponse.chats:type_name -> rpc_personal_chat.v1.Chat
-	52, // 8: rpc_personal_chat.v1.GetMessagesRequest.afterCreatedAt:type_name -> google.protobuf.Timestamp
+	53, // 8: rpc_personal_chat.v1.GetMessagesRequest.afterCreatedAt:type_name -> google.protobuf.Timestamp
 	1,  // 9: rpc_personal_chat.v1.GetMessagesResponse.messages:type_name -> rpc_personal_chat.v1.Message
-	52, // 10: rpc_personal_chat.v1.GetMessagesResponse.otherUserLastReadAt:type_name -> google.protobuf.Timestamp
-	52, // 11: rpc_personal_chat.v1.GetMessagesResponse.otherUserLastDeliveredAt:type_name -> google.protobuf.Timestamp
-	52, // 12: rpc_personal_chat.v1.GetMessagesResponse.nextCreatedAt:type_name -> google.protobuf.Timestamp
-	52, // 13: rpc_personal_chat.v1.GetPendingMessagesRequest.afterRecipientCreatedAt:type_name -> google.protobuf.Timestamp
-	52, // 14: rpc_personal_chat.v1.GetPendingMessagesRequest.afterSenderCreatedAt:type_name -> google.protobuf.Timestamp
+	53, // 10: rpc_personal_chat.v1.GetMessagesResponse.otherUserLastReadAt:type_name -> google.protobuf.Timestamp
+	53, // 11: rpc_personal_chat.v1.GetMessagesResponse.otherUserLastDeliveredAt:type_name -> google.protobuf.Timestamp
+	53, // 12: rpc_personal_chat.v1.GetMessagesResponse.nextCreatedAt:type_name -> google.protobuf.Timestamp
+	53, // 13: rpc_personal_chat.v1.GetPendingMessagesRequest.afterRecipientCreatedAt:type_name -> google.protobuf.Timestamp
+	53, // 14: rpc_personal_chat.v1.GetPendingMessagesRequest.afterSenderCreatedAt:type_name -> google.protobuf.Timestamp
 	1,  // 15: rpc_personal_chat.v1.GetPendingMessagesResponse.messages:type_name -> rpc_personal_chat.v1.Message
-	52, // 16: rpc_personal_chat.v1.GetPendingMessagesResponse.otherUserLastReadAt:type_name -> google.protobuf.Timestamp
-	52, // 17: rpc_personal_chat.v1.GetPendingMessagesResponse.otherUserLastDeliveredAt:type_name -> google.protobuf.Timestamp
-	52, // 18: rpc_personal_chat.v1.GetPendingMessagesResponse.nextRecipientCreatedAt:type_name -> google.protobuf.Timestamp
-	52, // 19: rpc_personal_chat.v1.GetPendingMessagesResponse.nextSenderCreatedAt:type_name -> google.protobuf.Timestamp
+	53, // 16: rpc_personal_chat.v1.GetPendingMessagesResponse.otherUserLastReadAt:type_name -> google.protobuf.Timestamp
+	53, // 17: rpc_personal_chat.v1.GetPendingMessagesResponse.otherUserLastDeliveredAt:type_name -> google.protobuf.Timestamp
+	53, // 18: rpc_personal_chat.v1.GetPendingMessagesResponse.nextRecipientCreatedAt:type_name -> google.protobuf.Timestamp
+	53, // 19: rpc_personal_chat.v1.GetPendingMessagesResponse.nextSenderCreatedAt:type_name -> google.protobuf.Timestamp
 	27, // 20: rpc_personal_chat.v1.AckAndReadBatchResponse.readMessages:type_name -> rpc_personal_chat.v1.MessageReadReceipt
-	52, // 21: rpc_personal_chat.v1.PresignChatUploadResponse.expiresAt:type_name -> google.protobuf.Timestamp
-	52, // 22: rpc_personal_chat.v1.ConfirmChatUploadResponse.createdAt:type_name -> google.protobuf.Timestamp
-	52, // 23: rpc_personal_chat.v1.ConfirmChatUploadResponse.expiresAt:type_name -> google.protobuf.Timestamp
-	52, // 24: rpc_personal_chat.v1.MessageReadReceipt.readAt:type_name -> google.protobuf.Timestamp
+	53, // 21: rpc_personal_chat.v1.PresignChatUploadResponse.expiresAt:type_name -> google.protobuf.Timestamp
+	53, // 22: rpc_personal_chat.v1.ConfirmChatUploadResponse.createdAt:type_name -> google.protobuf.Timestamp
+	53, // 23: rpc_personal_chat.v1.ConfirmChatUploadResponse.expiresAt:type_name -> google.protobuf.Timestamp
+	53, // 24: rpc_personal_chat.v1.MessageReadReceipt.readAt:type_name -> google.protobuf.Timestamp
 	27, // 25: rpc_personal_chat.v1.MarkChatReadResponse.readMessages:type_name -> rpc_personal_chat.v1.MessageReadReceipt
-	32, // 26: rpc_personal_chat.v1.SyncAction.payload:type_name -> rpc_personal_chat.v1.SyncActionPayload
-	52, // 27: rpc_personal_chat.v1.SyncAction.createdAt:type_name -> google.protobuf.Timestamp
-	33, // 28: rpc_personal_chat.v1.GetSyncActionsResponse.actions:type_name -> rpc_personal_chat.v1.SyncAction
-	52, // 29: rpc_personal_chat.v1.AcknowledgeDeliverySsePayload.deliveredAt:type_name -> google.protobuf.Timestamp
+	33, // 26: rpc_personal_chat.v1.SyncAction.payload:type_name -> rpc_personal_chat.v1.SyncActionPayload
+	53, // 27: rpc_personal_chat.v1.SyncAction.createdAt:type_name -> google.protobuf.Timestamp
+	34, // 28: rpc_personal_chat.v1.GetSyncActionsResponse.actions:type_name -> rpc_personal_chat.v1.SyncAction
+	53, // 29: rpc_personal_chat.v1.AcknowledgeDeliverySsePayload.deliveredAt:type_name -> google.protobuf.Timestamp
 	27, // 30: rpc_personal_chat.v1.MarkChatReadSsePayload.readMessages:type_name -> rpc_personal_chat.v1.MessageReadReceipt
 	1,  // 31: rpc_personal_chat.v1.ChatSsePayload.SendMessageSseEvent:type_name -> rpc_personal_chat.v1.Message
-	45, // 32: rpc_personal_chat.v1.ChatSsePayload.AcknowledgeDeliverySseEvent:type_name -> rpc_personal_chat.v1.AcknowledgeDeliverySsePayload
-	46, // 33: rpc_personal_chat.v1.ChatSsePayload.MarkChatReadSseEvent:type_name -> rpc_personal_chat.v1.MarkChatReadSsePayload
-	47, // 34: rpc_personal_chat.v1.ChatSsePayload.UnsendMessageSseEvent:type_name -> rpc_personal_chat.v1.UnsendMessageSsePayload
-	48, // 35: rpc_personal_chat.v1.ChatSsePayload.DeleteMessageForMeSseEvent:type_name -> rpc_personal_chat.v1.DeleteMessageForMeSsePayload
+	46, // 32: rpc_personal_chat.v1.ChatSsePayload.AcknowledgeDeliverySseEvent:type_name -> rpc_personal_chat.v1.AcknowledgeDeliverySsePayload
+	47, // 33: rpc_personal_chat.v1.ChatSsePayload.MarkChatReadSseEvent:type_name -> rpc_personal_chat.v1.MarkChatReadSsePayload
+	48, // 34: rpc_personal_chat.v1.ChatSsePayload.UnsendMessageSseEvent:type_name -> rpc_personal_chat.v1.UnsendMessageSsePayload
+	49, // 35: rpc_personal_chat.v1.ChatSsePayload.DeleteMessageForMeSseEvent:type_name -> rpc_personal_chat.v1.DeleteMessageForMeSsePayload
 	1,  // 36: rpc_personal_chat.v1.ChatSsePayload.ConfirmFileMessageUploadSseEvent:type_name -> rpc_personal_chat.v1.Message
-	49, // 37: rpc_personal_chat.v1.ChatSsePayload.RequestHistorySyncSseEvent:type_name -> rpc_personal_chat.v1.RequestHistorySyncSsePayload
-	50, // 38: rpc_personal_chat.v1.ChatSsePayload.UploadHistorySyncSseEvent:type_name -> rpc_personal_chat.v1.UploadHistorySyncSsePayload
+	50, // 37: rpc_personal_chat.v1.ChatSsePayload.RequestHistorySyncSseEvent:type_name -> rpc_personal_chat.v1.RequestHistorySyncSsePayload
+	51, // 38: rpc_personal_chat.v1.ChatSsePayload.UploadHistorySyncSseEvent:type_name -> rpc_personal_chat.v1.UploadHistorySyncSsePayload
 	2,  // 39: rpc_personal_chat.v1.ChatService.CheckEligibility:input_type -> rpc_personal_chat.v1.CheckEligibilityRequest
 	4,  // 40: rpc_personal_chat.v1.ChatService.CreateChat:input_type -> rpc_personal_chat.v1.CreateChatRequest
 	6,  // 41: rpc_personal_chat.v1.ChatService.GetUserChats:input_type -> rpc_personal_chat.v1.GetUserChatsRequest
@@ -3875,14 +3963,14 @@ var file_proto_personal_personal_chat_personal_chat_api_proto_depIdxs = []int32{
 	25, // 51: rpc_personal_chat.v1.ChatService.GetFileURL:input_type -> rpc_personal_chat.v1.GetFileURLRequest
 	28, // 52: rpc_personal_chat.v1.ChatService.MarkChatRead:input_type -> rpc_personal_chat.v1.MarkChatReadRequest
 	30, // 53: rpc_personal_chat.v1.ChatService.UnsendMessage:input_type -> rpc_personal_chat.v1.UnsendMessageRequest
-	31, // 54: rpc_personal_chat.v1.ChatService.DeleteMessageForMe:input_type -> rpc_personal_chat.v1.DeleteMessageForMeRequest
-	34, // 55: rpc_personal_chat.v1.ChatService.GetSyncActions:input_type -> rpc_personal_chat.v1.GetSyncActionsRequest
-	36, // 56: rpc_personal_chat.v1.ChatService.AcknowledgeSyncAction:input_type -> rpc_personal_chat.v1.AcknowledgeSyncActionRequest
-	37, // 57: rpc_personal_chat.v1.ChatService.RequestHistorySync:input_type -> rpc_personal_chat.v1.RequestHistorySyncRequest
-	39, // 58: rpc_personal_chat.v1.ChatService.UploadHistorySync:input_type -> rpc_personal_chat.v1.UploadHistorySyncRequest
-	40, // 59: rpc_personal_chat.v1.ChatService.DownloadHistorySync:input_type -> rpc_personal_chat.v1.DownloadHistorySyncRequest
-	43, // 60: rpc_personal_chat.v1.ChatService.FetchHistorySync:input_type -> rpc_personal_chat.v1.FetchHistorySyncRequest
-	42, // 61: rpc_personal_chat.v1.ChatService.AcknowledgeHistorySync:input_type -> rpc_personal_chat.v1.AcknowledgeHistorySyncRequest
+	32, // 54: rpc_personal_chat.v1.ChatService.DeleteMessageForMe:input_type -> rpc_personal_chat.v1.DeleteMessageForMeRequest
+	35, // 55: rpc_personal_chat.v1.ChatService.GetSyncActions:input_type -> rpc_personal_chat.v1.GetSyncActionsRequest
+	37, // 56: rpc_personal_chat.v1.ChatService.AcknowledgeSyncAction:input_type -> rpc_personal_chat.v1.AcknowledgeSyncActionRequest
+	38, // 57: rpc_personal_chat.v1.ChatService.RequestHistorySync:input_type -> rpc_personal_chat.v1.RequestHistorySyncRequest
+	40, // 58: rpc_personal_chat.v1.ChatService.UploadHistorySync:input_type -> rpc_personal_chat.v1.UploadHistorySyncRequest
+	41, // 59: rpc_personal_chat.v1.ChatService.DownloadHistorySync:input_type -> rpc_personal_chat.v1.DownloadHistorySyncRequest
+	44, // 60: rpc_personal_chat.v1.ChatService.FetchHistorySync:input_type -> rpc_personal_chat.v1.FetchHistorySyncRequest
+	43, // 61: rpc_personal_chat.v1.ChatService.AcknowledgeHistorySync:input_type -> rpc_personal_chat.v1.AcknowledgeHistorySyncRequest
 	3,  // 62: rpc_personal_chat.v1.ChatService.CheckEligibility:output_type -> rpc_personal_chat.v1.CheckEligibilityResponse
 	5,  // 63: rpc_personal_chat.v1.ChatService.CreateChat:output_type -> rpc_personal_chat.v1.CreateChatResponse
 	7,  // 64: rpc_personal_chat.v1.ChatService.GetUserChats:output_type -> rpc_personal_chat.v1.GetUserChatsResponse
@@ -3897,15 +3985,15 @@ var file_proto_personal_personal_chat_personal_chat_api_proto_depIdxs = []int32{
 	24, // 73: rpc_personal_chat.v1.ChatService.ConfirmUpload:output_type -> rpc_personal_chat.v1.ConfirmChatUploadResponse
 	26, // 74: rpc_personal_chat.v1.ChatService.GetFileURL:output_type -> rpc_personal_chat.v1.GetFileURLResponse
 	29, // 75: rpc_personal_chat.v1.ChatService.MarkChatRead:output_type -> rpc_personal_chat.v1.MarkChatReadResponse
-	53, // 76: rpc_personal_chat.v1.ChatService.UnsendMessage:output_type -> rpc_common_model.v1.StatusOkay
-	53, // 77: rpc_personal_chat.v1.ChatService.DeleteMessageForMe:output_type -> rpc_common_model.v1.StatusOkay
-	35, // 78: rpc_personal_chat.v1.ChatService.GetSyncActions:output_type -> rpc_personal_chat.v1.GetSyncActionsResponse
-	53, // 79: rpc_personal_chat.v1.ChatService.AcknowledgeSyncAction:output_type -> rpc_common_model.v1.StatusOkay
-	38, // 80: rpc_personal_chat.v1.ChatService.RequestHistorySync:output_type -> rpc_personal_chat.v1.RequestHistorySyncResponse
-	53, // 81: rpc_personal_chat.v1.ChatService.UploadHistorySync:output_type -> rpc_common_model.v1.StatusOkay
-	41, // 82: rpc_personal_chat.v1.ChatService.DownloadHistorySync:output_type -> rpc_personal_chat.v1.DownloadHistorySyncResponse
-	44, // 83: rpc_personal_chat.v1.ChatService.FetchHistorySync:output_type -> rpc_personal_chat.v1.FetchHistorySyncResponse
-	53, // 84: rpc_personal_chat.v1.ChatService.AcknowledgeHistorySync:output_type -> rpc_common_model.v1.StatusOkay
+	31, // 76: rpc_personal_chat.v1.ChatService.UnsendMessage:output_type -> rpc_personal_chat.v1.UnsendMessageResponse
+	54, // 77: rpc_personal_chat.v1.ChatService.DeleteMessageForMe:output_type -> rpc_common_model.v1.StatusOkay
+	36, // 78: rpc_personal_chat.v1.ChatService.GetSyncActions:output_type -> rpc_personal_chat.v1.GetSyncActionsResponse
+	54, // 79: rpc_personal_chat.v1.ChatService.AcknowledgeSyncAction:output_type -> rpc_common_model.v1.StatusOkay
+	39, // 80: rpc_personal_chat.v1.ChatService.RequestHistorySync:output_type -> rpc_personal_chat.v1.RequestHistorySyncResponse
+	54, // 81: rpc_personal_chat.v1.ChatService.UploadHistorySync:output_type -> rpc_common_model.v1.StatusOkay
+	42, // 82: rpc_personal_chat.v1.ChatService.DownloadHistorySync:output_type -> rpc_personal_chat.v1.DownloadHistorySyncResponse
+	45, // 83: rpc_personal_chat.v1.ChatService.FetchHistorySync:output_type -> rpc_personal_chat.v1.FetchHistorySyncResponse
+	54, // 84: rpc_personal_chat.v1.ChatService.AcknowledgeHistorySync:output_type -> rpc_common_model.v1.StatusOkay
 	62, // [62:85] is the sub-list for method output_type
 	39, // [39:62] is the sub-list for method input_type
 	39, // [39:39] is the sub-list for extension type_name
@@ -3928,8 +4016,8 @@ func file_proto_personal_personal_chat_personal_chat_api_proto_init() {
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[12].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[23].OneofWrappers = []any{}
 	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[24].OneofWrappers = []any{}
-	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[32].OneofWrappers = []any{}
-	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[51].OneofWrappers = []any{
+	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[33].OneofWrappers = []any{}
+	file_proto_personal_personal_chat_personal_chat_api_proto_msgTypes[52].OneofWrappers = []any{
 		(*ChatSsePayload_SendMessageSseEvent)(nil),
 		(*ChatSsePayload_AcknowledgeDeliverySseEvent)(nil),
 		(*ChatSsePayload_MarkChatReadSseEvent)(nil),
@@ -3945,7 +4033,7 @@ func file_proto_personal_personal_chat_personal_chat_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc), len(file_proto_personal_personal_chat_personal_chat_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   52,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

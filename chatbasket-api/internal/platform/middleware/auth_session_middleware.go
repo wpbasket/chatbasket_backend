@@ -54,8 +54,7 @@ func writeAuthError(c *echo.Context, err error) error {
 	return err
 }
 
-// AuthSessionMiddleware verifies the session token and populates the context.
-// Ported from legacy middleware/session.go with modular adjustments.
+// AuthSessionMiddleware verifies the session token and populates the request context.
 func AuthSessionMiddleware(authProvider AuthSessionProvider, requireVerified bool, personalSseManager *personal_sse.Manager) echo.MiddlewareFunc {
 	return AuthSessionMiddlewareWithConfig(AuthSessionConfig{
 		AuthProvider:       authProvider,

@@ -11,13 +11,13 @@ type UserId struct {
 
 
 
-// ported from chatbasket-api/model/user.go
+// StatusOkay is a generic boolean status and message response.
 type StatusOkay struct {
 	Status  bool   `json:"status"`
 	Message string `json:"message"`
 }
 
-// ported from chatbasket-api/model/base.go
+// Documents wraps a list of typed items.
 type Documents[T any] struct {
 	Documents []T `json:"documents"`
 }

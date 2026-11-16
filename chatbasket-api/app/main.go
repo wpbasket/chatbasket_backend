@@ -80,8 +80,18 @@ func main() {
 	}
 	slog.Info("Postgres client initialized successfully")
 
+	maintenanceStartupCtx, maintenanceStartupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	maintenancePool, err := clients.ConnectPostgres(maintenanceStartupCtx, cfg.MaintenancePostgres)
+	maintenanceStartupCancel()
+	if err != nil {
+		pool.Close()
+		slog.Error("failed to connect to postgres maintenance pool", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Postgres maintenance pool initialized successfully")
+
 	// --- Route Registration ---
-	router.Register(e, pool, cfg, r2Pool)
+	router.Register(e, pool, maintenancePool, cfg, r2Pool)
 
 	// Graceful shutdown context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -124,6 +134,7 @@ func main() {
 	go func() {
 		defer close(done)
 		pool.Close()
+		maintenancePool.Close()
 	}()
 
 	select {

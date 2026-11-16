@@ -29,8 +29,10 @@ import (
 // commands across all server nodes in a multi-node cluster.
 type Manager struct {
 	*connect_sse.Manager[*rpc_personal_ssev1.PersonalSseEvent]
-	pool            *pgxpool.Pool
-	postgresQueries *personal_sse_store.Queries
+	pool                       *pgxpool.Pool
+	postgresQueries            *personal_sse_store.Queries
+	maintenancePool            *pgxpool.Pool
+	maintenancePostgresQueries *personal_sse_store.Queries
 	// outboxQueue decouples NOTIFY reception from DB hydration so one
 	// slow 65KB fetch never blocks urgent small events behind it.
 	// Delivery is at-most-once per node: a full queue drops (log only)
@@ -40,19 +42,21 @@ type Manager struct {
 }
 
 // outboxQueueCapacity bounds queued large events (~25KB of pointers).
-// outboxWorkerCount fits the pool budget: 2 LISTEN + 33 HTTP + 5 = 40.
+// outboxWorkerCount fits the main pool budget: 2 LISTEN + 31 HTTP + 5 = 38 (+ 2 MaintenancePostgres = 40).
 const (
 	outboxQueueCapacity = 256
 	outboxWorkerCount   = 5
 )
 
 // NewManager instantiates a new Manager for personal SSE streams.
-func NewManager(pool *pgxpool.Pool) *Manager {
+func NewManager(pool *pgxpool.Pool, maintenancePool *pgxpool.Pool) *Manager {
 	return &Manager{
-		Manager:         connect_sse.NewManager[*rpc_personal_ssev1.PersonalSseEvent](),
-		pool:            pool,
-		postgresQueries: personal_sse_store.New(pool),
-		outboxQueue:     make(chan postgresSsePayload, outboxQueueCapacity),
+		Manager:                    connect_sse.NewManager[*rpc_personal_ssev1.PersonalSseEvent](),
+		pool:                       pool,
+		postgresQueries:            personal_sse_store.New(pool),
+		maintenancePool:            maintenancePool,
+		maintenancePostgresQueries: personal_sse_store.New(maintenancePool),
+		outboxQueue:                make(chan postgresSsePayload, outboxQueueCapacity),
 	}
 }
 

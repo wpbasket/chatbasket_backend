@@ -247,7 +247,7 @@ func waitOne(t *testing.T, conn *pgxpool.Conn) postgresSsePayload {
 func TestIntegration_RouteLargeEndToEnd(t *testing.T) {
 	pool := integrationPool(t)
 	ctx := context.Background()
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 	want, raw := bigTestEvent(t)
 	require.True(t, shouldUseOutbox(postgresSsePayload{Command: cmdBroadcastToUser, TargetUserID: uuid.New()}, raw))
 
@@ -277,7 +277,7 @@ func TestIntegration_RouteLargeEndToEnd(t *testing.T) {
 func TestIntegration_RouteSmallInline(t *testing.T) {
 	pool := integrationPool(t)
 	ctx := context.Background()
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 	want := smallTestEvent()
 	raw, err := marshalEventBytes(want)
 	require.NoError(t, err)
@@ -302,7 +302,7 @@ func TestIntegration_RouteSmallInline(t *testing.T) {
 func TestIntegration_WorkerDeliversToLocalSession(t *testing.T) {
 	pool := integrationPool(t)
 	ctx := context.Background()
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 	want, raw := bigTestEvent(t)
 
 	userID := uuid.New()
@@ -342,7 +342,7 @@ func TestIntegration_WorkerDeliversToLocalSession(t *testing.T) {
 func TestIntegration_EdgeCase_PoisonPillCorruptedPayload(t *testing.T) {
 	pool := integrationPool(t)
 	ctx := context.Background()
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 
 	targetUser := uuid.New()
 	sessID := uuid.New()
@@ -376,7 +376,7 @@ func TestIntegration_EdgeCase_PoisonPillCorruptedPayload(t *testing.T) {
 func TestIntegration_EdgeCase_GhostOutboxID(t *testing.T) {
 	pool := integrationPool(t)
 	ctx := context.Background()
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 
 	targetUser := uuid.New()
 	sessID := uuid.New()
@@ -403,7 +403,7 @@ func TestIntegration_EdgeCase_GhostOutboxID(t *testing.T) {
 func TestIntegration_EdgeCase_DisconnectRaceCondition(t *testing.T) {
 	pool := integrationPool(t)
 	ctx := context.Background()
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 
 	targetUser := uuid.New()
 	sessID := uuid.New()
@@ -433,7 +433,7 @@ func TestIntegration_EdgeCase_InterleavedLargeAndSmallEvents(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 
 	var wg sync.WaitGroup
 	for i := 0; i < outboxWorkerCount; i++ {
@@ -512,7 +512,7 @@ func TestIntegration_EdgeCase_ZeroLeakedConnections(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 
 	var wg sync.WaitGroup
 	for i := 0; i < outboxWorkerCount; i++ {
@@ -573,7 +573,7 @@ func TestIntegration_EdgeCase_ZeroLeakedConnections(t *testing.T) {
 func TestIntegration_EdgeCase_MultiSessionTargetingAndExclusion(t *testing.T) {
 	pool := integrationPool(t)
 	ctx := context.Background()
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 
 	targetUser := uuid.New()
 	phoneSess := uuid.New()
@@ -665,7 +665,7 @@ func TestIntegration_EdgeCase_RapidSessionFlapping(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 
 	var wg sync.WaitGroup
 	for i := 0; i < outboxWorkerCount; i++ {
@@ -722,7 +722,7 @@ func TestIntegration_EdgeCase_RapidSessionFlapping(t *testing.T) {
 func TestIntegration_CeilingRejectsBeforePersistence(t *testing.T) {
 	pool := integrationPool(t)
 	ctx := context.Background()
-	mgr := NewManager(pool)
+	mgr := NewManager(pool, pool)
 
 	countRows := func() int64 {
 		var n int64

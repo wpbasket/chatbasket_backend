@@ -144,16 +144,23 @@ message AckDeliveryBatchPayload {
 message AckDeliveryBatchResponse {
   int32 acknowledgedCount = 1;
   repeated string acknowledgedMessageIds = 2;
+  // Request IDs that can never succeed for this caller: malformed or unknown
+  // IDs, messages the caller neither sent nor received, and expired messages.
+  repeated string permanentlyRejectedMessageIds = 3;
 }
 
+// The client never names a chat, and the IDs may come from different chats:
+// the server checks each message row on its own.
 message AckReadReceiptBatchRequest {
-  string chatId = 1;
-  repeated string messageIds = 2;
+  repeated string messageIds = 1;
 }
 
 message AckReadReceiptBatchResponse {
   int32 acknowledgedCount = 1;
   repeated string acknowledgedMessageIds = 2;
+  // Request IDs that can never succeed for this caller: malformed or unknown
+  // IDs, messages the caller neither sent nor received, and expired messages.
+  repeated string permanentlyRejectedMessageIds = 3;
 }
 
 message AckAndReadBatchPayload {
@@ -163,6 +170,9 @@ message AckAndReadBatchPayload {
 message AckAndReadBatchResponse {
   int32 acknowledgedCount = 1;
   repeated MessageReadReceipt readMessages = 2;
+  // Request IDs that can never succeed for this caller: malformed or unknown
+  // IDs, messages the caller neither sent nor received, and expired messages.
+  repeated string permanentlyRejectedMessageIds = 3;
 }
 
 message PresignChatUploadRequest {
@@ -217,20 +227,31 @@ message MessageReadReceipt {
   google.protobuf.Timestamp readAt = 2;
 }
 
+// The chat comes from the message rows on the server; the client never names it.
 message MarkChatReadRequest {
-  string chatId = 1;
-  repeated string messageIds = 2;
+  repeated string messageIds = 1;
 }
 
 message MarkChatReadResponse {
   bool status = 1;
   string readAt = 2;
   repeated MessageReadReceipt readMessages = 3;
+  // Request IDs that can never succeed for this caller: malformed or unknown
+  // IDs, messages the caller neither sent nor received, and expired messages.
+  repeated string permanentlyRejectedMessageIds = 4;
 }
 
+// The chat comes from the message rows on the server; the client never names it.
 message UnsendMessageRequest {
-  string chatId = 1;
-  repeated string messageIds = 2;
+  repeated string messageIds = 1;
+}
+
+message UnsendMessageResponse {
+  int32 acknowledgedCount = 1;
+  repeated string acknowledgedMessageIds = 2;
+  // Request IDs that can never succeed for this caller: malformed or unknown
+  // IDs, messages the caller neither sent nor received, and expired messages.
+  repeated string permanentlyRejectedMessageIds = 3;
 }
 
 message DeleteMessageForMeRequest {
@@ -365,7 +386,7 @@ service ChatService {
   rpc ConfirmUpload(ConfirmChatUploadRequest) returns (ConfirmChatUploadResponse);
   rpc GetFileURL(GetFileURLRequest) returns (GetFileURLResponse);
   rpc MarkChatRead(MarkChatReadRequest) returns (MarkChatReadResponse);
-  rpc UnsendMessage(UnsendMessageRequest) returns (rpc_common_model.v1.StatusOkay);
+  rpc UnsendMessage(UnsendMessageRequest) returns (UnsendMessageResponse);
   rpc DeleteMessageForMe(DeleteMessageForMeRequest) returns (rpc_common_model.v1.StatusOkay);
   rpc GetSyncActions(GetSyncActionsRequest) returns (GetSyncActionsResponse);
   rpc AcknowledgeSyncAction(AcknowledgeSyncActionRequest) returns (rpc_common_model.v1.StatusOkay);

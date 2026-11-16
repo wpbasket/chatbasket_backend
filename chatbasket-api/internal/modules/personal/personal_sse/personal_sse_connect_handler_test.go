@@ -14,7 +14,7 @@ import (
 )
 
 func TestStreamEvents_RateLimitGenericError(t *testing.T) {
-	mgr := NewManager(nil)
+	mgr := NewManager(nil, nil)
 	handler := newPersonalSseConnectHandler(mgr)
 
 	userID := uuid.New()

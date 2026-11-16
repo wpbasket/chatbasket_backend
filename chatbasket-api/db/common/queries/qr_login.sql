@@ -22,9 +22,16 @@ SET status = 'EXCHANGED', updated_at = NOW()
 WHERE id = $1 AND status = 'APPROVED' AND expires_at > NOW()
 RETURNING auth_user_id;
 
--- name: CleanupExpiredQRLoginRequests :exec
-DELETE FROM qr_login_requests
-WHERE expires_at < NOW();
+-- name: CleanupExpiredQRLoginRequestsBatch :execrows
+WITH batch AS (
+    SELECT id FROM qr_login_requests
+    WHERE expires_at < now()
+    FOR UPDATE SKIP LOCKED
+    LIMIT sqlc.arg('batch_size')
+)
+DELETE FROM qr_login_requests AS q
+USING batch
+WHERE q.id = batch.id;
 
 -- name: NotifyQREvent :exec
 SELECT pg_notify('qr_login_events', $1::text);

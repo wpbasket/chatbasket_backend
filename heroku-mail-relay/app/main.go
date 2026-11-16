@@ -298,21 +298,27 @@ func emailWorker(ctx context.Context, id int, cfg Config) {
 			log.Printf("Worker %d shutting down...", id)
 			return
 		case job := <-jobQueue:
-			// Only send to first recipient (as per original logic).
-			// mail.ParseAddress already validated it in the RPC handler,
-			// but defend-in-depth: sanitize once more to strip CR/LF.
-			toAddr := sanitizeHeader(job.To[0])
-
-			msg, err := buildMIMEMessage(cfg, toAddr, job.Subject, job.Body, job.TextBody, job.RefID)
-			if err != nil {
-				log.Printf("Worker %d Build Error for %v: %v", id, toAddr, err)
+			if len(job.To) == 0 {
+				log.Printf("Worker %d: job has no recipients, skipping", id)
 				continue
 			}
 
-			if err := sendMail(addr, auth, cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, []string{toAddr}, msg); err != nil {
-				log.Printf("Worker %d Error for %v: %v", id, toAddr, err)
+			// Defend-in-depth: sanitize all recipient addresses to strip CR/LF.
+			toAddrs := make([]string, 0, len(job.To))
+			for _, addr := range job.To {
+				toAddrs = append(toAddrs, sanitizeHeader(addr))
+			}
+
+			msg, err := buildMIMEMessage(cfg, toAddrs, job.Subject, job.Body, job.TextBody, job.RefID)
+			if err != nil {
+				log.Printf("Worker %d Build Error for %v: %v", id, toAddrs, err)
+				continue
+			}
+
+			if err := sendMail(addr, auth, cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPFrom, toAddrs, msg); err != nil {
+				log.Printf("Worker %d Error for %v: %v", id, toAddrs, err)
 			} else {
-				log.Printf("Worker %d Success: Email sent to %v (Subject: %q)", id, toAddr, sanitizeHeader(job.Subject))
+				log.Printf("Worker %d Success: Email sent to %v (Subject: %q)", id, toAddrs, sanitizeHeader(job.Subject))
 			}
 		}
 	}
@@ -339,11 +345,14 @@ func emailWorker(ctx context.Context, id int, cfg Config) {
 // transactional security mail (OTPs, verification); users must not be able to
 // "unsubscribe" from password resets. Gmail's bulk-sender unsubscribe rules
 // apply only when sending bulk/promotional mail.
-func buildMIMEMessage(cfg Config, to, subject, htmlBody, textBody, refID string) ([]byte, error) {
+func buildMIMEMessage(cfg Config, to []string, subject, htmlBody, textBody, refID string) ([]byte, error) {
 	// Sanitize inbound header content to guarantee no CR/LF injection.
 	subject = sanitizeHeader(subject)
 	fromName := sanitizeHeader(cfg.SMTPFromName)
-	to = sanitizeHeader(to)
+	sanitizedTo := make([]string, 0, len(to))
+	for _, addr := range to {
+		sanitizedTo = append(sanitizedTo, sanitizeHeader(addr))
+	}
 
 	// Parse the From address to ensure validity and to produce a properly
 	// RFC 2047 / 5322 encoded From header (mail.Address.String handles this).
@@ -371,7 +380,7 @@ func buildMIMEMessage(cfg Config, to, subject, htmlBody, textBody, refID string)
 	// --- Headers ---------------------------------------------------------
 	writeHeader(&buf, "Date", time.Now().UTC().Format(time.RFC1123Z))
 	writeHeader(&buf, "From", fromAddr.String())
-	writeHeader(&buf, "To", to)
+	writeHeader(&buf, "To", strings.Join(sanitizedTo, ", "))
 	writeHeader(&buf, "Subject", mime.QEncoding.Encode("UTF-8", subject))
 	writeHeader(&buf, "Message-ID", messageID)
 	writeHeader(&buf, "MIME-Version", "1.0")

@@ -1,15 +1,16 @@
 package personal_chat
 
 import (
-	"context"
 	"chatbasket-api/internal/modules/personal/personal_chat/internal/personal_chat_store"
 	"chatbasket-api/internal/platform/kit"
+	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
-
 
 // RequestHistorySync handles step ①: secondary requests sync
 func (s *chatService) RequestHistorySync(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, chatsCipher string, usedPrimaryKey string) (uuid.UUID, uuid.UUID, string, error) {
@@ -57,7 +58,10 @@ func (s *chatService) UploadHistorySync(ctx context.Context, userID uuid.UUID, r
 	// We need to fetch the session ID associated with this requestID to send the "ready" event.
 	syncReq, err := s.PostgresQuerier.GetHistorySyncMeta(ctx, requestID)
 	if err != nil {
-		return uuid.Nil, kit.NewError(http.StatusGone, "request_gone", "History sync request expired or not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, kit.NewError(http.StatusGone, "request_gone", "History sync request expired or not found")
+		}
+		return uuid.Nil, kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to load history sync request")
 	}
 
 	// Ensure it belongs to this user
@@ -90,7 +94,10 @@ func (s *chatService) UploadHistorySync(ctx context.Context, userID uuid.UUID, r
 func (s *chatService) DownloadHistorySync(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, requestID uuid.UUID) (*string, error) {
 	syncReqMeta, err := s.PostgresQuerier.GetHistorySyncMeta(ctx, requestID)
 	if err != nil {
-		return nil, kit.NewError(http.StatusGone, "request_gone", "History sync request expired or not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, kit.NewError(http.StatusGone, "request_gone", "History sync request expired or not found")
+		}
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to load history sync request")
 	}
 
 	if syncReqMeta.UserID != userID || syncReqMeta.SessionID != sessionID {
@@ -105,6 +112,9 @@ func (s *chatService) DownloadHistorySync(ctx context.Context, userID uuid.UUID,
 		ID:        requestID,
 		SessionID: sessionID,
 	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to load history sync payload")
+	}
 	if err != nil || len(payload) == 0 {
 		return nil, kit.NewError(http.StatusNotFound, "not_ready", "Payload not yet ready")
 	}
@@ -128,7 +138,10 @@ func (s *chatService) FetchHistorySync(ctx context.Context, userID uuid.UUID, re
 		UserID: userID,
 	})
 	if err != nil {
-		return "", "", kit.NewError(http.StatusGone, "request_gone", "History sync request expired or not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", "", kit.NewError(http.StatusGone, "request_gone", "History sync request expired or not found")
+		}
+		return "", "", kit.NewError(http.StatusInternalServerError, "internal_error", "Failed to load history sync request")
 	}
 
 	if row.ExpiresAt.Before(time.Now()) {
@@ -162,5 +175,3 @@ func (s *chatService) AcknowledgeHistorySync(ctx context.Context, userID uuid.UU
 	}
 	return nil
 }
-
-

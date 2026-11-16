@@ -3,110 +3,117 @@
 ```
 chatbasket_backend/
 ├── .agents/
-│   ├── skills/
-│   │   ├── building-native-ui/
-│   │   │   ├── references/
-│   │   │   │   ├── animations.md
-│   │   │   │   ├── controls.md
-│   │   │   │   ├── form-sheet.md
-│   │   │   │   ├── gradients.md
-│   │   │   │   ├── icons.md
-│   │   │   │   ├── media.md
-│   │   │   │   ├── route-structure.md
-│   │   │   │   ├── search.md
-│   │   │   │   ├── storage.md
-│   │   │   │   ├── tabs.md
-│   │   │   │   ├── toolbar-and-headers.md
-│   │   │   │   ├── visual-effects.md
-│   │   │   │   ├── webgpu-three.md
-│   │   │   │   └── zoom-transitions.md
-│   │   │   └── SKILL.md
-│   │   ├── eas-update-insights/
-│   │   │   ├── references/
-│   │   │   │   ├── channel-insights-schema.md
-│   │   │   │   └── update-insights-schema.md
-│   │   │   └── SKILL.md
-│   │   ├── expo-api-routes/
-│   │   │   └── SKILL.md
-│   │   ├── expo-cicd-workflows/
-│   │   │   ├── scripts/
-│   │   │   │   ├── fetch.js
-│   │   │   │   ├── package.json
-│   │   │   │   └── validate.js
-│   │   │   └── SKILL.md
-│   │   ├── expo-deployment/
-│   │   │   ├── references/
-│   │   │   │   ├── app-store-metadata.md
-│   │   │   │   ├── ios-app-store.md
-│   │   │   │   ├── play-store.md
-│   │   │   │   ├── testflight.md
-│   │   │   │   └── workflows.md
-│   │   │   └── SKILL.md
-│   │   ├── expo-dev-client/
-│   │   │   └── SKILL.md
-│   │   ├── expo-module/
-│   │   │   ├── references/
-│   │   │   │   ├── config-plugin.md
-│   │   │   │   ├── create-expo-module.md
-│   │   │   │   ├── lifecycle.md
-│   │   │   │   ├── module-config.md
-│   │   │   │   ├── native-module.md
-│   │   │   │   └── native-view.md
-│   │   │   └── SKILL.md
-│   │   ├── expo-tailwind-setup/
-│   │   │   └── SKILL.md
-│   │   ├── expo-ui-jetpack-compose/
-│   │   │   └── SKILL.md
-│   │   ├── expo-ui-swiftui/
-│   │   │   └── SKILL.md
-│   │   ├── frontend-design/
-│   │   │   ├── LICENSE.txt
-│   │   │   └── SKILL.md
-│   │   ├── native-data-fetching/
-│   │   │   ├── references/
-│   │   │   │   └── expo-router-loaders.md
-│   │   │   └── SKILL.md
-│   │   ├── ui-ux-pro-max/
-│   │   │   ├── SKILL.md
-│   │   │   ├── data
-│   │   │   └── scripts
-│   │   ├── upgrading-expo/
-│   │   │   ├── references/
-│   │   │   │   ├── expo-av-to-audio.md
-│   │   │   │   ├── expo-av-to-video.md
-│   │   │   │   ├── native-tabs.md
-│   │   │   │   ├── new-architecture.md
-│   │   │   │   ├── react-19.md
-│   │   │   │   ├── react-compiler.md
-│   │   │   │   └── react-navigation-to-expo-router.md
-│   │   │   └── SKILL.md
-│   │   └── use-dom/
-│   │       └── SKILL.md
-│   └── workflows/
-│       ├── folder-tree-sync.md
-│       ├── gitnexus-backup-cb-docs-references.md
-│       ├── gitnexus-chatbasket-backend.md
-│       ├── gitnexus-chatbasket.md
-│       ├── gitnexus-helper-cb-backend.md
-│       ├── gitnexus-wiki-backup-cb-docs-references.md
-│       ├── gitnexus-wiki-chatbasket-backend.md
-│       ├── gitnexus-wiki-chatbasket.md
-│       └── gitnexus-wiki-helper-cb-backend.md
+│   └── skills/
+│       ├── building-native-ui/
+│       │   ├── references/
+│       │   │   ├── animations.md
+│       │   │   ├── controls.md
+│       │   │   ├── form-sheet.md
+│       │   │   ├── gradients.md
+│       │   │   ├── icons.md
+│       │   │   ├── media.md
+│       │   │   ├── route-structure.md
+│       │   │   ├── search.md
+│       │   │   ├── storage.md
+│       │   │   ├── tabs.md
+│       │   │   ├── toolbar-and-headers.md
+│       │   │   ├── visual-effects.md
+│       │   │   ├── webgpu-three.md
+│       │   │   └── zoom-transitions.md
+│       │   └── SKILL.md
+│       ├── eas-update-insights/
+│       │   ├── references/
+│       │   │   ├── channel-insights-schema.md
+│       │   │   └── update-insights-schema.md
+│       │   └── SKILL.md
+│       ├── expo-api-routes/
+│       │   └── SKILL.md
+│       ├── expo-cicd-workflows/
+│       │   ├── scripts/
+│       │   │   ├── fetch.js
+│       │   │   ├── package.json
+│       │   │   └── validate.js
+│       │   └── SKILL.md
+│       ├── expo-deployment/
+│       │   ├── references/
+│       │   │   ├── app-store-metadata.md
+│       │   │   ├── ios-app-store.md
+│       │   │   ├── play-store.md
+│       │   │   ├── testflight.md
+│       │   │   └── workflows.md
+│       │   └── SKILL.md
+│       ├── expo-dev-client/
+│       │   └── SKILL.md
+│       ├── expo-module/
+│       │   ├── references/
+│       │   │   ├── config-plugin.md
+│       │   │   ├── create-expo-module.md
+│       │   │   ├── lifecycle.md
+│       │   │   ├── module-config.md
+│       │   │   ├── native-module.md
+│       │   │   └── native-view.md
+│       │   └── SKILL.md
+│       ├── expo-tailwind-setup/
+│       │   └── SKILL.md
+│       ├── expo-ui-jetpack-compose/
+│       │   └── SKILL.md
+│       ├── expo-ui-swiftui/
+│       │   └── SKILL.md
+│       ├── folder-tree-sync/
+│       │   └── SKILL.md
+│       ├── frontend-design/
+│       │   ├── LICENSE.txt
+│       │   └── SKILL.md
+│       ├── gitnexus-all/
+│       │   └── SKILL.md
+│       ├── gitnexus-chatbasket-backend/
+│       │   └── SKILL.md
+│       ├── gitnexus-cli/
+│       │   └── SKILL.md
+│       ├── gitnexus-debugging/
+│       │   └── SKILL.md
+│       ├── gitnexus-exploring/
+│       │   └── SKILL.md
+│       ├── gitnexus-guide/
+│       │   └── SKILL.md
+│       ├── gitnexus-impact-analysis/
+│       │   └── SKILL.md
+│       ├── gitnexus-refactoring/
+│       │   └── SKILL.md
+│       ├── native-data-fetching/
+│       │   ├── references/
+│       │   │   └── expo-router-loaders.md
+│       │   └── SKILL.md
+│       ├── ui-ux-pro-max/
+│       │   ├── SKILL.md
+│       │   ├── data
+│       │   └── scripts
+│       ├── upgrading-expo/
+│       │   ├── references/
+│       │   │   ├── expo-av-to-audio.md
+│       │   │   ├── expo-av-to-video.md
+│       │   │   ├── native-tabs.md
+│       │   │   ├── new-architecture.md
+│       │   │   ├── react-19.md
+│       │   │   ├── react-compiler.md
+│       │   │   └── react-navigation-to-expo-router.md
+│       │   └── SKILL.md
+│       └── use-dom/
+│           └── SKILL.md
 ├── .claude/
 │   ├── skills/
-│   │   └── gitnexus/
-│   │       ├── gitnexus-cli/
-│   │       │   └── SKILL.md
-│   │       ├── gitnexus-debugging/
-│   │       │   └── SKILL.md
-│   │       ├── gitnexus-exploring/
-│   │       │   └── SKILL.md
-│   │       ├── gitnexus-guide/
-│   │       │   └── SKILL.md
-│   │       ├── gitnexus-impact-analysis/
-│   │       │   └── SKILL.md
-│   │       └── gitnexus-refactoring/
-│   │           └── SKILL.md
+│   │   ├── gitnexus-cli/
+│   │   │   └── SKILL.md
+│   │   ├── gitnexus-debugging/
+│   │   │   └── SKILL.md
+│   │   ├── gitnexus-exploring/
+│   │   │   └── SKILL.md
+│   │   ├── gitnexus-guide/
+│   │   │   └── SKILL.md
+│   │   ├── gitnexus-impact-analysis/
+│   │   │   └── SKILL.md
+│   │   └── gitnexus-refactoring/
+│   │       └── SKILL.md
 │   └── settings.json
 ├── .github/
 │   └── workflows/
@@ -151,12 +158,19 @@ chatbasket_backend/
 │   │   │   │   ├── 010_pending_uploads.down.sql
 │   │   │   │   ├── 010_pending_uploads.up.sql
 │   │   │   │   ├── 011_history_sync.down.sql
-│   │   │   │   └── 011_history_sync.up.sql
+│   │   │   │   ├── 011_history_sync.up.sql
+│   │   │   │   ├── 012_sse_outbox.down.sql
+│   │   │   │   ├── 012_sse_outbox.up.sql
+│   │   │   │   ├── 013_message_sender_secondary_sync.down.sql
+│   │   │   │   ├── 013_message_sender_secondary_sync.up.sql
+│   │   │   │   ├── 014_message_history.down.sql
+│   │   │   │   └── 014_message_history.up.sql
 │   │   │   └── queries/
 │   │   │       ├── pending_uploads.sql
 │   │   │       ├── personal_chat.sql
 │   │   │       ├── personal_contacts.sql
-│   │   │       └── personal_profile.sql
+│   │   │       ├── personal_profile.sql
+│   │   │       └── personal_sse.sql
 │   │   └── public/
 │   │       └── queries/
 │   │           └── placeholder.sql
@@ -245,7 +259,8 @@ chatbasket_backend/
 │   │   │   │       │       ├── pending_uploads.sql.go
 │   │   │   │       │       └── querier.go
 │   │   │   │       ├── pending_uploads_cleanup.go
-│   │   │   │       └── pending_uploads_svc.go
+│   │   │   │       ├── pending_uploads_svc.go
+│   │   │   │       └── pending_uploads_svc_test.go
 │   │   │   └── personal/
 │   │   │       ├── personal_chat/
 │   │   │       │   ├── internal/
@@ -257,20 +272,39 @@ chatbasket_backend/
 │   │   │       │   │       └── querier.go
 │   │   │       │   ├── cleanup_integration_test.go
 │   │   │       │   ├── history_sync_api_http_handler.go
+│   │   │       │   ├── history_sync_fetch_test.go
 │   │   │       │   ├── history_sync_svc.go
 │   │   │       │   ├── history_sync_svc_integration_test.go
 │   │   │       │   ├── personal_chat_api_http_handler.go
 │   │   │       │   ├── personal_chat_api_routes.go
+│   │   │       │   ├── personal_chat_block_direction_test.go
 │   │   │       │   ├── personal_chat_connect_handler.go
 │   │   │       │   ├── personal_chat_errors.go
+│   │   │       │   ├── personal_chat_handlers_integration_test.go
+│   │   │       │   ├── personal_chat_live_ack_relay_test.go
+│   │   │       │   ├── personal_chat_live_read_ack_test.go
+│   │   │       │   ├── personal_chat_live_read_cleanup_test.go
+│   │   │       │   ├── personal_chat_live_read_order_test.go
+│   │   │       │   ├── personal_chat_live_unsend_batch_test.go
+│   │   │       │   ├── personal_chat_live_unsend_review_points_test.go
 │   │   │       │   ├── personal_chat_mdl.go
 │   │   │       │   ├── personal_chat_svc.go
+│   │   │       │   ├── personal_chat_svc_batch_delete_for_me_test.go
 │   │   │       │   ├── personal_chat_svc_cleanup.go
-│   │   │       │   ├── personal_chat_svc_cleanup_mock_test.go
+│   │   │       │   ├── personal_chat_svc_cleanup_test.go
+│   │   │       │   ├── personal_chat_svc_delivery_ack_test.go
+│   │   │       │   ├── personal_chat_svc_expiry_test.go
 │   │   │       │   ├── personal_chat_svc_file.go
 │   │   │       │   ├── personal_chat_svc_idempotency_test.go
+│   │   │       │   ├── personal_chat_svc_partitions.go
+│   │   │       │   ├── personal_chat_svc_partitions_test.go
+│   │   │       │   ├── personal_chat_svc_permanently_rejected_test.go
+│   │   │       │   ├── personal_chat_svc_read_test.go
+│   │   │       │   ├── personal_chat_svc_reply_test.go
 │   │   │       │   ├── personal_chat_svc_revision_test.go
 │   │   │       │   ├── personal_chat_svc_session_filter_mock_test.go
+│   │   │       │   ├── personal_chat_svc_unsend_test.go
+│   │   │       │   ├── personal_chat_test_helpers_test.go
 │   │   │       │   └── stale_keys_error_test.go
 │   │   │       ├── personal_contact/
 │   │   │       │   ├── internal/
@@ -281,9 +315,11 @@ chatbasket_backend/
 │   │   │       │   │       └── querier.go
 │   │   │       │   ├── personal_contact_api_http_handler.go
 │   │   │       │   ├── personal_contact_api_routes.go
+│   │   │       │   ├── personal_contact_block_direction_test.go
 │   │   │       │   ├── personal_contact_block_status_test.go
 │   │   │       │   ├── personal_contact_connect_handler.go
 │   │   │       │   ├── personal_contact_delete_integration_test.go
+│   │   │       │   ├── personal_contact_direct_add_cleanup_mock_test.go
 │   │   │       │   ├── personal_contact_errors.go
 │   │   │       │   ├── personal_contact_mdl.go
 │   │   │       │   ├── personal_contact_request_integration_test.go
@@ -316,9 +352,19 @@ chatbasket_backend/
 │   │   │       │   ├── personal_setting_mdl.go
 │   │   │       │   └── personal_setting_svc.go
 │   │   │       └── personal_sse/
+│   │   │           ├── internal/
+│   │   │           │   └── personal_sse_store/
+│   │   │           │       ├── db.go
+│   │   │           │       ├── models.go
+│   │   │           │       ├── personal_sse.sql.go
+│   │   │           │       └── querier.go
 │   │   │           ├── personal_sse_api_routes.go
 │   │   │           ├── personal_sse_connect_handler.go
+│   │   │           ├── personal_sse_connect_handler_test.go
 │   │   │           ├── personal_sse_manager.go
+│   │   │           ├── personal_sse_outbox.go
+│   │   │           ├── personal_sse_outbox_integration_test.go
+│   │   │           ├── personal_sse_outbox_test.go
 │   │   │           └── personal_sse_postgres_listener.go
 │   │   └── platform/
 │   │       ├── clients/
@@ -393,8 +439,9 @@ chatbasket_backend/
 │   │   └── personal/
 │   │       ├── personal.chat-system.md
 │   │       └── personal.profile&contact-system.md
-│   └── testing/
-│       └── pgx-testing.md
+│   ├── testing/
+│   │   └── pgx-testing.md
+│   └── MESSAGE_PAYLOAD_SIZING_FORMULA.md
 ├── heroku-mail-relay/
 │   ├── app/
 │   │   ├── main.go
@@ -412,7 +459,6 @@ chatbasket_backend/
 │   ├── buf.gen.yaml
 │   ├── go.mod
 │   └── go.sum
-├── scripts/
 ├── .gitignore
 ├── .gitnexusignore
 ├── AGENTS.md
@@ -425,192 +471,130 @@ chatbasket_backend/
 ```
 chatbasket/
 ├── .agents/
-│   ├── skills/
-│   │   ├── building-native-ui/
-│   │   │   ├── references/
-│   │   │   │   ├── animations.md
-│   │   │   │   ├── controls.md
-│   │   │   │   ├── form-sheet.md
-│   │   │   │   ├── gradients.md
-│   │   │   │   ├── icons.md
-│   │   │   │   ├── media.md
-│   │   │   │   ├── route-structure.md
-│   │   │   │   ├── search.md
-│   │   │   │   ├── storage.md
-│   │   │   │   ├── tabs.md
-│   │   │   │   ├── toolbar-and-headers.md
-│   │   │   │   ├── visual-effects.md
-│   │   │   │   ├── webgpu-three.md
-│   │   │   │   └── zoom-transitions.md
-│   │   │   └── SKILL.md
-│   │   ├── eas-update-insights/
-│   │   │   ├── references/
-│   │   │   │   ├── channel-insights-schema.md
-│   │   │   │   └── update-insights-schema.md
-│   │   │   └── SKILL.md
-│   │   ├── expo-api-routes/
-│   │   │   └── SKILL.md
-│   │   ├── expo-cicd-workflows/
-│   │   │   ├── scripts/
-│   │   │   │   ├── fetch.js
-│   │   │   │   ├── package.json
-│   │   │   │   └── validate.js
-│   │   │   └── SKILL.md
-│   │   ├── expo-deployment/
-│   │   │   ├── references/
-│   │   │   │   ├── app-store-metadata.md
-│   │   │   │   ├── ios-app-store.md
-│   │   │   │   ├── play-store.md
-│   │   │   │   ├── testflight.md
-│   │   │   │   └── workflows.md
-│   │   │   └── SKILL.md
-│   │   ├── expo-dev-client/
-│   │   │   └── SKILL.md
-│   │   ├── expo-module/
-│   │   │   ├── references/
-│   │   │   │   ├── config-plugin.md
-│   │   │   │   ├── create-expo-module.md
-│   │   │   │   ├── lifecycle.md
-│   │   │   │   ├── module-config.md
-│   │   │   │   ├── native-module.md
-│   │   │   │   └── native-view.md
-│   │   │   └── SKILL.md
-│   │   ├── expo-tailwind-setup/
-│   │   │   └── SKILL.md
-│   │   ├── expo-ui-jetpack-compose/
-│   │   │   └── SKILL.md
-│   │   ├── expo-ui-swiftui/
-│   │   │   └── SKILL.md
-│   │   ├── frontend-design/
-│   │   │   ├── LICENSE.txt
-│   │   │   └── SKILL.md
-│   │   ├── native-data-fetching/
-│   │   │   ├── references/
-│   │   │   │   └── expo-router-loaders.md
-│   │   │   └── SKILL.md
-│   │   ├── ui-ux-pro-max/
-│   │   │   ├── SKILL.md
-│   │   │   ├── data
-│   │   │   └── scripts
-│   │   ├── upgrading-expo/
-│   │   │   ├── references/
-│   │   │   │   ├── expo-av-to-audio.md
-│   │   │   │   ├── expo-av-to-video.md
-│   │   │   │   ├── native-tabs.md
-│   │   │   │   ├── new-architecture.md
-│   │   │   │   ├── react-19.md
-│   │   │   │   ├── react-compiler.md
-│   │   │   │   └── react-navigation-to-expo-router.md
-│   │   │   └── SKILL.md
-│   │   └── use-dom/
-│   │       └── SKILL.md
-│   └── workflows/
-│       ├── folder-tree-sync.md
-│       ├── gitnexus-backup-cb-docs-references.md
-│       ├── gitnexus-chatbasket-backend.md
-│       ├── gitnexus-chatbasket.md
-│       ├── gitnexus-helper-cb-backend.md
-│       ├── gitnexus-wiki-backup-cb-docs-references.md
-│       ├── gitnexus-wiki-chatbasket-backend.md
-│       ├── gitnexus-wiki-chatbasket.md
-│       └── gitnexus-wiki-helper-cb-backend.md
+│   └── skills/
+│       ├── building-native-ui/
+│       │   ├── references/
+│       │   │   ├── animations.md
+│       │   │   ├── controls.md
+│       │   │   ├── form-sheet.md
+│       │   │   ├── gradients.md
+│       │   │   ├── icons.md
+│       │   │   ├── media.md
+│       │   │   ├── route-structure.md
+│       │   │   ├── search.md
+│       │   │   ├── storage.md
+│       │   │   ├── tabs.md
+│       │   │   ├── toolbar-and-headers.md
+│       │   │   ├── visual-effects.md
+│       │   │   ├── webgpu-three.md
+│       │   │   └── zoom-transitions.md
+│       │   └── SKILL.md
+│       ├── eas-update-insights/
+│       │   ├── references/
+│       │   │   ├── channel-insights-schema.md
+│       │   │   └── update-insights-schema.md
+│       │   └── SKILL.md
+│       ├── expo-api-routes/
+│       │   └── SKILL.md
+│       ├── expo-cicd-workflows/
+│       │   ├── scripts/
+│       │   │   ├── fetch.js
+│       │   │   ├── package.json
+│       │   │   └── validate.js
+│       │   └── SKILL.md
+│       ├── expo-deployment/
+│       │   ├── references/
+│       │   │   ├── app-store-metadata.md
+│       │   │   ├── ios-app-store.md
+│       │   │   ├── play-store.md
+│       │   │   ├── testflight.md
+│       │   │   └── workflows.md
+│       │   └── SKILL.md
+│       ├── expo-dev-client/
+│       │   └── SKILL.md
+│       ├── expo-module/
+│       │   ├── references/
+│       │   │   ├── config-plugin.md
+│       │   │   ├── create-expo-module.md
+│       │   │   ├── lifecycle.md
+│       │   │   ├── module-config.md
+│       │   │   ├── native-module.md
+│       │   │   └── native-view.md
+│       │   └── SKILL.md
+│       ├── expo-tailwind-setup/
+│       │   └── SKILL.md
+│       ├── expo-ui-jetpack-compose/
+│       │   └── SKILL.md
+│       ├── expo-ui-swiftui/
+│       │   └── SKILL.md
+│       ├── folder-tree-sync/
+│       │   └── SKILL.md
+│       ├── frontend-design/
+│       │   ├── LICENSE.txt
+│       │   └── SKILL.md
+│       ├── gitnexus-all/
+│       │   └── SKILL.md
+│       ├── gitnexus-chatbasket/
+│       │   └── SKILL.md
+│       ├── gitnexus-cli/
+│       │   └── SKILL.md
+│       ├── gitnexus-debugging/
+│       │   └── SKILL.md
+│       ├── gitnexus-exploring/
+│       │   └── SKILL.md
+│       ├── gitnexus-guide/
+│       │   └── SKILL.md
+│       ├── gitnexus-impact-analysis/
+│       │   └── SKILL.md
+│       ├── gitnexus-refactoring/
+│       │   └── SKILL.md
+│       ├── native-data-fetching/
+│       │   ├── references/
+│       │   │   └── expo-router-loaders.md
+│       │   └── SKILL.md
+│       ├── ui-ux-pro-max/
+│       │   ├── SKILL.md
+│       │   ├── data
+│       │   └── scripts
+│       ├── upgrading-expo/
+│       │   ├── references/
+│       │   │   ├── expo-av-to-audio.md
+│       │   │   ├── expo-av-to-video.md
+│       │   │   ├── native-tabs.md
+│       │   │   ├── new-architecture.md
+│       │   │   ├── react-19.md
+│       │   │   ├── react-compiler.md
+│       │   │   └── react-navigation-to-expo-router.md
+│       │   └── SKILL.md
+│       └── use-dom/
+│           └── SKILL.md
 ├── .claude/
 │   ├── skills/
-│   │   ├── building-native-ui/
-│   │   │   ├── references/
-│   │   │   │   ├── animations.md
-│   │   │   │   ├── controls.md
-│   │   │   │   ├── form-sheet.md
-│   │   │   │   ├── gradients.md
-│   │   │   │   ├── icons.md
-│   │   │   │   ├── media.md
-│   │   │   │   ├── route-structure.md
-│   │   │   │   ├── search.md
-│   │   │   │   ├── storage.md
-│   │   │   │   ├── tabs.md
-│   │   │   │   ├── toolbar-and-headers.md
-│   │   │   │   ├── visual-effects.md
-│   │   │   │   ├── webgpu-three.md
-│   │   │   │   └── zoom-transitions.md
+│   │   ├── gitnexus-cli/
 │   │   │   └── SKILL.md
-│   │   ├── eas-update-insights/
-│   │   │   ├── references/
-│   │   │   │   ├── channel-insights-schema.md
-│   │   │   │   └── update-insights-schema.md
+│   │   ├── gitnexus-debugging/
 │   │   │   └── SKILL.md
-│   │   ├── expo-api-routes/
+│   │   ├── gitnexus-exploring/
 │   │   │   └── SKILL.md
-│   │   ├── expo-cicd-workflows/
-│   │   │   ├── scripts/
-│   │   │   │   ├── fetch.js
-│   │   │   │   ├── package.json
-│   │   │   │   └── validate.js
+│   │   ├── gitnexus-guide/
 │   │   │   └── SKILL.md
-│   │   ├── expo-deployment/
-│   │   │   ├── references/
-│   │   │   │   ├── app-store-metadata.md
-│   │   │   │   ├── ios-app-store.md
-│   │   │   │   ├── play-store.md
-│   │   │   │   ├── testflight.md
-│   │   │   │   └── workflows.md
+│   │   ├── gitnexus-impact-analysis/
 │   │   │   └── SKILL.md
-│   │   ├── expo-dev-client/
-│   │   │   └── SKILL.md
-│   │   ├── expo-module/
-│   │   │   ├── references/
-│   │   │   │   ├── config-plugin.md
-│   │   │   │   ├── create-expo-module.md
-│   │   │   │   ├── lifecycle.md
-│   │   │   │   ├── module-config.md
-│   │   │   │   ├── native-module.md
-│   │   │   │   └── native-view.md
-│   │   │   └── SKILL.md
-│   │   ├── expo-tailwind-setup/
-│   │   │   └── SKILL.md
-│   │   ├── expo-ui-jetpack-compose/
-│   │   │   └── SKILL.md
-│   │   ├── expo-ui-swiftui/
-│   │   │   └── SKILL.md
-│   │   ├── frontend-design/
-│   │   │   ├── LICENSE.txt
-│   │   │   └── SKILL.md
-│   │   ├── gitnexus/
-│   │   │   ├── gitnexus-cli/
-│   │   │   │   └── SKILL.md
-│   │   │   ├── gitnexus-debugging/
-│   │   │   │   └── SKILL.md
-│   │   │   ├── gitnexus-exploring/
-│   │   │   │   └── SKILL.md
-│   │   │   ├── gitnexus-guide/
-│   │   │   │   └── SKILL.md
-│   │   │   ├── gitnexus-impact-analysis/
-│   │   │   │   └── SKILL.md
-│   │   │   └── gitnexus-refactoring/
-│   │   │       └── SKILL.md
-│   │   ├── native-data-fetching/
-│   │   │   ├── references/
-│   │   │   │   └── expo-router-loaders.md
-│   │   │   └── SKILL.md
-│   │   ├── ui-ux-pro-max/
-│   │   │   ├── SKILL.md
-│   │   │   ├── data
-│   │   │   └── scripts
-│   │   ├── upgrading-expo/
-│   │   │   ├── references/
-│   │   │   │   ├── expo-av-to-audio.md
-│   │   │   │   ├── expo-av-to-video.md
-│   │   │   │   ├── native-tabs.md
-│   │   │   │   ├── new-architecture.md
-│   │   │   │   ├── react-19.md
-│   │   │   │   ├── react-compiler.md
-│   │   │   │   └── react-navigation-to-expo-router.md
-│   │   │   └── SKILL.md
-│   │   └── use-dom/
+│   │   └── gitnexus-refactoring/
 │   │       └── SKILL.md
 │   └── settings.json
 ├── .github/
 │   └── workflows/
 │       └── deploy-web.yml
+├── .pi/
+│   └── tasks/
+│       ├── 01a1719e-179d-707a-842c-98c90ae00099-65037/
+│       ├── 01a18bb1-68a0-7742-8f9b-cb96aaa74db1-42347/
+│       ├── 01a18bb2-320e-7742-8f9b-cb98ec3d8fa2-42347/
+│       └── 01a18bb3-0494-7742-8f9b-cb9a6db30213-42347/
+├── .thinkrail/
+│   └── context/
+│       └── .gitignore
 ├── .vscode/
 │   ├── extensions.json
 │   └── settings.json
@@ -641,58 +625,6 @@ chatbasket/
 │       ├── react-logo@2x.png
 │       ├── react-logo@3x.png
 │       └── splash-icon.png
-├── coverage/
-│   ├── lcov-report/
-│   │   ├── gen/
-│   │   │   └── proto/
-│   │   │       ├── common/
-│   │   │       │   └── model/
-│   │   │       │       ├── index.html
-│   │   │       │       └── model_pb.ts.html
-│   │   │       └── personal/
-│   │   │           └── personal_chat/
-│   │   │               ├── index.html
-│   │   │               └── personal_chat_api_pb.ts.html
-│   │   ├── lib/
-│   │   │   ├── personalLib/
-│   │   │   │   ├── chatApi/
-│   │   │   │   │   ├── chat.recovery.ts.html
-│   │   │   │   │   ├── chat.sse.subscriber.ts.html
-│   │   │   │   │   └── index.html
-│   │   │   │   ├── e2ee/
-│   │   │   │   │   ├── e2ee.crypto.ts.html
-│   │   │   │   │   ├── e2ee.log.ts.html
-│   │   │   │   │   ├── e2ee.service.ts.html
-│   │   │   │   │   └── index.html
-│   │   │   │   ├── models/
-│   │   │   │   │   ├── index.html
-│   │   │   │   │   └── personal.model.chat.ts.html
-│   │   │   │   └── sseApi/
-│   │   │   │       ├── index.html
-│   │   │   │       └── personal.sse.module.base.ts.html
-│   │   │   └── storage/
-│   │   │       └── personalStorage/
-│   │   │           └── chat/
-│   │   │               ├── chat.storage.schema.ts.html
-│   │   │               └── index.html
-│   │   ├── utils/
-│   │   │   ├── commonUtils/
-│   │   │   │   ├── index.html
-│   │   │   │   └── util.date.ts.html
-│   │   │   └── personalUtils/
-│   │   │       ├── index.html
-│   │   │       └── util.chatPreview.ts.html
-│   │   ├── base.css
-│   │   ├── block-navigation.js
-│   │   ├── favicon.png
-│   │   ├── index.html
-│   │   ├── prettify.css
-│   │   ├── prettify.js
-│   │   ├── sort-arrow-sprite.png
-│   │   └── sorter.js
-│   ├── clover.xml
-│   ├── coverage-final.json
-│   └── lcov.info
 ├── docs/
 │   ├── CHANGE_POLICY.md
 │   ├── KEYBOARD_VIEW.md
@@ -731,14 +663,27 @@ chatbasket/
 │   └── verify-build.ts
 ├── src/
 │   ├── __tests__/
+│   │   ├── app/
 │   │   ├── components/
-│   │   │   └── privacy_avatar.test.ts
+│   │   │   ├── chat_input_bar.voice.test.ts
+│   │   │   ├── message_bubble.selection.test.ts
+│   │   │   ├── privacy_avatar.test.ts
+│   │   │   └── username_display.test.ts
 │   │   ├── helpers/
+│   │   │   ├── cancelSendStorageScenarios.ts
 │   │   │   ├── expoSqliteNode.ts
-│   │   │   └── tombstoneScenarios.ts
+│   │   │   ├── permanentlyRejectedScenarios.ts
+│   │   │   ├── tombstoneScenarios.ts
+│   │   │   └── webEncryptPark.ts
 │   │   ├── lib/
 │   │   │   ├── chat/
-│   │   │   │   └── chat.recovery.test.ts
+│   │   │   │   ├── chat.recovery.test.ts
+│   │   │   │   ├── delete.chat.batch.test.ts
+│   │   │   │   ├── forward.send.test.ts
+│   │   │   │   ├── message_reply_quoting.test.ts
+│   │   │   │   ├── pending.sync.test.ts
+│   │   │   │   ├── read.receipt.queue.test.ts
+│   │   │   │   └── unsend.messages.test.ts
 │   │   │   ├── clients/
 │   │   │   │   └── connect_error_details.test.ts
 │   │   │   ├── e2ee/
@@ -746,26 +691,66 @@ chatbasket/
 │   │   │   │   ├── e2ee_v3_download_pipeline.test.ts
 │   │   │   │   ├── e2ee_v3_envelope.test.ts
 │   │   │   │   └── e2ee_v3_service_multikey.test.ts
+│   │   │   ├── fileSystem/
+│   │   │   │   ├── file.copy.test.ts
+│   │   │   │   ├── file.download.inactivity.test.ts
+│   │   │   │   └── file.upload.abort.test.ts
+│   │   │   ├── historySync/
+│   │   │   │   └── history.sync.lock.test.ts
 │   │   │   ├── outbox/
-│   │   │   │   └── outbox.preparing.test.ts
+│   │   │   │   ├── outbox.cancel.test.ts
+│   │   │   │   ├── outbox.cancel_abort.test.ts
+│   │   │   │   ├── outbox.fifo_ordering.test.ts
+│   │   │   │   ├── outbox.pause.release.test.ts
+│   │   │   │   ├── outbox.preparing.test.ts
+│   │   │   │   ├── outbox.promote_latch.test.ts
+│   │   │   │   ├── outbox.purged_rejection.test.ts
+│   │   │   │   ├── outbox.retry.test.ts
+│   │   │   │   ├── outbox.send_window.test.ts
+│   │   │   │   └── outbox.staged.test.ts
 │   │   │   ├── sse/
 │   │   │   │   ├── chat.sse.subscriber.e2ee_v3.test.ts
 │   │   │   │   ├── chat.sse.subscriber.failures.test.ts
 │   │   │   │   ├── chat.sse.subscriber.test.ts
 │   │   │   │   ├── personal.api.sse.test.ts
 │   │   │   │   ├── personal.sse.module.base.test.ts
+│   │   │   │   ├── read_receipt_explicit.test.ts
 │   │   │   │   ├── tombstone.sse_race.test.ts
 │   │   │   │   └── unread_badge.sse_race.test.ts
 │   │   │   └── personal.session.coordinator.recovery.test.ts
 │   │   ├── state/
 │   │   │   ├── chat/
+│   │   │   │   ├── ack_and_read_routing.test.ts
+│   │   │   │   ├── ack_latch_policy.test.ts
 │   │   │   │   ├── ack_race_condition.test.ts
+│   │   │   │   ├── active_chat_badge.native.test.ts
 │   │   │   │   ├── avatar_caching.test.ts
+│   │   │   │   ├── badge_consume.test.ts
+│   │   │   │   ├── boot_sweep.test.ts
+│   │   │   │   ├── cancel_send.state.test.ts
+│   │   │   │   ├── chunk_loop_650.test.ts
+│   │   │   │   ├── download_ack_safety.test.ts
+│   │   │   │   ├── download_latch.test.ts
+│   │   │   │   ├── explicit_read.test.ts
 │   │   │   │   ├── history_sync.test.ts
+│   │   │   │   ├── home_preview_status.test.ts
 │   │   │   │   ├── is_contactable.test.ts
+│   │   │   │   ├── local_unread_count.test.ts
+│   │   │   │   ├── manual_retry_download.test.ts
+│   │   │   │   ├── media_preview_hydration.test.ts
+│   │   │   │   ├── message_deduplication.test.ts
+│   │   │   │   ├── pending_page_partial_chat.test.ts
 │   │   │   │   ├── pending_preview_heal.test.ts
+│   │   │   │   ├── permanently_rejected.test.ts
+│   │   │   │   ├── read_ack_drainage.test.ts
+│   │   │   │   ├── rejected_flag_mirror.test.ts
+│   │   │   │   ├── reply_clear_race.test.ts
+│   │   │   │   ├── retry_send_guard.test.ts
+│   │   │   │   ├── setmessages_preview_heal.test.ts
 │   │   │   │   ├── setmessages_tombstone.test.ts
 │   │   │   │   ├── sync_catchup_rerun.test.ts
+│   │   │   │   ├── sync_payload_protection.test.ts
+│   │   │   │   ├── text_latch.test.ts
 │   │   │   │   └── ui_sort_local_seq.test.ts
 │   │   │   ├── contacts/
 │   │   │   │   └── personal.state.contacts.test.ts
@@ -779,16 +764,47 @@ chatbasket/
 │   │   ├── storage/
 │   │   │   ├── auth.e2ee_revision.test.ts
 │   │   │   ├── auth.logout_stream_stop.test.ts
+│   │   │   ├── cancel_send.storage.native.test.ts
+│   │   │   ├── cancel_send.storage.web.test.ts
 │   │   │   ├── chat.storage.localSeq.test.ts
+│   │   │   ├── chat.storage.merge.test.ts
+│   │   │   ├── chat_list_tick_normalize.test.ts
+│   │   │   ├── delete_chat_ids.test.ts
+│   │   │   ├── delete_chat_ids.web.test.ts
+│   │   │   ├── delete_chat_media_order.native.test.ts
+│   │   │   ├── delete_chat_media_order.web.test.ts
+│   │   │   ├── download_commit.native.test.ts
+│   │   │   ├── download_commit.web.test.ts
+│   │   │   ├── history_have_ids.test.ts
+│   │   │   ├── history_payload_content.native.test.ts
+│   │   │   ├── history_payload_content.web.test.ts
+│   │   │   ├── outbox.claim_confirm.native.test.ts
+│   │   │   ├── outbox.claim_confirm.web.test.ts
+│   │   │   ├── payload_latch_plain.web.test.ts
+│   │   │   ├── payload_policy.native.test.ts
+│   │   │   ├── payload_policy.web.test.ts
+│   │   │   ├── permanently_rejected.native.test.ts
+│   │   │   ├── permanently_rejected.web.test.ts
+│   │   │   ├── receipt_write_race.native.test.ts
+│   │   │   ├── receipt_write_race.web.test.ts
 │   │   │   ├── sqlite_key.test.ts
+│   │   │   ├── status_write_race.web.test.ts
 │   │   │   ├── storage_init.e2ee_seed.test.ts
+│   │   │   ├── sweep_order.web.test.ts
+│   │   │   ├── tombstone.index.web.test.ts
 │   │   │   ├── tombstone.storage.native.test.ts
 │   │   │   ├── tombstone.storage.web.test.ts
 │   │   │   └── tombstone.web_upgrade.test.ts
 │   │   └── utils/
+│   │       ├── commonUtils/
+│   │       │   └── util.date.test.ts
 │   │       ├── personalUtils/
+│   │       │   ├── util.chatErrors.test.ts
+│   │       │   ├── util.chatMedia.test.ts
 │   │       │   ├── util.contactErrors.test.ts
-│   │       │   └── util.messageTick.test.ts
+│   │       │   ├── util.mediaCompress.test.ts
+│   │       │   ├── util.messageTick.test.ts
+│   │       │   └── util.voiceNote.test.ts
 │   │       └── personal_util_device.test.ts
 │   ├── app/
 │   │   ├── (auth)/
@@ -800,6 +816,8 @@ chatbasket/
 │   │   │   │   ├── blocks/
 │   │   │   │   │   └── index.tsx
 │   │   │   │   ├── chat/
+│   │   │   │   │   ├── forward/
+│   │   │   │   │   │   └── index.tsx
 │   │   │   │   │   ├── user/
 │   │   │   │   │   │   └── [user_id].tsx
 │   │   │   │   │   └── [chat_id].tsx
@@ -830,6 +848,8 @@ chatbasket/
 │   │   │   │   │   │   ├── BulkActionBar.tsx
 │   │   │   │   │   │   ├── ChatInputBar.tsx
 │   │   │   │   │   │   └── MessageBubble.tsx
+│   │   │   │   │   ├── forward/
+│   │   │   │   │   │   └── index.tsx
 │   │   │   │   │   ├── user/
 │   │   │   │   │   │   └── [user_id].tsx
 │   │   │   │   │   ├── README_CHAT.md
@@ -847,6 +867,7 @@ chatbasket/
 │   │   │   │   │   └── index.tsx
 │   │   │   │   ├── settings/
 │   │   │   │   │   ├── components/
+│   │   │   │   │   │   ├── SettingsDeleteAccountRow.tsx
 │   │   │   │   │   │   ├── SettingsEmailRow.tsx
 │   │   │   │   │   │   └── SettingsPasswordRow.tsx
 │   │   │   │   │   ├── qr-login/
@@ -1001,7 +1022,6 @@ chatbasket/
 │   │   │   ├── hooks.qrLogin.ts
 │   │   │   ├── hooks.qrScanner.ts
 │   │   │   └── hooks.theme.ts
-│   │   ├── personalHooks/
 │   │   └── useIncomingShare.ts
 │   ├── lib/
 │   │   ├── commonLib/
@@ -1033,10 +1053,17 @@ chatbasket/
 │   │   │   │   ├── chat.sse.subscriber.ts
 │   │   │   │   ├── chat.transport.ts
 │   │   │   │   ├── connection.watcher.ts
+│   │   │   │   ├── delete.chat.batch.ts
+│   │   │   │   ├── forward.send.ts
+│   │   │   │   ├── history.sync.lock.ts
 │   │   │   │   ├── history.sync.ts
 │   │   │   │   ├── outbox.errors.ts
 │   │   │   │   ├── outbox.queue.ts
-│   │   │   │   └── personal.api.chat.ts
+│   │   │   │   ├── pending.sync.ts
+│   │   │   │   ├── personal.api.chat.ts
+│   │   │   │   ├── read.receipt.queue.ts
+│   │   │   │   ├── rejected.flags.ts
+│   │   │   │   └── unsend.messages.ts
 │   │   │   ├── constant/
 │   │   │   │   └── constant.chat.ts
 │   │   │   ├── contactApi/
@@ -1161,6 +1188,8 @@ chatbasket/
 │   │   ├── ui/
 │   │   │   └── state.ui.ts
 │   │   └── README_STATE_PATTERNS.md
+│   ├── types/
+│   │   └── react-native-webrtc-web-shim.d.ts
 │   ├── utils/
 │   │   ├── commonUtils/
 │   │   │   ├── util.date.ts
@@ -1188,8 +1217,10 @@ chatbasket/
 │   │   │   ├── util.chatMedia.ts
 │   │   │   ├── util.chatPreview.ts
 │   │   │   ├── util.contactMessages.ts
+│   │   │   ├── util.mediaCompress.ts
 │   │   │   ├── util.messageTick.ts
-│   │   │   └── util.profileAvatar.ts
+│   │   │   ├── util.profileAvatar.ts
+│   │   │   └── util.voiceNote.ts
 │   │   └── publicUtils/
 │   │       └── public.util.profile.ts
 │   └── global.css

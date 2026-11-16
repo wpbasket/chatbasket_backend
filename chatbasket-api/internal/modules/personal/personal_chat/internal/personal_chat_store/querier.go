@@ -6,12 +6,15 @@ package personal_chat_store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type Querier interface {
 	CheckMessageExists(ctx context.Context, id uuid.UUID) (bool, error)
+	// Checks whether a message ID has ever been recorded in the history/tombstone table
+	CheckMessageHistoryExists(ctx context.Context, id uuid.UUID) (bool, error)
 	CleanupFullyAcknowledgedReadMessagesInChat(ctx context.Context, chatID uuid.UUID) error
 	// Bounded cleanup batch: deletes sync actions for chats between blocked users.
 	// Controlled from Go with a batch_size parameter and a time budget.
@@ -19,10 +22,10 @@ type Querier interface {
 	// ===========================================
 	// Per-Participant Preview Operations
 	// ===========================================
-	// Clears the last message preview for a specific participant only (used by Delete for Me).
-	// Only fires if the deleted message is the current preview message.
-	ClearLastMessageForParticipant(ctx context.Context, arg ClearLastMessageForParticipantParams) error
-	ClearMessageFileFields(ctx context.Context, id uuid.UUID) error
+	// Clears the last message preview for a specific participant across all matching chats (used by batch Delete for Me).
+	// Only fires for chats where last_message_id matches any of the deleted messages.
+	ClearLastMessageForParticipantBatch(ctx context.Context, arg ClearLastMessageForParticipantBatchParams) (int64, error)
+	ClearMessagesFileFieldsBatch(ctx context.Context, messageIds []uuid.UUID) error
 	ConsumeSyncAction(ctx context.Context, id uuid.UUID) error
 	// ===========================================
 	// Chat Queries for sqlc
@@ -40,12 +43,16 @@ type Querier interface {
 	// Sync Action Operations
 	// ===========================================
 	CreateSyncAction(ctx context.Context, arg CreateSyncActionParams) (MessageSyncAction, error)
+	CreateSyncActionsBatch(ctx context.Context, arg CreateSyncActionsBatchParams) (int64, error)
 	// Bounded cleanup batch: deletes no-file messages in chats between blocked users.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteBlockedUserMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
 	// Bounded cleanup batch: deletes expired history-sync records.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteExpiredHistorySyncBatch(ctx context.Context, batchSize int32) (int64, error)
+	// Deletes exactly the expired rows whose IDs are supplied, after their files
+	// have been removed from R2. TTL supersedes relay delivery.
+	DeleteExpiredMessagesWithFilesBatch(ctx context.Context, messageIds []uuid.UUID) (int64, error)
 	// Bounded cleanup batch: deletes expired messages without attached files.
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteExpiredMessagesWithoutFilesBatch(ctx context.Context, batchSize int32) (int64, error)
@@ -59,6 +66,7 @@ type Querier interface {
 	// Controlled from Go with a batch_size parameter and a time budget.
 	DeleteOldSyncActionsBatch(ctx context.Context, batchSize int32) (int64, error)
 	GetChatByID(ctx context.Context, id uuid.UUID) (Chat, error)
+	GetChatByIDForNoKeyUpdate(ctx context.Context, id uuid.UUID) (Chat, error)
 	GetChatByParticipants(ctx context.Context, arg GetChatByParticipantsParams) (Chat, error)
 	GetChatMessages(ctx context.Context, arg GetChatMessagesParams) ([]Message, error)
 	GetExpiredMessagesWithFiles(ctx context.Context, arg GetExpiredMessagesWithFilesParams) ([]Message, error)
@@ -66,7 +74,12 @@ type Querier interface {
 	GetHistorySyncMeta(ctx context.Context, id uuid.UUID) (GetHistorySyncMetaRow, error)
 	GetHistorySyncRequest(ctx context.Context, arg GetHistorySyncRequestParams) (GetHistorySyncRequestRow, error)
 	GetMessageByID(ctx context.Context, id uuid.UUID) (Message, error)
-	GetMessagesByIds(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesByIdsRow, error)
+	GetMessagesForAckAndReadBatch(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesForAckAndReadBatchRow, error)
+	GetMessagesForDeleteForMeBatch(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesForDeleteForMeBatchRow, error)
+	GetMessagesForDeliveryAckBatch(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesForDeliveryAckBatchRow, error)
+	GetMessagesForMarkChatRead(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesForMarkChatReadRow, error)
+	GetMessagesForReadAckBatch(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesForReadAckBatchRow, error)
+	GetMessagesForUnsendBatch(ctx context.Context, messageIds []uuid.UUID) ([]GetMessagesForUnsendBatchRow, error)
 	GetMessagesWithFilesByChatID(ctx context.Context, chatID uuid.UUID) ([]Message, error)
 	// ===========================================
 	// Block Cleanup Operations (Background Worker)
@@ -99,16 +112,18 @@ type Querier interface {
 	IsChatParticipant(ctx context.Context, arg IsChatParticipantParams) (bool, error)
 	// Acquires exclusive row-level locks on all chats involving the user to prevent concurrent message writes during account deletion
 	LockUserChatsForUpdate(ctx context.Context, participant1ID uuid.UUID) ([]uuid.UUID, error)
-	MarkMessageDeletedByRecipient(ctx context.Context, arg MarkMessageDeletedByRecipientParams) error
-	MarkMessageDeletedBySender(ctx context.Context, arg MarkMessageDeletedBySenderParams) error
-	MarkMessageDeliveredToRecipient(ctx context.Context, id uuid.UUID) error
-	MarkMessageDeliveredToRecipientPrimary(ctx context.Context, id uuid.UUID) error
-	MarkMessageSyncedToSenderPrimary(ctx context.Context, id uuid.UUID) error
 	MarkMessagesAsRead(ctx context.Context, arg MarkMessagesAsReadParams) ([]MarkMessagesAsReadRow, error)
+	MarkMessagesDeletedByRecipientBatch(ctx context.Context, arg MarkMessagesDeletedByRecipientBatchParams) (int64, error)
+	MarkMessagesDeletedBySenderBatch(ctx context.Context, arg MarkMessagesDeletedBySenderBatchParams) (int64, error)
 	MarkMessagesDeliveredToRecipientBatch(ctx context.Context, arg MarkMessagesDeliveredToRecipientBatchParams) ([]MarkMessagesDeliveredToRecipientBatchRow, error)
 	MarkMessagesDeliveredToRecipientPrimaryBatch(ctx context.Context, arg MarkMessagesDeliveredToRecipientPrimaryBatchParams) ([]MarkMessagesDeliveredToRecipientPrimaryBatchRow, error)
-	MarkMessagesReadAckedBySender(ctx context.Context, arg MarkMessagesReadAckedBySenderParams) ([]uuid.UUID, error)
-	ResetChatReadStatus(ctx context.Context, arg ResetChatReadStatusParams) error
+	// Scoped by the caller's sender_id and the IDs only, so the rows may come from
+	// any chats. RETURNING chat_id gives each row's chat for the cleanup sweep.
+	MarkMessagesReadAckedBySender(ctx context.Context, arg MarkMessagesReadAckedBySenderParams) ([]MarkMessagesReadAckedBySenderRow, error)
+	MarkMessagesSyncedToSenderPrimaryBatch(ctx context.Context, arg MarkMessagesSyncedToSenderPrimaryBatchParams) ([]MarkMessagesSyncedToSenderPrimaryBatchRow, error)
+	// Records message ID in the append-only partitioned history table for deduplication
+	RecordMessageHistory(ctx context.Context, arg RecordMessageHistoryParams) error
+	ResetChatReadStatus(ctx context.Context, arg ResetChatReadStatusParams) (time.Time, error)
 	StripDeliveredMessagePayload(ctx context.Context, id uuid.UUID) error
 	UpdateChatLastDeliveredAt(ctx context.Context, arg UpdateChatLastDeliveredAtParams) error
 	// ===========================================
@@ -117,7 +132,9 @@ type Querier interface {
 	UpdateChatStatus(ctx context.Context, arg UpdateChatStatusParams) error
 	UpdateChatUnsendDecrement(ctx context.Context, arg UpdateChatUnsendDecrementParams) error
 	UpdateChatUnsendPreview(ctx context.Context, arg UpdateChatUnsendPreviewParams) error
-	UpdateMessageToUnsent(ctx context.Context, id uuid.UUID) error
+	UpdateChatUnsendPreviewBatch(ctx context.Context, arg UpdateChatUnsendPreviewBatchParams) error
+	UpdateMessageToUnsent(ctx context.Context, id uuid.UUID) (int64, error)
+	UpdateMessagesToUnsentBatch(ctx context.Context, messageIds []uuid.UUID) ([]uuid.UUID, error)
 	UploadHistorySyncPayload(ctx context.Context, arg UploadHistorySyncPayloadParams) (int64, error)
 	UpsertHistorySync(ctx context.Context, arg UpsertHistorySyncParams) (uuid.UUID, error)
 }

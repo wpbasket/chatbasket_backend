@@ -72,12 +72,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING
     *;
 
--- name: UpdateAvatarFileID :exec
--- Updates only the file_id for the main profile avatar (token columns unused per spec §3.C).
-UPDATE avatars
-SET file_id = $2
-WHERE user_id = $1 AND avatar_type = 'profile';
-
 -- name: GetAvatarFileID :one
 -- Fetches the storage file_id for the main profile avatar
 SELECT file_id FROM avatars WHERE user_id = $1 AND avatar_type = 'profile';

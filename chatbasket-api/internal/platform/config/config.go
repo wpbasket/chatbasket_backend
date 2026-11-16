@@ -26,14 +26,15 @@ type PostgresConfig struct {
 
 // Config holds the application-wide configuration.
 type Config struct {
-	Port       string
-	CORSOrigin string
-	Postgres   *PostgresConfig
-	Cosmos     *CosmosConfig
-	Email      *EmailConfig
-	Security   *SecurityConfig
-	Firebase   *FirebaseConfig
-	R2         *R2PoolConfig
+	Port                string
+	CORSOrigin          string
+	Postgres            *PostgresConfig
+	MaintenancePostgres *PostgresConfig
+	Cosmos              *CosmosConfig
+	Email               *EmailConfig
+	Security            *SecurityConfig
+	Firebase            *FirebaseConfig
+	R2                  *R2PoolConfig
 }
 
 // R2AccountConfig holds credentials for a single Cloudflare R2 account.
@@ -107,9 +108,21 @@ func Load() (*Config, error) {
 	pgCfg := &PostgresConfig{
 		DatabaseURL:           dsn,
 		DatabaseURLTesting:    os.Getenv("DATABASE_URL_PG_TESTING"),
-		MaxConns:              40,
+		MaxConns:              38,
 		MinConns:              2,
 		MinIdleConns:          2,
+		MaxConnLifetime:       kit.DefaultPostgresMaxConnLifetime,
+		MaxConnIdleTime:       2 * time.Minute,
+		HealthCheckPeriod:     1 * time.Minute,
+		MaxConnLifetimeJitter: 5 * time.Minute,
+	}
+
+	maintenancePgCfg := &PostgresConfig{
+		DatabaseURL:           dsn,
+		DatabaseURLTesting:    os.Getenv("DATABASE_URL_PG_TESTING"),
+		MaxConns:              2,
+		MinConns:              0,
+		MinIdleConns:          0,
 		MaxConnLifetime:       kit.DefaultPostgresMaxConnLifetime,
 		MaxConnIdleTime:       2 * time.Minute,
 		HealthCheckPeriod:     1 * time.Minute,
@@ -152,14 +165,15 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		Port:       port,
-		CORSOrigin: corsOrigin,
-		Postgres:   pgCfg,
-		Cosmos:     cosmosCfg,
-		Email:      emailCfg,
-		Security:   secCfg,
-		Firebase:   fbCfg,
-		R2:         r2Cfg,
+		Port:                port,
+		CORSOrigin:          corsOrigin,
+		Postgres:            pgCfg,
+		MaintenancePostgres: maintenancePgCfg,
+		Cosmos:              cosmosCfg,
+		Email:               emailCfg,
+		Security:            secCfg,
+		Firebase:            fbCfg,
+		R2:                  r2Cfg,
 	}, nil
 }
 
